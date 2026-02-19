@@ -1,0 +1,17 @@
+{
+  "name": "@neuroquant/types",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@neuroquant/config": "workspace:*",
+    "typescript": "^5.4.5"
+  }
+}
