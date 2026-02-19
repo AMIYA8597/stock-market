@@ -1,0 +1,13 @@
+{
+  "extends": "@neuroquant/config/tsconfig.nextjs.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@neuroquant/types": ["../../packages/types/src/index"],
+      "@neuroquant/ui": ["../../packages/ui/src/index"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
