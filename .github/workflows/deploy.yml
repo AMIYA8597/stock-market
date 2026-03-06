@@ -1,0 +1,42 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push Docker images
+        run: |
+          docker build -t neuroquant-backend backend/
+          docker tag neuroquant-backend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-backend:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-backend:latest
+
+          docker build -t neuroquant-gateway services/gateway/
+          docker tag neuroquant-gateway:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-gateway:latest
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-gateway:latest
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service --cluster neuroquant-cluster --service neuroquant-service --force-new-deployment
+
+      - name: Run database migrations
+        run: |
+          aws ecs run-task --cluster neuroquant-cluster --task-definition neuroquant-migration-task --launch-type FARGATE --network-configuration "awsvpcConfiguration={subnets=[subnet-12345],securityGroups=[sg-12345]}"

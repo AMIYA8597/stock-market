@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  node-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm type-check
+      - run: pnpm test -- --coverage --coverageReporters="text" --coverageReporters="lcov"
+      - uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/lcov.info
+
+  python-ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, ml-engine, data-pipeline, risk-engine, alert-service, backtesting]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+      - run: pip install -r services/${{ matrix.service }}/requirements.txt
+      - run: ruff check services/${{ matrix.service }}/app/ --output-format=github
+      - run: mypy services/${{ matrix.service }}/app/ --strict --ignore-missing-imports
+      - run: pytest services/${{ matrix.service }}/tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=80
+
+  docker-validate:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker build --target validate backend/
+      - run: docker build --target validate services/gateway/
+      - run: docker build --target validate services/ml-engine/
