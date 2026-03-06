@@ -1,0 +1,57 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": [
+    "NODE_ENV",
+    "NEXT_PUBLIC_API_URL",
+    "NEXT_PUBLIC_WS_URL",
+    "NEXTAUTH_URL",
+    "NEXTAUTH_SECRET"
+  ],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_API_URL",
+        "NEXT_PUBLIC_WS_URL",
+        "NEXTAUTH_URL"
+      ]
+    },
+    "lint": {
+      "outputs": [],
+      "dependsOn": []
+    },
+    "type-check": {
+      "outputs": [],
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "outputs": ["coverage/**"],
+      "dependsOn": ["^build"],
+      "env": [
+        "DATABASE_URL",
+        "REDIS_URL"
+      ]
+    },
+    "test:e2e": {
+      "outputs": ["playwright-report/**"],
+      "dependsOn": ["build"],
+      "env": [
+        "NEXTAUTH_URL",
+        "NEXT_PUBLIC_API_URL"
+      ]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["^build"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
