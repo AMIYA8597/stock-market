@@ -1,0 +1,1359 @@
+════════════════════════════════════════════════════════════════════════════════
+MISSION: Build "NEUROQUANT" — An Institutional-Grade AI Stock Market Platform
+CONTEXT: M.Tech Thesis, NIT Rourkela | Publishable Research + Production System
+STANDARD: Hedge Fund + FAANG Engineering Quality
+════════════════════════════════════════════════════════════════════════════════
+
+You are a Principal Engineer + Quantitative Researcher + AI Security Architect.
+Build this system from scratch, step by step, with ZERO placeholder code,
+ZERO "TODO" comments, and ZERO mock data. Every file must be production-ready,
+fully functional, and immediately runnable.
+
+After each phase, output: "✅ PHASE [N] COMPLETE — Run: [exact command to test it]"
+Never proceed to next phase until current phase is verified runnable.
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 1: MONOREPO ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════════
+
+Initialize with pnpm workspaces + Turborepo:
+
+neuroquant/
+├── apps/
+│   ├── web/                          # Next.js 14 (App Router, TypeScript strict)
+│   └── docs/                         # Nextra documentation site
+├── packages/
+│   ├── ui/                           # Shared component library (Radix + custom)
+│   ├── charts/                       # Chart primitives (TradingView + D3 + Three.js)
+│   ├── types/                        # Shared TypeScript types/zod schemas
+│   └── config/                       # ESLint, TSConfig, Prettier shared configs
+├── services/
+│   ├── gateway/                      # FastAPI API Gateway (port 8000)
+│   ├── ml-engine/                    # Python ML Service (port 8001)
+│   ├── data-pipeline/                # Data ingestion service (port 8002)
+│   ├── risk-engine/                  # Risk calculation service (port 8003)
+│   ├── alert-service/                # Notification microservice (port 8004)
+│   └── backtesting/                  # Backtesting engine (port 8005)
+├── infrastructure/
+│   ├── docker/
+│   │   ├── docker-compose.yml
+│   │   ├── docker-compose.dev.yml
+│   │   └── docker-compose.prod.yml
+│   ├── nginx/
+│   │   └── nginx.conf                # Rate limiting, SSL termination, reverse proxy
+│   ├── postgres/
+│   │   ├── init.sql                  # TimescaleDB setup + hypertables
+│   │   └── migrations/               # Alembic migrations
+│   └── redis/
+│       └── redis.conf                # Redis Sentinel config
+├── scripts/
+│   ├── setup.sh                      # One-command full setup
+│   ├── seed_data.py                  # Historical data seeder
+│   └── train_models.py               # Model training orchestrator
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       ├── security-scan.yml         # Snyk + Trivy + SAST
+│       └── deploy.yml
+├── turbo.json
+├── pnpm-workspace.yaml
+└── .env.example                      # All 47 required env vars documented
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 2: COMPLETE TECH STACK SPECIFICATION
+════════════════════════════════════════════════════════════════════════════════
+
+FRONTEND (apps/web):
+  Framework:     Next.js 14.2+ (App Router, RSC, Server Actions)
+  Language:      TypeScript 5.4 (strict: true, all strict flags enabled)
+  Styling:       Tailwind CSS 3.4 + CSS Variables + CSS Modules for complex components
+  UI Primitives: Radix UI (headless) + custom design system
+  Charts:        TradingView Lightweight Charts v4 + D3.js v7 + Three.js r160
+  3D Graphics:   Three.js for market globe, correlation network graph
+  State:         Zustand 4 (client) + TanStack Query v5 (server state)
+  Forms:         React Hook Form v7 + Zod validation
+  Animation:     Framer Motion v11 + GSAP 3 (premium scroll animations)
+  WebSocket:     Native WebSocket with reconnect logic + useWebSocket hook
+  Auth Client:   NextAuth.js v5 (App Router compatible)
+  Table:         TanStack Table v8
+  Fonts:         "Clash Display" (headings) + "JetBrains Mono" (data/numbers)
+  Icons:         Lucide React + custom SVG icon system
+  Testing:       Vitest + React Testing Library + Playwright (E2E)
+  Perf:          next/bundle-analyzer, lighthouse CI, Core Web Vitals monitoring
+
+BACKEND GATEWAY (services/gateway):
+  Framework:     FastAPI 0.111 + Uvicorn + Gunicorn
+  Language:      Python 3.12 (full type hints, mypy strict)
+  Auth:          python-jose (JWT RS256) + passlib (argon2) + pyotp (TOTP 2FA)
+  ORM:           SQLAlchemy 2.0 (async) + asyncpg driver
+  Migrations:    Alembic
+  Validation:    Pydantic v2 (model_validator, field_validator)
+  Caching:       Redis via aioredis + fastapi-cache2
+  Rate Limiting: slowapi (per-user, per-endpoint, per-IP)
+  WebSocket:     FastAPI WebSocket + Redis Pub/Sub fanout
+  Task Queue:    Celery 5 + Redis broker + Flower monitoring
+  HTTP Client:   httpx (async) for inter-service communication
+  Security:      python-multipart, cryptography, secrets module
+  Logging:       structlog (JSON structured logs) + OpenTelemetry traces
+
+ML ENGINE (services/ml-engine):
+  Deep Learning: PyTorch 2.2 + Lightning 2.2
+  Forecasting:   pytorch-forecasting (TFT), neuralforecast (NHITS, PatchTST)
+  Classical ML:  scikit-learn 1.4, XGBoost 2.0, LightGBM 4.3, CatBoost 1.2
+  NLP/Sentiment: transformers 4.40 (FinBERT, FinGPT fine-tuning)
+  Feature Eng:   pandas-ta 0.3, ta-lib, tsfresh (500+ auto features)
+  Time Series:   statsmodels (ARIMA, GARCH, Granger causality)
+  Optimization:  Optuna 3.6 (TPE sampler, pruning)
+  Experiment:    MLflow 2.12 (tracking, registry, model serving)
+  Explainability:SHAP 0.45, captum (PyTorch attribution)
+  Causal ML:     DoWhy 0.11 (causal inference for factor attribution)
+  Reinforcement: stable-baselines3 (DRL trading agent)
+
+DATA PIPELINE (services/data-pipeline):
+  Streaming:     Apache Kafka (via confluent-kafka-python)
+  Scheduling:    APScheduler 3.10
+  Sources:       yfinance, alpha_vantage, nsepy, ccxt (crypto), FRED API
+  Storage:       TimescaleDB (time-series), PostgreSQL (relational), S3/MinIO (models)
+  Processing:    pandas 2.2, polars 0.20 (fast bulk processing)
+  Validation:    Great Expectations (data quality checks)
+
+RISK ENGINE (services/risk-engine):
+  Portfolio Opt: PyPortfolioOpt 1.5 (MVO, HRP, Black-Litterman)
+  Risk:          scipy, numpy (VaR, CVaR, Monte Carlo)
+  Factor Models: linearmodels (Fama-French, PCA factor extraction)
+
+DATABASES:
+  Primary DB:    PostgreSQL 16 + TimescaleDB 2.14
+  Cache:         Redis 7.2 (Cluster mode)
+  Search:        Meilisearch (fast stock symbol search)
+  Object Store:  MinIO (S3-compatible, for ML model artifacts)
+
+INFRASTRUCTURE:
+  Container:     Docker + Docker Compose
+  Proxy:         Nginx (rate limiting, SSL, WebSocket upgrade)
+  Monitoring:    Prometheus + Grafana dashboards
+  Tracing:       Jaeger (distributed tracing)
+  Secrets:       HashiCorp Vault (for production) / .env (for dev)
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 3: ENTERPRISE SECURITY ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════════
+
+This is a FINANCIAL APPLICATION — security is non-negotiable.
+Implement ALL of the following — no exceptions.
+
+3A. AUTHENTICATION & SESSION SECURITY:
+
+  JWT Implementation (RS256, NOT HS256):
+  - Generate RSA-2048 key pair on startup (private key never leaves server)
+  - Access token: 15-minute expiry, signed with RS256
+  - Refresh token: 7-day expiry, stored as HttpOnly + Secure + SameSite=Strict cookie
+  - Refresh token rotation: new refresh token issued on every use
+  - Token family tracking: detect refresh token reuse (invalidate entire family)
+  - Store refresh tokens in DB (allows remote logout from all devices)
+  - JTI (JWT ID) claim: check against Redis blacklist for logout
+
+  Multi-Factor Authentication (TOTP):
+  - TOTP (RFC 6238) using pyotp
+  - QR code generation for authenticator apps (Google Auth, Authy)
+  - Backup codes: 10 single-use codes, bcrypt hashed in DB
+  - 2FA enforcement: configurable per user role
+  - Recovery flow: email verification + backup code
+
+  Password Security:
+  - Argon2id hashing (winner of Password Hashing Competition)
+  - Parameters: memory=64MB, iterations=3, parallelism=4
+  - Minimum entropy check (zxcvbn library, score >= 3)
+  - Pwned Passwords API check (k-anonymity, no plaintext sent)
+  - Password history: prevent last 12 passwords reuse
+  - Account lockout: 5 failed attempts → 15-minute lockout (exponential backoff)
+
+  OAuth2 Social Login:
+  - Google OAuth2 (via NextAuth.js)
+  - GitHub OAuth2
+  - PKCE flow (no implicit flow ever)
+
+3B. API SECURITY:
+
+  Rate Limiting (layered):
+  - Global: 1000 req/min per IP
+  - Auth endpoints: 5 req/min per IP (brute force protection)
+  - ML predictions: 100 req/hour per user (expensive operations)
+  - WebSocket: max 10 concurrent connections per user
+  - Implement with Redis sliding window algorithm
+
+  Input Validation & Sanitization:
+  - ALL inputs validated with Pydantic v2 (whitelist approach)
+  - SQL injection: SQLAlchemy parameterized queries only (NO raw SQL strings)
+  - XSS prevention: bleach sanitization on all string inputs
+  - Path traversal prevention on file uploads
+  - JSON depth limit: max 20 levels
+  - Request size limit: 10MB max body
+  - Symbol injection: regex whitelist for stock symbols [A-Z0-9.-]{1,20}
+
+  CORS Configuration:
+  - Whitelist only: ["https://neuroquant.app", "http://localhost:3000"]
+  - Credentials: true (for cookies)
+  - Exposed headers: X-Total-Count, X-RateLimit-Remaining
+
+  Security Headers (Nginx + FastAPI):
+  - Content-Security-Policy: strict (nonce-based for inline scripts)
+  - Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  - X-Content-Type-Options: nosniff
+  - X-Frame-Options: DENY
+  - Referrer-Policy: strict-origin-when-cross-origin
+  - Permissions-Policy: camera=(), microphone=(), geolocation=()
+
+  API Key Management (for external integrations):
+  - Cryptographically secure key generation (secrets.token_urlsafe(32))
+  - Keys stored as SHA-256 hash only (never plaintext)
+  - Prefix system: "nq_live_..." vs "nq_test_..." keys
+  - Scoped permissions per API key
+  - Key rotation endpoint
+
+3C. DATA SECURITY:
+
+  Encryption at Rest:
+  - Sensitive DB fields (email, phone) encrypted with AES-256-GCM
+  - SQLAlchemy TypeDecorator for transparent encrypt/decrypt
+  - Field-level encryption key rotation support
+  - ML model artifacts encrypted in MinIO
+
+  Encryption in Transit:
+  - TLS 1.3 only (disable TLS 1.0, 1.1, 1.2)
+  - HSTS preloading
+  - Internal service communication: mTLS (mutual TLS)
+  - Certificate pinning on mobile (if applicable)
+
+  Secrets Management:
+  - Zero secrets in code or Docker images
+  - All secrets via environment variables
+  - .env.example with fake values + documentation
+  - Docker secrets for production
+  - Secret scanning in CI (gitleaks, truffleHog)
+
+3D. AUDIT & COMPLIANCE:
+
+  Comprehensive Audit Log:
+  - Every auth event: login, logout, failed attempt, 2FA, password change
+  - Every data access: who accessed what, when, from where
+  - Every trade signal: generated_at, model_version, inputs, output
+  - Every API call: user, endpoint, params (sanitized), response_time, status
+  - Immutable audit log: append-only table in TimescaleDB
+  - Log integrity: each row contains hash of previous row (blockchain-style)
+
+  OWASP Top 10 Compliance:
+  - A01 Broken Access Control: RBAC with permission decorators
+  - A02 Cryptographic Failures: AES-256, argon2id, RS256, TLS 1.3
+  - A03 Injection: Pydantic + SQLAlchemy (no raw queries)
+  - A04 Insecure Design: threat model documented
+  - A05 Security Misconfiguration: security headers, disabled debug mode
+  - A06 Vulnerable Components: Dependabot + Snyk in CI
+  - A07 Auth Failures: lockout, rotation, TOTP
+  - A08 Software Integrity: Docker image signing
+  - A09 Logging Failures: structured logs + audit trail
+  - A10 SSRF: whitelist external URLs, block internal IP ranges
+
+  RBAC (Role-Based Access Control):
+  Roles: ADMIN | RESEARCHER | ANALYST | VIEWER | API_USER
+  Implement with FastAPI dependency injection:
+  - Decorator: @require_permission("predictions:read")
+  - Fine-grained: resource-level permissions
+  - JWT contains role + permissions array
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 4: AI ENGINE — NOVEL RESEARCH CONTRIBUTIONS
+════════════════════════════════════════════════════════════════════════════════
+
+4A. PRIMARY FORECASTING MODEL — "NeuroQuant Transformer" (Your Novel Model):
+
+  Architecture (ORIGINAL CONTRIBUTION for thesis):
+  Build a custom architecture called "Adaptive Multi-Scale Temporal Attention Network (AMSTAN)"
+  that combines:
+
+  Component 1 — Multi-Scale Patch Embedding:
+  - Inspired by PatchTST but with adaptive patch sizes (learned, not fixed)
+  - 3 scales: short(5 bars), medium(20 bars), long(60 bars)
+  - Cross-scale attention: scales attend to each other
+  - Positional encoding: rotary position embedding (RoPE)
+
+  Component 2 — Regime-Gated Attention:
+  - HMM regime state (bull/bear/sideways) gates the attention weights
+  - In bull regime: attends more to momentum features
+  - In bear regime: attends more to volatility/risk features
+  - Gate learned jointly with transformer
+
+  Component 3 — Cross-Asset Attention:
+  - Each stock attends to: sector ETF, market index, macro indicators
+  - Sparse attention (top-k=10 most correlated assets)
+  - Enables "contagion" detection
+
+  Component 4 — Uncertainty Quantification:
+  - Monte Carlo Dropout at inference (T=50 forward passes)
+  - Conformal prediction intervals (guaranteed coverage)
+  - Output: point forecast + 80% + 95% prediction intervals
+  - Epistemic vs aleatoric uncertainty decomposition
+
+  Training:
+  - Dataset: 10+ years OHLCV for NSE500 + S&P500 + Top50 Crypto
+  - Walk-forward expanding window CV (20 windows, no overlap)
+  - Loss: Quantile loss (multi-quantile: 0.1, 0.25, 0.5, 0.75, 0.9) + 
+          Directional loss (asymmetric, penalize wrong direction more)
+  - Optimizer: AdamW + OneCycleLR scheduler
+  - Regularization: R-Drop, SWA (Stochastic Weight Averaging)
+  - Mixed precision: torch.amp (FP16)
+  - Compile: torch.compile() for 2x inference speedup
+
+4B. REINFORCEMENT LEARNING TRADING AGENT:
+
+  Environment (custom OpenAI Gym):
+  class StockTradingEnv(gym.Env):
+    - State space: 200-dim vector (OHLCV + 150 indicators + portfolio state)
+    - Action space: Continuous [-1, 1] (−1=full short, 0=flat, 1=full long)
+    - Reward: Differential Sharpe Ratio (NOT just P&L — prevents risk-seeking)
+    - Transaction costs: realistic 0.1% + slippage model
+    - Market impact: square-root model for large orders
+
+  Algorithm: Proximal Policy Optimization (PPO) with:
+  - Actor-Critic with shared LSTM backbone (captures temporal state)
+  - Intrinsic curiosity module (explores novel market regimes)
+  - Curriculum learning: train on easy assets first, then hard ones
+  - Ensemble: train 10 agents with different seeds, vote on action
+
+  Training Infrastructure:
+  - Ray RLlib for distributed training
+  - 5 years of data for training, 1 year validation, 1 year test
+  - Evaluation: vs buy-and-hold, vs random policy, vs momentum baseline
+
+4C. GRAPH NEURAL NETWORK — MARKET TOPOLOGY:
+
+  Build a GNN to model inter-stock relationships:
+  - Nodes: individual stocks (features = price history embeddings)
+  - Edges: dynamic (recalculated daily)
+    - Type 1: Correlation edges (|corr| > 0.6)
+    - Type 2: Supply chain edges (from knowledge graph)
+    - Type 3: Sector membership edges
+  - Architecture: GraphSAGE (inductive, handles new nodes)
+  - Output: Node embeddings used as features in AMSTAN
+  - Visualization: Force-directed graph in UI (Three.js / D3)
+  - Novel use: early warning — if correlation structure breaks → crisis signal
+
+4D. MULTI-AGENT LLM SYSTEM (GPT-4-level analysis):
+
+  Build a multi-agent pipeline using LangGraph:
+
+  Agent 1 — News Analyst (FinBERT + GPT):
+  - Scrapes: Reuters, Bloomberg RSS, NSE announcements, SEC filings
+  - Extracts: entities (company names, people, amounts)
+  - Classifies: event type (earnings, M&A, regulation, macro)
+  - Output: structured JSON event with sentiment + magnitude estimate
+
+  Agent 2 — Technical Analyst:
+  - Analyzes: current chart pattern (CNN classifier trained on chart images)
+  - Identifies: support/resistance levels (pivot points + ML clustering)
+  - Detects: 61 candlestick patterns + Elliott Wave count (rule-based)
+  - Output: structured technical thesis with confidence
+
+  Agent 3 — Fundamental Analyst:
+  - Fetches: P/E, P/B, EV/EBITDA, ROE, debt ratios
+  - Compares: vs sector median, vs 5-year history
+  - DCF model: automated with analyst consensus estimates
+  - Output: fair value estimate + margin of safety
+
+  Agent 4 — Risk Manager:
+  - Aggregates signals from Agents 1-3
+  - Applies portfolio-level constraints
+  - Outputs: position size recommendation + risk warnings
+
+  Orchestrator (LangGraph):
+  - Runs all 4 agents in parallel
+  - Synthesizes into: "AI Research Report" (markdown, rendered in UI)
+  - Confidence score: 0-100 based on agent agreement
+  - Contradictions highlighted explicitly
+
+4E. ANOMALY DETECTION ENGINE:
+
+  Unsupervised anomaly detection for:
+  - Price anomalies: Isolation Forest + LSTM autoencoder reconstruction error
+  - Volume anomalies: z-score + DBSCAN clustering
+  - Market microstructure: quote stuffing, spoofing pattern detection
+  - Cross-asset: sudden correlation breakdown (Mahalanobis distance)
+  - Flash crash prediction: order book imbalance + tick velocity
+
+  When anomaly detected:
+  - Immediate WebSocket push to all connected clients
+  - Alert with: anomaly type, severity (1-5), affected assets, historical precedents
+  - Auto-suspend trading signals for affected asset
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 5: QUANTITATIVE ALGORITHMS
+════════════════════════════════════════════════════════════════════════════════
+
+5A. FEATURE ENGINEERING PIPELINE (services/ml-engine/features/):
+
+  Class: FeatureEngineer
+  Input: Raw OHLCV DataFrame
+  Output: 200+ feature DataFrame
+
+  Technical Features (pandas-ta + ta-lib):
+  - Trend: SMA[5,10,20,50,200], EMA, DEMA, TEMA, WMA, ALMA, KAMA, VAMA
+  - Momentum: RSI[7,14,21], Stochastic[%K,%D], Williams%R, CCI, CMO, MFI, UO
+  - MACD variations: MACD(12,26,9), PPO, DPO, KST, TRIX, TSI
+  - Volatility: ATR[7,14,21], BB[20,2.0], BB[20,1.5], Keltner, Donchian
+  - Volume: OBV, VWAP, CMF, FI, EMV, VPT, NVI, PVI, ADOSC
+  - Ichimoku: Tenkan, Kijun, Senkou A/B, Chikou (full cloud)
+  - Pivot Points: Standard, Fibonacci, Camarilla, Woodie (all 3 timeframes)
+  - Pattern Recognition: all 61 TA-Lib candle patterns → binary features
+
+  Microstructure Features:
+  - Amihud illiquidity: |return| / volume (20-day rolling)
+  - Roll spread: 2 * sqrt(max(-cov(δp_t, δp_t-1), 0))
+  - Bid-ask proxy: (high - low) / close
+  - Kyle's lambda: OLS of |return| on sqrt(volume)
+  - Realized volatility: 5-min squared returns summed (if tick data)
+  - RVOL: current_volume / avg_volume_same_time_window
+
+  Statistical Features:
+  - Return distribution moments: skew, kurtosis (rolling 20, 60)
+  - Hurst exponent (rolling): trend-persistence measure
+  - Fractal dimension (Higuchi method)
+  - Permutation entropy: market complexity measure
+  - Transfer entropy: information flow from sector ETF to stock
+  - Regime feature: HMM state probability vector (3 states)
+  - Autocorrelation: lag 1,2,3,5,10 return autocorrelation
+  - Granger causality p-values: vs index, vs sector, vs related stocks
+
+  Cross-Asset Features (per stock):
+  - Beta: rolling 60-day vs Nifty50/S&P500
+  - Relative strength vs sector ETF
+  - Dollar index correlation (for export-heavy sectors)
+  - VIX (India VIX / CBOE VIX) level + change
+  - Yield curve slope (10Y - 2Y) + change
+  - Credit spread (proxy via sectoral bond ETF)
+  - GNN embedding vector (32-dim, from graph model)
+
+  tsfresh automated features:
+  - Run tsfresh.extract_relevant_features() with 500+ features
+  - Filter by statistical significance (p < 0.01) against target
+  - Typical result: 80-120 additional features pass threshold
+
+  Feature Pipeline:
+  - Imputation: forward-fill → backward-fill → median-fill
+  - Outlier clipping: winsorize at 1st/99th percentile
+  - Scaling: RobustScaler (robust to outliers, better than StandardScaler)
+  - Saved as: sklearn Pipeline (fit on train, transform on all)
+
+5B. TRADING STRATEGIES (services/backtesting/strategies/):
+
+  All strategies implement:
+  class BaseStrategy(ABC):
+      @abstractmethod
+      def generate_signals(df: pd.DataFrame) -> pd.Series  # +1/-1/0
+      @abstractmethod  
+      def get_params() -> dict
+      def optimize(df, metric='sharpe') -> dict  # Optuna-based
+
+  Strategy 1: Kalman Filter Pairs Trading
+  - Cointegration: Engle-Granger + Johansen (both required)
+  - Hedge ratio: Kalman Filter state-space model (time-varying β)
+  - Spread: y_t - β_t * x_t
+  - Entry: |spread_zscore| > 2.0
+  - Exit: |spread_zscore| < 0.5
+  - Stop: |spread_zscore| > 3.5 (regime change)
+  - Universe formation: sector-constrained + market cap matched
+  - Update frequency: daily re-estimation
+
+  Strategy 2: Adaptive Momentum (Dual Momentum + Regime Filter)
+  - Absolute momentum: 12-1 month return > T-bill rate?
+  - Relative momentum: rank assets by 12-1 month return
+  - Regime filter: only go long if HMM state = BULL
+  - Position sizing: volatility parity (target 10% annual vol per position)
+  - Rebalancing: monthly (reduce turnover)
+  - Asset universe: top 20 by momentum, avoid bottom 20
+
+  Strategy 3: ML Alpha Strategy
+  - Raw signal: AMSTAN 5-day direction probability
+  - Signal refinement: multiply by regime confidence + sentiment score
+  - Long: top quintile by composite score
+  - Short: bottom quintile (market-neutral variant)
+  - Portfolio construction: mean-variance optimization (PyPortfolioOpt)
+  - Turnover control: L1 transaction cost penalty
+
+  Strategy 4: Statistical Arbitrage (Index Rebalancing)
+  - Track: Nifty50 + Nifty100 + S&P500 constituent changes
+  - Data source: NSE/BSE official announcements
+  - Model: linear price pressure model calibrated on 5 years history
+  - Trade: buy additions T-5 days before, sell T+1; reverse for deletions
+  - Risk: market beta-hedged via index futures proxy
+
+  Strategy 5: Volatility Regime Strategy
+  - Detect: Volatility clustering via GARCH(1,1) + Markov Switching
+  - Low vol regime: momentum strategy (trend persists)
+  - High vol regime: mean-reversion strategy (overreactions)
+  - Transition: smooth blending over 5-day window
+  - Hedge: buy VIX-correlated assets in high-vol regime
+
+  Strategy 6: Deep RL Agent (PPO)
+  - Load trained PPO agent
+  - State: 200-dim feature vector (real-time)
+  - Action: continuous position sizing [-1, 1]
+  - Risk overlay: hard position limits from risk engine
+
+5C. RISK ENGINE (services/risk-engine/):
+
+  Real-Time Portfolio Risk:
+
+  VaR Engine:
+  - Method 1: Historical Simulation (10-year lookback, 1-day horizon)
+  - Method 2: Parametric (DCC-GARCH for dynamic correlations)
+  - Method 3: Monte Carlo (100,000 paths, GBM + jump diffusion)
+  - Confidence levels: 95%, 99%, 99.9%
+  - Report: all 3 methods + average (robust ensemble)
+
+  CVaR (Expected Shortfall):
+  - Computed for all 3 VaR methods
+  - Portfolio CVaR decomposition: per-asset contribution
+  - Stressed CVaR: using 2008 crisis / 2020 COVID scenarios
+
+  Stress Testing:
+  Scenarios:
+  - 2008 Global Financial Crisis (Sep-Dec 2008 returns)
+  - 2020 COVID Crash (Feb-Mar 2020)
+  - 2022 Rate Hike Selloff
+  - Custom: user-defined factor shocks
+  Output: Portfolio P&L under each scenario
+
+  Factor Risk:
+  - Fama-French 5-Factor model decomposition
+  - Principal Component Analysis: top 5 PCs explain variance
+  - Factor exposure report: beta to each factor
+  - Idiosyncratic risk: residual after factor model
+
+  Position Sizing:
+  - Kelly Criterion: f* = (bp - q) / b (fractional Kelly: 0.25x)
+  - Volatility scaling: target 1.5% daily portfolio vol per trade
+  - Correlation-adjusted sizing: reduce size when adding correlated assets
+  - Max position: 8% single stock, 20% single sector, 30% single geography
+
+  Portfolio Optimization (PyPortfolioOpt):
+  - Mean-Variance Optimization (Markowitz, L2-regularized)
+  - Hierarchical Risk Parity (HRP) - no matrix inversion issues
+  - Black-Litterman: incorporate ML model views
+  - Minimum Variance, Maximum Sharpe, Maximum Diversification
+  - Plot: Efficient Frontier with current portfolio marked
+
+5D. BACKTESTING ENGINE (services/backtesting/):
+
+  Event-Driven Architecture:
+  Classes: MarketEvent, SignalEvent, OrderEvent, FillEvent
+  Handlers: DataHandler, PortfolioHandler, ExecutionHandler, PerformanceHandler
+
+  Realism Features:
+  - Bid-ask spread: separate bid/ask series (or estimate from OHLC)
+  - Slippage model: 0.05% + market impact (proportional to order size)
+  - Commission: 0.1% per trade + fixed Rs.20 (Zerodha model)
+  - Short selling constraints: locate fee 0.5% annualized
+  - Margin requirements: 20% for long, 50% for short
+  - Survivorship bias: include delisted stocks in backtest universe
+  - Lookahead prevention: strict timestamp ordering
+
+  Statistical Analysis:
+  - Sharpe ratio + Confidence Interval (bootstrap 10,000 samples)
+  - Sortino, Calmar, Omega, MAR ratios
+  - Maximum drawdown, drawdown duration, recovery time
+  - Win rate, profit factor, average win/loss ratio
+  - Monthly returns heatmap (seaborn calendar heatmap)
+  - Equity curve + drawdown curve
+  - Rolling Sharpe (252-day window)
+  - Alpha, Beta vs benchmark (Nifty50 / S&P500)
+
+  Strategy Validation:
+  - Monte Carlo permutation test (shuffle returns 1000x, compute p-value)
+  - Walk-forward optimization (in-sample + out-of-sample windows)
+  - Deflated Sharpe Ratio (correct for multiple testing)
+  - Robustness: test sensitivity to ±10% parameter perturbation
+
+  Auto-Report Generation (PDF via WeasyPrint):
+  - Cover page: strategy name, period, author (M.Tech NIT Rourkela)
+  - Executive summary with key metrics table
+  - Equity curve chart
+  - Monthly returns calendar heatmap
+  - Drawdown analysis
+  - Trade log with 20 best/worst trades annotated on chart
+  - Risk decomposition
+  - Statistical significance tests
+  - LaTeX-formatted mathematical methodology section
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 6: NEXT.JS FRONTEND — BLOOMBERG-GRADE UI
+════════════════════════════════════════════════════════════════════════════════
+
+Design System:
+- Theme: Dark terminal aesthetic with precision data density
+- Primary background: #0A0B0E (near-black with slight blue)
+- Secondary background: #111318
+- Card surface: #161B24
+- Border: #1E2532 (subtle, not harsh)
+- Primary accent: #00D4FF (electric cyan)
+- Bull color: #00E676 (vivid green, not lime)
+- Bear color: #FF3B3B (vivid red, not orange-red)
+- Warning: #FFB800 (amber)
+- Text primary: #E8EAED
+- Text secondary: #8B9BB4
+- Font headings: "Clash Display Variable" (Google Fonts)
+- Font mono/data: "JetBrains Mono" (numbers, prices)
+- Font body: "Cabinet Grotesk" (general text)
+
+All price changes must use:
+- Green with upward triangle ▲ for positive
+- Red with downward triangle ▼ for negative
+- Monospace font for all price/number rendering
+- Trailing zeros preserved (₹1,234.50 not ₹1234.5)
+
+PAGE IMPLEMENTATIONS:
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 1: /dashboard — Command Center
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Layout: CSS Grid, 12-column, 3 rows
+
+Row 1 — Global Market Ticker (full width):
+  - WebSocket live price strip: Nifty50 | Sensex | S&P500 | NASDAQ | Gold | BTC | USD/INR
+  - Smooth horizontal scroll animation
+  - Color-coded +/- with sparkline mini-chart (SVG, 20-bar)
+
+Row 2 — Market Heatmap (7 cols) + AI Summary Panel (5 cols):
+  Market Heatmap (D3.js Treemap):
+  - NSE500 stocks as rectangles, sized by market cap
+  - Colored: deep red (-5%+) → neutral (#161B24) → deep green (+5%+)
+  - Hover: tooltip with OHLCV, prediction, news count
+  - Toggle: by sector, by index, by asset class
+  - Animation: smooth color transitions on price updates
+
+  AI Summary Panel:
+  - "NeuroQuant AI Market Pulse" — regenerates every 5 minutes
+  - LLM-generated 3-paragraph market analysis
+  - Regime indicator: animated badge (BULL/BEAR/SIDEWAYS) with confidence %
+  - Top 3 catalyst events (from news agent)
+  - Global risk gauge: Fear & Greed Index (animated radial chart)
+  - VIX level + Z-score
+
+Row 3 — 4 stat cards + Portfolio mini + Alerts feed:
+  Stat Cards: Portfolio P&L Today | Active Signals | Model Accuracy (30d) | Alerts
+  Portfolio Mini: Donut chart (holdings by sector) + top 5 positions
+  Alert Feed: Real-time WebSocket alert stream with severity badges
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 2: /market/[symbol] — Stock Intelligence Terminal
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Header:
+  - Stock name + exchange + currency
+  - Live price (WebSocket) in 36px JetBrains Mono
+  - % change + ▲/▼ + abs change
+  - 52-week high/low progress bar
+  - Market cap, P/E, Volume, VWAP badges
+
+Main Chart (TradingView Lightweight Charts — full feature):
+  Chart types: Candlestick | Bar | Line | Area | Heikin-Ashi | Baseline
+  Timeframes: 1m | 5m | 15m | 1h | 4h | 1D | 1W | 1M
+  
+  Overlay indicators (toggle buttons):
+  - Moving averages: SMA20(blue), SMA50(orange), SMA200(red), EMA9(cyan)
+  - Bollinger Bands (semi-transparent fill)
+  - VWAP (dashed purple line)
+  - Ichimoku Cloud (semi-transparent green/red fills)
+  - Volume Profile (horizontal bar chart on right axis)
+  
+  Subplot panels (below main chart, each collapsible):
+  - Volume histogram (green/red bars)
+  - MACD (line + signal + histogram)
+  - RSI with overbought/oversold zones
+  - Stochastic oscillator
+  
+  AI Overlay on chart:
+  - Prediction band: shaded area (80% CI, 95% CI)
+  - Regime background: bull=subtle green tint, bear=subtle red tint
+  - Anomaly markers: orange ⚠ flag annotations on chart
+  - Pattern labels: text annotations ("Bullish Engulfing", "Head & Shoulders")
+  - Support/resistance: horizontal dashed lines with price labels
+
+Right Panel (tabbed):
+  Tab 1 — AI Forecast:
+  - AMSTAN model: 5/10/30 day forecast chart with uncertainty bands
+  - Direction probability gauge: big circular gauge, 0-100% bullish
+  - Model ensemble: show all 5 model predictions with weights
+  - Next earnings date + analyst consensus
+  - Price targets: AI target vs analyst consensus vs current
+  - Attention heatmap (horizontal bar chart: which past bars matter most)
+  - SHAP waterfall chart: top 10 features driving prediction
+
+  Tab 2 — AI Research Report:
+  - Full LLM-generated markdown report (rendered with react-markdown)
+  - Sections: Technical View | Fundamental View | News Catalyst | Risk Factors
+  - Confidence score: 0-100 with breakdown
+  - Contradictions section (when agents disagree)
+  - "Generated at [timestamp] | Refresh" button
+
+  Tab 3 — Fundamentals:
+  - Income statement trend chart (revenue, profit — 5Y)
+  - Balance sheet health scores (visual meters)
+  - DCF valuation table
+  - Peer comparison radar chart (P/E, P/B, ROE, margin vs top 5 peers)
+
+  Tab 4 — Options (if equity):
+  - Options chain table: strikes, OI, volume, IV, delta, gamma
+  - IV smile curve (D3 line chart)
+  - Put/Call ratio gauge
+  - Max pain price marker on chain
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 3: /portfolio — Intelligent Portfolio Manager
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Holdings Table (TanStack Table):
+  Columns: Symbol | Name | Qty | Avg Cost | LTP | P&L | P&L% | 
+           Day Chg | Weight | VaR Contrib | Model Signal | Actions
+  - Virtualized rows (fast render for 500+ holdings)
+  - Inline sparklines in P&L column
+  - Sortable, filterable, groupable by sector
+  - Bulk actions: set stop-loss, set target, close position
+
+Portfolio Analytics (full-width charts):
+  - Performance chart: portfolio equity curve vs Nifty50 vs S&P500 (3 lines)
+  - Drawdown chart: colored area below zero
+  - Allocation: 4 donut charts (by asset, sector, geography, asset class)
+  - Risk attribution: stacked bar chart (systematic + idiosyncratic per holding)
+
+Efficient Frontier (D3.js scatter plot):
+  - 10,000 random portfolios (gray dots)
+  - Efficient frontier curve (blue line)
+  - Current portfolio (orange star)
+  - Max Sharpe portfolio (green star)
+  - Min Variance portfolio (yellow star)
+  - Drag current portfolio point → see required trades to reach optimal
+
+Monte Carlo Simulation:
+  - 1-year forward paths: 500 simulated equity curves (fan chart)
+  - 10th/25th/50th/75th/90th percentile bands
+  - Table: probability of reaching target | probability of hitting stop
+
+Rebalancing Optimizer:
+  - Choose optimization method: MVO | HRP | Black-Litterman | Equal Weight
+  - Toggle: include ML views (yes/no)
+  - Output: target weights vs current weights
+  - Trade list: exact buy/sell quantities to reach optimal
+  - Estimated transaction cost of rebalancing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 4: /screener — AI-Powered Stock Screener
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Filter Builder (visual, drag-and-drop blocks):
+  Fundamental filters:
+  - Market cap range, P/E range, P/B range, Dividend yield
+  - Revenue growth YoY, Net margin, ROE, Debt/Equity
+  - 52-week high proximity (within 5%)
+
+  Technical filters:
+  - RSI range, above/below SMA, MACD crossover (bullish/bearish)
+  - Volume > N * 20-day average (volume surge)
+  - Bollinger squeeze (low volatility setup)
+  - New 52-week high/low
+
+  AI filters (unique to NeuroQuant):
+  - Model confidence score > threshold
+  - Predicted 5-day return > threshold
+  - Sentiment score (positive/negative/neutral)
+  - Anomaly detected in last N days
+  - Regime: currently in bull/bear
+
+  Preset screens:
+  - "AI High Conviction Longs" (model conf>75%, bull regime, positive sentiment)
+  - "Mean Reversion Candidates" (RSI<30, near support, positive sentiment)
+  - "Momentum Leaders" (above all MAs, high RVOL, strong fundamentals)
+  - "Value + Quality" (low P/E, high ROE, low debt, positive momentum)
+
+Results Table:
+  - All filter-passing stocks with mini sparkline
+  - Sort by any column
+  - "Add to Watchlist" | "View Analysis" | "Add to Portfolio" actions
+  - Export CSV button
+  - Save/name current screen
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 5: /backtesting — Research Lab
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Strategy Configuration Panel:
+  - Strategy selector: dropdown with 6 strategies
+  - Dynamic parameter sliders (rendered from strategy.get_params())
+  - Asset universe selector: NSE500 | S&P500 | Crypto | Custom
+  - Date range: interactive date slider
+  - Benchmark: Nifty50 | S&P500 | Buy & Hold | Custom
+  - Initial capital: input
+  - Toggle: include transaction costs | short selling | margin
+
+Run Backtest → Progress Panel:
+  - WebSocket progress stream: "Loading data... Feature engineering... 
+    Running signals... Calculating performance..."
+  - Progress bar with stage indicator
+
+Results Dashboard:
+  Section 1 — Headline Metrics (card grid):
+  CAGR | Sharpe Ratio | Max Drawdown | Win Rate | Total Return |
+  Profit Factor | Sortino | Calmar | # Trades | Avg Hold Period
+
+  Section 2 — Charts:
+  - Equity curve (strategy vs benchmark, log scale toggle)
+  - Underwater/Drawdown curve
+  - Monthly returns heatmap (calendar)
+  - Rolling Sharpe (252-day)
+  - Trade distribution histogram
+
+  Section 3 — Statistical Significance:
+  - Monte Carlo permutation test: p-value + histogram
+  - Bootstrap Sharpe CI: [lower, upper] at 95%
+  - Deflated Sharpe Ratio
+  - Walk-forward results table (each window's metrics)
+
+  Section 4 — Trade Log:
+  - Table: date, symbol, side, price, qty, P&L, duration
+  - Click any trade → chart annotation jumps to that trade
+  - Top 10 wins / Top 10 losses highlighted
+
+  Download: "Generate PDF Report" button (WeasyPrint backend)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 6: /research — AI Research Hub
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Model Performance Leaderboard:
+  - Table: all models × all assets × all timeframes
+  - Metrics: IC, Directional Accuracy, Sharpe of predictions
+  - Heatmap: IC by sector × timeframe
+
+Correlation Network (3D — Three.js):
+  - Nodes = stocks, sized by market cap
+  - Edges = |correlation| > 0.5, thickness = strength
+  - Node color = sector
+  - Rotate, zoom, click node to navigate to stock page
+  - Filter: min correlation threshold slider
+
+Regime Analysis:
+  - Regime timeline: colored bar (green=bull, red=bear, gray=sideways)
+  - Regime statistics: avg duration, transition probabilities
+  - Transition matrix heatmap
+
+Factor Exposure Analysis:
+  - Fama-French factor loadings: scatter plot + regression output
+  - Rolling factor betas over time
+  - Factor return attribution: how much return comes from each factor
+
+Macro Dashboard:
+  - GDP growth, inflation, interest rates, unemployment (FRED API)
+  - Correlation: macro indicator changes vs market returns
+  - Regime switching model on macro variables
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PAGE 7: /alerts — Smart Alert Center
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Alert Builder:
+  - Type: Price | Technical | ML Signal | Sentiment | Anomaly | News
+  - Condition builder: visual (like Airtable filters)
+  - Notification channels: In-App | Email | Webhook
+  - Cooldown: don't re-trigger for N minutes
+
+Active Alerts Table:
+  - Status: Active | Triggered | Paused
+  - Last triggered timestamp
+  - # times triggered
+  - Edit / Pause / Delete
+
+Alert History Feed:
+  - WebSocket real-time stream
+  - Each alert: severity badge + stock chip + message + timestamp
+  - Filter by type, severity, asset
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GLOBAL UI COMPONENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Navigation:
+  - Left sidebar: collapsible, icon + label
+  - Top bar: search (Meilisearch, instant), notifications bell, profile
+  - Command palette: Cmd+K → fuzzy search any stock/crypto/page
+
+Search (Cmd+K):
+  - Powered by Meilisearch
+  - Instant results as you type
+  - Results grouped: Stocks | Crypto | ETFs | Indices
+  - Recent searches persisted in localStorage
+
+Notifications:
+  - Bell icon with unread badge
+  - Dropdown: last 10 alerts with mark-as-read
+  - "Clear all" and "Settings" links
+
+Toast System:
+  - Success / Error / Warning / Info variants
+  - WebSocket connection status toast (reconnecting...)
+  - ML model prediction loading toast
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 7: DATABASE SCHEMA
+════════════════════════════════════════════════════════════════════════════════
+
+PostgreSQL + TimescaleDB Schema:
+
+-- Users & Auth
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,           -- AES-256-GCM encrypted
+  email_hash TEXT UNIQUE NOT NULL,      -- SHA-256, for lookups
+  password_hash TEXT NOT NULL,          -- argon2id
+  totp_secret TEXT,                     -- encrypted
+  is_2fa_enabled BOOLEAN DEFAULT false,
+  role TEXT DEFAULT 'ANALYST',
+  is_active BOOLEAN DEFAULT true,
+  email_verified_at TIMESTAMPTZ,
+  last_login_at TIMESTAMPTZ,
+  failed_login_attempts INT DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE refresh_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT UNIQUE NOT NULL,      -- SHA-256 of token
+  family_id UUID NOT NULL,             -- for reuse detection
+  expires_at TIMESTAMPTZ NOT NULL,
+  revoked_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE backup_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  code_hash TEXT NOT NULL,             -- bcrypt
+  used_at TIMESTAMPTZ
+);
+
+-- Market Data (TimescaleDB hypertable)
+CREATE TABLE ohlcv (
+  time TIMESTAMPTZ NOT NULL,
+  symbol TEXT NOT NULL,
+  exchange TEXT NOT NULL,
+  open NUMERIC(18,4) NOT NULL,
+  high NUMERIC(18,4) NOT NULL,
+  low NUMERIC(18,4) NOT NULL,
+  close NUMERIC(18,4) NOT NULL,
+  volume BIGINT NOT NULL,
+  PRIMARY KEY (time, symbol, exchange)
+);
+SELECT create_hypertable('ohlcv', 'time');
+CREATE INDEX ON ohlcv (symbol, time DESC);
+
+CREATE TABLE tick_data (
+  time TIMESTAMPTZ NOT NULL,
+  symbol TEXT NOT NULL,
+  price NUMERIC(18,4),
+  volume INT,
+  side TEXT  -- 'BUY' | 'SELL'
+);
+SELECT create_hypertable('tick_data', 'time');
+
+-- ML Predictions
+CREATE TABLE predictions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  symbol TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  prediction_time TIMESTAMPTZ NOT NULL,
+  horizon_days INT NOT NULL,
+  predicted_price NUMERIC(18,4),
+  predicted_direction INT,             -- +1/-1/0
+  confidence NUMERIC(5,4),
+  lower_80 NUMERIC(18,4),
+  upper_80 NUMERIC(18,4),
+  lower_95 NUMERIC(18,4),
+  upper_95 NUMERIC(18,4),
+  feature_importances JSONB,
+  actual_price NUMERIC(18,4),          -- filled after realization
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Portfolio
+CREATE TABLE portfolios (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  base_currency TEXT DEFAULT 'INR',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE holdings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  portfolio_id UUID REFERENCES portfolios(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  exchange TEXT NOT NULL,
+  quantity NUMERIC(18,8) NOT NULL,
+  avg_cost NUMERIC(18,4) NOT NULL,
+  stop_loss NUMERIC(18,4),
+  take_profit NUMERIC(18,4),
+  opened_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Risk Metrics
+CREATE TABLE portfolio_risk_snapshots (
+  time TIMESTAMPTZ NOT NULL,
+  portfolio_id UUID REFERENCES portfolios(id),
+  var_95 NUMERIC(18,4),
+  var_99 NUMERIC(18,4),
+  cvar_95 NUMERIC(18,4),
+  cvar_99 NUMERIC(18,4),
+  sharpe_90d NUMERIC(8,4),
+  max_drawdown NUMERIC(8,4),
+  beta NUMERIC(8,4),
+  correlation_matrix JSONB
+);
+SELECT create_hypertable('portfolio_risk_snapshots', 'time');
+
+-- Alerts
+CREATE TABLE alert_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  symbol TEXT,
+  alert_type TEXT NOT NULL,
+  conditions JSONB NOT NULL,
+  channels JSONB NOT NULL,
+  cooldown_minutes INT DEFAULT 60,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE alert_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alert_id UUID REFERENCES alert_definitions(id),
+  triggered_at TIMESTAMPTZ DEFAULT NOW(),
+  payload JSONB,
+  notified BOOLEAN DEFAULT false
+);
+
+-- Audit Log (immutable)
+CREATE TABLE audit_log (
+  id BIGSERIAL,
+  user_id UUID,
+  action TEXT NOT NULL,
+  resource_type TEXT,
+  resource_id TEXT,
+  ip_address INET,
+  user_agent TEXT,
+  request_id UUID,
+  metadata JSONB,
+  prev_hash TEXT,                      -- hash of previous row
+  row_hash TEXT,                       -- hash of this row's data
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+SELECT create_hypertable('audit_log', 'created_at');
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 8: WEBSOCKET ARCHITECTURE
+════════════════════════════════════════════════════════════════════════════════
+
+Server (FastAPI + Redis Pub/Sub):
+
+class ConnectionManager:
+    - Per-user connection registry (dict[user_id, list[WebSocket]])
+    - Per-symbol subscription registry (dict[symbol, set[user_id]])
+    - Heartbeat: ping every 30s, close if no pong in 10s
+    - Reconnection: client implements exponential backoff (1s → 2s → 4s → max 30s)
+    - Max 10 concurrent connections per user
+    - Auth: JWT token passed as query param on connect (ws://.../ws?token=...)
+    
+Message Types (JSON with "type" discriminator):
+  Server → Client:
+  - {type: "tick", symbol, price, volume, change_pct, timestamp}
+  - {type: "prediction_update", symbol, model, direction, confidence}
+  - {type: "alert_triggered", alert_id, message, severity, symbol}
+  - {type: "regime_change", symbol, old_regime, new_regime, confidence}
+  - {type: "anomaly_detected", symbol, anomaly_type, severity, description}
+  - {type: "portfolio_update", pnl, pnl_pct, positions}
+  - {type: "heartbeat", server_time}
+
+  Client → Server:
+  - {type: "subscribe", symbols: ["RELIANCE.NS", "BTC-USD"]}
+  - {type: "unsubscribe", symbols: [...]}
+  - {type: "pong"}
+
+Client Hook (React):
+  useWebSocket(symbols: string[]) returns:
+  - ticks: Map<symbol, TickData>
+  - predictions: Map<symbol, PredictionData>
+  - alerts: AlertEvent[]
+  - connectionStatus: "connected" | "reconnecting" | "disconnected"
+  - anomalies: AnomalyEvent[]
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 9: BUILD ORDER — EXACT PHASE-BY-PHASE INSTRUCTIONS
+════════════════════════════════════════════════════════════════════════════════
+
+Execute EXACTLY in this order. After each phase, run the test command 
+provided and confirm it passes before proceeding.
+
+PHASE 0 — Environment Setup (run first):
+  1. Install: Node.js 20 LTS, Python 3.12, Docker Desktop, pnpm
+  2. Run: scripts/setup.sh (create all dirs, install deps, start Docker)
+  3. Verify: all Docker containers healthy
+  4. Test command: docker compose ps (all services "healthy")
+
+PHASE 1 — Database + Migrations:
+  1. PostgreSQL + TimescaleDB init.sql (all tables above)
+  2. Alembic setup + initial migration
+  3. Redis config
+  4. Test: connect to DB, verify hypertables created, Redis ping
+
+PHASE 2 — Auth Service (gateway/app/api/v1/auth/):
+  1. User registration with argon2id, email verification
+  2. Login with lockout, JWT RS256 issuance
+  3. Refresh token rotation with family tracking
+  4. TOTP 2FA setup and verify endpoints
+  5. Logout (blacklist JTI in Redis)
+  6. Test: full auth flow with pytest-asyncio
+
+PHASE 3 — Data Pipeline:
+  1. yfinance fetcher: bulk historical OHLCV for NSE200 + S&P100 + Top20 Crypto
+  2. TimescaleDB bulk insert (COPY command for speed)
+  3. APScheduler: 1-minute OHLCV refresh during market hours
+  4. WebSocket price simulator (during market hours, real API; off hours: last close)
+  5. Redis Pub/Sub: price updates published to "ticks:{symbol}" channels
+  6. Test: subscribe to BTC-USD channel, verify ticks flowing
+
+PHASE 4 — Feature Engineering + ML Training:
+  1. FeatureEngineer class: all 200+ features, tested for data leakage
+  2. Train HMM regime detection (first, used as input to other models)
+  3. Train GNN market topology model
+  4. Train AMSTAN (custom transformer) with walk-forward CV
+  5. Train RL agent (PPO) on StockTradingEnv
+  6. Train ensemble (XGBoost + LightGBM + CatBoost stacking)
+  7. Train FinBERT sentiment pipeline
+  8. Register all models in MLflow
+  9. Test: run inference on RELIANCE.NS, verify output shape + confidence intervals
+
+PHASE 5 — Risk Engine:
+  1. VaR (3 methods) + CVaR calculations
+  2. Monte Carlo portfolio simulation
+  3. PyPortfolioOpt integration (MVO + HRP + Black-Litterman)
+  4. Kelly criterion + volatility-scaled position sizing
+  5. Stress testing scenarios
+  6. Test: compute VaR for sample portfolio, verify reasonable output
+
+PHASE 6 — Backtesting Engine:
+  1. Event-driven backtester (DataHandler, Portfolio, Execution, Performance)
+  2. All 6 strategies implemented
+  3. Walk-forward optimization
+  4. Monte Carlo significance testing
+  5. PDF report generation (WeasyPrint)
+  6. Test: backtest momentum strategy 2020-2024, Sharpe > 0.5
+
+PHASE 7 — FastAPI REST Endpoints:
+  1. All endpoints from Section 7 with Pydantic validation
+  2. Rate limiting (slowapi)
+  3. RBAC decorators
+  4. Redis caching
+  5. Audit logging middleware
+  6. Security headers middleware
+  7. Test: full API test suite (pytest), 90%+ coverage
+
+PHASE 8 — WebSocket Server:
+  1. ConnectionManager with auth
+  2. Redis Pub/Sub → WebSocket fanout
+  3. All message types
+  4. Heartbeat + reconnection
+  5. Test: connect 3 clients, subscribe to symbols, verify tick delivery
+
+PHASE 9 — LangGraph Multi-Agent System:
+  1. News Agent (FinBERT + RSS fetcher)
+  2. Technical Agent (pattern classifier + support/resistance)
+  3. Fundamental Agent (DCF + peer comparison)
+  4. Risk Manager Agent
+  5. LangGraph orchestrator
+  6. Endpoint: POST /api/v1/research/generate/{symbol}
+  7. Test: generate report for TCS.NS, verify all 4 agent sections present
+
+PHASE 10 — Next.js App Setup:
+  1. Next.js 14 project with TypeScript strict
+  2. Tailwind CSS + design tokens (CSS variables)
+  3. Font loading (Clash Display, JetBrains Mono, Cabinet Grotesk)
+  4. NextAuth.js v5 with credentials + Google + GitHub providers
+  5. Zustand stores + TanStack Query setup
+  6. WebSocket hook (useWebSocket) with auto-reconnect
+  7. API client layer (all endpoints typed)
+  8. Test: npm run dev, visit localhost:3000, login flow works
+
+PHASE 11 — Dashboard Page:
+  Build: ticker strip, D3 heatmap, AI summary panel, portfolio mini, alerts
+  Test: live price updates visible in ticker strip
+
+PHASE 12 — Stock Detail Page:
+  Build: full TradingView chart with all indicators + AI prediction overlay
+  Test: open RELIANCE.NS page, all tabs load, chart renders
+
+PHASE 13 — Portfolio + Screener + Backtesting Pages:
+  Test: add holding, run screener with 3 filters, run backtest
+
+PHASE 14 — Research + Alerts Pages:
+  Test: 3D correlation graph renders, create price alert, receives notification
+
+PHASE 15 — Security Hardening:
+  1. Add all security headers (Nginx + FastAPI middleware)
+  2. CSP with nonces
+  3. Enable rate limiting on all endpoints
+  4. Run OWASP ZAP scan → fix all HIGH/MEDIUM findings
+  5. Run bandit (Python SAST) → fix all HIGH severity
+  6. Run npm audit → fix all HIGH/CRITICAL
+  7. Test: ZAP scan report shows 0 High findings
+
+PHASE 16 — Monitoring + Observability:
+  1. Prometheus metrics (custom: prediction_accuracy, data_latency, etc.)
+  2. Grafana dashboards (market data, ML performance, API health)
+  3. OpenTelemetry traces → Jaeger
+  4. Structured logging (structlog JSON)
+  5. Test: Grafana dashboard at localhost:3001 shows live metrics
+
+PHASE 17 — Testing + Documentation:
+  1. Backend: pytest suite, 90%+ coverage, all edge cases
+  2. Frontend: Vitest unit tests, Playwright E2E (login + dashboard + trade)
+  3. README.md: thesis-grade with architecture diagrams (Mermaid)
+  4. Mathematical methodology section (LaTeX in MD)
+  5. API docs: auto-generated FastAPI OpenAPI + custom examples
+  6. Test: all CI checks pass (lint, type-check, test, security-scan)
+
+
+════════════════════════════════════════════════════════════════════════════════
+SECTION 10: .env.example (all 47 required variables)
+════════════════════════════════════════════════════════════════════════════════
+
+# Database
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/neuroquant
+SYNC_DATABASE_URL=postgresql://user:password@localhost:5432/neuroquant
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=10
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+REDIS_CACHE_TTL=300
+
+# JWT (generate with: openssl genrsa -out private.pem 2048)
+JWT_PRIVATE_KEY_PATH=./keys/private.pem
+JWT_PUBLIC_KEY_PATH=./keys/public.pem
+JWT_ALGORITHM=RS256
+ACCESS_TOKEN_EXPIRE_MINUTES=15
+REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# Encryption (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key())")
+FIELD_ENCRYPTION_KEY=your-fernet-key-here
+
+# TOTP
+TOTP_ISSUER=NeuroQuant
+TOTP_DIGITS=6
+
+# Email (SendGrid)
+SENDGRID_API_KEY=SG.xxxxxxxxxxxx
+FROM_EMAIL=noreply@neuroquant.app
+
+# Data APIs
+ALPHA_VANTAGE_API_KEY=your_key
+FINNHUB_API_KEY=your_key
+NEWS_API_KEY=your_key
+FRED_API_KEY=your_key
+POLYGON_API_KEY=your_key
+
+# OAuth
+GOOGLE_CLIENT_ID=your_client_id
+GOOGLE_CLIENT_SECRET=your_secret
+GITHUB_CLIENT_ID=your_id
+GITHUB_CLIENT_SECRET=your_secret
+NEXTAUTH_SECRET=your_nextauth_secret_min_32_chars
+NEXTAUTH_URL=http://localhost:3000
+
+# ML
+MLFLOW_TRACKING_URI=http://localhost:5000
+MODEL_ARTIFACTS_PATH=./ml/artifacts
+HUGGINGFACE_TOKEN=hf_xxxxxxxx
+
+# MinIO (object storage)
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=minioadmin
+MINIO_SECRET_KEY=minioadmin
+MINIO_BUCKET_MODELS=ml-models
+
+# Monitoring
+PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+JAEGER_AGENT_HOST=localhost
+JAEGER_AGENT_PORT=6831
+
+# App
+ENVIRONMENT=development
+DEBUG=false
+LOG_LEVEL=INFO
+CORS_ORIGINS=["http://localhost:3000"]
+MAX_CONNECTIONS_PER_USER=10
+RATE_LIMIT_PER_MINUTE=1000
+
+# Meilisearch
+MEILISEARCH_URL=http://localhost:7700
+MEILISEARCH_MASTER_KEY=your_master_key
+
+# LLM (for multi-agent system)
+OPENAI_API_KEY=sk-xxxxxx
+LLM_MODEL=gpt-4o-mini
+
+
+════════════════════════════════════════════════════════════════════════════════
+ABSOLUTE RULES — NON-NEGOTIABLE
+════════════════════════════════════════════════════════════════════════════════
+
+1. NO placeholder code. Every function must be fully implemented.
+2. NO "TODO" comments. Either implement it or don't include it.
+3. NO mock data (except in tests). All data from real APIs.
+4. NO hardcoded credentials anywhere.
+5. ALL Python files: type hints on every function + mypy strict compliant.
+6. ALL TypeScript: strict mode, no 'any' type.
+7. ALL database queries: parameterized (no string concatenation).
+8. ALL API endpoints: Pydantic request/response validation.
+9. ALL ML models: walk-forward validation (never train on test data).
+10. Error handling: every async operation wrapped in try/except with
+    structured error logging.
+11. After each file created: run syntax check / type check before moving on.
+12. Each phase must be independently runnable and testable.
+13. Production secrets: NEVER commit to git (verify with gitleaks pre-commit hook).
+14. All chart components: handle loading state + error state + empty state.
+15. WebSocket hooks: always handle disconnect/reconnect gracefully.
+
+════════════════════════════════════════════════════════════════════════════════
+read the exising repo and start after remaining part
+
+
+
+════════════════════════════════════════════════════════════════════════════════
+
+
+
+
+
+
+I think You are not followed my full prompt, there clearly maintion You should create step wise with best standard wat with full conversation with fully all projects setup to perfect completetion..... But here is lots of errors, Not used proper algorithm for graph and others monitizations, Listen You should work perfectly without skipping anything, There are really simple looking this project adn overall statements the projects is like 1 star out of 10, Now i think you could follow the perfect prompt step by step and do exactly all work, Listen This is 2026 so You should give me fully projects with lots of files with small code with overall fully customized

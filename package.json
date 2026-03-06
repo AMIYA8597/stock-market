@@ -1,0 +1,29 @@
+{
+  "name": "neuroquant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NEUROQUANT — Institutional-Grade AI Stock Market Platform (NIT Rourkela M.Tech Thesis)",
+  "author": "NIT Rourkela M.Tech Thesis",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@8.15.6",
+  "scripts": {
+    "build":        "turbo run build",
+    "dev":          "turbo run dev --parallel",
+    "lint":         "turbo run lint",
+    "type-check":   "turbo run type-check",
+    "test":         "turbo run test",
+    "test:e2e":     "turbo run test:e2e",
+    "clean":        "turbo run clean && rm -rf node_modules",
+    "format":       "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,css}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,css}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "turbo":    "^2.0.0",
+    "prettier": "^3.2.5",
+    "typescript": "^5.4.5"
+  }
+}
