@@ -7,7 +7,7 @@
     "NEXTAUTH_URL",
     "NEXTAUTH_SECRET"
   ],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [
