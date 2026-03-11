@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import TickerStrip from '@/components/dashboard/TickerStrip';
 import Heatmap from '@/components/dashboard/Heatmap';
 import AISummaryPanel from '@/components/dashboard/AISummaryPanel';
@@ -29,3 +30,10 @@ export default function Home() {
     </main>
   );
 }
+=======
+import { redirect } from "next/navigation";
+
+export default function RootPage() {
+  redirect("/dashboard");
+}
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c

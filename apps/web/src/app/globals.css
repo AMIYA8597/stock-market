@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 @layer base {
+<<<<<<< HEAD
   * {
     @apply border-border;
   }
@@ -10,3 +11,95 @@
     @apply bg-background text-text-primary;
   }
 }
+=======
+  :root {
+    /* NeuroQuant Design Tokens */
+    --nq-bg-primary: #0A0B0E;
+    --nq-bg-secondary: #111318;
+    --nq-bg-card: #161B24;
+    --nq-bg-elevated: #1C2230;
+
+    --nq-border: #1E2532;
+    --nq-border-hover: #2A3447;
+
+    --nq-accent: #00D4FF;
+    --nq-accent-hover: #33DDFF;
+    --nq-accent-muted: rgba(0, 212, 255, 0.1);
+
+    --nq-bull: #00E676;
+    --nq-bull-muted: rgba(0, 230, 118, 0.2);
+    --nq-bull-bg: rgba(0, 230, 118, 0.08);
+
+    --nq-bear: #FF3B3B;
+    --nq-bear-muted: rgba(255, 59, 59, 0.2);
+    --nq-bear-bg: rgba(255, 59, 59, 0.08);
+
+    --nq-warning: #FFB800;
+    --nq-warning-muted: rgba(255, 184, 0, 0.1);
+
+    --nq-text-primary: #E8EAED;
+    --nq-text-secondary: #8B9BB4;
+    --nq-text-tertiary: #566176;
+
+    /* Font vars (set by next/font) */
+    --font-clash-display: 'Clash Display Variable', system-ui, sans-serif;
+    --font-cabinet: 'Cabinet Grotesk', system-ui, sans-serif;
+    --font-jetbrains: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+
+  * {
+    border-color: var(--nq-border);
+  }
+
+  body {
+    background-color: var(--nq-bg-primary);
+    color: var(--nq-text-primary);
+    font-family: var(--font-cabinet);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--nq-bg-primary);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--nq-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--nq-border-hover);
+  }
+
+  /* Selection */
+  ::selection {
+    background-color: rgba(0, 212, 255, 0.2);
+    color: var(--nq-text-primary);
+  }
+}
+
+@layer components {
+  .nq-glass {
+    backdrop-filter: blur(12px) saturate(150%);
+    background-color: rgba(22, 27, 36, 0.8);
+  }
+
+  .nq-glow-text {
+    text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+  }
+
+  .nq-gradient-text {
+    background: linear-gradient(135deg, #00D4FF, #00E676);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
