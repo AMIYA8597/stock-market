@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "compilerOptions": {
     "target": "es5",
     "lib": ["dom", "dom.iterable", "es6"],
@@ -29,3 +30,17 @@
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
 }
+=======
+  "extends": "@neuroquant/config/tsconfig.nextjs.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@neuroquant/types": ["../../packages/types/src/index"],
+      "@neuroquant/ui": ["../../packages/ui/src/index"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c

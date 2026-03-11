@@ -1,4 +1,5 @@
 """
+<<<<<<< HEAD
 Authentication endpoints with enterprise security: RS256 JWT, 2FA, refresh token management.
 
 Implements OAuth2 with Password flow + TOTP 2FA + backup codes.
@@ -7,10 +8,17 @@ Implements OAuth2 with Password flow + TOTP 2FA + backup codes.
 - Passwords: Argon2id hashed
 - 2FA: TOTP with backup codes
 - Field encryption: AES-256-GCM for sensitive data
+=======
+Authentication endpoints: register, login, refresh, current user.
+
+Uses JWT with access/refresh token pair.
+Passwords are hashed with bcrypt before storage.
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 """
 
 from __future__ import annotations
 
+<<<<<<< HEAD
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -22,11 +30,22 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+=======
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.config import get_settings
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 from app.core.database import get_db
 from app.core.security import (
     TokenType,
     create_token,
     decode_token,
+<<<<<<< HEAD
     decrypt_field,
     encrypt_field,
     generate_totp_secret,
@@ -57,6 +76,22 @@ from app.schemas.auth import (
     Verify2FA,
 )
 
+=======
+    get_current_user,
+    hash_password,
+    verify_password,
+)
+from app.models.user import User
+from app.schemas.auth import (
+    MessageResponse,
+    TokenRefresh,
+    TokenResponse,
+    UserRegister,
+    UserResponse,
+)
+
+settings = get_settings()
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 router = APIRouter()
 
 
@@ -69,6 +104,7 @@ async def register(
     Register a new user account.
 
     - Validates email uniqueness
+<<<<<<< HEAD
     - Hashes password with Argon2id
     - Encrypts email field
     - Assigns default role 'ANALYST'
@@ -77,6 +113,13 @@ async def register(
 
     # Check if email already exists
     result = await db.execute(select(User).where(User.email_hash == email_hash))
+=======
+    - Hashes password with bcrypt
+    - Assigns default role 'viewer'
+    """
+    # Check if email already exists
+    result = await db.execute(select(User).where(User.email == payload.email))
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     if result.scalar_one_or_none():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -84,6 +127,7 @@ async def register(
         )
 
     user = User(
+<<<<<<< HEAD
         email=encrypt_field(payload.email),
         email_hash=email_hash,
         password_hash=hash_password(payload.password),
@@ -104,16 +148,33 @@ async def register(
         last_login_at=user.last_login_at,
         created_at=user.created_at,
     )
+=======
+        email=payload.email,
+        hashed_password=hash_password(payload.password),
+        full_name=payload.full_name,
+        role=payload.role,
+    )
+    db.add(user)
+    await db.flush()
+    await db.refresh(user)
+
+    return user
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(
+<<<<<<< HEAD
     payload: UserLogin,
+=======
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     """
     Authenticate user and issue JWT token pair.
 
+<<<<<<< HEAD
     - Verifies password with Argon2id
     - Handles 2FA if enabled
     - Issues access (15min) + refresh (7day) tokens
@@ -131,6 +192,15 @@ async def login(
             if user.failed_login_attempts >= 5:
                 user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
             await db.commit()
+=======
+    Accepts OAuth2 password form: username (email) + password.
+    Returns access_token (15 min) + refresh_token (7 days).
+    """
+    result = await db.execute(select(User).where(User.email == form_data.username))
+    user = result.scalar_one_or_none()
+
+    if not user or not verify_password(form_data.password, user.hashed_password):
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
@@ -143,6 +213,7 @@ async def login(
             detail="Account is deactivated",
         )
 
+<<<<<<< HEAD
     # Check account lockout
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
         raise HTTPException(
@@ -209,11 +280,19 @@ async def login(
     db.add(db_refresh_token)
 
     await db.commit()
+=======
+    access_token = create_token(str(user.id), TokenType.ACCESS)
+    refresh_token = create_token(str(user.id), TokenType.REFRESH)
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
+<<<<<<< HEAD
         expires_in=900,  # 15 minutes
+=======
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     )
 
 
@@ -225,12 +304,19 @@ async def refresh_token(
     """
     Refresh an expired access token using a valid refresh token.
 
+<<<<<<< HEAD
     - Validates refresh token against DB
     - Implements family tracking for reuse detection
     - Issues new access/refresh pair
     - Revokes entire family on reuse attempt
     """
     token_data = decode_token(payload.refresh_token)
+=======
+    Validates the refresh token and issues a new access/refresh pair.
+    """
+    token_data = decode_token(payload.refresh_token)
+
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     if token_data.get("type") != TokenType.REFRESH.value:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -238,6 +324,7 @@ async def refresh_token(
         )
 
     user_id = token_data.get("sub")
+<<<<<<< HEAD
     jti = token_data.get("jti")
     refresh_token_hash = hashlib.sha256(payload.refresh_token.encode()).hexdigest()
 
@@ -268,12 +355,18 @@ async def refresh_token(
     # Get user
     user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
+=======
+    result = await db.execute(select(User).where(User.id == int(user_id)))
+    user = result.scalar_one_or_none()
+
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     if not user or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
 
+<<<<<<< HEAD
     # Revoke old refresh token
     db_refresh_token.revoked_at = datetime.now(timezone.utc)
 
@@ -294,17 +387,26 @@ async def refresh_token(
     db.add(new_db_refresh_token)
 
     await db.commit()
+=======
+    access_token = create_token(str(user.id), TokenType.ACCESS)
+    new_refresh_token = create_token(str(user.id), TokenType.REFRESH)
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
     return TokenResponse(
         access_token=access_token,
         refresh_token=new_refresh_token,
+<<<<<<< HEAD
         expires_in=900,
+=======
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     )
 
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: Annotated[User, Depends(get_current_user)]):
     """Get the currently authenticated user's profile."""
+<<<<<<< HEAD
     return UserResponse(
         id=current_user.id,
         email=decrypt_field(current_user.email),  # Decrypt for display
@@ -434,3 +536,6 @@ async def change_password(
     await db.commit()
 
     return MessageResponse(message="Password changed successfully")
+=======
+    return current_user
+>>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
