@@ -1,119 +1,206 @@
-version: "3.9"
+version: '3.9'
 
 services:
-  # ─── PostgreSQL + TimescaleDB ─────────────────────────────
-  db:
-    image: timescale/timescaledb:latest-pg15
-    restart: unless-stopped
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # PostgreSQL 16 + TimescaleDB 2.14 (Primary Database)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  postgres:
+    image: timescale/timescaledb:latest-pg16-oss
+    container_name: ${PROJECT_NAME:-stock-market-project}-postgres-1
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-quantedge}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantedge}
-      POSTGRES_DB: ${POSTGRES_DB:-quantedge}
+      POSTGRES_USER: ${POSTGRES_USER:-neuroquant}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-neuroquant}
+      POSTGRES_DB: ${POSTGRES_DB:-neuroquant}
+      TZ: Asia/Kolkata
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quantedge"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-neuroquant}"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ─── Redis ────────────────────────────────────────────────
-  cache:
-    image: redis:7-alpine
+    networks:
+      - neuroquant
     restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Redis 7.2 (Caching + Celery Broker)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  redis:
+    image: redis:7.2-alpine
+    container_name: ${PROJECT_NAME:-stock-market-project}-redis-1
+    command: redis-server /usr/local/etc/redis/redis.conf
     ports:
       - "6379:6379"
     volumes:
-      - redisdata:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-
-  # ─── FastAPI Backend ──────────────────────────────────────
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    networks:
+      - neuroquant
     restart: unless-stopped
-    env_file: .env
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # MinIO (S3-Compatible Storage for ML Artifacts)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  minio:
+    image: minio/minio:latest
+    container_name: ${PROJECT_NAME:-stock-market-project}-minio-1
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
-      - "8000:8000"
+      - "9000:9000"
+      - "9001:9001"
     volumes:
-      - ./backend:/app
-    depends_on:
-      db:
-        condition: service_healthy
-      cache:
-        condition: service_healthy
-    command: >
-      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-  # ─── Celery Worker ───────────────────────────────────────
-  worker:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neuroquant
     restart: unless-stopped
-    env_file: .env
-    volumes:
-      - ./backend:/app
-    depends_on:
-      db:
-        condition: service_healthy
-      cache:
-        condition: service_healthy
-    command: >
-      celery -A app.core.celery_app worker --loglevel=info --concurrency=2
 
-  # ─── MLflow Tracking Server ──────────────────────────────
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Meilisearch (Full-Text Search for Symbol Lookup)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: ${PROJECT_NAME:-stock-market-project}-meilisearch-1
+    environment:
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: production
+    ports:
+      - "7700:7700"
+    volumes:
+      - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - neuroquant
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Prometheus (Metrics Collection)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ${PROJECT_NAME:-stock-market-project}-prometheus-1
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+    networks:
+      - neuroquant
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Grafana (Monitoring Dashboards)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ${PROJECT_NAME:-stock-market-project}-grafana-1
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_INSTALL_PLUGINS: grafana-worldmap-panel
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - neuroquant
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Jaeger (Distributed Tracing)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: ${PROJECT_NAME:-stock-market-project}-jaeger-1
+    ports:
+      - "5775:5775/udp"
+      - "6831:6831/udp"
+      - "6832:6832/udp"
+      - "5778:5778"
+      - "16686:16686"
+      - "14268:14268"
+      - "14250:14250"
+      - "9411:9411"
+    networks:
+      - neuroquant
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # MLflow (ML Experiment Tracking)
+  # ═══════════════════════════════════════════════════════════════════════════════
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.9.2
-    restart: unless-stopped
+    image: ghcr.io/mlflow/mlflow:latest
+    container_name: ${PROJECT_NAME:-stock-market-project}-mlflow-1
     ports:
       - "5000:5000"
     volumes:
-      - mlflow-artifacts:/mlflow/artifacts
-    command: >
-      mlflow server
-      --backend-store-uri sqlite:///mlflow/mlflow.db
-      --default-artifact-root /mlflow/artifacts
-      --host 0.0.0.0
-      --port 5000
-
-  # ─── Next.js Frontend ────────────────────────────────────
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      - mlflow_data:/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri file:///mlflow
+    networks:
+      - neuroquant
     restart: unless-stopped
-    env_file: .env
-    ports:
-      - "3000:3000"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-      - /app/.next
-    depends_on:
-      - backend
-    command: npm run dev
 
-  # ─── Nginx Reverse Proxy ─────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Nginx (Reverse Proxy)
+  # ═══════════════════════════════════════════════════════════════════════════════
   nginx:
     image: nginx:alpine
-    restart: unless-stopped
+    container_name: ${PROJECT_NAME:-stock-market-project}-nginx-1
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - backend
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - neuroquant
+    restart: unless-stopped
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# VOLUMES (Persistent Storage)
+# ═══════════════════════════════════════════════════════════════════════════════
 volumes:
-  pgdata:
-  redisdata:
-  mlflow-artifacts:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  meilisearch_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  mlflow_data:
+    driver: local
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NETWORKS
+# ═══════════════════════════════════════════════════════════════════════════════
+networks:
+  neuroquant:
+    driver: bridge

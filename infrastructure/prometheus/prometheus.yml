@@ -1,0 +1,108 @@
+# Global Prometheus configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'neuroquant-platform'
+
+# Alerting configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+# Load rules from files
+rule_files: []
+
+# Scrape configurations
+scrape_configs:
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Prometheus itself
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # PostgreSQL exporter (for database metrics)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['localhost:5432']
+    scrape_interval: 30s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Redis exporter (for cache metrics)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['localhost:6379']
+    scrape_interval: 30s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # FastAPI Gateway (when running)
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'gateway-api'
+    static_configs:
+      - targets: ['localhost:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # ML Engine service
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'ml-engine'
+    static_configs:
+      - targets: ['localhost:8001']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Data Pipeline service
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'data-pipeline'
+    static_configs:
+      - targets: ['localhost:8002']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Risk Engine service
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'risk-engine'
+    static_configs:
+      - targets: ['localhost:8003']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Alert Service
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'alert-service'
+    static_configs:
+      - targets: ['localhost:8004']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Backtesting Engine
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'backtesting-engine'
+    static_configs:
+      - targets: ['localhost:8005']
+    metrics_path: '/metrics'
+    scrape_interval: 10s
+    scrape_timeout: 5s
+
+  # ═══════════════════════════════════════════════════════════════════════════════
+  # Jaeger tracing
+  # ═══════════════════════════════════════════════════════════════════════════════
+  - job_name: 'jaeger'
+    static_configs:
+      - targets: ['localhost:16686']
+    scrape_interval: 30s

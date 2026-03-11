@@ -22,9 +22,22 @@ module.exports = {
         },
       },
       fontFamily: {
-        heading: ['Clash Display', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
-        body: ['Cabinet Grotesk', 'sans-serif'],
+        clash: ['"Clash Display"', 'sans-serif'],
+        jbmono: ['"JetBrains Mono"', 'monospace'],
+        grotesk: ['"Space Grotesk"', 'sans-serif'],
+        heading: ['"Clash Display"', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+        body: ['"Space Grotesk"', 'sans-serif'],
+      },
+      animation: {
+        scroll: 'scroll 30s linear infinite',
+        pulse: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      keyframes: {
+        scroll: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(100px)' },
+        },
       },
     },
   },
