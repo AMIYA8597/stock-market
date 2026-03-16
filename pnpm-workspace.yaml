@@ -2,3 +2,11 @@ packages:
   - 'apps/*'
   - 'packages/*'
   - 'services/*'
+
+catalogs:
+  default:
+    @neuroquant/ui: 'workspace:*'
+    @neuroquant/charts: 'workspace:*'
+    @neuroquant/types: 'workspace:*'
+    @neuroquant/config: 'workspace:*'
+  - 'services/*'

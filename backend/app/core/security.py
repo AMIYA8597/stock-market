@@ -1,29 +1,19 @@
-"""
-<<<<<<< HEAD
-Enterprise security utilities: RS256 JWT, Argon2id passwords, TOTP 2FA, AES-256-GCM encryption.
+"""Enterprise security utilities for NeuroQuant.
 
-Implements OAuth2 with Password flow + 2FA.
-- Access tokens: 15-minute expiry, RS256 signed
-- Refresh tokens: 7-day expiry, family tracking for reuse detection
-- Passwords: Argon2id (winner of Password Hashing Competition)
-- 2FA: TOTP with backup codes
-- Field encryption: AES-256-GCM for sensitive data
-=======
-Security utilities: JWT token management, password hashing, auth dependencies.
-
-Implements OAuth2 with Password flow.
-- Access tokens: short-lived (15 min default)
-- Refresh tokens: long-lived (7 days default)
-- Passwords: bcrypt via passlib
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
+This module implements:
+- RS256 JWT access + refresh tokens
+- Argon2id password hashing
+- TOTP 2FA + backup codes
+- AES-256-GCM field encryption
+- FastAPI auth dependencies and RBAC helpers
 """
 
 from __future__ import annotations
 
-<<<<<<< HEAD
 import hashlib
 import secrets
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Annotated, Optional
 from uuid import uuid4
@@ -35,22 +25,11 @@ from cryptography.fernet import Fernet
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
-=======
-from datetime import datetime, timedelta, timezone
-from enum import Enum
-from typing import Annotated, Optional
-
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
-from passlib.context import CryptContext
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
-<<<<<<< HEAD
 from app.models.user import User
 
 settings = get_settings()
@@ -87,18 +66,10 @@ if not FIELD_ENCRYPTION_KEY:
     raise RuntimeError("FIELD_ENCRYPTION_KEY not set in environment")
 
 fernet = Fernet(FIELD_ENCRYPTION_KEY.encode())
-=======
-
-settings = get_settings()
-
-# ─── Password Hashing ─────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
 # ─── OAuth2 Scheme ─────────────────────────────────────────────
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
 
-<<<<<<< HEAD
 # ─── Enums ────────────────────────────────────────────────────
 class UserRole(str):
     """Role-based access control roles."""
@@ -109,22 +80,10 @@ class UserRole(str):
     API_USER = "API_USER"
 
 class TokenType(str):
-=======
-
-class UserRole(str, Enum):
-    """Role-based access control roles."""
-    ADMIN = "admin"
-    RESEARCHER = "researcher"
-    VIEWER = "viewer"
-
-
-class TokenType(str, Enum):
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
     """JWT token types."""
     ACCESS = "access"
     REFRESH = "refresh"
 
-<<<<<<< HEAD
 # ─── Password Functions ────────────────────────────────────────
 def hash_password(password: str) -> str:
     """Hash a plaintext password using Argon2id."""
@@ -139,24 +98,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 # ─── JWT Functions ────────────────────────────────────────────
-=======
-
-def hash_password(password: str) -> str:
-    """Hash a plaintext password using bcrypt."""
-    return pwd_context.hash(password)
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
-    return pwd_context.verify(plain_password, hashed_password)
-
-
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 def create_token(
     subject: str,
     token_type: TokenType,
     expires_delta: Optional[timedelta] = None,
-<<<<<<< HEAD
     jti: Optional[str] = None,
     role: Optional[str] = None,
 ) -> str:
@@ -169,16 +114,6 @@ def create_token(
         expires_delta: Custom expiration. Uses defaults if None.
         jti: JWT ID for uniqueness.
         role: User role for access control.
-=======
-) -> str:
-    """
-    Create a JWT token.
-
-    Args:
-        subject: The token subject (typically user ID as string).
-        token_type: ACCESS or REFRESH.
-        expires_delta: Custom expiration. Uses defaults if None.
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
     Returns:
         Encoded JWT string.
@@ -186,33 +121,21 @@ def create_token(
     now = datetime.now(timezone.utc)
     if expires_delta is None:
         if token_type == TokenType.ACCESS:
-<<<<<<< HEAD
             expires_delta = timedelta(minutes=15)
         else:
             expires_delta = timedelta(days=7)
-=======
-            expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        else:
-            expires_delta = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
     payload = {
         "sub": subject,
         "type": token_type.value,
         "iat": now,
         "exp": now + expires_delta,
-<<<<<<< HEAD
         "jti": jti or secrets.token_urlsafe(32),
     }
     if role:
         payload["role"] = role
 
     return jwt.encode(payload, JWT_PRIVATE_KEY, algorithm="RS256")
-=======
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
-
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
 
 def decode_token(token: str) -> dict:
     """
@@ -223,17 +146,12 @@ def decode_token(token: str) -> dict:
     """
     try:
         payload = jwt.decode(
-<<<<<<< HEAD
             token, JWT_PUBLIC_KEY, algorithms=["RS256"]
-=======
-            token, settings.SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
         )
         return payload
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-<<<<<<< HEAD
             detail="Invalid authentication credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
@@ -328,8 +246,6 @@ def require_role(required_role: str):
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-=======
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c
             detail="Invalid or expired token",
             headers={"WWW-Authenticate": "Bearer"},
         )

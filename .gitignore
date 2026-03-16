@@ -76,3 +76,4 @@ mlflow-artifacts/
 # *.db
 # *.sqlite3
 # pgdata/
+.aider*

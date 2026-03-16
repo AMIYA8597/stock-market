@@ -38,11 +38,15 @@ class Settings(BaseSettings):
     # ─── Redis ─────────────────────────────────────────────
     REDIS_URL: str = "redis://cache:6379/0"
 
-    # ─── Security / JWT ────────────────────────────────────
-    SECRET_KEY: str = "CHANGE_ME_TO_A_RANDOM_64_CHAR_HEX_STRING"
-    JWT_ALGORITHM: str = "HS256"
+    # ─── Security / JWT (RS256) ─────────────────────────────
+    JWT_PRIVATE_KEY_PATH: str = "./keys/private.pem"
+    JWT_PUBLIC_KEY_PATH: str = "./keys/public.pem"
+    JWT_ALGORITHM: str = "RS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # ─── Field Encryption (AES-256-GCM via Fernet) ──────────
+    FIELD_ENCRYPTION_KEY: str = "REPLACE_ME_WITH_FERNET_KEY_FROM_SETUP_SCRIPT"
 
     # ─── CORS ──────────────────────────────────────────────
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:80"]
