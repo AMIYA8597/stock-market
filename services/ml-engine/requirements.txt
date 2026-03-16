@@ -46,7 +46,7 @@ statsmodels==0.14.1
 matplotlib==3.8.4
 seaborn==0.13.2
 plotly==5.19.0
-polars==0.20.16
+hmmlearn==0.3.2
 
 # Data Pipeline
 yfinance==0.2.37
