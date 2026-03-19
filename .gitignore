@@ -55,15 +55,15 @@ mlflow-artifacts/
 # *.log
 # logs/
 
-# # Coverage
-# htmlcov/
-# .coverage
-# .coverage.*
-# coverage.xml
-# *.cover
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
 
-# # pytest
-# .pytest_cache/
+# pytest
+.pytest_cache/
 
 # # Alembic
 # backend/alembic/versions/*.pyc
