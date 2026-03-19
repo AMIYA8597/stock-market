@@ -9,4 +9,3 @@ catalogs:
     @neuroquant/charts: 'workspace:*'
     @neuroquant/types: 'workspace:*'
     @neuroquant/config: 'workspace:*'
-  - 'services/*'

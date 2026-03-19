@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from contextlib import asynccontextmanager
+
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase
 
 from app.core.config import settings
 
-# Create async engine
+
+class Base(DeclarativeBase):
+    """Base declarative model for the data-pipeline service."""
+
+
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.ENVIRONMENT == "development",
@@ -15,8 +21,7 @@ engine = create_async_engine(
     max_overflow=20,
 )
 
-# Create async session factory
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False,
@@ -24,7 +29,17 @@ AsyncSessionLocal = sessionmaker(
 
 
 async def get_db() -> AsyncSession:
-    """Get database session."""
+    """Yield a database session for FastAPI dependencies."""
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
+
+
+@asynccontextmanager
+async def get_session() -> AsyncSession:
+    """Provide a database session for internal service workflows."""
     async with AsyncSessionLocal() as session:
         try:
             yield session

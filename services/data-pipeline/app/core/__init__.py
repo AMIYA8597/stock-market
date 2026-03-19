@@ -1,6 +1,6 @@
 """Core package."""
 
 from .config import settings
-from .database import get_db
+from .database import Base, get_db, get_session
 
-__all__ = ["settings", "get_db"]
+__all__ = ["Base", "settings", "get_db", "get_session"]
