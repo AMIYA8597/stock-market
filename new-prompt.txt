@@ -1,0 +1,1544 @@
+════════════════════════════════════════════════════════════════════════════════
+MASTER BUILD PROMPT — RESEARCH-GRADE ALGORITHMIC TRADING INTELLIGENCE PLATFORM
+M.Tech Thesis | NIT Rourkela | 2026 Edition
+Architect level: 15 years senior quant + full-stack experience
+════════════════════════════════════════════════════════════════════════════════
+
+You are a 15-year senior quantitative researcher, distributed systems architect,
+and ML engineering lead. Your task is to build a complete, production-grade,
+research-publishable Algorithmic Trading Intelligence Platform from absolute
+scratch. Every line must be correct, complete, and at the standard of a
+top-tier financial technology firm. No placeholder logic. No TODO comments.
+No simplified approximations. This is an NIT M.Tech thesis — it must be
+publishable in IEEE / Elsevier / Springer journals.
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 1: COMPLETE MONOREPO STRUCTURE
+────────────────────────────────────────────────────────────────────────────────
+
+algo-trading-thesis/
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yml                    # lint + test on every PR
+│       ├── deploy-staging.yml        # auto-deploy to staging on merge to dev
+│       └── model-retrain.yml         # weekly scheduled model retrain
+│
+├── frontend/                         # Next.js 14 — App Router
+│   ├── app/
+│   │   ├── layout.tsx                # Root layout: font, theme, providers
+│   │   ├── page.tsx                  # Redirect to /terminal
+│   │   ├── (auth)/
+│   │   │   ├── login/page.tsx
+│   │   │   └── register/page.tsx
+│   │   ├── terminal/
+│   │   │   ├── layout.tsx            # Three-column Bloomberg layout
+│   │   │   └── page.tsx              # Main trading terminal
+│   │   ├── markets/
+│   │   │   ├── page.tsx              # Market overview + heatmap
+│   │   │   ├── stocks/
+│   │   │   │   ├── page.tsx          # Stock universe table
+│   │   │   │   └── [symbol]/
+│   │   │   │       ├── page.tsx      # Full stock detail page
+│   │   │   │       └── loading.tsx   # Skeleton loader
+│   │   │   ├── crypto/
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── [coin]/page.tsx
+│   │   │   └── forex/page.tsx
+│   │   ├── research/
+│   │   │   ├── layout.tsx
+│   │   │   ├── page.tsx              # Research workbench overview
+│   │   │   ├── regime-analysis/page.tsx
+│   │   │   ├── correlation-graph/page.tsx
+│   │   │   ├── factor-exposure/page.tsx
+│   │   │   ├── explainability/
+│   │   │   │   ├── page.tsx
+│   │   │   │   └── [symbol]/page.tsx
+│   │   │   └── model-performance/page.tsx
+│   │   ├── backtest-lab/
+│   │   │   ├── page.tsx
+│   │   │   └── results/[jobId]/page.tsx
+│   │   ├── portfolio/
+│   │   │   ├── page.tsx              # Holdings + performance
+│   │   │   └── optimizer/page.tsx    # Portfolio optimizer
+│   │   ├── screener/page.tsx
+│   │   ├── alerts/page.tsx
+│   │   └── model-monitor/page.tsx
+│   │
+│   ├── components/
+│   │   ├── charts/
+│   │   │   ├── CandlestickChart/
+│   │   │   │   ├── index.tsx         # TradingView Lightweight Charts wrapper
+│   │   │   │   ├── useChartSetup.ts  # Chart init, series, dispose
+│   │   │   │   ├── IndicatorPlugin.ts # Overlay: EMA, BB, Ichimoku, VWAP
+│   │   │   │   ├── RegimeBands.tsx   # HMM state background bands
+│   │   │   │   ├── AttentionOverlay.tsx # TFT attention heatmap layer
+│   │   │   │   ├── SignalMarkers.tsx  # ▲▼ BUY/SELL annotations
+│   │   │   │   └── VolumeProfile.tsx  # Y-axis horizontal volume profile
+│   │   │   ├── RegimeChart/
+│   │   │   │   ├── index.tsx         # Stacked area: P(bull), P(bear), P(crisis)
+│   │   │   │   └── TransitionMatrix.tsx # 4×4 heatmap of A matrix
+│   │   │   ├── CorrelationGraph/
+│   │   │   │   ├── index.tsx         # D3 force-directed asset graph
+│   │   │   │   ├── useGraphPhysics.ts
+│   │   │   │   └── NodeTooltip.tsx
+│   │   │   ├── ShapWaterfall/
+│   │   │   │   ├── index.tsx         # SHAP waterfall bar chart (D3)
+│   │   │   │   └── FeatureRanking.tsx
+│   │   │   ├── EfficientFrontier/
+│   │   │   │   ├── index.tsx         # Interactive frontier scatter
+│   │   │   │   └── PortfolioPoint.tsx
+│   │   │   ├── VolatilitySurface/
+│   │   │   │   └── index.tsx         # Three.js 3D vol surface
+│   │   │   ├── MonteCarloFan/
+│   │   │   │   └── index.tsx         # 10k path fan with percentile bands
+│   │   │   ├── DrawdownChart/
+│   │   │   │   └── index.tsx         # Underwater equity chart (Recharts)
+│   │   │   ├── WalkForwardGrid/
+│   │   │   │   └── index.tsx         # Calendar heatmap of fold Sharpes
+│   │   │   ├── OrderFlowImbalance/
+│   │   │   │   └── index.tsx         # Real-time OFI bar (Canvas)
+│   │   │   ├── HeatmapTreemap/
+│   │   │   │   └── index.tsx         # D3 treemap — sector % change
+│   │   │   └── AttentionHeatmap/
+│   │   │       └── index.tsx         # 2D grid: timestep × head weights
+│   │   │
+│   │   ├── terminal/
+│   │   │   ├── TerminalLayout.tsx    # Three-pane resizable layout
+│   │   │   ├── Watchlist/
+│   │   │   │   ├── index.tsx
+│   │   │   │   ├── WatchlistRow.tsx  # Price, %, signal badge, regime dot
+│   │   │   │   └── useWatchlistWS.ts # WebSocket subscription hook
+│   │   │   ├── SignalPanel/
+│   │   │   │   ├── index.tsx         # Live signal feed card
+│   │   │   │   ├── SignalCard.tsx     # Per-asset: direction, confidence, models
+│   │   │   │   └── EnsembleWeightPie.tsx
+│   │   │   ├── RegimeBadge.tsx       # BULL / BEAR / SIDEWAYS / CRISIS pill
+│   │   │   ├── MarketTicker.tsx      # Horizontal scrolling price ticker
+│   │   │   └── ModelStatus.tsx       # Health indicators per model
+│   │   │
+│   │   ├── research/
+│   │   │   ├── FactorDecomposition.tsx
+│   │   │   ├── CounterfactualPanel.tsx
+│   │   │   └── DriftAlert.tsx
+│   │   │
+│   │   ├── portfolio/
+│   │   │   ├── HoldingsTable.tsx
+│   │   │   ├── AllocationDonut.tsx
+│   │   │   ├── PnLTimeline.tsx
+│   │   │   ├── RiskMetricsCard.tsx
+│   │   │   └── HRPDendrogram.tsx     # D3 dendrogram of clustering
+│   │   │
+│   │   └── ui/
+│   │       ├── Button.tsx
+│   │       ├── Badge.tsx
+│   │       ├── Card.tsx
+│   │       ├── Skeleton.tsx
+│   │       ├── Tooltip.tsx
+│   │       ├── DataTable.tsx         # Sortable, filterable table
+│   │       ├── RangeSlider.tsx
+│   │       ├── MultiSelect.tsx
+│   │       ├── Toast.tsx
+│   │       └── ErrorBoundary.tsx
+│   │
+│   ├── hooks/
+│   │   ├── useWebSocket.ts           # Reconnecting WS with exponential backoff
+│   │   ├── useSignalFeed.ts          # Subscribe to /ws/signals
+│   │   ├── usePriceFeed.ts           # Subscribe to /ws/prices
+│   │   ├── useRegime.ts              # Current regime state
+│   │   ├── useBacktest.ts            # Poll backtest job status
+│   │   └── usePortfolio.ts
+│   │
+│   ├── lib/
+│   │   ├── api.ts                    # Typed API client (fetch wrapper)
+│   │   ├── wsManager.ts              # Singleton WebSocket manager
+│   │   ├── chartUtils.ts             # OHLCV normalization, color helpers
+│   │   └── numberFormat.ts           # Compact price, % format utils
+│   │
+│   ├── store/
+│   │   ├── terminalStore.ts          # Zustand: selected symbol, timeframe
+│   │   ├── portfolioStore.ts
+│   │   └── alertStore.ts
+│   │
+│   ├── types/
+│   │   ├── market.ts                 # OHLCV, Quote, Signal, Regime types
+│   │   ├── models.ts                 # ModelPrediction, EnsembleWeight types
+│   │   ├── portfolio.ts
+│   │   └── api.ts                    # API response schemas
+│   │
+│   ├── styles/
+│   │   ├── globals.css               # CSS variables, resets
+│   │   └── terminal.css              # Terminal-specific layout classes
+│   │
+│   ├── next.config.ts
+│   ├── tailwind.config.ts
+│   ├── tsconfig.json                 # strict: true, paths aliases
+│   └── package.json
+│
+├── backend/                          # Python 3.12 — FastAPI async
+│   ├── app/
+│   │   ├── main.py                   # FastAPI app factory, lifespan, CORS
+│   │   ├── api/
+│   │   │   └── v1/
+│   │   │       ├── router.py         # Aggregate all routers
+│   │   │       ├── market.py         # /market/* endpoints
+│   │   │       ├── signals.py        # /signals/* endpoints
+│   │   │       ├── regime.py         # /regime/* endpoints
+│   │   │       ├── backtest.py       # /backtest/* endpoints
+│   │   │       ├── portfolio.py      # /portfolio/* endpoints
+│   │   │       ├── screener.py       # /screener/* endpoints
+│   │   │       ├── explainability.py # /explain/* endpoints
+│   │   │       ├── alerts.py         # /alerts/* endpoints
+│   │   │       └── model_monitor.py  # /monitor/* endpoints
+│   │   │
+│   │   ├── websocket/
+│   │   │   ├── router.py             # /ws/* WebSocket endpoints
+│   │   │   ├── price_broadcaster.py  # Publish ticks to subscribers
+│   │   │   ├── signal_broadcaster.py
+│   │   │   └── connection_manager.py # Room-based subscription manager
+│   │   │
+│   │   ├── core/
+│   │   │   ├── config.py             # Pydantic BaseSettings, env vars
+│   │   │   ├── security.py           # JWT encode/decode, password hash
+│   │   │   ├── dependencies.py       # FastAPI Depends: db, auth, redis
+│   │   │   ├── logging.py            # Structured JSON logging (structlog)
+│   │   │   └── events.py             # startup: load models, connect feeds
+│   │   │
+│   │   ├── models/                   # SQLAlchemy ORM models
+│   │   │   ├── user.py
+│   │   │   ├── symbol.py
+│   │   │   ├── ohlcv.py              # TimescaleDB hypertable mapped model
+│   │   │   ├── feature_vector.py
+│   │   │   ├── portfolio.py
+│   │   │   ├── transaction.py
+│   │   │   ├── alert.py
+│   │   │   ├── backtest_job.py
+│   │   │   ├── ml_prediction.py
+│   │   │   └── news_sentiment.py
+│   │   │
+│   │   ├── schemas/                  # Pydantic v2 request/response schemas
+│   │   │   ├── market.py
+│   │   │   ├── signal.py
+│   │   │   ├── regime.py
+│   │   │   ├── backtest.py
+│   │   │   ├── portfolio.py
+│   │   │   └── explain.py
+│   │   │
+│   │   ├── services/
+│   │   │   ├── data_ingestion/
+│   │   │   │   ├── base.py           # Abstract async data source
+│   │   │   │   ├── yfinance_source.py
+│   │   │   │   ├── nse_source.py
+│   │   │   │   ├── coingecko_source.py
+│   │   │   │   ├── fred_source.py
+│   │   │   │   ├── alpha_vantage_source.py
+│   │   │   │   └── orchestrator.py   # Concurrent async fetch manager
+│   │   │   │
+│   │   │   ├── feature_service.py    # Compute + cache feature vectors
+│   │   │   ├── signal_service.py     # Orchestrate model inference → signal
+│   │   │   ├── portfolio_service.py
+│   │   │   └── alert_service.py
+│   │   │
+│   │   └── database/
+│   │       ├── connection.py         # Async SQLAlchemy engine, session
+│   │       ├── redis_client.py       # Async Redis connection pool
+│   │       └── migrations/           # Alembic migrations
+│   │           └── versions/
+│   │               ├── 001_initial_schema.py
+│   │               └── 002_timescale_hypertables.py
+│   │
+│   ├── research/                     # CORE THESIS — all ML algorithms
+│   │   ├── __init__.py
+│   │   │
+│   │   ├── models/
+│   │   │   ├── tft/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── architecture.py   # Full TFT: VSN, GRN, LSTM, Attn, Quantile
+│   │   │   │   ├── components.py     # GRN, VSN, GLU as nn.Module subclasses
+│   │   │   │   ├── dataset.py        # TimeSeriesDataset with proper windowing
+│   │   │   │   ├── trainer.py        # Training loop, quantile loss, AdamW
+│   │   │   │   ├── evaluator.py      # P50 RMSE, Winkler Score, DM test
+│   │   │   │   └── inference.py      # Batched async inference, attention extract
+│   │   │   │
+│   │   │   ├── hmm_garch/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── hmm.py            # HMM with Student-t emissions, Baum-Welch
+│   │   │   │   ├── garch.py          # Per-state GARCH(1,1) via scipy optimize
+│   │   │   │   ├── regime_detector.py # Viterbi decode + forward-backward smooth
+│   │   │   │   ├── trainer.py        # EM training, convergence check
+│   │   │   │   └── forecaster.py     # N-day conditional vol forecast per state
+│   │   │   │
+│   │   │   ├── gnn/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── graph_builder.py  # GLASSO → sparse correlation graph
+│   │   │   │   ├── architecture.py   # GAT + GraphSAGE + temporal GRU (PyG)
+│   │   │   │   ├── dataset.py        # Dynamic graph dataset, edge updates
+│   │   │   │   ├── trainer.py
+│   │   │   │   └── inference.py      # Embed per asset, spillover risk score
+│   │   │   │
+│   │   │   ├── lstm_attention/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── architecture.py   # Bi-LSTM + multi-head self-attention
+│   │   │   │   ├── trainer.py
+│   │   │   │   └── inference.py
+│   │   │   │
+│   │   │   ├── xgboost_model/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── trainer.py        # XGBRegressor, rolling retrain pipeline
+│   │   │   │   ├── feature_selector.py # SHAP-based feature pruning
+│   │   │   │   └── inference.py
+│   │   │   │
+│   │   │   ├── ensemble/
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── orchestrator.py   # Load all models, run parallel inference
+│   │   │   │   ├── weight_manager.py # Dynamic weight: regime × rolling perf
+│   │   │   │   ├── signal_combiner.py # Weighted sum → S∈[-1,+1], confidence
+│   │   │   │   └── kelly_sizer.py    # Kelly criterion position sizing
+│   │   │   │
+│   │   │   └── online_learner/
+│   │   │       ├── __init__.py
+│   │   │       ├── reservoir.py      # Reservoir sampling buffer
+│   │   │       ├── ewc.py            # Elastic Weight Consolidation penalty
+│   │   │       ├── drift_detector.py # ADWIN algorithm for concept drift
+│   │   │       └── fine_tuner.py     # 5-step micro fine-tune on new data
+│   │   │
+│   │   ├── feature_engineering/
+│   │   │   ├── __init__.py
+│   │   │   ├── base.py               # FeatureBuilder ABC with fit/transform
+│   │   │   ├── price_factors.py      # Log-ret, momentum, 52w-high, drawdown
+│   │   │   ├── volatility_factors.py # Parkinson, Y-Z, GARCH-vol, vol-of-vol
+│   │   │   ├── microstructure.py     # OFI, Kyle λ, Amihud, Corwin-Schultz
+│   │   │   ├── calendar_effects.py   # Sin/cos encoding, earnings proximity
+│   │   │   ├── cross_sectional.py    # z-score normalization, rank, sector-rel
+│   │   │   ├── sentiment_factors.py  # FinBERT pipeline, EW sentiment score
+│   │   │   ├── ff5_betas.py          # Fama-French 5-factor rolling OLS betas
+│   │   │   └── pipeline.py           # Sequential FeatureBuilder pipeline
+│   │   │
+│   │   ├── backtesting/
+│   │   │   ├── __init__.py
+│   │   │   ├── engine.py             # Vectorized backtester (pure numpy)
+│   │   │   ├── cost_model.py         # Brokerage, STT, market impact, spread
+│   │   │   ├── walk_forward.py       # CPCV: purge + embargo + combinatorial
+│   │   │   ├── monte_carlo.py        # Bootstrap + Merton jump-diffusion 10k
+│   │   │   ├── analytics.py          # All metrics: Sharpe, Sortino, Omega...
+│   │   │   └── statistical_tests.py  # DM test, MCS, deflated Sharpe, MinBTL
+│   │   │
+│   │   ├── portfolio/
+│   │   │   ├── __init__.py
+│   │   │   ├── mean_variance.py      # MVO + Ledoit-Wolf + turnover constraint
+│   │   │   ├── black_litterman.py    # BL with ML views as P/Q/Ω inputs
+│   │   │   ├── risk_parity.py        # Equal risk contribution (ERC)
+│   │   │   ├── hrp.py                # Hierarchical Risk Parity (López de Prado)
+│   │   │   └── cvar_optimization.py  # CVaR LP via cvxpy
+│   │   │
+│   │   ├── risk/
+│   │   │   ├── __init__.py
+│   │   │   ├── var_models.py         # Historical, Parametric, MC VaR + CVaR
+│   │   │   ├── stress_testing.py     # 2008, COVID, DotCom, custom scenarios
+│   │   │   ├── factor_attribution.py # FF5 return decomposition
+│   │   │   └── tail_risk.py          # Cornish-Fisher VaR, EVT GPD fitting
+│   │   │
+│   │   └── explainability/
+│   │       ├── __init__.py
+│   │       ├── shap_explainer.py     # TreeSHAP + DeepSHAP per model
+│   │       ├── attention_extractor.py # TFT + LSTM-Attn weight serialization
+│   │       └── counterfactual.py     # DiCE counterfactual generation
+│   │
+│   ├── pipelines/
+│   │   ├── data_pipeline.py          # Prefect-style orchestration decorator
+│   │   ├── training_pipeline.py      # End-to-end model training flow
+│   │   ├── inference_pipeline.py     # Sub-100ms real-time inference chain
+│   │   └── retraining_trigger.py     # ADWIN → Celery retrain task dispatch
+│   │
+│   ├── tasks/                        # Celery task definitions
+│   │   ├── celery_app.py
+│   │   ├── data_tasks.py             # Scheduled ingestion + feature compute
+│   │   ├── backtest_tasks.py         # Async backtest job execution
+│   │   └── training_tasks.py         # Model retraining tasks
+│   │
+│   ├── tests/
+│   │   ├── unit/
+│   │   │   ├── test_tft.py           # TFT forward pass shape assertions
+│   │   │   ├── test_hmm_garch.py     # Compare GARCH vs R rugarch output
+│   │   │   ├── test_gnn.py
+│   │   │   ├── test_features.py      # Verify no look-ahead bias
+│   │   │   ├── test_backtest.py      # Known return sequence → expected metrics
+│   │   │   ├── test_portfolio.py     # MVO weight sum = 1, CVaR constraint holds
+│   │   │   └── test_statistical.py   # DM test type-I error at 5% significance
+│   │   ├── integration/
+│   │   │   ├── test_api_market.py
+│   │   │   ├── test_api_signals.py
+│   │   │   └── test_websocket.py
+│   │   └── property_tests/
+│   │       └── test_feature_invariants.py # Hypothesis-based invariant tests
+│   │
+│   ├── notebooks/                    # Jupyter — thesis evidence
+│   │   ├── 01_EDA_and_stationarity.ipynb
+│   │   ├── 02_feature_engineering_validation.ipynb
+│   │   ├── 03_hmm_regime_detection.ipynb
+│   │   ├── 04_tft_training_and_eval.ipynb
+│   │   ├── 05_gnn_correlation_topology.ipynb
+│   │   ├── 06_ensemble_walk_forward.ipynb
+│   │   ├── 07_portfolio_optimization.ipynb
+│   │   ├── 08_explainability_shap.ipynb
+│   │   └── 09_statistical_significance.ipynb
+│   │
+│   ├── pyproject.toml                # ruff, mypy, pytest config
+│   ├── requirements.txt
+│   └── requirements-dev.txt
+│
+├── data/
+│   ├── raw/                          # Git-ignored raw API dumps
+│   ├── processed/                    # Feature matrices, normalized
+│   ├── models/                       # .pt checkpoints, .pkl serialized
+│   └── results/                      # Backtest artifacts, JSON metrics
+│
+├── infrastructure/
+│   ├── docker-compose.yml            # Full local dev stack
+│   ├── docker-compose.prod.yml       # Production overrides
+│   ├── nginx/
+│   │   └── nginx.conf
+│   ├── postgres/
+│   │   └── init.sql                  # TimescaleDB extension + hypertable setup
+│   └── monitoring/
+│       ├── prometheus.yml
+│       └── grafana-dashboard.json
+│
+├── Makefile                          # make dev, test, train, backtest, docs
+├── .env.example
+└── README.md                         # Architecture diagram + setup in 5 steps
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 2: DATABASE SCHEMA (implement completely via Alembic migrations)
+────────────────────────────────────────────────────────────────────────────────
+
+PostgreSQL 16 + TimescaleDB 2.x extension.
+
+-- migrations/001_initial_schema.py
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email VARCHAR(255) UNIQUE NOT NULL,
+  hashed_password VARCHAR(255) NOT NULL,
+  full_name VARCHAR(255),
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE symbols (
+  id SERIAL PRIMARY KEY,
+  ticker VARCHAR(32) UNIQUE NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  exchange VARCHAR(32) NOT NULL,  -- NSE, BSE, NYSE, NASDAQ, CRYPTO
+  sector VARCHAR(64),
+  industry VARCHAR(64),
+  market_cap_bucket VARCHAR(16),  -- LARGE, MID, SMALL, MICRO
+  asset_type VARCHAR(16) NOT NULL, -- EQUITY, CRYPTO, INDEX, ETF, FOREX
+  currency VARCHAR(8) DEFAULT 'USD',
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE ohlcv (
+  time TIMESTAMPTZ NOT NULL,
+  symbol_id INTEGER NOT NULL REFERENCES symbols(id),
+  open NUMERIC(20, 8) NOT NULL,
+  high NUMERIC(20, 8) NOT NULL,
+  low NUMERIC(20, 8) NOT NULL,
+  close NUMERIC(20, 8) NOT NULL,
+  volume NUMERIC(24, 4) NOT NULL,
+  adjusted_close NUMERIC(20, 8),
+  interval VARCHAR(8) NOT NULL,  -- 1m, 5m, 15m, 1h, 1d
+  PRIMARY KEY (time, symbol_id, interval)
+);
+SELECT create_hypertable('ohlcv', 'time', chunk_time_interval => INTERVAL '7 days');
+CREATE INDEX ON ohlcv (symbol_id, time DESC);
+-- Continuous aggregates for fast OHLCV resampling
+CREATE MATERIALIZED VIEW ohlcv_1h WITH (timescaledb.continuous) AS
+  SELECT time_bucket('1 hour', time) AS bucket, symbol_id,
+         first(open, time) AS open, max(high) AS high,
+         min(low) AS low, last(close, time) AS close, sum(volume) AS volume
+  FROM ohlcv WHERE interval = '1m' GROUP BY bucket, symbol_id;
+
+CREATE TABLE feature_vectors (
+  time TIMESTAMPTZ NOT NULL,
+  symbol_id INTEGER NOT NULL REFERENCES symbols(id),
+  features JSONB NOT NULL,      -- 80+ float features, keyed by factor name
+  feature_version VARCHAR(16) NOT NULL DEFAULT 'v1',
+  PRIMARY KEY (time, symbol_id)
+);
+SELECT create_hypertable('feature_vectors', 'time', chunk_time_interval => INTERVAL '30 days');
+
+CREATE TABLE regime_states (
+  time TIMESTAMPTZ NOT NULL PRIMARY KEY,
+  viterbi_state SMALLINT NOT NULL,           -- 0=bull, 1=bear, 2=sideways, 3=crisis
+  state_probs NUMERIC(6,4)[] NOT NULL,       -- [P(bull), P(bear), P(sideways), P(crisis)]
+  conditional_vol NUMERIC(10,6) NOT NULL,    -- GARCH forecast 1-day vol
+  vol_forecast_5d NUMERIC(10,6),
+  vol_forecast_21d NUMERIC(10,6)
+);
+
+CREATE TABLE ml_predictions (
+  id BIGSERIAL PRIMARY KEY,
+  time TIMESTAMPTZ NOT NULL,
+  symbol_id INTEGER NOT NULL REFERENCES symbols(id),
+  model_name VARCHAR(32) NOT NULL,   -- tft, hmm_garch, gnn, lstm_attn, xgboost
+  horizon_days SMALLINT NOT NULL,    -- 1, 5, 10, 21
+  p10_return NUMERIC(10,6),          -- 10th percentile predicted return
+  p50_return NUMERIC(10,6),          -- median predicted return (point forecast)
+  p90_return NUMERIC(10,6),          -- 90th percentile predicted return
+  raw_signal NUMERIC(6,4),           -- continuous signal ∈ [-1, +1]
+  confidence NUMERIC(5,4),           -- ensemble agreement score ∈ [0, 1]
+  shap_values JSONB,                 -- per-feature SHAP attribution
+  attention_weights JSONB,           -- serialized attention weight array
+  actual_return NUMERIC(10,6),       -- filled in retrospectively
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX ON ml_predictions (symbol_id, time DESC, model_name);
+
+CREATE TABLE ensemble_signals (
+  time TIMESTAMPTZ NOT NULL,
+  symbol_id INTEGER NOT NULL REFERENCES symbols(id),
+  signal NUMERIC(6,4) NOT NULL,      -- final ∈ [-1, +1]
+  confidence NUMERIC(5,4) NOT NULL,
+  direction VARCHAR(12) NOT NULL,    -- STRONG_BUY, BUY, NEUTRAL, SELL, STRONG_SELL
+  model_weights JSONB NOT NULL,      -- {"tft": 0.32, "hmm_garch": 0.18, ...}
+  regime_state SMALLINT NOT NULL,
+  kelly_fraction NUMERIC(5,4),
+  PRIMARY KEY (time, symbol_id)
+);
+
+CREATE TABLE portfolio_holdings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  symbol_id INTEGER NOT NULL REFERENCES symbols(id),
+  quantity NUMERIC(20, 8) NOT NULL,
+  avg_buy_price NUMERIC(20, 8) NOT NULL,
+  realized_pnl NUMERIC(20, 4) DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, symbol_id)
+);
+
+CREATE TABLE transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  symbol_id INTEGER NOT NULL REFERENCES symbols(id),
+  type VARCHAR(8) NOT NULL,          -- BUY, SELL
+  quantity NUMERIC(20, 8) NOT NULL,
+  price NUMERIC(20, 8) NOT NULL,
+  brokerage NUMERIC(12, 4) DEFAULT 0,
+  stt NUMERIC(12, 4) DEFAULT 0,
+  net_amount NUMERIC(20, 4) NOT NULL,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE alerts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  symbol_id INTEGER REFERENCES symbols(id),
+  alert_type VARCHAR(32) NOT NULL,   -- PRICE_ABOVE, PRICE_BELOW, RSI_OB, MACD_CROSS, SIGNAL_CHANGE, REGIME_CHANGE
+  threshold NUMERIC(20, 8),
+  is_triggered BOOLEAN DEFAULT false,
+  triggered_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE backtest_jobs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  strategy_name VARCHAR(64) NOT NULL,
+  strategy_params JSONB NOT NULL,
+  universe JSONB NOT NULL,           -- list of symbol tickers
+  date_from DATE NOT NULL,
+  date_to DATE NOT NULL,
+  initial_capital NUMERIC(16, 2) NOT NULL,
+  status VARCHAR(16) DEFAULT 'PENDING', -- PENDING, RUNNING, DONE, FAILED
+  results JSONB,                     -- full metrics + equity curve
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE news_sentiment (
+  id BIGSERIAL PRIMARY KEY,
+  symbol_id INTEGER REFERENCES symbols(id),
+  headline TEXT NOT NULL,
+  source VARCHAR(128),
+  url TEXT,
+  sentiment_label VARCHAR(16) NOT NULL,  -- POSITIVE, NEGATIVE, NEUTRAL
+  sentiment_score NUMERIC(5,4) NOT NULL, -- finbert probability
+  published_at TIMESTAMPTZ NOT NULL,
+  processed_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX ON news_sentiment (symbol_id, published_at DESC);
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 3: BACKEND API — EVERY ENDPOINT (implement all, no stubs)
+────────────────────────────────────────────────────────────────────────────────
+
+BASE URL: /api/v1
+
+── /market ──────────────────────────────────────────────────────────────────
+GET  /market/quote/{symbol}
+  → Params: none
+  → Response: { ticker, name, price, change, change_pct, volume,
+                market_cap, pe_ratio, 52w_high, 52w_low,
+                regime: {state, probs}, signal: {direction, confidence} }
+  → Source: Redis cache (TTL 1s) → fallback yfinance
+
+GET  /market/history/{symbol}
+  → Query: interval=1d|1h|15m|5m|1m, period=1d|5d|1mo|3mo|6mo|1y|2y|5y|max
+  → Response: { symbol, interval, data: [{time, open, high, low, close, volume}] }
+  → Source: TimescaleDB continuous aggregate by interval
+
+GET  /market/indices
+  → Response: [{ name, ticker, value, change, change_pct, regime_state }]
+  → Covers: ^NSEI, ^BSESN, ^GSPC, ^IXIC, ^DJI, ^VIX, BTC-USD, ETH-USD
+
+GET  /market/movers
+  → Query: exchange=NSE|NYSE|CRYPTO, type=gainers|losers|volume|momentum
+  → Response: top 20 assets with signal overlay
+
+GET  /market/heatmap
+  → Query: exchange, metric=return_1d|return_5d|volume_surge
+  → Response: treemap data: { sector, stocks: [{ticker, name, value, metric}] }
+
+GET  /market/search
+  → Query: q=string (min 2 chars)
+  → Response: fuzzy-matched [{ticker, name, exchange, asset_type}]
+
+GET  /market/economic-calendar
+  → Response: upcoming FOMC, earnings, expiry dates for next 30 days
+
+── /signals ─────────────────────────────────────────────────────────────────
+GET  /signals/{symbol}
+  → Response: {
+      symbol, timestamp,
+      ensemble: { signal, confidence, direction, kelly_fraction },
+      models: {
+        tft: { p10, p50, p90, raw_signal, horizon_days: 1|5|21 },
+        hmm_garch: { regime_signal, vol_forecast_1d, vol_forecast_21d },
+        gnn: { spillover_risk, embedding_norm, top_correlated_assets },
+        lstm_attn: { raw_signal, attention_peaks: [timestep, weight] },
+        xgboost: { raw_signal, top_features: [{name, shap_value}] }
+      },
+      model_weights: { tft, hmm_garch, gnn, lstm_attn, xgboost },
+      regime: { state, probs, transition_probs }
+    }
+
+GET  /signals/bulk
+  → Query: symbols=RELIANCE.NS,TCS.NS,...  (up to 50)
+  → Response: array of signal objects (parallel inference)
+
+GET  /signals/history/{symbol}
+  → Query: model=ensemble|tft|..., days=30|90|252
+  → Response: time-series of signals with actual returns for accuracy eval
+
+── /regime ──────────────────────────────────────────────────────────────────
+GET  /regime/current
+  → Response: { state, probs, transition_matrix (4x4),
+                cond_vol_1d, cond_vol_5d, cond_vol_21d,
+                days_in_state, last_transition_date }
+
+GET  /regime/history
+  → Query: days=252
+  → Response: [{time, state, probs, cond_vol}]
+
+GET  /regime/statistics
+  → Response: per-state stats: {avg_duration, avg_return, avg_vol, freq}
+
+── /explain ─────────────────────────────────────────────────────────────────
+GET  /explain/shap/{symbol}
+  → Response: { model, feature_contributions: [{name, shap_val, feature_val, pct_rank}],
+                base_value, output_value, waterfall_ready: true }
+
+GET  /explain/attention/{symbol}
+  → Response: { model: tft|lstm_attn,
+                weights: [[float]] (heads × timesteps),
+                mean_weights: [float] (timestep importance),
+                top_timesteps: [{date, weight}] }
+
+POST /explain/counterfactual/{symbol}
+  → Body: { target_direction: BUY|SELL, num_cfs: 5 }
+  → Response: [{
+      cf_id, changed_features: [{name, original, counterfactual}],
+      resulting_signal, proximity_score
+    }]
+
+── /backtest ─────────────────────────────────────────────────────────────────
+POST /backtest/run
+  → Body: {
+      strategy_name: "ensemble"|"tft_only"|"ma_crossover"|"rsi_mrv"|"custom",
+      strategy_params: { fast_period, slow_period, rsi_threshold, ... },
+      universe: ["RELIANCE.NS", "TCS.NS", ...],
+      date_from: "2018-01-01",
+      date_to: "2024-12-31",
+      initial_capital: 1000000,
+      walk_forward: { enabled: true, n_splits: 8, purge_days: 5, embargo_days: 5 },
+      monte_carlo: { enabled: true, n_simulations: 10000 }
+    }
+  → Response: { job_id, status: "PENDING", estimated_seconds: 45 }
+
+GET  /backtest/status/{job_id}
+  → Response: { job_id, status, progress_pct, result_preview }
+
+GET  /backtest/results/{job_id}
+  → Response: {
+      metrics: {
+        total_return, cagr, sharpe, sortino, calmar, omega,
+        max_drawdown, max_drawdown_duration_days,
+        win_rate, profit_factor, avg_win, avg_loss, payoff_ratio,
+        num_trades, gross_profit, gross_loss,
+        tail_ratio, serenity_ratio, deflated_sharpe
+      },
+      equity_curve: [{date, portfolio_value, benchmark_value}],
+      drawdown_series: [{date, drawdown_pct}],
+      trade_log: [{date, symbol, direction, qty, price, pnl, cum_pnl}],
+      walk_forward: { fold_sharpes: [float], mean, std, t_stat, p_value },
+      monte_carlo: {
+        percentiles: { p5, p25, p50, p75, p95 },
+        prob_of_ruin_10pct: float,
+        prob_of_ruin_25pct: float,
+        fan_paths_sample: [[float]] (100 sampled paths for chart)
+      },
+      statistical_tests: {
+        dm_test: { statistic, p_value, vs_benchmark: "ARIMA" },
+        sharpe_se: float,
+        min_backtest_length_days: int,
+        multiple_testing_correction: "Bonferroni"
+      }
+    }
+
+── /portfolio ────────────────────────────────────────────────────────────────
+GET  /portfolio/holdings           → Live P&L for all holdings
+POST /portfolio/transaction        → Record BUY/SELL with cost calculation
+GET  /portfolio/performance        → Time-series P&L vs benchmark
+GET  /portfolio/risk-metrics       → Sharpe, Sortino, Beta, Alpha, VaR, CVaR
+
+POST /portfolio/optimize
+  → Body: {
+      universe: [tickers],
+      method: "hrp"|"black_litterman"|"cvar"|"mean_variance",
+      constraints: { max_weight: 0.20, sector_limits: {...}, max_turnover: 0.3 },
+      use_ml_views: true   -- incorporate ensemble signals as BL views
+    }
+  → Response: {
+      weights: { RELIANCE.NS: 0.12, TCS.NS: 0.09, ... },
+      expected_return, expected_vol, sharpe_ratio,
+      efficient_frontier: [{return, vol, weights}],  -- 100 points
+      hrp_dendrogram: { linkage_matrix, labels },
+      bl_posterior_returns: { ticker: expected_return }
+    }
+
+── /screener ─────────────────────────────────────────────────────────────────
+POST /screener/run
+  → Body: {
+      exchange: ["NSE", "NYSE"],
+      filters: {
+        market_cap_min: 10e9, market_cap_max: null,
+        pe_ratio_max: 25, rsi_min: 25, rsi_max: 45,
+        momentum_21d_min: 0.05, volume_ratio_min: 1.5,
+        signal_direction: ["BUY", "STRONG_BUY"],
+        regime_compatible: true
+      },
+      sort_by: "sharpe_21d",
+      limit: 50
+    }
+  → Response: { results: [{ticker, name, price, pe, rsi, signal, ...}],
+                total_matched, filters_applied }
+
+GET  /screener/presets
+  → Response: [{ name, description, filters_json }]
+  → Presets: value_stocks, momentum, oversold_rsi, breakout_candidates,
+             regime_aligned_buys, vol_contraction_squeeze
+
+── /alerts ──────────────────────────────────────────────────────────────────
+GET    /alerts               → User's alerts list
+POST   /alerts               → Create alert
+PATCH  /alerts/{id}          → Update alert
+DELETE /alerts/{id}          → Delete alert
+
+── /monitor ─────────────────────────────────────────────────────────────────
+GET  /monitor/model-accuracy
+  → Response: per model, rolling 21d: precision, recall, directional accuracy,
+               P50 RMSE, Winkler coverage score
+
+GET  /monitor/drift
+  → Response: per model: ADWIN p_value, drift_detected bool,
+               residual_distribution (last 63d), ks_stat vs training distribution
+
+GET  /monitor/ensemble-weights-history
+  → Response: time-series of model weights over last 252 days
+
+── WebSocket ─────────────────────────────────────────────────────────────────
+WS   /ws/prices
+  → Client sends: { action: "subscribe"|"unsubscribe", symbols: ["RELIANCE.NS"] }
+  → Server sends: { type: "tick", symbol, price, change_pct, timestamp }
+  → Rate: 1-second ticks (throttled from internal 100ms source)
+
+WS   /ws/signals
+  → Client sends: { action: "subscribe", symbols: [...] }
+  → Server sends: { type: "signal_update", symbol, signal, confidence, direction }
+  → Triggered on: new inference result computed
+
+WS   /ws/alerts
+  → Server sends: { type: "alert_triggered", alert_id, message, symbol, value }
+
+WS   /ws/backtest-progress
+  → Server sends: { type: "progress", job_id, pct, current_date, equity_value }
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 4: ML ALGORITHMS — FULL MATHEMATICAL IMPLEMENTATION
+────────────────────────────────────────────────────────────────────────────────
+
+Implement every formula below exactly. No library black boxes for core math.
+
+── TFT (research/models/tft/architecture.py) ────────────────────────────────
+
+GATED RESIDUAL NETWORK (GRN):
+  GRN(x, c=None):
+    η₁ = ELU(W₁·x + W_c·c + b₁)  [c is optional context]
+    η₂ = W₂·η₁ + b₂
+    gate = sigmoid(W₃·x + b₃)    [GLU gating]
+    out  = LayerNorm(x + gate ⊙ η₂)
+  Dropout applied after ELU. Residual skip: if dim(x) ≠ dim(out), use 1×1 conv.
+
+VARIABLE SELECTION NETWORK (VSN):
+  For K input features at one time step:
+    ξ = concat(x₁, x₂, ..., xₖ)          [flatten all features]
+    v = softmax(GRN(ξ))                    [K-dim selection weights, sparse]
+    x̃ₖ = GRN(xₖ)                          [per-feature processing]
+    X̃ = Σₖ vₖ · x̃ₖ                       [weighted feature combination]
+
+LSTM ENCODER-DECODER:
+  Encoder: LSTM over past 60 timesteps → hidden state h, cell state c
+  Decoder: LSTM over future horizon using h, c as initial state
+  Gate addition: each LSTM output passed through Gated Skip Connection:
+    out = LayerNorm(LSTM_out + Linear(x))  [add-norm residual]
+
+TEMPORAL SELF-ATTENTION:
+  Q = W_Q · h_dec,  K = W_K · h_enc,  V = W_V · h_enc
+  A(Q,K,V) = softmax(Q·Kᵀ / √d_k) · V   [causal mask: upper triangle = -∞]
+  Multi-head: 8 heads concatenated, projected to d_model
+  Output: GRN(attention_out + h_dec)
+
+QUANTILE OUTPUT:
+  For each quantile q ∈ {0.1, 0.5, 0.9}:
+    ŷ_q = Linear(attention_out)            [horizon × n_quantiles output]
+  Loss: QL = Σ_q Σ_t [q·max(y-ŷ_q, 0) + (1-q)·max(ŷ_q-y, 0)]
+
+── HMM-GARCH (research/models/hmm_garch/) ───────────────────────────────────
+
+HMM with K=4 hidden states, Student-t emissions:
+  Emission: p(r_t | s_t=k) = t_ν(μ_k, σ²_k)  [Student-t, ν_k degrees of freedom]
+  Parameters: μ_k, σ_k, ν_k, transition matrix A (4×4), initial π (4×1)
+
+FORWARD ALGORITHM:
+  α_t(k) = p(r₁,...,r_t, s_t=k | θ)
+  α₁(k) = π_k · p(r₁ | k)
+  α_t(k) = p(r_t|k) · Σⱼ α_{t-1}(j) · A_{jk}
+  Scaled: ĉ_t = Σ_k α_t(k), α̂_t(k) = α_t(k) / ĉ_t  [prevents underflow]
+
+BACKWARD ALGORITHM:
+  β_T(k) = 1
+  β_t(k) = Σⱼ A_{kj} · p(r_{t+1}|j) · β_{t+1}(j)
+
+BAUM-WELCH EM:
+  E-step: γ_t(k) = α̂_t(k)·β_t(k) / Σⱼ α̂_t(j)·β_t(j)
+           ξ_t(j,k) = α̂_t(j)·A_{jk}·p(r_{t+1}|k)·β_{t+1}(k) / normalizer
+  M-step: π_k = γ_1(k)
+           A_{jk} = Σ_t ξ_t(j,k) / Σ_t γ_t(j)
+           μ_k = Σ_t γ_t(k)·r_t / Σ_t γ_t(k)
+           σ²_k = Σ_t γ_t(k)·(r_t-μ_k)² / Σ_t γ_t(k)
+           ν_k: solve via Newton's method on log-likelihood gradient
+  Iterate until |ΔlogL| < 1e-6 or 500 iterations
+
+VITERBI DECODING:
+  δ_t(k) = max path probability ending at state k at time t
+  ψ_t(k) = argmax of incoming state
+  Traceback from t=T to t=1 for optimal regime sequence
+
+STATE-DEPENDENT GARCH(1,1):
+  Per state k: σ²_t = ω_k + α_k·ε²_{t-1} + β_k·σ²_{t-1}
+  Constraint: ω_k > 0, α_k ≥ 0, β_k ≥ 0, α_k+β_k < 1
+  Fit via scipy.optimize.minimize (L-BFGS-B) on negative log-likelihood
+  ε_t = r_t - μ_k,  NLL = -Σ_t [-0.5·log(σ²_t) - 0.5·(ε²_t/σ²_t)]
+
+── GNN (research/models/gnn/) ────────────────────────────────────────────────
+
+GRAPH CONSTRUCTION:
+  1. Compute rolling 60-day return matrix R ∈ ℝ^{T×N} for N assets
+  2. Fit Graphical LASSO: minimize -log|Θ| + trace(SΘ) + λ·‖Θ‖₁
+     where S = empirical covariance, Θ = precision matrix
+  3. Adjacency: A_{ij} = 1 if Θ_{ij} ≠ 0 (GLASSO sparsity), weight = |ρ_{ij}|
+  4. Edge features: [correlation, abs_partial_corr, granger_f_stat, lead_lag_coef]
+  5. Node features: 40-dim feature vector per asset from feature pipeline
+
+GRAPH ATTENTION NETWORK (GAT) layer:
+  e_{ij} = LeakyReLU(aᵀ · [W·hᵢ ‖ W·hⱼ])     [attention coefficient]
+  α_{ij} = softmax_j(e_{ij}) = exp(e_{ij}) / Σ_{k∈N(i)} exp(e_{ik})
+  h'_i = ∥_{m=1}^{M} σ(Σ_{j∈N(i)} α^m_{ij} · Wᵐ·hⱼ)  [8 heads concatenated]
+  Use PyTorch Geometric GATConv with edge_attr support
+
+TEMPORAL GNN:
+  For T daily snapshots of graph: {G₁, G₂, ..., G_T}
+  embed_t = GAT(G_t)                           [N × d_node per snapshot]
+  h_i = GRU(embed_{1..T,i})                   [per-asset temporal encoding]
+  Output: per-asset 128-dim embedding + scalar spillover_risk = degree centrality
+
+── ENSEMBLE (research/models/ensemble/) ──────────────────────────────────────
+
+DYNAMIC WEIGHT COMPUTATION:
+  1. Rolling performance: For each model k, compute rolling 63-day Sharpe:
+     SR_k(t) = mean(r_k(t-63:t)) / std(r_k(t-63:t)) * √252
+     where r_k(t) = sign(signal_k(t-1)) * actual_return(t)
+
+  2. Regime weight lookup: Pre-train a ridge meta-learner per regime state:
+     w_k^{regime} = argmin Σ_t∈regime_k (Σ_k w_k·s_k(t) - r(t))²
+     Subject to: w_k ≥ 0.05, Σ_k w_k = 1
+
+  3. Final weight blending:
+     w_k(t) = 0.6 · softmax(SR_1..K(t)) + 0.4 · w_k^{regime(t)}
+     Renormalize: w_k(t) = w_k(t) / Σ_k w_k(t)
+
+SIGNAL AGGREGATION:
+  S(t) = Σ_k w_k(t) · s_k(t)                 [weighted continuous signal]
+  C(t) = 1 - std(s_1..K(t)) / 2               [confidence: agreement measure]
+  direction = map(S) to: STRONG_BUY(>0.6)|BUY(>0.2)|NEUTRAL|SELL(<-0.2)|STRONG_SELL
+
+KELLY POSITION SIZING:
+  f* = C(t) · S(t) · (μ_regime / σ²_regime)   [continuous Kelly fraction]
+  f_half = f* / 2                               [half-Kelly, capped at 0.25]
+  Position = f_half · account_equity / price
+
+── BACKTESTING ENGINE (research/backtesting/engine.py) ───────────────────────
+
+Implement purely vectorized with numpy. No loops over time.
+
+CORE SIMULATION:
+  Inputs: signals (T×N), prices (T×N), initial_capital
+  1. Raw positions: pos_raw = signal_array * kelly_fraction_array
+  2. Scale to target volatility:
+     realized_vol = rolling_std(returns, 21) * √252
+     vol_scalar = target_vol / (realized_vol + ε)   [target_vol = 0.15]
+     pos_scaled = pos_raw * vol_scalar
+  3. Apply constraints: max_gross=2.0, max_net=1.0, max_single=0.20
+  4. Transaction cost deduction:
+     trades = pos_scaled.diff().abs()
+     brokerage = trades * price * 0.0003
+     stt = trades.clip(lower=0) * price * 0.00025   [on sell for equity]
+     market_impact = sqrt(trades/adv) * price * realized_vol * 0.1
+     costs = brokerage + stt + market_impact
+  5. Daily P&L: pnl = (pos_scaled.shift(1) * returns * capital) - costs
+  6. Equity curve: equity = initial_capital + pnl.cumsum()
+
+WALK-FORWARD CPCV:
+  n = total_days, k = n_splits, gaps = purge_days + embargo_days
+  Generate all C(k, 2) combinatorial path combinations
+  For each combination: train_idx, test_idx = split respecting purge+embargo
+  Run backtest on test_idx only
+  Return distribution of Sharpe ratios across all paths
+
+ANALYTICS (all from scratch):
+  sharpe = (μ_daily - rf_daily) / σ_daily * √252
+  sortino = (μ_daily - rf_daily) / downside_std * √252
+    downside_std = std(min(r, 0)) * √252
+  calmar = cagr / abs(max_drawdown)
+  omega(τ) = E[max(R-τ, 0)] / E[max(τ-R, 0)]
+    compute via empirical distribution
+  serenity = cagr / (max_drawdown * √tracking_error)
+  deflated_sharpe = (SR - E[SR_max]) / std(SR)
+    where E[SR_max] = Euler_gamma + √(2·log(N_trials)) / 2·√log(N_trials)
+    N_trials = number of strategy variations tested
+
+── PORTFOLIO OPTIMIZATION ────────────────────────────────────────────────────
+
+LEDOIT-WOLF SHRINKAGE (in mean_variance.py):
+  Sample covariance: S = (1/T) Xᵀ X, X = demeaned returns
+  Target: F = (trace(S)/N) · I_N   [scaled identity]
+  Optimal shrinkage: δ* = min(Σ_t ‖X_t Xᵀ_t/T - S‖² / ‖F-S‖², 1)
+  Σ̂ = δ* · F + (1-δ*) · S        [shrunk covariance]
+  Use in cvxpy: minimize wᵀ Σ̂ w subject to constraints
+
+BLACK-LITTERMAN (in black_litterman.py):
+  STEP 1 - Equilibrium returns:
+    w_mkt = market-cap weights of universe
+    λ = risk_aversion_coeff (typically 2.5)
+    π = λ · Σ · w_mkt               [implied equilibrium returns]
+
+  STEP 2 - Views from ML signals:
+    For asset i with ensemble signal s_i ∈ [-1,+1]:
+      q_i = s_i * target_vol / √252  [view: expected daily return]
+      P_i = e_i (unit vector)        [absolute view]
+      Ω_ii = (1 - |s_i|) * var(π_i) [view uncertainty ∝ 1 - confidence]
+
+  STEP 3 - Posterior:
+    M = [(τΣ)⁻¹ + Pᵀ Ω⁻¹ P]⁻¹
+    μ_BL = M · [(τΣ)⁻¹π + Pᵀ Ω⁻¹ q]
+    Σ_BL = Σ + M
+
+  STEP 4 - Optimize with posterior:
+    maximize: wᵀ μ_BL - λ/2 · wᵀ Σ_BL w
+    via cvxpy with turnover constraint
+
+HRP (in hrp.py — López de Prado 2016):
+  STEP 1: Distance matrix D = √((1-ρ)/2),  ρ = corr(returns)
+  STEP 2: Hierarchical clustering: Z = linkage(D, method='ward')
+  STEP 3: Quasi-diagonalization: reorder assets by cluster membership
+  STEP 4: Recursive bisection:
+    def bisect(items):
+      if len(items) == 1: return {items[0]: 1.0}
+      left, right = split_at_midpoint(Z, items)
+      vol_left = portfolio_vol(left, Σ)
+      vol_right = portfolio_vol(right, Σ)
+      α = vol_right / (vol_left + vol_right)   [inverse vol allocation]
+      return {**{k: v*α for k,v in bisect(left).items()},
+              **{k: v*(1-α) for k,v in bisect(right).items()}}
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 5: FRONTEND — EVERY PAGE AND COMPONENT
+────────────────────────────────────────────────────────────────────────────────
+
+DESIGN SYSTEM:
+  Font: "Berkeley Mono" (numbers, prices, code), "Cabinet Grotesk" (headings),
+        "Instrument Sans" (body). Load from Fontsource npm packages.
+
+  Color tokens (globals.css CSS variables):
+    --bg-base:       #07090F    /* outermost canvas */
+    --bg-surface:    #0C1018    /* card/panel background */
+    --bg-elevated:   #111926    /* hover, selected state */
+    --bg-overlay:    #1A2333    /* dropdown, tooltip bg */
+    --border-subtle: rgba(255,255,255,0.06)
+    --border-muted:  rgba(255,255,255,0.12)
+    --border-strong: rgba(255,255,255,0.22)
+    --text-primary:  #E8EDF5
+    --text-secondary:#8B97A8
+    --text-muted:    #4A5568
+    --accent-cyan:   #00D4F5    /* primary interactive, BUY signal */
+    --accent-green:  #00E676    /* profit, gain */
+    --accent-red:    #FF3B5C    /* loss, SELL signal */
+    --accent-amber:  #FFB800    /* neutral signal, warning */
+    --accent-purple: #8B5CF6    /* ML model highlight */
+    --regime-bull:   rgba(0,230,118,0.15)
+    --regime-bear:   rgba(255,59,92,0.15)
+    --regime-side:   rgba(255,184,0,0.12)
+    --regime-crisis: rgba(220,38,38,0.20)
+
+  Breakpoints: Mobile-ignored. All layouts desktop-first (min-width: 1280px).
+  Grid: 12-column, 8px base unit, 16px gutter.
+
+PAGE: /terminal — Bloomberg-style three-column trading terminal
+
+  Layout (TerminalLayout.tsx):
+    <div style="display: grid; grid-template-columns: 280px 1fr 320px;
+                grid-template-rows: 48px 1fr; height: 100vh; overflow: hidden">
+      <TopBar />                  /* spans all 3 cols: logo, regime pill, search */
+      <Watchlist />               /* col 1: scrollable asset list */
+      <ChartSection />            /* col 2: candlestick + sub-charts */
+      <SignalPanel />             /* col 3: signals, ensemble weights, news */
+    </div>
+
+  TopBar:
+    - Left: logo + system clock + current regime badge (colored pill)
+    - Center: global search (cmd+K shortcut, fuzzy)
+    - Right: account equity, day P&L (colored), settings
+
+  Watchlist (col 1):
+    - Two tabs: MY WATCHLIST | MARKET (exchange filter)
+    - Each row (WatchlistRow.tsx):
+        [regime dot 8px] [ticker 12px bold] [name 10px muted]
+        [price right-aligned] [% change colored] [signal arrow ↑↓→]
+    - Hover: show sparkline (7-day price mini chart, Canvas 80×28px)
+    - Click: updates ChartSection to show selected symbol
+    - Real-time via useWatchlistWS — prices update without full re-render
+
+  ChartSection (col 2):
+    Top bar: symbol name | exchange | price | change | regime | timeframe tabs
+    
+    CandlestickChart (fills 70% height):
+      - TradingView Lightweight Charts v4 (NOT v3)
+      - Overlay selector: EMA(9), EMA(21), EMA(55), EMA(200), BB(20,2),
+                         VWAP, Ichimoku(9,26,52), Supertrend(10,3)
+      - RegimeBands: colored semi-transparent background rectangles per regime epoch
+      - AttentionOverlay: semi-transparent amber rectangles on top candles
+                          height proportional to TFT attention weight for that bar
+      - SignalMarkers: plotMarkers API — up triangles (BUY, cyan), down (SELL, red)
+                       label shows confidence % on hover
+      - Volume Profile: right Y-axis shows horizontal bars (VPVR)
+      - Volume histogram: bottom sub-pane, 20% height
+      - Crosshair: vertical + horizontal lines, OHLCV tooltip at cursor
+
+    Sub-chart tabs (30% height, tabbed):
+      INDICATORS: RSI(14), MACD(12,26,9), Stochastic(14,3,3), ATR(14), OBV
+      SIGNALS: Model signal time-series lines (1 per model + ensemble)
+      ORDER FLOW: OFI bar chart (green=buy pressure, red=sell pressure)
+
+  SignalPanel (col 3):
+    Top: Current ensemble signal card
+      - Large direction badge: STRONG BUY / BUY / NEUTRAL / SELL / STRONG SELL
+      - Confidence meter (arc gauge, 0-100%)
+      - Kelly fraction %
+    
+    EnsembleWeightPie:
+      - Donut chart: 5 slices for each model, labeled with current weight %
+      - Animated on update (smooth arc transitions)
+    
+    Model breakdown accordion:
+      - TFT: P10/P50/P90 returns for 1d, 5d, 21d (horizontal bar range)
+      - HMM-GARCH: regime probabilities (4 colored bars) + vol forecast
+      - GNN: spillover risk score + top 3 correlated assets
+      - LSTM-Attn: signal + top attention timestep
+      - XGBoost: top 5 SHAP features (bar chart inline)
+    
+    Bottom: News feed (FinBERT-scored, sentiment color dot, scrollable)
+
+PAGE: /markets/stocks/[symbol]
+
+  Full-page stock detail:
+    - Header: ticker, full name, exchange, sector, market cap, P/E, EPS
+    - Same CandlestickChart as terminal but full-width, with more indicator options
+    - Right panel: Signal summary + regime + model predictions grid
+    - Below chart: Three tabs
+        FUNDAMENTALS: revenue, earnings, margins, P/E, P/B, EV/EBITDA tables
+        ANALYSIS: SHAP waterfall + attention heatmap + counterfactual panel
+        SIMILAR: 6 asset cards with correlation coefficient
+
+PAGE: /research/regime-analysis
+
+  Layout: Two-column: left=charts, right=statistics
+
+  Left charts (stacked):
+    1. Price chart with regime background bands (HMM state coloring)
+    2. Regime probability stacked area chart (4 areas, 252 days)
+    3. Conditional volatility line chart (GARCH forecast vs realized)
+
+  Right panel:
+    - Current state card with bold label + days in current state
+    - Transition probability matrix: 4×4 colored heatmap (D3)
+    - Regime statistics table: for each state:
+        avg duration (days), frequency (%), avg daily return, avg vol
+    - Strategy allocation table: how position sizing changes per regime
+
+PAGE: /research/correlation-graph
+
+  Full-page D3 force-directed graph:
+    - Node = asset. Size = market cap. Color = sector (8 colors).
+    - Edge = GLASSO correlation. Width = |correlation|. Color = pos(green)/neg(red).
+    - Physics: d3.forceSimulation with charge, link, center forces
+    - Interaction:
+        Click node → highlight ego network (1-hop neighbors), dim others
+        Hover node → tooltip: asset name, sector, current signal, vol
+        Time slider (bottom) → replay graph evolution over 5 years
+        Systemic risk toggle → node outline thickness = degree centrality
+    - Right panel: selected asset details + top 5 correlates list
+
+PAGE: /research/explainability/[symbol]
+
+  Four sections:
+    1. SHAP Waterfall (D3 custom):
+       - Horizontal bars: positive contributions (green right), negative (red left)
+       - Sorted by |SHAP value|, top 20 features
+       - Base value line at center, output value annotation
+       - Feature value shown as small text on each bar
+
+    2. Attention Heatmap:
+       - 2D grid: Y=attention heads (8), X=past 60 timesteps
+       - Color: amber intensity = attention weight
+       - Click timestep → show which date, price, key events
+
+    3. Counterfactual Panel:
+       - "Currently: SELL — to flip to BUY these features would need to change:"
+       - Table: feature | current value | counterfactual value | delta
+       - 3 counterfactuals shown as tabs (CF1, CF2, CF3)
+
+    4. Feature Rolling Importance:
+       - Line chart: top 5 features, 63-day rolling |SHAP| over time
+       - Shows which factors drove recent signals
+
+PAGE: /backtest-lab
+
+  Three-section layout:
+    Section 1 (left 40%): Strategy configurator
+      - Strategy dropdown: Ensemble, TFT-Only, MA-Crossover, RSI-MRV, Custom
+      - Universe selector (multi-select with exchange filter)
+      - Date range picker (5y of data available)
+      - Capital, brokerage, slippage inputs
+      - Walk-forward toggle (n_splits, purge_days, embargo_days)
+      - Monte Carlo toggle (n_simulations)
+      - [RUN BACKTEST] button → submits to /backtest/run → polling begins
+
+    Section 2 (right 60%): Results (shown after completion):
+      - Metrics grid (12 key metrics in 4×3 cards):
+          Total Return | CAGR | Sharpe | Sortino
+          Max Drawdown | Calmar | Win Rate | Profit Factor
+          Num Trades | Deflated Sharpe | DM p-value | MinBTL
+      
+      - Equity curve + drawdown chart (stacked, 300px each, Recharts)
+      - Monte Carlo fan chart: 100 sampled paths (thin gray) + P5/P95 band
+      - Walk-forward fold heatmap: calendar grid, cell = fold Sharpe
+      - Trade log table: paginated, sortable, filterable
+
+PAGE: /portfolio/optimizer
+
+  Interactive optimizer:
+    Left (40%): Input panel
+      - Asset universe multi-select (with live price + signal badge)
+      - Method radio: HRP | Black-Litterman | CVaR | Mean-Variance
+      - ML Views toggle: "use ensemble signals as BL views"
+      - Constraints: max weight slider, sector limits, turnover limit
+      - [OPTIMIZE] button
+
+    Right (60%): Results
+      - Efficient Frontier scatter (Recharts): risk vs return
+        Colored dots: all portfolios, highlighted: current, min-var, max-Sharpe
+        Draggable point on frontier → weights update live in donut
+      - Optimal weights donut chart (Recharts, animated)
+      - HRP Dendrogram (D3 tree): shows clustering of assets
+      - Expected metrics: return, vol, Sharpe, CVaR
+      - Weights table: ticker, weight %, signal direction badge, contribution to vol
+
+PAGE: /model-monitor
+
+  Model health dashboard:
+    - Four model accuracy cards (TFT, LSTM, XGBoost, Ensemble):
+        Rolling 21d directional accuracy, P50 RMSE, Winkler score
+    - Ensemble weight evolution: stacked area chart (252 days, 5 models)
+    - Prediction vs actual scatter (rolling 21 days, per model tabs)
+    - Drift detection table: ADWIN p-value, drift_detected badge, last retrain date
+    - Residual distribution: histogram + normal QQ-plot (D3 custom)
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 6: INFRASTRUCTURE — COMPLETE DOCKER + DEVOPS
+────────────────────────────────────────────────────────────────────────────────
+
+docker-compose.yml services (all with health checks):
+
+  frontend:
+    build: ./frontend
+    dockerfile: Dockerfile.frontend  # multi-stage: node:20-alpine build + serve
+    ports: ["3000:3000"]
+    env_file: .env
+    depends_on: [backend]
+
+  backend:
+    build: ./backend
+    dockerfile: Dockerfile.backend   # python:3.12-slim, no root
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    ports: ["8000:8000"]
+    env_file: .env
+    depends_on: [timescaledb, redis]
+    volumes:
+      - ./data/models:/app/data/models    # mount trained model checkpoints
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_DB: algo_trading
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    volumes: [redisdata:/data]
+    ports: ["6379:6379"]
+
+  celery-worker:
+    build: ./backend
+    command: celery -A tasks.celery_app worker --loglevel=info --concurrency=4 -Q backtest,training,data
+    env_file: .env
+    depends_on: [timescaledb, redis]
+    volumes:
+      - ./data/models:/app/data/models
+
+  celery-beat:
+    build: ./backend
+    command: celery -A tasks.celery_app beat --loglevel=info
+    env_file: .env
+    # Schedules: hourly feature compute, daily data ingestion at 06:00 IST,
+    #            weekly model accuracy audit, ADWIN-triggered retraining
+
+  flower:
+    image: mher/flower
+    command: celery flower --broker=redis://redis:6379
+    ports: ["5555:5555"]
+    depends_on: [redis]
+
+  prometheus:
+    image: prom/prometheus
+    volumes: [./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml]
+    ports: ["9090:9090"]
+
+  grafana:
+    image: grafana/grafana
+    volumes: [grafanadata:/var/lib/grafana]
+    ports: ["3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}
+
+.env.example (document every variable):
+  # Database
+  DATABASE_URL=postgresql+asyncpg://postgres:PASSWORD@timescaledb:5432/algo_trading
+  DB_PASSWORD=your_secure_password
+
+  # Redis
+  REDIS_URL=redis://redis:6379
+
+  # Security
+  SECRET_KEY=your_64_char_secret
+  ACCESS_TOKEN_EXPIRE_MINUTES=60
+  REFRESH_TOKEN_EXPIRE_DAYS=7
+
+  # Data sources
+  ALPHA_VANTAGE_KEY=your_key       # intraday 1-min bars
+  COINGECKO_API_KEY=your_key       # Pro plan for higher rate limits
+  FRED_API_KEY=your_key            # free from fred.stlouisfed.org
+  NEWS_API_KEY=your_key            # newsapi.org
+
+  # ML
+  MODEL_CHECKPOINT_DIR=/app/data/models
+  ENABLE_GPU=false                  # set true if CUDA available
+  TFT_BATCH_SIZE=64
+  TFT_SEQUENCE_LEN=60
+  TFT_HORIZON=21
+  HMM_N_STATES=4
+
+  # Feature flags
+  ENABLE_ONLINE_LEARNING=true
+  DRIFT_DETECTION_ALPHA=0.05
+  RETRAIN_MIN_INTERVAL_DAYS=7
+
+  # Celery
+  CELERY_BROKER_URL=redis://redis:6379/0
+  CELERY_RESULT_BACKEND=redis://redis:6379/1
+
+  # Frontend
+  NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+  NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
+  NEXTAUTH_SECRET=your_nextauth_secret
+  NEXTAUTH_URL=http://localhost:3000
+
+Makefile targets:
+  make dev           → docker compose up --build
+  make test          → pytest backend/tests/ + jest frontend/
+  make lint          → ruff check + mypy + eslint + tsc
+  make migrate       → alembic upgrade head
+  make data-fetch    → python -m pipelines.data_pipeline --full-history
+  make features      → python -m pipelines.data_pipeline --features-only
+  make train-hmm     → python -m research.models.hmm_garch.trainer
+  make train-tft     → python -m research.models.tft.trainer
+  make train-gnn     → python -m research.models.gnn.trainer
+  make train-all     → sequential: hmm → gnn → tft → ensemble calibration
+  make backtest-full → python -m research.backtesting.engine --full-cpcv
+  make notebooks     → jupyter lab --notebook-dir=backend/notebooks
+  make docs          → generate API docs from FastAPI OpenAPI schema
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 7: RESEARCH NOTEBOOKS — THESIS EVIDENCE
+────────────────────────────────────────────────────────────────────────────────
+
+Each notebook must be fully runnable end-to-end. Include:
+  - LaTeX-rendered math explanations (markdown cells)
+  - Paper citations in BibTeX format (markdown cells)
+  - Publication-quality matplotlib figures (300 DPI, proper axis labels)
+  - Statistical test results with interpretation
+
+01_EDA_and_stationarity.ipynb:
+  - Load 5y OHLCV for full universe
+  - ADF test per series: table of test statistics and p-values
+  - KPSS test as complement
+  - Return distribution: histogram vs normal, Q-Q plot, kurtosis/skewness
+  - ACF/PACF plots: returns, squared returns (justify GARCH)
+  - Ljung-Box test: residual autocorrelation
+  - ARCH LM test: volatility clustering significance
+
+03_hmm_regime_detection.ipynb:
+  - Train HMM-GARCH on NIFTY/S&P 500
+  - Plot: Viterbi state sequence over 5 years with price
+  - Regime-conditional return distributions (violin plots per state)
+  - Transition matrix heatmap
+  - Vol forecast accuracy: GARCH conditional vol vs realized (30-day window)
+  - State statistics table: mean return, vol, Sharpe per state
+
+04_tft_training_and_eval.ipynb:
+  - Training curve: train/val quantile loss over epochs
+  - Hyperparameter sensitivity: grid results table
+  - Forecast quality: P50 RMSE vs ARIMA baseline (DM test table)
+  - Winkler score: P10-P90 coverage vs nominal 80%
+  - Variable selection: mean |VSN weight| per feature (bar chart)
+  - Attention patterns: example attention heatmap (selected asset, selected date)
+
+06_ensemble_walk_forward.ipynb:
+  - CPCV fold structure visualization
+  - Distribution of fold Sharpe ratios (histogram per model + ensemble)
+  - Out-of-sample equity curves (one per fold, overlaid)
+  - Deflated Sharpe calculation: show N_trials correction
+  - Benchmark comparison: ensemble vs buy-and-hold, NIFTY50, random signals
+  - McNemar's test: is ensemble direction accuracy > any single model?
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 8: CODE QUALITY STANDARDS (non-negotiable)
+────────────────────────────────────────────────────────────────────────────────
+
+PYTHON:
+  - Python 3.12, strict mypy (no implicit optional, no untyped calls)
+  - ruff: all rules enabled, E/W/F/B/I/N
+  - Every public function: Google-style docstring with:
+      """Summary line.
+
+      Mathematical formulation (LaTeX):
+          QL = Σ_q Σ_t [q·max(y-ŷ_q, 0) + (1-q)·max(ŷ_q-y, 0)]
+
+      Reference:
+          Lim et al. (2021). "Temporal Fusion Transformers for Interpretable
+          Multi-horizon Time Series Forecasting." NeurIPS.
+
+      Args:
+          x: Input tensor of shape (batch, seq_len, n_features).
+          quantiles: Target quantile levels, e.g. [0.1, 0.5, 0.9].
+
+      Returns:
+          Quantile predictions of shape (batch, horizon, n_quantiles).
+
+      Raises:
+          ValueError: If quantiles not in (0, 1).
+      """
+  - Unit tests: every algorithm module has test_*.py covering:
+      1. Output shape assertions
+      2. Numerical correctness vs analytical solution
+      3. Edge cases: all-zero input, NaN propagation
+      4. No look-ahead bias: verify features only use past data
+
+TYPESCRIPT:
+  - TypeScript 5.x, strict: true, noUncheckedIndexedAccess: true
+  - No `any`, no `as`, no non-null assertion unless unavoidable + commented
+  - All API responses: typed with Zod schemas (runtime validation)
+  - Every React component: explicit prop types, memo where appropriate
+  - Custom hooks: jsdoc with @param/@returns
+  - Error boundaries wrapping every route
+  - Suspense boundaries with Skeleton loaders for all async data
+
+COMMIT CONVENTION (enforce via commitlint):
+  feat(model): add TFT quantile output layer with pinball loss
+  fix(backtest): correct CPCV purge boundary calculation
+  perf(frontend): memoize WatchlistRow to prevent unnecessary re-renders
+  test(hmm): add Baum-Welch convergence assertion
+  docs(api): add OpenAPI examples for /signals/{symbol}
+
+────────────────────────────────────────────────────────────────────────────────
+SECTION 9: BUILD ORDER — EXECUTE EXACTLY IN THIS SEQUENCE
+────────────────────────────────────────────────────────────────────────────────
+
+STEP 1 — Scaffold:
+  Create full directory tree, all __init__.py, empty modules with correct imports.
+  Create .env.example, docker-compose.yml, Makefile, pyproject.toml, package.json.
+
+STEP 2 — Database:
+  Write init.sql: TimescaleDB extension, all CREATE TABLE statements above.
+  Write Alembic migration 001 and 002.
+  Test: docker compose up timescaledb → alembic upgrade head → verify schema.
+
+STEP 3 — Data ingestion:
+  Implement all data source adapters (yfinance, CoinGecko, FRED, Alpha Vantage).
+  Implement async orchestrator: concurrent fetch with rate-limit handling.
+  Test: fetch 5y daily OHLCV for 25 NSE stocks + 10 US stocks + 5 crypto.
+  Verify: data lands in TimescaleDB ohlcv table with correct schema.
+
+STEP 4 — Feature engineering:
+  Implement all 80+ factors in research/feature_engineering/.
+  Implement pipeline.py: sequential compute, store to feature_vectors table.
+  Test: run pipeline on 1 asset, verify no look-ahead bias (check index alignment).
+  Verify: feature_vector has 80+ float columns, no NaN after warmup period.
+
+STEP 5 — FastAPI skeleton + auth:
+  app/main.py, core/config.py, core/security.py, database/connection.py.
+  GET /api/v1/market/quote/{symbol} using Redis cache + TimescaleDB fallback.
+  JWT auth endpoints: POST /auth/register, POST /auth/token.
+  Test: curl quote endpoint returns correct schema.
+
+STEP 6 — WebSocket infrastructure:
+  connection_manager.py, price_broadcaster.py (reads from Redis pub/sub).
+  Test: two browser tabs subscribe to same symbol, both receive price ticks.
+
+STEP 7 — HMM-GARCH:
+  Implement hmm.py, garch.py, regime_detector.py, trainer.py.
+  Train on NIFTY 5y daily returns. Save checkpoint.
+  Test: notebook 03, verify regime sequence is interpretable.
+
+STEP 8 — TFT:
+  Implement all components: GRN, VSN, LSTM encoder-decoder, temporal attention, quantile output.
+  Training pipeline: dataset.py, trainer.py (AdamW + cosine annealing).
+  Train on 5y data for 25 assets. Save checkpoint.
+  Test: notebook 04, DM test vs ARIMA must be p < 0.10.
+
+STEP 9 — GNN:
+  graph_builder.py (GLASSO), architecture.py (GAT + GRU), trainer.py.
+  Train on rolling correlation graphs. Save checkpoint.
+  Test: spillover risk score correlates with known high-beta assets.
+
+STEP 10 — Ensemble:
+  orchestrator.py: load all models, run parallel inference.
+  weight_manager.py: regime-conditional + rolling performance weighting.
+  signal_combiner.py: weighted sum → direction + confidence + Kelly.
+  Test: end-to-end inference pipeline < 100ms for single asset.
+
+STEP 11 — Backtesting engine + CPCV:
+  engine.py (vectorized numpy), walk_forward.py (CPCV), analytics.py.
+  Test: known synthetic return series → verified Sharpe/Sortino outputs.
+  Run: full CPCV backtest on ensemble strategy 2018-2024.
+
+STEP 12 — Portfolio optimization:
+  All four optimizers: MVO+LW, BL, HRP, CVaR. All via cvxpy.
+  Test: weights sum to 1, constraints satisfied, HRP handles singular covariance.
+
+STEP 13 — Explainability:
+  SHAP: TreeSHAP for XGBoost, DeepSHAP for TFT/LSTM.
+  Attention extraction from TFT and LSTM-Attn.
+  DiCE counterfactual generation.
+  API endpoints: /explain/shap/{symbol}, /explain/attention/{symbol}.
+
+STEP 14 — All remaining API endpoints:
+  Complete /signals, /regime, /backtest, /portfolio, /screener, /alerts, /monitor.
+  Celery tasks: backtest_tasks.py, data_tasks.py, training_tasks.py.
+  Test: integration tests for all endpoints.
+
+STEP 15 — Frontend:
+  Next.js setup: fonts, CSS variables, Zustand stores, API client.
+  Build in order: Terminal page → Markets → Research → Backtest → Portfolio.
+  Every chart component: proper loading/error states, WebSocket cleanup.
+  Test: jest + React Testing Library for all hooks and key components.
+
+STEP 16 — Final validation:
+  Run notebook 09 (statistical significance).
+  Verify deflated Sharpe > 0 (strategy survives multiple testing correction).
+  Run make test → 100% pass.
+  Run make lint → 0 errors.
+  Docker compose up prod → all health checks green.
+
+────────────────────────────────────────────────────────────────────────────────
+DO NOT:
+  - Use placeholder functions or TODO comments
+  - Simplify any algorithm ("this is the same idea as...")
+  - Skip error handling on any API endpoint
+  - Use polling where WebSocket is specified
+  - Let any TypeScript `any` slip through
+  - Hardcode API keys anywhere (use env vars only)
+  - Copy library examples — implement from mathematical specification above
+
+ALWAYS:
+  - Every formula: implement exactly as stated with variable names matching
+  - Every endpoint: proper HTTP status codes, Pydantic response model
+  - Every component: loading skeleton, error boundary, empty state
+  - Every test: meaningful assertions, not just "it runs"
+  - Every docstring: math + paper citation + args + returns
+════════════════════════════════════════════════════════════════════════════════
+
+
+

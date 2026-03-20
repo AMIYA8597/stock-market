@@ -87,6 +87,7 @@ class AuditLogger:
             "prev_hash": self.last_hash,
         }
 
+
         # Calculate hash
         entry_json = json.dumps(entry, sort_keys=True, default=str)
         current_hash = hashlib.sha256(entry_json.encode()).hexdigest()

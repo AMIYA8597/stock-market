@@ -3,7 +3,6 @@
 NEUROQUANT Data Seeding Script
 Seeds historical market data for NSE500, S&P500, and crypto
 """
-
 import asyncio
 import logging
 from datetime import datetime, timedelta

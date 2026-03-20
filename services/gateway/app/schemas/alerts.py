@@ -1,12 +1,10 @@
 """
 Pydantic schemas for alerts endpoints.
 """
-
 from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, Field, field_validator
-
 
 class AlertBase(BaseModel):
     """Base alert schema."""
@@ -53,7 +51,6 @@ class AlertBase(BaseModel):
             if channel not in valid_channels:
                 raise ValueError(f"Invalid channel: {channel}")
         return ",".join(channels)
-
 
 class AlertCreate(AlertBase):
     """Alert creation schema."""

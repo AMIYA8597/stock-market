@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Play, Download, Settings } from "lucide-react";
-import { Card, CardHeader, CardTitle, Button, Badge, Input, StatCard, cn, formatPercent, getPriceColor } from "@neuroquant/ui";
+import { Play, Download } from "lucide-react";
+import { Card, CardHeader, CardTitle, Button, Input, StatCard, cn, formatPercent, getPriceColor } from "@neuroquant/ui";
 import type { StrategyName } from "@neuroquant/types";
 
 const STRATEGIES: { value: StrategyName; label: string }[] = [

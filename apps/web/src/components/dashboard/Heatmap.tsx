@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { useWebSocket } from '@/hooks/useWebSocket';
-import { TickData, HeatmapData } from '@/types/market';
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { contractsApi, type MarketMover } from '@/lib/contracts-api';
+import { usePriceFeed } from '@/hooks/usePriceFeed';
+import { HeatmapData } from '@/types/market';
 
 /**
  * SectorHeatmap Component (D3.js Treemap style)
@@ -18,56 +20,96 @@ import { TickData, HeatmapData } from '@/types/market';
 type GroupBy = 'sector' | 'index' | 'asset-class';
 
 const SectorHeatmap = (): JSX.Element => {
-  const { ticks } = useWebSocket([
-    'RELIANCE',
-    'TCS',
-    'INFY',
-    'HDFC',
-    'ICICI',
-    'SBIN',
-    'WIPRO',
-    'BAJAJFINSV',
-    'MARUTI',
-    'HEROMOTOCO',
-  ]);
-
+  const router = useRouter();
   const [groupBy, setGroupBy] = useState<GroupBy>('sector');
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
+  const [movers, setMovers] = useState<MarketMover[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
-  // Convert tick data to heatmap data with sectors
-  const heatmapData = useMemo(() => {
-    const sectorMap: Record<string, string> = {
-      RELIANCE: 'Energy',
-      TCS: 'IT',
-      INFY: 'IT',
-      HDFC: 'Finance',
-      ICICI: 'Finance',
-      SBIN: 'Finance',
-      WIPRO: 'IT',
-      BAJAJFINSV: 'Finance',
-      MARUTI: 'Auto',
-      HEROMOTOCO: 'Auto',
+  const symbols = useMemo(() => movers.map((item) => item.ticker.toUpperCase()), [movers]);
+  const { ticks } = usePriceFeed(symbols);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadMovers(): Promise<void> {
+      try {
+        setLoading(true);
+        setError(null);
+        const data = await contractsApi.getMovers('NSE', 'momentum');
+        if (!mounted) {
+          return;
+        }
+        setMovers(data.slice(0, 15));
+        setLastUpdated(Date.now());
+      } catch {
+        if (!mounted) {
+          return;
+        }
+        setError('Unable to load heatmap movers contract.');
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadMovers();
+    const intervalId = setInterval(() => {
+      void loadMovers();
+    }, 30_000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
     };
+  }, []);
 
-    return Array.from(ticks.values()).map((tick: TickData) => ({
-      symbol: tick.symbol,
-      name: tick.symbol,
-      sector: sectorMap[tick.symbol] || 'Other',
-      marketCap: Math.random() * 500000000000, // Mock market cap
-      price: tick.price,
-      change: tick.changePct,
-      changePct: tick.changePct,
-      volume: tick.volume,
-    })) as HeatmapData[];
-  }, [ticks]);
+  const inferSector = (name: string, symbol: string): string => {
+    const token = `${name} ${symbol}`.toUpperCase();
+    if (token.includes('BANK') || token.includes('FIN')) return 'Finance';
+    if (token.includes('TECH') || token.includes('INFO') || token.includes('TCS') || token.includes('WIPRO')) return 'IT';
+    if (token.includes('AUTO') || token.includes('MOTOR') || token.includes('MARUTI')) return 'Auto';
+    if (token.includes('PHARMA') || token.includes('HEALTH')) return 'Healthcare';
+    if (token.includes('POWER') || token.includes('ENERGY') || token.includes('OIL') || token.includes('GAS')) return 'Energy';
+    if (token.includes('METAL') || token.includes('STEEL') || token.includes('CEMENT')) return 'Industrials';
+    return 'Other';
+  };
+
+  // Convert movers + live ticks to heatmap data with sector mapping.
+  const heatmapData = useMemo(() => {
+    return movers.map((item) => {
+      const symbol = item.ticker.toUpperCase();
+      const live = ticks.get(symbol);
+      const price = live?.price ?? item.price;
+      const changePct = live?.change_pct ?? item.change_pct;
+      const inferredMarketCap = Math.max(price * Math.max(item.volume, 1) * 4.5, 1000000000);
+
+      return {
+        symbol,
+        name: item.name,
+        sector: inferSector(item.name, symbol),
+        marketCap: inferredMarketCap,
+        price,
+        change: changePct,
+        changePct,
+        volume: item.volume,
+      } as HeatmapData;
+    });
+  }, [movers, ticks]);
+
+  const ageSeconds = lastUpdated ? Math.floor((Date.now() - lastUpdated) / 1000) : null;
+  const freshness = error !== null ? 'degraded' : ageSeconds !== null && ageSeconds > 75 ? 'stale' : 'fresh';
 
   // Group data based on selected grouping
   const groupedData = useMemo(() => {
     if (groupBy === 'sector') {
       const grouped: Record<string, HeatmapData[]> = {};
       heatmapData.forEach((item) => {
-        if (!grouped[item.sector]) grouped[item.sector] = [];
-        grouped[item.sector].push(item);
+        const bucket = grouped[item.sector] ?? (grouped[item.sector] = []);
+        bucket.push(item);
       });
       return grouped;
     }
@@ -85,17 +127,29 @@ const SectorHeatmap = (): JSX.Element => {
   };
 
   const handleRectClick = (symbol: string): void => {
-    // Navigate to stock detail page
-    window.location.href = `/market/${symbol}`;
+    router.push(`/markets/stocks/${encodeURIComponent(symbol)}`);
   };
 
   return (
-    <div className="w-full bg-[#0A0B0E] border border-[#1E2532] rounded-lg p-6">
+    <div className="w-full rounded-lg border border-[#1E2532] bg-[linear-gradient(180deg,#0A0B0E,#111722)] p-4 sm:p-6">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xl font-semibold text-[#E8EAED] font-clash">
           Market Sector Heatmap
         </h2>
+        <span
+          className={`rounded border px-2 py-1 text-[10px] uppercase tracking-[0.08em] sm:text-xs ${
+            freshness === 'fresh'
+              ? 'border-[rgba(0,230,118,0.35)] bg-[rgba(0,230,118,0.10)] text-[#00E676]'
+              : freshness === 'stale'
+                ? 'border-[rgba(255,184,0,0.35)] bg-[rgba(255,184,0,0.10)] text-[#FFB800]'
+                : 'border-[rgba(255,59,92,0.35)] bg-[rgba(255,59,92,0.10)] text-[#FF3B5C]'
+          }`}
+        >
+          movers {freshness}
+          {ageSeconds !== null ? ` ${ageSeconds}s` : ''}
+        </span>
+        {error ? <span className="text-xs text-[#FF3B3B]">{error}</span> : null}
         <div className="flex gap-2">
           {(['sector', 'index', 'asset-class'] as const).map((option) => (
             <button
@@ -115,6 +169,14 @@ const SectorHeatmap = (): JSX.Element => {
 
       {/* Heatmap Grid */}
       <div className="space-y-4">
+        {loading ? (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+            {Array.from({ length: 10 }, (_, i) => (
+              <div key={`heatmap-skeleton-${i}`} className="h-24 animate-pulse rounded-lg bg-[#161B24]" />
+            ))}
+          </div>
+        ) : null}
+
         {Object.entries(groupedData).map(([group, items]) => (
           <div key={group}>
             {group !== 'All' && (
@@ -143,7 +205,7 @@ const SectorHeatmap = (): JSX.Element => {
                     <div className="p-3 h-full flex flex-col justify-between">
                       <div>
                         <p className="text-sm font-bold text-[#0A0B0E] font-clash">
-                          {item.symbol}
+                          {item.symbol.replace('.NS', '')}
                         </p>
                         <p className="text-xs text-[#0A0B0E]/80 font-jbmono">
                           ₹{item.price.toFixed(2)}

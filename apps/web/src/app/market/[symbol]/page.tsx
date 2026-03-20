@@ -1,12 +1,14 @@
-import React from 'react';
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
-const MarketSymbolPage = () => {
-  return (
-    <div>
-      <h1>Market Symbol Page</h1>
-      <p>Details about the selected market symbol will be displayed here.</p>
-    </div>
-  );
-};
+interface PageProps {
+  params: { symbol: string };
+}
 
-export default MarketSymbolPage;
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  return { title: `${decodeURIComponent(params.symbol)} - Market` };
+}
+
+export default function MarketSymbolPage({ params }: PageProps): never {
+  redirect(`/markets/stocks/${encodeURIComponent(params.symbol)}`);
+}

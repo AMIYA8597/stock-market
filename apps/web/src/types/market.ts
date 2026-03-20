@@ -70,7 +70,40 @@ export interface PortfolioUpdate {
 
 export interface WebSocketMessage {
   type: 'tick' | 'prediction_update' | 'alert_triggered' | 'regime_change' | 'anomaly_detected' | 'portfolio_update' | 'heartbeat' | 'subscribe' | 'unsubscribe' | 'pong';
-  [key: string]: any;
+  symbol?: string;
+  price?: number;
+  volume?: number;
+  change_pct?: number;
+  timestamp?: number;
+  high_52week?: number;
+  low_52week?: number;
+  market_cap?: string;
+  pe?: number;
+  vwap?: number;
+  model?: string;
+  direction?: 1 | -1 | 0;
+  confidence?: number;
+  predicted_price?: number;
+  lower_80?: number;
+  upper_80?: number;
+  lower_95?: number;
+  upper_95?: number;
+  alert_id?: string;
+  message?: string;
+  severity?: 1 | 2 | 3 | 4 | 5;
+  triggered_at?: number;
+  anomaly_type?: string;
+  description?: string;
+  pnl?: number;
+  pnl_pct?: number;
+  positions?: Array<{
+    symbol: string;
+    quantity: number;
+    avgCost: number;
+    currentPrice: number;
+    pnl: number;
+  }>;
+  symbols?: string[];
 }
 
 export interface HeatmapData {

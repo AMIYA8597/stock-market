@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Download, RefreshCw, ArrowUpDown } from "lucide-react";
+import { Plus, Download, RefreshCw } from "lucide-react";
 import {
   Card, CardHeader, CardTitle, Button, Badge, PriceDisplay, Sparkline,
-  cn, formatPrice, formatPercent, formatVolume, getPriceColor, getDirectionArrow,
+  cn, formatPrice, formatPercent, getPriceColor, getDirectionArrow,
 } from "@neuroquant/ui";
 
 interface HoldingRow {
@@ -30,9 +29,6 @@ const OPTIMIZATION_METHODS = [
 ];
 
 export function PortfolioContent() {
-  const [sortCol, setSortCol] = useState<string>("weight");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
   const totalValue = HOLDINGS.reduce((s, h) => s + h.ltp * h.qty, 0);
   const totalPnl = HOLDINGS.reduce((s, h) => s + h.pnl, 0);
   const totalPnlPct = (totalPnl / (totalValue - totalPnl)) * 100;

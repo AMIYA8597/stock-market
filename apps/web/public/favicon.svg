@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Background -->
+  <rect width="256" height="256" fill="#0A0B0E"/>
+  
+  <!-- Gradient -->
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4F5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#8B5CF6;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Letter N (NeuroQuant) -->
+  <text
+    x="128"
+    y="180"
+    font-size="140"
+    font-weight="700"
+    font-family="monospace"
+    text-anchor="middle"
+    fill="url(#grad)"
+  >N</text>
+  
+  <!-- Chart line (candlestick concept) -->
+  <polyline
+    points="70,120 100,100 130,110 160,90 190,110"
+    stroke="#00D4F5"
+    stroke-width="3"
+    fill="none"
+    stroke-linecap="round"
+  />
+</svg>

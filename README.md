@@ -59,6 +59,23 @@ pip install -r backend/requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
+## Sequential Build Pipeline (Backend)
+
+From `backend/`, run the strict sequence used for schema/data/features/model setup:
+
+```bash
+python scripts/run_sequential_build.py --years 5 --interval 1d --model all --symbol NIFTY --universe NSE
+```
+
+You can also run steps individually:
+
+```bash
+python scripts/verify_schema.py
+python scripts/data_pipeline.py --full-history --years 5
+python scripts/data_pipeline.py --features-only --interval 1d
+python scripts/model_trainer.py --model all --symbol NIFTY --universe NSE
+```
+
 ## Notes
 
 - Heavy infrastructure setup (Docker/AWS/etc.) is intentionally not required for the basic UI + backend workflow.

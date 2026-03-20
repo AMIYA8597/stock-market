@@ -1,6 +1,6 @@
 "use client";
 
-import { Card, CardHeader, CardTitle, Badge, cn, RegimeBadge } from "@neuroquant/ui";
+import { Card, CardHeader, CardTitle, Badge, RegimeBadge } from "@neuroquant/ui";
 
 const MODEL_LEADERBOARD = [
   { name: "AMSTAN", ic: 0.082, directional: 72.4, sharpe: 1.84, bestSector: "Banking" },
