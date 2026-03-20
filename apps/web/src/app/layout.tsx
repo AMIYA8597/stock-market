@@ -37,6 +37,17 @@ export const metadata: Metadata = {
     "machine learning",
     "risk management",
   ],
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  openGraph: {
+    title: "NeuroQuant — AI Stock Market Intelligence",
+    description:
+      "Institutional-grade AI-powered stock market analysis platform with real-time predictions, risk management, and portfolio optimization.",
+    type: "website",
+  },
 };
 
 export const viewport: Viewport = {

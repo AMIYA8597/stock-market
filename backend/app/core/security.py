@@ -44,13 +44,19 @@ pwd_hasher = PasswordHasher(
 )
 
 # ─── JWT RSA Keys ──────────────────────────────────────────────
-JWT_PRIVATE_KEY_PATH = Path("keys/private.pem")
-JWT_PUBLIC_KEY_PATH = Path("keys/public.pem")
+# Keys are stored at project root in keys/ directory
+# Path calculation: app/core/security.py → up 4 levels → project root
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+JWT_PRIVATE_KEY_PATH = _PROJECT_ROOT / "keys" / "private.pem"
+JWT_PUBLIC_KEY_PATH = _PROJECT_ROOT / "keys" / "public.pem"
 
 def load_jwt_keys():
     """Load RSA keys for JWT signing/verification."""
     if not JWT_PRIVATE_KEY_PATH.exists() or not JWT_PUBLIC_KEY_PATH.exists():
-        raise RuntimeError("JWT RSA keys not found. Run setup script to generate keys.")
+        raise RuntimeError(
+            f"JWT RSA keys not found at {JWT_PRIVATE_KEY_PATH.parent}/. "
+            f"Run setup script to generate keys."
+        )
 
     with open(JWT_PRIVATE_KEY_PATH, 'r') as f:
         private_key = f.read()
@@ -242,68 +248,4 @@ def require_role(required_role: str):
             )
         return current_user
     return role_checker
-        return payload
-    except JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
 
-
-async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
-    db: Annotated[AsyncSession, Depends(get_db)],
-):
-    """
-    FastAPI dependency: extract and validate current user from JWT.
-
-    Returns the User ORM object.
-    """
-    # Import here to avoid circular imports
-    from app.models.user import User
-
-    payload = decode_token(token)
-    if payload.get("type") != TokenType.ACCESS.value:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token type",
-        )
-
-    user_id: str | None = payload.get("sub")
-    if user_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token missing subject",
-        )
-
-    result = await db.execute(select(User).where(User.id == int(user_id)))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    return user
-
-
-def require_role(*roles: UserRole):
-    """
-    FastAPI dependency factory: restrict endpoint to specific roles.
-
-    Usage:
-        @router.get("/admin", dependencies=[Depends(require_role(UserRole.ADMIN))])
-    """
-
-    async def role_checker(
-        current_user=Depends(get_current_user),
-    ):
-        if current_user.role not in [r.value for r in roles]:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient permissions",
-            )
-        return current_user
-
-    return role_checker
