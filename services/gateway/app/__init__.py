@@ -1,1 +1,0 @@
-# NeuroQuant Gateway Service
