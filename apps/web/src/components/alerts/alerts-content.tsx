@@ -1,35 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Plus, Bell, Pause, Trash2, Edit, AlertTriangle, Brain, TrendingUp, Newspaper } from "lucide-react";
-import { Card, CardHeader, CardTitle, Button, Badge, Input, cn } from "@neuroquant/ui";
+import { Card, CardHeader, CardTitle, Button, Badge } from "@neuroquant/ui";
 import type { AlertType, AlertSeverity } from "@neuroquant/types";
+import { alertsApi } from "@/lib/api-client";
 
 interface ActiveAlert {
   id: string; name: string; symbol: string; type: AlertType; status: "active" | "triggered" | "paused";
   lastTriggered: string | null; timesTriggered: number;
 }
 
-const ACTIVE_ALERTS: ActiveAlert[] = [
-  { id: "1", name: "RELIANCE breakout", symbol: "RELIANCE", type: "price", status: "active", lastTriggered: "2h ago", timesTriggered: 3 },
-  { id: "2", name: "IT sector anomaly", symbol: "NIFTYIT", type: "anomaly", status: "triggered", lastTriggered: "15m ago", timesTriggered: 1 },
-  { id: "3", name: "SBIN ML signal", symbol: "SBIN", type: "ml_signal", status: "active", lastTriggered: "1d ago", timesTriggered: 5 },
-  { id: "4", name: "HDFCBANK RSI alert", symbol: "HDFCBANK", type: "technical", status: "paused", lastTriggered: null, timesTriggered: 0 },
-  { id: "5", name: "Market sentiment shift", symbol: "NIFTY50", type: "sentiment", status: "active", lastTriggered: "4h ago", timesTriggered: 2 },
-];
-
 interface HistoryItem {
   id: string; symbol: string; type: AlertType; severity: AlertSeverity; message: string; time: string;
 }
-
-const HISTORY: HistoryItem[] = [
-  { id: "h1", symbol: "WIPRO", type: "anomaly", severity: 4, message: "Volume anomaly: 3.2x average, potential institutional activity", time: "2 min ago" },
-  { id: "h2", symbol: "TATAMOTORS", type: "ml_signal", severity: 3, message: "Strong BUY signal — AMSTAN confidence 82%, ensemble agrees", time: "5 min ago" },
-  { id: "h3", symbol: "RELIANCE", type: "price", severity: 2, message: "Price crossed ₹2,850 resistance with high volume confirmation", time: "12 min ago" },
-  { id: "h4", symbol: "NIFTYIT", type: "anomaly", severity: 4, message: "Sector correlation breakdown detected — diverging from Nifty50", time: "15 min ago" },
-  { id: "h5", symbol: "SBIN", type: "news", severity: 3, message: "RBI policy decision positive for banking — sentiment score: 0.84", time: "18 min ago" },
-  { id: "h6", symbol: "INFY", type: "technical", severity: 2, message: "RSI entered oversold territory at 28.4 — potential reversal zone", time: "25 min ago" },
-];
 
 const typeIcons: Record<AlertType, typeof Bell> = {
   price: TrendingUp, technical: TrendingUp, ml_signal: Brain,
@@ -38,13 +22,130 @@ const typeIcons: Record<AlertType, typeof Bell> = {
 
 const statusColors = { active: "bull", triggered: "warning", paused: "default" } as const;
 
+function formatRelativeTime(input: string | null): string {
+  if (!input) return "Never triggered";
+  const date = new Date(input);
+  const diffMs = Date.now() - date.getTime();
+  if (Number.isNaN(diffMs) || diffMs < 0) return "Recently";
+
+  const minutes = Math.floor(diffMs / 60000);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
 export function AlertsContent() {
+  const [alerts, setAlerts] = useState<ActiveAlert[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadData = async (): Promise<void> => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const [definitions, events] = await Promise.all([
+        alertsApi.list(),
+        alertsApi.getHistory(20),
+      ]);
+
+      const mappedAlerts: ActiveAlert[] = definitions.map((item) => ({
+        id: item.id,
+        name: item.name,
+        symbol: item.symbol ?? "NIFTY50",
+        type: item.alert_type,
+        status: item.is_active ? "active" : "paused",
+        lastTriggered: formatRelativeTime(item.last_triggered_at),
+        timesTriggered: item.times_triggered,
+      }));
+
+      const mappedHistory: HistoryItem[] = events.map((event) => ({
+        id: event.id,
+        symbol: event.symbol,
+        type: event.alert_type,
+        severity: event.severity,
+        message: event.message,
+        time: formatRelativeTime(event.triggered_at),
+      }));
+
+      setAlerts(mappedAlerts);
+      setHistory(mappedHistory);
+    } catch (fetchError) {
+      const message =
+        fetchError instanceof Error ? fetchError.message : "Failed to fetch alerts.";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const activeCount = useMemo(
+    () => alerts.filter((item) => item.status === "active").length,
+    [alerts]
+  );
+
+  const createDefaultAlert = async (): Promise<void> => {
+    try {
+      await alertsApi.create({
+        name: "NIFTY Momentum Watch",
+        symbol: "NIFTY50",
+        alert_type: "technical",
+        conditions: { indicator: "rsi", operator: "lt", value: 35 },
+        channels: ["in_app"],
+        cooldown_minutes: 20,
+        is_active: true,
+      });
+      await loadData();
+    } catch (createError) {
+      const message =
+        createError instanceof Error ? createError.message : "Failed to create alert.";
+      setError(message);
+    }
+  };
+
+  const toggleAlert = async (alert: ActiveAlert): Promise<void> => {
+    try {
+      const nextActive = alert.status !== "active";
+      await alertsApi.update(alert.id, { is_active: nextActive });
+      await loadData();
+    } catch (updateError) {
+      const message =
+        updateError instanceof Error ? updateError.message : "Failed to update alert.";
+      setError(message);
+    }
+  };
+
+  const removeAlert = async (alertId: string): Promise<void> => {
+    try {
+      await alertsApi.delete(alertId);
+      await loadData();
+    } catch (deleteError) {
+      const message =
+        deleteError instanceof Error ? deleteError.message : "Failed to delete alert.";
+      setError(message);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-nq-text-primary">Smart Alert Center</h1>
-        <Button size="sm"><Plus className="h-3.5 w-3.5" /> New Alert</Button>
+        <Button size="sm" onClick={() => void createDefaultAlert()} disabled={loading}>
+          <Plus className="h-3.5 w-3.5" />
+          New Alert
+        </Button>
       </div>
+      {error ? <p className="text-xs text-nq-bear">{error}</p> : null}
 
       <div className="grid grid-cols-12 gap-4">
         {/* Active alerts */}
@@ -52,10 +153,10 @@ export function AlertsContent() {
           <Card noPadding>
             <CardHeader className="px-4 pt-3">
               <CardTitle>Active Alerts</CardTitle>
-              <Badge variant="accent">{ACTIVE_ALERTS.filter((a) => a.status === "active").length} active</Badge>
+              <Badge variant="accent">{loading ? "..." : `${activeCount} active`}</Badge>
             </CardHeader>
             <div className="divide-y divide-nq-border">
-              {ACTIVE_ALERTS.map((alert) => {
+              {alerts.map((alert) => {
                 const Icon = typeIcons[alert.type];
                 return (
                   <div key={alert.id} className="flex items-center gap-3 px-4 py-3 hover:bg-nq-bg-card/50 transition-colors">
@@ -79,12 +180,19 @@ export function AlertsContent() {
                     </div>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" className="h-7 w-7"><Edit className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7"><Pause className="h-3 w-3" /></Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-nq-bear"><Trash2 className="h-3 w-3" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => void toggleAlert(alert)}>
+                        <Pause className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-nq-bear" onClick={() => void removeAlert(alert.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 );
               })}
+              {!loading && alerts.length === 0 ? (
+                <div className="px-4 py-6 text-xs text-nq-text-tertiary">No alerts configured yet.</div>
+              ) : null}
             </div>
           </Card>
         </div>
@@ -97,7 +205,7 @@ export function AlertsContent() {
               <Badge>Live</Badge>
             </CardHeader>
             <div className="divide-y divide-nq-border max-h-[500px] overflow-y-auto">
-              {HISTORY.map((item) => {
+              {history.map((item) => {
                 const Icon = typeIcons[item.type];
                 const severityVar = `severity${item.severity}` as "severity1" | "severity2" | "severity3" | "severity4" | "severity5";
                 return (
@@ -111,6 +219,9 @@ export function AlertsContent() {
                   </div>
                 );
               })}
+              {!loading && history.length === 0 ? (
+                <div className="px-4 py-6 text-xs text-nq-text-tertiary">No recent alert events.</div>
+              ) : null}
             </div>
           </Card>
         </div>

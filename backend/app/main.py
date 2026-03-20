@@ -8,13 +8,14 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
-from app.api.v1 import api_router
+from app.api.v1.router import api_router
 from app.core.config import get_settings
-from app.core.websocket_manager import ws_manager
+from app.core.events import shutdown_events, startup_events
+from app.websocket.router import router as websocket_router
 
 settings = get_settings()
 
@@ -23,7 +24,9 @@ settings = get_settings()
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown hooks."""
     logger.info("🚀 QuantEdge API starting up...")
+    background_tasks = await startup_events()
     yield
+    await shutdown_events(background_tasks)
     logger.info("🛑 QuantEdge API shutting down...")
 
 
@@ -48,47 +51,4 @@ app.add_middleware(
 
 # ─── Mount API v1 ─────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-
-
-# ─── WebSocket Endpoints ──────────────────────────────────
-
-@app.websocket("/ws/market/{symbol}")
-async def ws_market_feed(websocket: WebSocket, symbol: str):
-    """
-    WebSocket endpoint for live market price streaming.
-
-    Clients subscribe to a symbol channel and receive real-time tick updates.
-    """
-    channel = f"market:{symbol.upper()}"
-    await ws_manager.connect(websocket, channel)
-    try:
-        while True:
-            # Keep connection alive; actual data is pushed by the data pipeline
-            data = await websocket.receive_text()
-            logger.debug(f"WS received from {channel}: {data}")
-    except WebSocketDisconnect:
-        await ws_manager.disconnect(websocket, channel)
-
-
-@app.websocket("/ws/portfolio")
-async def ws_portfolio_feed(websocket: WebSocket):
-    """WebSocket endpoint for live portfolio P&L updates."""
-    channel = "portfolio:live"
-    await ws_manager.connect(websocket, channel)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        await ws_manager.disconnect(websocket, channel)
-
-
-@app.websocket("/ws/alerts")
-async def ws_alerts_feed(websocket: WebSocket):
-    """WebSocket endpoint for real-time alert notifications."""
-    channel = "alerts:live"
-    await ws_manager.connect(websocket, channel)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        await ws_manager.disconnect(websocket, channel)
+app.include_router(websocket_router)

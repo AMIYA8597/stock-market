@@ -1,0 +1,154 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neuroquant-backend"
+version = "2026.01"
+description = "Algorithmic Trading Intelligence Platform — Institutional-Grade ML + Quant Research"
+authors = [{name = "M.Tech Thesis Team", email = "research@neuroquant.local"}]
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+
+dependencies = [
+    # Web Framework
+    "fastapi==0.104.1",
+    "uvicorn[standard]==0.24.0",
+    "pydantic==2.5.0",
+    "pydantic-settings==2.1.0",
+    
+    # Database
+    "sqlalchemy==2.0.23",
+    "asyncpg==0.29.0",
+    "alembic==1.13.1",
+    "psycopg2-binary==2.9.9",
+    
+    # Redis & Caching
+    "redis==5.0.1",
+    
+    # Async & Concurrency
+    "aiohttp==3.9.1",
+    "httpx==0.25.2",
+    
+    # ML & Scientific Computing
+    "numpy==1.26.3",
+    "pandas==2.1.4",
+    "scipy==1.11.4",
+    "scikit-learn==1.3.2",
+    "torch==2.1.1",
+    "pytorch-lightning==2.1.3",
+    "pyg==2.4.0",
+    
+    # Specialized Models
+    "xgboost==2.0.3",
+    "statsmodels==0.14.0",
+    "hmmlearn==0.3.0",
+    
+    # Data Sources
+    "yfinance==0.2.32",
+    "alpha-vantage==2.3.1",
+    "fred-api==3.2.0",
+    "newsapi==1.1.0",
+    
+    # Explainability
+    "shap==0.43.0",
+    "lime==0.2.0",
+    
+    # Feature Engineering & Optimization
+    "ta==0.11.0",
+    "cvxpy==1.4.1",
+    
+    # Time Series
+    "prophet==1.1.5",
+    "statsmodels==0.14.0",
+    
+    # Security
+    "python-jose==3.3.0",
+    "passlib==1.7.4",
+    "cryptography==41.0.7",
+    
+    # Celery & Task Queue
+    "celery==5.3.4",
+    
+    # Monitoring & Logging
+    "structlog==23.3.0",
+    "python-json-logger==2.0.7",
+    "prometheus-client==0.19.0",
+    
+    # Utilities
+    "python-dotenv==1.0.0",
+    "typer==0.9.0",
+    "requests==2.31.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==7.4.3",
+    "pytest-asyncio==0.21.1",
+    "pytest-cov==4.1.0",
+    "mypy==1.7.1",
+    "ruff==0.1.11",
+    "black==23.12.1",
+    "isort==5.13.2",
+    "pre-commit==3.5.0",
+    "jupyter==1.0.0",
+    "notebook==7.0.6",
+    "jupyterlab==4.0.9",
+    "matplotlib==3.8.2",
+    "seaborn==0.13.0",
+    "plotly==5.18.0",
+    "hypothesis==6.92.2",
+]
+
+[tool.setuptools]
+packages = ["app", "research", "tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+select = ["E", "W", "F", "B", "I", "N", "UP", "C90"]
+ignore = ["E501", "W503"]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401", "F403"]
+"tests/**/*.py" = ["F841"]
+
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+strict_equality = true
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "sklearn.*", "pandas.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+asyncio_mode = "auto"
+addopts = "--strict-markers -v"
+
+[tool.coverage.run]
+source = ["app", "research"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

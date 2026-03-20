@@ -19,6 +19,7 @@ from uuid import uuid4
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -216,6 +217,20 @@ async def login(
         refresh_token=refresh_token,
         expires_in=900,
     )
+
+
+@router.post("/token", response_model=TokenResponse)
+async def token_login(
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """OAuth2 password-flow token endpoint alias.
+
+    This keeps `/auth/token` available per build prompt while reusing
+    the same login verification and token issuance path.
+    """
+    payload = UserLogin(email=form_data.username, password=form_data.password)
+    return await login(payload=payload, db=db)
 
 
 @router.post("/refresh", response_model=TokenResponse)

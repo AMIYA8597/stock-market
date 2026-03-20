@@ -15,8 +15,17 @@ import { useUIStore } from "@/stores/ui-store";
 interface SearchItem {
   symbol: string;
   name: string;
-  type: "stock" | "crypto" | "etf" | "index";
+  type: "stock" | "crypto" | "etf" | "index" | "page";
+  route?: string;
   exchange?: string;
+}
+
+function getMarketRoute(item: SearchItem): string {
+  if (item.type === "crypto") {
+    return `/markets/crypto/${encodeURIComponent(item.symbol)}`;
+  }
+
+  return `/markets/stocks/${encodeURIComponent(item.symbol)}`;
 }
 
 const POPULAR_SEARCHES: SearchItem[] = [
@@ -36,7 +45,18 @@ const typeIcons: Record<string, typeof TrendingUp> = {
   crypto: Bitcoin,
   etf: BarChart3,
   index: BarChart3,
+  page: ArrowRight,
 };
+
+const PAGE_SHORTCUTS: SearchItem[] = [
+  { symbol: "PAGE_TERMINAL", name: "Open Terminal", type: "page", route: "/terminal" },
+  { symbol: "PAGE_MARKETS", name: "Open Markets", type: "page", route: "/markets" },
+  { symbol: "PAGE_RESEARCH", name: "Open Research", type: "page", route: "/research" },
+  { symbol: "PAGE_BACKTEST", name: "Open Backtest Lab", type: "page", route: "/backtest-lab" },
+  { symbol: "PAGE_PORTFOLIO", name: "Open Portfolio", type: "page", route: "/portfolio" },
+  { symbol: "PAGE_MONITOR", name: "Open Model Monitor", type: "page", route: "/model-monitor" },
+  { symbol: "PAGE_ALERTS", name: "Open Alerts", type: "page", route: "/alerts" },
+];
 
 export function CommandPalette() {
   const router = useRouter();
@@ -44,9 +64,11 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const allItems = [...PAGE_SHORTCUTS, ...POPULAR_SEARCHES];
+
   const filteredItems = query.length === 0
-    ? POPULAR_SEARCHES
-    : POPULAR_SEARCHES.filter(
+    ? allItems
+    : allItems.filter(
         (item) =>
           item.symbol.toLowerCase().includes(query.toLowerCase()) ||
           item.name.toLowerCase().includes(query.toLowerCase())
@@ -54,7 +76,14 @@ export function CommandPalette() {
 
   const handleSelect = useCallback(
     (item: SearchItem) => {
-      router.push(`/market/${encodeURIComponent(item.symbol)}`);
+      if (item.type === "page" && item.route) {
+        router.push(item.route);
+        closeCommandPalette();
+        setQuery("");
+        return;
+      }
+
+      router.push(getMarketRoute(item));
       closeCommandPalette();
       setQuery("");
     },
@@ -128,7 +157,7 @@ export function CommandPalette() {
         <div className="max-h-80 overflow-y-auto py-2">
           {query.length === 0 && (
             <div className="px-4 py-1.5 text-[10px] font-medium text-nq-text-tertiary uppercase tracking-wider">
-              Popular
+              Quick Actions + Popular Symbols
             </div>
           )}
           {filteredItems.length === 0 ? (
@@ -140,7 +169,7 @@ export function CommandPalette() {
               const Icon = typeIcons[item.type] ?? TrendingUp;
               return (
                 <button
-                  key={item.symbol}
+                  key={`${item.type}-${item.symbol}`}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={cn(
@@ -154,7 +183,7 @@ export function CommandPalette() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm font-semibold">
-                        {item.symbol}
+                        {item.type === "page" ? "PAGE" : item.symbol}
                       </span>
                       {item.exchange && (
                         <span className="text-[10px] text-nq-text-tertiary">

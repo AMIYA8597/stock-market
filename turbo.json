@@ -17,7 +17,7 @@
     "JWT_PUBLIC_KEY_PATH",
     "ENVIRONMENT"
   ],
-  "pipeline": {
+  "tasks": {
     "build": {
       "dependsOn": ["^build", "^type-check"],
       "outputs": [

@@ -1,11 +1,11 @@
 packages:
-  - 'apps/*'
-  - 'packages/*'
-  - 'services/*'
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
 
 catalogs:
   default:
-    @neuroquant/ui: 'workspace:*'
-    @neuroquant/charts: 'workspace:*'
-    @neuroquant/types: 'workspace:*'
-    @neuroquant/config: 'workspace:*'
+    "@neuroquant/ui": "workspace:*"
+    "@neuroquant/charts": "workspace:*"
+    "@neuroquant/types": "workspace:*"
+    "@neuroquant/config": "workspace:*"

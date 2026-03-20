@@ -3,48 +3,64 @@
 @tailwind utilities;
 
 @layer base {
-<<<<<<< HEAD
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-text-primary;
-  }
-}
-=======
   :root {
-    /* NeuroQuant Design Tokens */
-    --nq-bg-primary: #0A0B0E;
-    --nq-bg-secondary: #111318;
-    --nq-bg-card: #161B24;
-    --nq-bg-elevated: #1C2230;
+    /* Prompt-aligned core design tokens */
+    --bg-base: #07090F;
+    --bg-surface: #0C1018;
+    --bg-elevated: #111926;
+    --bg-overlay: #1A2333;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-muted: rgba(255,255,255,0.12);
+    --border-strong: rgba(255,255,255,0.22);
+    --text-primary: #E8EDF5;
+    --text-secondary: #8B97A8;
+    --text-muted: #4A5568;
+    --accent-cyan: #00D4F5;
+    --accent-green: #00E676;
+    --accent-red: #FF3B5C;
+    --accent-amber: #FFB800;
+    --accent-purple: #8B5CF6;
+    --regime-bull: rgba(0,230,118,0.15);
+    --regime-bear: rgba(255,59,92,0.15);
+    --regime-side: rgba(255,184,0,0.12);
+    --regime-crisis: rgba(220,38,38,0.20);
 
-    --nq-border: #1E2532;
-    --nq-border-hover: #2A3447;
+    /* Backward-compatible aliases used in existing components */
+    --nq-bg-base: var(--bg-base);
+    --nq-bg-surface: var(--bg-surface);
+    --nq-bg-overlay: var(--bg-overlay);
+    --nq-bg-primary: var(--bg-base);
+    --nq-bg-secondary: var(--bg-surface);
+    --nq-bg-card: var(--bg-surface);
+    --nq-bg-elevated: var(--bg-elevated);
 
-    --nq-accent: #00D4FF;
+    --nq-border: var(--border-subtle);
+    --nq-border-hover: var(--border-muted);
+
+    --nq-accent: var(--accent-cyan);
     --nq-accent-hover: #33DDFF;
-    --nq-accent-muted: rgba(0, 212, 255, 0.1);
+    --nq-accent-muted: rgba(0, 212, 245, 0.1);
 
-    --nq-bull: #00E676;
+    --nq-bull: var(--accent-green);
     --nq-bull-muted: rgba(0, 230, 118, 0.2);
     --nq-bull-bg: rgba(0, 230, 118, 0.08);
 
-    --nq-bear: #FF3B3B;
-    --nq-bear-muted: rgba(255, 59, 59, 0.2);
-    --nq-bear-bg: rgba(255, 59, 59, 0.08);
+    --nq-bear: var(--accent-red);
+    --nq-bear-muted: rgba(255, 59, 92, 0.2);
+    --nq-bear-bg: rgba(255, 59, 92, 0.08);
 
-    --nq-warning: #FFB800;
+    --nq-warning: var(--accent-amber);
     --nq-warning-muted: rgba(255, 184, 0, 0.1);
 
-    --nq-text-primary: #E8EAED;
-    --nq-text-secondary: #8B9BB4;
-    --nq-text-tertiary: #566176;
+    --nq-text-primary: var(--text-primary);
+    --nq-text-secondary: var(--text-secondary);
+    --nq-text-tertiary: var(--text-muted);
 
     /* Font vars (set by next/font) */
-    --font-clash-display: 'Clash Display Variable', system-ui, sans-serif;
-    --font-cabinet: 'Cabinet Grotesk', system-ui, sans-serif;
-    --font-jetbrains: 'JetBrains Mono', 'Fira Code', monospace;
+    --font-instrument: 'Instrument Sans', system-ui, sans-serif;
+    --font-cabinet: 'Cabinet Grotesk', 'Manrope', system-ui, sans-serif;
+    --font-berkeley: 'Berkeley Mono', 'Space Mono', 'JetBrains Mono', monospace;
+    --font-jetbrains: var(--font-berkeley);
   }
 
   * {
@@ -54,7 +70,7 @@
   body {
     background-color: var(--nq-bg-primary);
     color: var(--nq-text-primary);
-    font-family: var(--font-cabinet);
+    font-family: var(--font-instrument);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -102,4 +118,3 @@
     background-clip: text;
   }
 }
->>>>>>> 10e1aa79ae3f95f38345cbdf853c86957900630c

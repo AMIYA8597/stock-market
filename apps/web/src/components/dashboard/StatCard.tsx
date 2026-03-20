@@ -25,7 +25,7 @@ const StatCard = ({ data }: StatCardProps): JSX.Element => {
     data.trend === 'up' ? '▲' : data.trend === 'down' ? '▼' : '→';
 
   return (
-    <div className="bg-[#161B24] border border-[#1E2532] rounded-lg p-6 hover:border-[#00D4FF] transition-all duration-300">
+    <div className="relative rounded-lg border border-[#1E2532] bg-[#161B24] p-6 transition-all duration-300 hover:border-[#00D4FF]">
       {/* Label */}
       <p className="text-xs font-semibold text-[#8B9BB4] uppercase mb-3">
         {data.label}

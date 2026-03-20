@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { BacktestingContent } from "@/components/backtesting/backtesting-content";
+import { redirect } from "next/navigation";
 
 export const metadata: Metadata = { title: "Backtesting" };
 
-export default function BacktestingPage() {
-  return <BacktestingContent />;
+export default function BacktestingPage(): never {
+  redirect("/backtest-lab");
 }

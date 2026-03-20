@@ -7,7 +7,6 @@ from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-
 class UserBase(BaseModel):
     """Base user schema."""
     email: EmailStr = Field(..., description="User email address")

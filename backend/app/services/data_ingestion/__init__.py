@@ -1,8 +1,11 @@
-"""
-Data ingestion service.
+"""Data ingestion package exports."""
 
-Handles fetching data from Yahoo Finance, Alpha Vantage, NSE, CoinGecko,
-NewsAPI, Finnhub, and FRED. Implements async data pipeline with Redis caching.
+from app.services.data_ingestion.base import Interval, OHLCVBar
+from app.services.data_ingestion.orchestrator import DataIngestionOrchestrator, IngestionTask
 
-Fully implemented in Phase 2.
-"""
+__all__ = [
+	"DataIngestionOrchestrator",
+	"IngestionTask",
+	"Interval",
+	"OHLCVBar",
+]

@@ -1,7 +1,6 @@
 "use client";
 
-import { Search, Bell, Wifi, WifiOff, Command } from "lucide-react";
-import { Badge } from "@neuroquant/ui";
+import { Search, Bell, Wifi, WifiOff, Command, Menu } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 
 interface TopbarProps {
@@ -10,28 +9,46 @@ interface TopbarProps {
 }
 
 export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
-  const { openCommandPalette, sidebarCollapsed } = useUIStore();
+  const { openCommandPalette, toggleMobileSidebar } = useUIStore();
 
   return (
     <header
       className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-nq-border bg-nq-bg-secondary/80 backdrop-blur-md px-6"
     >
       {/* Search */}
-      <button
-        onClick={openCommandPalette}
-        className="flex items-center gap-2 rounded-nq border border-nq-border bg-nq-bg-card px-3 py-1.5 text-sm text-nq-text-tertiary hover:border-nq-border-hover hover:text-nq-text-secondary transition-all w-72"
-      >
-        <Search className="h-4 w-4" />
-        <span className="flex-1 text-left">Search stocks, crypto, pages...</span>
-        <kbd className="flex items-center gap-0.5 rounded border border-nq-border bg-nq-bg-elevated px-1.5 py-0.5 text-[10px] font-mono text-nq-text-tertiary">
-          <Command className="h-2.5 w-2.5" />K
-        </kbd>
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={toggleMobileSidebar}
+          className="flex h-9 w-9 items-center justify-center rounded-nq border border-nq-border bg-nq-bg-card text-nq-text-secondary transition-colors hover:border-nq-border-hover hover:text-nq-text-primary lg:hidden"
+          aria-label="Open menu"
+        >
+          <Menu className="h-4 w-4" />
+        </button>
+
+        <button
+          onClick={openCommandPalette}
+          className="hidden w-72 items-center gap-2 rounded-nq border border-nq-border bg-nq-bg-card px-3 py-1.5 text-sm text-nq-text-tertiary transition-all hover:border-nq-border-hover hover:text-nq-text-secondary sm:flex"
+        >
+          <Search className="h-4 w-4" />
+          <span className="flex-1 text-left">Search stocks, crypto, pages...</span>
+          <kbd className="flex items-center gap-0.5 rounded border border-nq-border bg-nq-bg-elevated px-1.5 py-0.5 text-[10px] font-mono text-nq-text-tertiary">
+            <Command className="h-2.5 w-2.5" />K
+          </kbd>
+        </button>
+
+        <button
+          onClick={openCommandPalette}
+          className="flex h-9 w-9 items-center justify-center rounded-nq border border-nq-border bg-nq-bg-card text-nq-text-secondary transition-colors hover:border-nq-border-hover hover:text-nq-text-primary sm:hidden"
+          aria-label="Open search"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      </div>
 
       {/* Right section */}
       <div className="flex items-center gap-3">
         {/* Connection status */}
-        <div className="flex items-center gap-1.5">
+        <div className="hidden items-center gap-1.5 sm:flex">
           {connectionStatus === "connected" ? (
             <Wifi className="h-3.5 w-3.5 text-nq-bull" />
           ) : connectionStatus === "reconnecting" ? (
