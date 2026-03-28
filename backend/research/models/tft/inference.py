@@ -170,6 +170,6 @@ class TFTInferenceEngine:
         Returns:
             VSN weights (batch, time, n_features) or None if not available.
         """
-        # TODO: Capture VSN weights during forward pass
+        # VSN weights are not currently emitted by the model forward pass.
         return None
 
