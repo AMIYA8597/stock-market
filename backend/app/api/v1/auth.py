@@ -31,6 +31,7 @@ from app.schemas.auth import (
     UserRegister,
     UserResponse,
 )
+from app.schemas.errors import ErrorCode, ErrorResponse, ErrorDetail
 from app.services.email_service import enqueue_email
 
 settings = get_settings()
@@ -76,7 +77,14 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
 
     existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already in use")
+        # Use generic message to prevent user enumeration
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ErrorResponse.create(
+                code=ErrorCode.ALREADY_EXISTS,
+                message="Unable to complete registration. Please try with a different email or contact support.",
+            ).dict(),
+        )
 
     user = User(
         email=email,
@@ -122,7 +130,13 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             }
             _TEST_USERS[email] = user
         if str(user["password"]) != payload.password:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.INVALID_CREDENTIALS,
+                    message="Email or password is incorrect. Please try again.",
+                ).dict(),
+            )
         access_token = create_access_token(user_id=str(user["id"]), role=str(user["role"]))
         refresh_token = create_refresh_token(user_id=str(user["id"]))
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
@@ -131,17 +145,37 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(payload.password, user.hashed_password):
+        # Generic message prevents user enumeration
         if user is not None:
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= 5:
                 user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INVALID_CREDENTIALS,
+                message="Email or password is incorrect. Please try again.",
+            ).dict(),
+        )
 
     if not user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive account")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=ErrorResponse.create(
+                code=ErrorCode.ACCOUNT_INACTIVE,
+                message="Your account is inactive. Please contact support.",
+            ).dict(),
+        )
 
     if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Account temporarily locked")
+        remaining = (user.locked_until - datetime.now(timezone.utc)).total_seconds()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=ErrorResponse.create(
+                code=ErrorCode.ACCOUNT_LOCKED,
+                message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
+            ).dict(),
+        )
 
     user.failed_login_attempts = 0
     user.locked_until = None
