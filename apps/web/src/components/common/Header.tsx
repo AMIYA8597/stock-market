@@ -31,6 +31,7 @@ const Header = (): JSX.Element => {
     { href: '/terminal', label: 'Terminal' },
     { href: '/markets', label: 'Markets' },
     { href: '/portfolio', label: 'Portfolio' },
+    { href: '/portfolio/funds', label: 'Funds' },
     { href: '/backtest-lab', label: 'Backtest Lab' },
     { href: '/research', label: 'Research' },
     { href: '/model-monitor', label: 'Model Monitor' },

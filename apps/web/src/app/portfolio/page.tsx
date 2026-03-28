@@ -111,12 +111,20 @@ export default function PortfolioPage(): JSX.Element {
       <h1 className="mb-2 text-2xl font-semibold">Portfolio</h1>
       <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-xs text-[var(--nq-text-secondary)]">Live contracts: portfolio holdings, risk metrics, performance, and ws price feed ({status}).</p>
-        <Link
-          href="/portfolio/orders"
-          className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
-        >
-          View order history
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/portfolio/funds"
+            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+          >
+            Add funds
+          </Link>
+          <Link
+            href="/portfolio/orders"
+            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+          >
+            View order history
+          </Link>
+        </div>
       </div>
       {error ? <p className="mb-2 text-sm text-[var(--nq-accent-red)]">{error}</p> : null}
 
