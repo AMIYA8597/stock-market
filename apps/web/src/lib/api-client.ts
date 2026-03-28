@@ -23,6 +23,8 @@ import type {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_PREFIX = "/api/v1";
+const ACCESS_TOKEN_KEY = "nq_access_token";
+const REFRESH_TOKEN_KEY = "nq_refresh_token";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -37,15 +39,81 @@ class ApiError extends Error {
   }
 }
 
+let refreshPromise: Promise<string | null> | null = null;
+
+function getAccessToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
+function getRefreshToken(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+export function setAuthTokens(tokens: { access_token: string; refresh_token: string }): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+}
+
+export function clearAuthTokens(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) {
+    clearAuthTokens();
+    return null;
+  }
+
+  if (!refreshPromise) {
+    refreshPromise = (async () => {
+      const url = `${API_BASE}${API_PREFIX}/auth/refresh`;
+      const response = await fetch(url, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (!response.ok) {
+        clearAuthTokens();
+        return null;
+      }
+
+      const data = (await response.json()) as TokenResponse;
+      setAuthTokens({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      return data.access_token;
+    })().finally(() => {
+      refreshPromise = null;
+    });
+  }
+
+  return refreshPromise;
+}
+
 async function fetchApi<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  retryCount = 0
 ): Promise<T> {
   const url = `${API_BASE}${API_PREFIX}${path}`;
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("nq_access_token")
-      : null;
+  const token = getAccessToken();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -63,6 +131,18 @@ async function fetchApi<T>(
   });
 
   if (!response.ok) {
+    if (response.status === 401 && retryCount < 1) {
+      const nextToken = await refreshAccessToken();
+      if (nextToken) {
+        return fetchApi<T>(path, options, retryCount + 1);
+      }
+    }
+
+    if (response.status >= 500 && retryCount < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 250 * (retryCount + 1)));
+      return fetchApi<T>(path, options, retryCount + 1);
+    }
+
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, response.statusText, body);
   }
@@ -86,7 +166,7 @@ export const authApi = {
   },
 
   login(email: string, password: string): Promise<TokenResponse> {
-    return fetchApi("/auth/token", {
+    return fetchApi("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
@@ -105,6 +185,91 @@ export const authApi = {
 
   logout(): Promise<void> {
     return fetchApi("/auth/logout", { method: "POST" });
+  },
+
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return fetchApi("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    return fetchApi("/auth/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ token, new_password: newPassword }),
+    });
+  },
+};
+
+export const usersApi = {
+  getProfile(): Promise<{ id: string; email: string; full_name: string | null; role: string; is_active: boolean }> {
+    return fetchApi("/users/profile");
+  },
+  updateProfile(full_name: string): Promise<{ id: string; email: string; full_name: string | null; role: string; is_active: boolean }> {
+    return fetchApi("/users/profile", {
+      method: "PATCH",
+      body: JSON.stringify({ full_name }),
+    });
+  },
+};
+
+export const adminApi = {
+  listUsers(): Promise<Array<{ id: string; email: string; full_name: string | null; role: string; is_active: boolean }>> {
+    return fetchApi("/admin/users");
+  },
+  updateUserRole(userId: string, role: "USER" | "ADMIN"): Promise<{ id: string; email: string; full_name: string | null; role: string; is_active: boolean }> {
+    return fetchApi(`/admin/users/${encodeURIComponent(userId)}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+  },
+  getContent(): Promise<{ posts: Array<{ id: string; slug: string; title: string; status: string }> }> {
+    return fetchApi("/admin/content");
+  },
+};
+
+export const blogApi = {
+  listPosts(limit = 20): Promise<{ items: Array<{ slug: string; title: string; excerpt: string; published_at: string | null }> }> {
+    return fetchApi(`/blog/posts?limit=${limit}`);
+  },
+  getPost(slug: string): Promise<{ slug: string; title: string; excerpt: string; content: string; status: string; published_at: string | null }> {
+    return fetchApi(`/blog/posts/${encodeURIComponent(slug)}`);
+  },
+};
+
+export const notificationsApi = {
+  list(): Promise<{ items: Array<{ id: string; title: string; message: string; level: string; is_read: boolean; created_at: string }> }> {
+    return fetchApi("/notifications");
+  },
+  markRead(notificationId: string): Promise<{ status: string }> {
+    return fetchApi(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: "POST" });
+  },
+};
+
+export const paymentsApi = {
+  methods(): Promise<{ methods: Array<{ code: string; min_amount: string; max_amount: string; enabled: boolean }> }> {
+    return fetchApi("/payments/methods");
+  },
+  balance(): Promise<{ currency: string; wallet_balance: string }> {
+    return fetchApi("/payments/balance");
+  },
+  async createIntent(data: { amount: number; method: "UPI" | "CARD" | "NETBANKING"; currency?: string; description?: string }): Promise<{ intent_id: string; provider_ref: string; amount: string; status: string }> {
+    const idem = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `idem-${Date.now()}`;
+    return fetchApi("/payments/intents", {
+      method: "POST",
+      headers: { "Idempotency-Key": idem },
+      body: JSON.stringify(data),
+    });
+  },
+  confirmIntent(intent_id: string, confirmation_code: string): Promise<{ intent_id: string; status: string; credited_amount: string; completed_at: string | null }> {
+    return fetchApi("/payments/confirm", {
+      method: "POST",
+      body: JSON.stringify({ intent_id, confirmation_code }),
+    });
+  },
+  history(limit = 20): Promise<{ items: Array<{ intent_id: string; amount: string; currency: string; method: string; status: string; created_at: string }>; total: number }> {
+    return fetchApi(`/payments/history?limit=${limit}`);
   },
 };
 

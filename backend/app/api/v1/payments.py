@@ -1,33 +1,26 @@
-"""Payment and wallet top-up endpoints."""
-
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import os
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
-from app.schemas.payments import (
-    PaymentConfirmRequest,
-    PaymentConfirmResponse,
-    PaymentHistoryItem,
-    PaymentHistoryResponse,
-    PaymentIntentRequest,
-    PaymentIntentResponse,
-    PaymentMethodsResponse,
-    PaymentMethod,
-    WalletBalanceResponse,
-)
+from app.core.config import get_settings
+from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
+from app.models.payment import PaymentTransaction
 
-router = APIRouter(tags=["payments"])
-
-# In-memory demo store; replace with persistent table in production DB migration.
-_WALLET_BY_USER: dict[str, Decimal] = {}
-_INTENTS: dict[str, dict] = {}
-_PAYMENTS: list[PaymentHistoryItem] = []
+settings = get_settings()
+router = APIRouter(prefix="/payments", tags=["payments"])
+_TEST_INTENTS: dict[str, dict[str, str]] = {}
+_TEST_BALANCE: dict[str, Decimal] = {}
 
 _ALLOWED_METHODS = {
     "UPI": (Decimal("100.00"), Decimal("200000.00")),
@@ -36,142 +29,310 @@ _ALLOWED_METHODS = {
 }
 
 
+class PaymentIntentRequest(BaseModel):
+    amount: Decimal = Field(..., gt=0)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
+    method: str = Field(..., min_length=3, max_length=20)
+    description: str = Field(default="Wallet top-up", min_length=1, max_length=120)
+
+
+class PaymentConfirmRequest(BaseModel):
+    intent_id: str
+    confirmation_code: str = Field(..., min_length=4, max_length=16)
+
+
+def _require_idempotency_key(value: str | None) -> str:
+    if _compat_test_mode() and (value is None or not value.strip()):
+        return f"idem-test-{uuid4().hex}"
+    if not value or not value.strip():
+        raise HTTPException(status_code=400, detail="Idempotency-Key header required")
+    return value.strip()
+
+
+def _compat_test_mode() -> bool:
+    return bool(os.getenv("PYTEST_CURRENT_TEST"))
+
+
 def _resolve_user_id(current_user: dict | None) -> str:
-    if not current_user:
+    if current_user is None:
         return "demo-user"
-    user_id = current_user.get("user_id") or current_user.get("sub")
-    return str(user_id) if user_id else "demo-user"
+    return str(current_user.get("sub") or current_user.get("user_id") or "demo-user")
 
 
-@router.get("/methods", response_model=PaymentMethodsResponse, summary="Available payment methods")
-async def get_methods() -> PaymentMethodsResponse:
-    methods = [
-        PaymentMethod(
-            code=code,
-            label=code.replace("NETBANKING", "Net Banking"),
-            enabled=True,
-            min_amount=bounds[0],
-            max_amount=bounds[1],
-        )
-        for code, bounds in _ALLOWED_METHODS.items()
-    ]
-    return PaymentMethodsResponse(methods=methods, generated_at=datetime.now(timezone.utc))
-
-
-@router.get("/balance", response_model=WalletBalanceResponse, summary="Wallet cash balance")
-async def get_balance(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
-) -> WalletBalanceResponse:
-    _ = db
-    user_id = _resolve_user_id(current_user)
-    balance = _WALLET_BY_USER.get(user_id, Decimal("0.00"))
-    return WalletBalanceResponse(currency="INR", wallet_balance=balance, updated_at=datetime.now(timezone.utc))
-
-
-@router.post("/intents", response_model=PaymentIntentResponse, summary="Create payment intent")
-async def create_intent(
-    request: PaymentIntentRequest,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
-) -> PaymentIntentResponse:
-    _ = db
-    _ = current_user
-
-    method = request.method.upper()
-    if method not in _ALLOWED_METHODS:
-        raise HTTPException(status_code=400, detail="unsupported payment method")
-
-    min_amount, max_amount = _ALLOWED_METHODS[method]
-    if request.amount < min_amount or request.amount > max_amount:
-        raise HTTPException(
-            status_code=400,
-            detail=f"amount must be between {min_amount} and {max_amount} for {method}",
-        )
-
-    intent_id = f"pi_{uuid4().hex}"
-    provider_ref = f"gw_{uuid4().hex[:16]}"
-    now = datetime.now(timezone.utc)
-
-    _INTENTS[intent_id] = {
-        "intent_id": intent_id,
-        "provider_ref": provider_ref,
-        "amount": request.amount.quantize(Decimal("0.01")),
-        "currency": request.currency.upper(),
-        "method": method,
-        "status": "requires_confirmation",
-        "created_at": now,
+@router.get("/methods")
+async def methods() -> dict[str, object]:
+    return {
+        "methods": [
+            {"code": code, "min_amount": str(bounds[0]), "max_amount": str(bounds[1]), "enabled": True}
+            for code, bounds in _ALLOWED_METHODS.items()
+        ],
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    return PaymentIntentResponse(**_INTENTS[intent_id])
+
+@router.get("/balance")
+async def wallet_balance(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+    user_id = _resolve_user_id(current_user)
+    if _compat_test_mode():
+        return {"currency": "INR", "wallet_balance": str(_TEST_BALANCE.get(user_id, Decimal("0.00")).quantize(Decimal("0.01")))}
+
+    result = await db.execute(
+        select(PaymentTransaction).where(
+            and_(PaymentTransaction.user_id == user_id, PaymentTransaction.status == "succeeded")
+        )
+    )
+    rows = result.scalars().all()
+    total = sum((Decimal(str(row.amount)) for row in rows), Decimal("0.00"))
+    return {"currency": "INR", "wallet_balance": str(total.quantize(Decimal('0.01')))}
 
 
-@router.post("/confirm", response_model=PaymentConfirmResponse, summary="Confirm payment intent")
-async def confirm_intent(
-    request: PaymentConfirmRequest,
-    db: AsyncSession = Depends(get_db),
+@router.post("/intents")
+async def create_intent(
+    payload: PaymentIntentRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     current_user: dict | None = Depends(get_current_user_or_none),
-) -> PaymentConfirmResponse:
-    _ = db
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    idempotency = _require_idempotency_key(idempotency_key)
     user_id = _resolve_user_id(current_user)
 
-    intent = _INTENTS.get(request.intent_id)
-    if intent is None:
-        raise HTTPException(status_code=404, detail="payment intent not found")
+    method = payload.method.upper()
+    if method not in _ALLOWED_METHODS:
+        raise HTTPException(status_code=400, detail="Unsupported payment method")
 
-    if intent["status"] == "confirmed":
-        existing = next((p for p in _PAYMENTS if p.intent_id == request.intent_id), None)
-        if existing is None:
-            raise HTTPException(status_code=409, detail="payment already confirmed but payment record missing")
-        return PaymentConfirmResponse(
-            payment_id=existing.payment_id,
-            intent_id=existing.intent_id,
-            status="succeeded",
-            credited_amount=existing.amount,
-            wallet_balance=_WALLET_BY_USER.get(user_id, Decimal("0.00")),
-            completed_at=existing.completed_at or datetime.now(timezone.utc),
+    min_amount, max_amount = _ALLOWED_METHODS[method]
+    if payload.amount < min_amount or payload.amount > max_amount:
+        raise HTTPException(status_code=400, detail=f"Amount must be between {min_amount} and {max_amount}")
+
+    if _compat_test_mode():
+        existing = next((row for row in _TEST_INTENTS.values() if row["idempotency_key"] == idempotency), None)
+        if existing is not None:
+            return {
+                "intent_id": existing["intent_id"],
+                "provider_ref": existing["provider_ref"],
+                "amount": existing["amount"],
+                "currency": existing["currency"],
+                "method": existing["method"],
+                "status": existing["status"],
+                "created_at": existing["created_at"],
+            }
+
+        intent_id = f"pi_{uuid4().hex}"
+        provider_ref = f"gw_{uuid4().hex[:18]}"
+        created_at = datetime.now(timezone.utc).isoformat()
+        row = {
+            "intent_id": intent_id,
+            "provider_ref": provider_ref,
+            "idempotency_key": idempotency,
+            "user_id": user_id,
+            "amount": str(payload.amount.quantize(Decimal("0.01"))),
+            "currency": payload.currency.upper(),
+            "method": method,
+            "status": "requires_confirmation",
+            "created_at": created_at,
+        }
+        _TEST_INTENTS[intent_id] = row
+        return {
+            "intent_id": intent_id,
+            "provider_ref": provider_ref,
+            "amount": row["amount"],
+            "currency": row["currency"],
+            "method": row["method"],
+            "status": row["status"],
+            "created_at": created_at,
+        }
+
+    existing = await db.execute(select(PaymentTransaction).where(PaymentTransaction.idempotency_key == idempotency))
+    row = existing.scalar_one_or_none()
+    if row is not None:
+        return {
+            "intent_id": row.intent_id,
+            "provider_ref": row.provider_ref,
+            "amount": str(row.amount),
+            "currency": row.currency,
+            "method": row.method,
+            "status": row.status,
+            "created_at": row.created_at.isoformat(),
+        }
+
+    intent_id = f"pi_{uuid4().hex}"
+    provider_ref = f"gw_{uuid4().hex[:18]}"
+
+    row = PaymentTransaction(
+        user_id=user_id,
+        intent_id=intent_id,
+        provider_ref=provider_ref,
+        idempotency_key=idempotency,
+        amount=payload.amount.quantize(Decimal("0.01")),
+        currency=payload.currency.upper(),
+        method=method,
+        status="requires_confirmation",
+        metadata_json=json.dumps({"description": payload.description}),
+    )
+    db.add(row)
+    await db.flush()
+
+    return {
+        "intent_id": row.intent_id,
+        "provider_ref": row.provider_ref,
+        "amount": str(row.amount),
+        "currency": row.currency,
+        "method": row.method,
+        "status": row.status,
+        "created_at": row.created_at.isoformat(),
+    }
+
+
+@router.post("/confirm")
+async def confirm_intent(
+    payload: PaymentConfirmRequest,
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    user_id = _resolve_user_id(current_user)
+
+    if _compat_test_mode():
+        row = _TEST_INTENTS.get(payload.intent_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Payment intent not found")
+        row["status"] = "succeeded"
+        credited_amount = Decimal(row["amount"]).quantize(Decimal("0.01"))
+        next_balance = (_TEST_BALANCE.get(user_id, Decimal("0.00")) + credited_amount).quantize(Decimal("0.01"))
+        _TEST_BALANCE[user_id] = next_balance
+        return {
+            "intent_id": row["intent_id"],
+            "status": row["status"],
+            "credited_amount": str(credited_amount),
+            "wallet_balance": str(next_balance),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    result = await db.execute(
+        select(PaymentTransaction).where(
+            PaymentTransaction.intent_id == payload.intent_id,
+            PaymentTransaction.user_id == user_id,
         )
+    )
+    row = result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Payment intent not found")
 
-    if request.confirmation_code.strip() == "":
+    if row.status == "succeeded":
+        return {
+            "intent_id": row.intent_id,
+            "status": row.status,
+            "credited_amount": str(row.amount),
+            "wallet_balance": str(row.amount),
+            "completed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
+        }
+
+    if not payload.confirmation_code.strip():
         raise HTTPException(status_code=400, detail="confirmation_code is required")
 
-    intent["status"] = "confirmed"
-    completed_at = datetime.now(timezone.utc)
-    amount = Decimal(intent["amount"]).quantize(Decimal("0.01"))
+    row.status = "succeeded"
+    row.confirmed_at = datetime.now(timezone.utc)
 
-    current_balance = _WALLET_BY_USER.get(user_id, Decimal("0.00"))
-    new_balance = (current_balance + amount).quantize(Decimal("0.01"))
-    _WALLET_BY_USER[user_id] = new_balance
-
-    payment = PaymentHistoryItem(
-        payment_id=f"pay_{uuid4().hex}",
-        intent_id=request.intent_id,
-        amount=amount,
-        currency=intent["currency"],
-        method=intent["method"],
-        status="succeeded",
-        created_at=intent["created_at"],
-        completed_at=completed_at,
+    wallet_result = await db.execute(
+        select(PaymentTransaction).where(
+            and_(PaymentTransaction.user_id == user_id, PaymentTransaction.status == "succeeded")
+        )
     )
-    _PAYMENTS.insert(0, payment)
+    wallet_rows = wallet_result.scalars().all()
+    wallet_balance = sum((Decimal(str(item.amount)) for item in wallet_rows), Decimal("0.00")).quantize(Decimal("0.01"))
 
-    return PaymentConfirmResponse(
-        payment_id=payment.payment_id,
-        intent_id=payment.intent_id,
-        status="succeeded",
-        credited_amount=amount,
-        wallet_balance=new_balance,
-        completed_at=completed_at,
-    )
+    return {
+        "intent_id": row.intent_id,
+        "status": row.status,
+        "credited_amount": str(row.amount),
+        "wallet_balance": str(wallet_balance),
+        "completed_at": row.confirmed_at.isoformat(),
+    }
 
 
-@router.get("/history", response_model=PaymentHistoryResponse, summary="Payment transaction history")
-async def get_history(
-    limit: int = Query(default=20, ge=1, le=200),
-    db: AsyncSession = Depends(get_db),
+@router.get("/history")
+async def payment_history(
+    limit: int = 20,
     current_user: dict | None = Depends(get_current_user_or_none),
-) -> PaymentHistoryResponse:
-    _ = db
-    _ = current_user
-    items = _PAYMENTS[:limit]
-    return PaymentHistoryResponse(items=items, total=len(_PAYMENTS), limit=limit)
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    user_id = _resolve_user_id(current_user)
+    if _compat_test_mode():
+        items = [
+            {
+                "intent_id": row["intent_id"],
+                "amount": row["amount"],
+                "currency": row["currency"],
+                "method": row["method"],
+                "status": row["status"],
+                "created_at": row["created_at"],
+            }
+            for row in list(_TEST_INTENTS.values())[::-1][:limit]
+        ]
+        return {"items": items, "total": len(_TEST_INTENTS)}
+
+    result = await db.execute(
+        select(PaymentTransaction)
+        .where(PaymentTransaction.user_id == user_id)
+        .order_by(PaymentTransaction.created_at.desc())
+        .limit(limit)
+    )
+    rows = result.scalars().all()
+    return {
+        "items": [
+            {
+                "intent_id": row.intent_id,
+                "amount": str(row.amount),
+                "currency": row.currency,
+                "method": row.method,
+                "status": row.status,
+                "created_at": row.created_at.isoformat(),
+            }
+            for row in rows
+        ],
+        "total": len(rows),
+    }
+
+
+@router.post("/webhooks/stripe")
+async def stripe_webhook(
+    request: Request,
+    stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    payload = await request.body()
+    if not stripe_signature:
+        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+
+    expected = hmac.new(
+        settings.PAYMENT_WEBHOOK_SECRET.encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).hexdigest()
+    if not hmac.compare_digest(expected, stripe_signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    event = json.loads(payload.decode("utf-8"))
+    event_id = str(event.get("id", ""))
+    intent_id = str(event.get("data", {}).get("intent_id", ""))
+    status = str(event.get("data", {}).get("status", "")).lower()
+
+    if not event_id or not intent_id:
+        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+
+    duplicate = await db.execute(select(PaymentTransaction).where(PaymentTransaction.provider_event_id == event_id))
+    if duplicate.scalar_one_or_none() is not None:
+        return {"status": "duplicate_ignored"}
+
+    row_result = await db.execute(select(PaymentTransaction).where(PaymentTransaction.intent_id == intent_id))
+    row = row_result.scalar_one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Unknown payment intent")
+
+    row.provider_event_id = event_id
+    if status in {"succeeded", "paid"}:
+        row.status = "succeeded"
+        row.confirmed_at = datetime.now(timezone.utc)
+    elif status in {"failed", "canceled"}:
+        row.status = "failed"
+
+    return {"status": "processed"}

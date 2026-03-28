@@ -1,13 +1,13 @@
 'use client';
 
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Input } from '@/components/ui/Input';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { cn } from '@/lib/utils';
-import { useTerminalStore } from '@/stores/terminalStore';
-import { formatTime } from '@/lib/formatters';
+import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
+import { Badge } from '../ui/Badge';
+import { Input } from '../ui/Input';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/Tabs';
+import { cn } from '../../lib/utils';
+import { useTerminalStore } from '../../stores/terminalStore';
+import { formatTime } from '../../lib/formatters';
 
 interface Watchlist {
   symbol: string;

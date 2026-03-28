@@ -17,6 +17,8 @@ export default function ExplainabilityPage(): JSX.Element {
   const [shap, setShap] = useState<ExplainShapResponse | null>(null);
   const [attention, setAttention] = useState<ExplainAttentionResponse | null>(null);
   const [counterfactuals, setCounterfactuals] = useState<CounterfactualResponse[]>([]);
+  const [activeCfIndex, setActiveCfIndex] = useState<number>(0);
+  const [selectedTimestep, setSelectedTimestep] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -77,6 +79,17 @@ export default function ExplainabilityPage(): JSX.Element {
     return (attention?.weights ?? []).slice(0, 8).flatMap((row, headIndex) => row.slice(0, 20).map((value, stepIndex) => ({ headIndex, stepIndex, value })));
   }, [attention?.weights]);
 
+  const topTimesteps = useMemo(() => {
+    return (attention?.top_timesteps ?? []).slice(0, 8);
+  }, [attention?.top_timesteps]);
+
+  const activeCf = useMemo(() => {
+    if (counterfactuals.length === 0) {
+      return null;
+    }
+    return counterfactuals[Math.min(activeCfIndex, counterfactuals.length - 1)] ?? null;
+  }, [activeCfIndex, counterfactuals]);
+
   const rollingImportance = useMemo(() => {
     return shapRows
       .map((row) => ({
@@ -104,7 +117,12 @@ export default function ExplainabilityPage(): JSX.Element {
 
       <div className="space-y-4">
         <section className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">SHAP Waterfall</h2>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-medium text-[var(--nq-text-secondary)]">SHAP Waterfall</h2>
+            <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2 py-1 text-[11px] text-[var(--nq-text-secondary)]">
+              Base {shap?.base_value.toFixed(4) ?? "--"} | Output {shap?.output_value.toFixed(4) ?? "--"}
+            </div>
+          </div>
           <div className="space-y-2 text-xs">
             {(loading ? [] : shapRows).map((row) => {
               const width = Math.round(Math.min(240, Math.abs(row.shap_val) * 400));
@@ -133,6 +151,19 @@ export default function ExplainabilityPage(): JSX.Element {
 
         <section className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Attention Heatmap (Heads x Timesteps)</h2>
+          <div className="mb-3 flex flex-wrap gap-1">
+            {topTimesteps.map((item, index) => (
+              <button
+                key={`${item.date}-${index}`}
+                type="button"
+                onClick={() => setSelectedTimestep(index)}
+                className={`rounded border px-2 py-1 text-[10px] ${selectedTimestep === index ? "border-[var(--nq-accent-amber)] bg-[rgba(255,184,0,0.15)] text-[var(--nq-text-primary)]" : "border-[var(--nq-border)] text-[var(--nq-text-secondary)]"}`}
+              >
+                {new Date(item.date).toLocaleDateString()} ({item.weight.toFixed(2)})
+              </button>
+            ))}
+            {topTimesteps.length === 0 ? <span className="text-xs text-[var(--nq-text-secondary)]">No timestep metadata.</span> : null}
+          </div>
           <div className="grid grid-cols-20 gap-[3px]">
             {(loading
               ? Array.from({ length: 160 }, (_, i) => ({ headIndex: Math.floor(i / 20), stepIndex: i % 20, value: 0.02 }))
@@ -153,27 +184,37 @@ export default function ExplainabilityPage(): JSX.Element {
 
         <section className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Counterfactuals To Flip Signal</h2>
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-3">
-            {(loading ? [] : counterfactuals).map((cf) => (
-              <article key={cf.cf_id} className="rounded border border-[var(--nq-border)] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold">{cf.cf_id}</span>
-                  <span className="text-xs text-[var(--nq-text-secondary)]">{cf.resulting_signal}</span>
-                </div>
-                <div className="space-y-2 text-xs">
-                  {cf.changed_features.map((item) => (
-                    <div key={`${cf.cf_id}-${item.name}`} className="rounded bg-[rgba(255,255,255,0.02)] px-2 py-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-[var(--nq-text-secondary)]">
-                        {item.original.toFixed(4)} to {item.counterfactual.toFixed(4)}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </article>
+          <div className="mb-3 flex flex-wrap gap-1">
+            {(loading ? [] : counterfactuals).map((cf, index) => (
+              <button
+                key={cf.cf_id}
+                type="button"
+                onClick={() => setActiveCfIndex(index)}
+                className={`rounded border px-2 py-1 text-[11px] ${activeCfIndex === index ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]" : "border-[var(--nq-border)] text-[var(--nq-text-secondary)]"}`}
+              >
+                CF{index + 1}
+              </button>
             ))}
-            {!loading && counterfactuals.length === 0 ? <p className="text-xs text-[var(--nq-text-secondary)]">No counterfactuals returned.</p> : null}
           </div>
+          {activeCf ? (
+            <div className="rounded border border-[var(--nq-border)] p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-sm font-semibold">{activeCf.cf_id}</span>
+                <span className="text-xs text-[var(--nq-text-secondary)]">{activeCf.resulting_signal}</span>
+              </div>
+              <div className="space-y-2 text-xs">
+                {activeCf.changed_features.map((item) => (
+                  <div key={`${activeCf.cf_id}-${item.name}`} className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-2 rounded bg-[rgba(255,255,255,0.02)] px-2 py-1">
+                    <div className="font-medium">{item.name}</div>
+                    <div className="text-[var(--nq-text-secondary)]">{item.original.toFixed(4)}</div>
+                    <div className="text-[var(--nq-text-secondary)]">{item.counterfactual.toFixed(4)}</div>
+                    <div className="text-[var(--nq-text-primary)]">{(item.counterfactual - item.original).toFixed(4)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {!loading && counterfactuals.length === 0 ? <p className="text-xs text-[var(--nq-text-secondary)]">No counterfactuals returned.</p> : null}
         </section>
 
         <section className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">

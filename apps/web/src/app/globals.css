@@ -1,3 +1,11 @@
+@import "@fontsource/instrument-sans/400.css";
+@import "@fontsource/instrument-sans/500.css";
+@import "@fontsource/instrument-sans/600.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/700.css";
+@import "@fontsource/space-mono/400.css";
+@import "@fontsource/space-mono/700.css";
+@import "../styles/tokens.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -38,6 +46,7 @@
     --nq-border-hover: var(--border-muted);
 
     --nq-accent: var(--accent-cyan);
+    --nq-accent-cyan: var(--accent-cyan);
     --nq-accent-hover: #33DDFF;
     --nq-accent-muted: rgba(0, 212, 245, 0.1);
 
@@ -140,6 +149,28 @@
     background-color: rgba(22, 27, 36, 0.8);
   }
 
+  .nq-premium-bg {
+    background:
+      radial-gradient(1200px 600px at 4% -10%, rgba(0, 212, 245, 0.18), transparent 48%),
+      radial-gradient(1000px 600px at 98% 8%, rgba(139, 92, 246, 0.16), transparent 52%),
+      radial-gradient(900px 500px at 45% 100%, rgba(0, 230, 118, 0.08), transparent 52%),
+      var(--nq-bg-base);
+  }
+
+  .nq-grid-overlay {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .nq-soft-ring {
+    box-shadow:
+      0 1px 0 rgba(255, 255, 255, 0.04) inset,
+      0 0 0 1px rgba(255, 255, 255, 0.04),
+      0 14px 40px rgba(0, 0, 0, 0.35);
+  }
+
   .nq-glow-text {
     text-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
   }
@@ -149,5 +180,75 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  .nq-float {
+    animation: nq-float 8s ease-in-out infinite;
+  }
+
+  .nq-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .nq-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-120%);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+    animation: nq-shimmer 3s ease-in-out infinite;
+  }
+
+  .ds-page-transition {
+    animation: ds-fade-up 0.45s ease both;
+  }
+
+  .ds-stagger > * {
+    animation: ds-fade-up 0.5s ease both;
+  }
+
+  .ds-stagger > *:nth-child(2) {
+    animation-delay: 0.05s;
+  }
+
+  .ds-stagger > *:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+
+  .ds-stagger > *:nth-child(4) {
+    animation-delay: 0.15s;
+  }
+}
+
+@keyframes nq-float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes nq-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@keyframes ds-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -5,6 +5,3 @@ export default function CoinDetailPage({ params }: { params: { coin: string } })
   return <CryptoCoinLiveContent coin={coin} />;
 }
 
-
-
-

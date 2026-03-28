@@ -1,26 +1,27 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { marketApi } from "@/lib/api-client";
 import type { OHLCVBar } from "@neuroquant/types";
 import type { SignalResponse } from "@/types/intelligence";
+import { LightweightCandlestickChart, SimpleLineAreaChart, type LineAreaPoint, SimpleBarChart, type SimpleBarPoint } from "@/components/charts";
 
 interface ChartSectionProps {
   signal: SignalResponse | null;
 }
 
-interface WeightPoint {
-  model: string;
-  weight: number;
-}
-
 export default function ChartSection({ signal }: ChartSectionProps): JSX.Element {
   const [bars, setBars] = useState<OHLCVBar[]>([]);
+  const [timeframe, setTimeframe] = useState<"1D" | "1H" | "15M" | "5M" | "1M">("1D");
+  const [subTab, setSubTab] = useState<"indicators" | "signals" | "orderflow">("signals");
 
-  const weightData: WeightPoint[] = signal
-    ? Object.entries(signal.model_weights).map(([model, weight]) => ({ model, weight }))
+  const weightData: SimpleBarPoint[] = signal
+    ? Object.entries(signal.model_weights).map(([model, weight]) => ({
+        label: model,
+        value: weight,
+        color: "rgba(0,212,245,0.6)",
+      }))
     : [];
   const confidence = signal ? (signal.ensemble.confidence * 100).toFixed(1) : "--";
 
@@ -34,9 +35,9 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
       }
 
       try {
-        const history = await marketApi.getHistory(signal.symbol, "1D");
+        const history = await marketApi.getHistory(signal.symbol, timeframe);
         if (mounted) {
-          setBars(history.bars.slice(-30));
+          setBars(history.bars.slice(-180));
         }
       } catch {
         if (mounted) {
@@ -49,18 +50,29 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
     return () => {
       mounted = false;
     };
-  }, [signal?.symbol]);
+  }, [signal?.symbol, timeframe]);
 
-  const chartShape = useMemo(() => {
-    if (bars.length < 2) {
-      return [] as number[];
+  const indicatorSeries = useMemo<LineAreaPoint[]>(() => {
+    if (bars.length === 0) {
+      return [];
     }
+    const closes = bars.slice(-60).map((bar) => bar.close);
+    const first = closes[0] ?? 1;
+    return closes.map((close, index) => ({ label: String(index + 1), value: ((close / first) - 1) * 100 }));
+  }, [bars]);
 
-    const closes = bars.map((bar) => bar.close);
-    const min = Math.min(...closes);
-    const max = Math.max(...closes);
-    const range = max - min || 1;
-    return closes.map((value) => 20 + ((value - min) / range) * 75);
+  const orderFlowBars = useMemo<SimpleBarPoint[]>(() => {
+    if (bars.length === 0) {
+      return [];
+    }
+    return bars.slice(-40).map((bar, index) => {
+      const imbalance = bar.close - bar.open;
+      return {
+        label: String(index + 1),
+        value: Math.abs(imbalance),
+        color: imbalance >= 0 ? "rgba(0,230,118,0.6)" : "rgba(255,59,92,0.6)",
+      };
+    });
   }, [bars]);
 
   return (
@@ -70,9 +82,17 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
           <h2 className="font-mono text-sm text-[var(--nq-text-primary)]">{signal?.symbol ?? "Select symbol"}</h2>
           <p className="text-xs text-[var(--nq-text-secondary)]">Regime {signal?.regime.state ?? "-"} | Confidence {confidence}%</p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-[var(--nq-text-secondary)]">Ensemble</p>
-          <p className="text-sm text-[var(--nq-text-primary)]">{signal?.ensemble.direction ?? "-"}</p>
+        <div className="flex items-center gap-1">
+          {(["1M", "5M", "15M", "1H", "1D"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setTimeframe(value)}
+              className={`rounded border px-2 py-1 text-[10px] ${timeframe === value ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]" : "border-[var(--nq-border)] text-[var(--nq-text-secondary)]"}`}
+            >
+              {value}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -80,33 +100,8 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
         <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Price and signal canvas</p>
           <div className="relative aspect-video overflow-hidden rounded border border-[var(--nq-border-hover)] bg-[linear-gradient(180deg,rgba(0,212,255,0.08),rgba(0,0,0,0))] p-3 lg:aspect-auto lg:h-[85%]">
-            <svg viewBox="0 0 240 100" className="h-full w-full" preserveAspectRatio="none" aria-label="Price sparkline">
-              <defs>
-                <linearGradient id="priceFill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(0,212,255,0.35)" />
-                  <stop offset="100%" stopColor="rgba(0,212,255,0.02)" />
-                </linearGradient>
-              </defs>
-              <polyline
-                fill="none"
-                stroke="rgba(0,212,255,0.95)"
-                strokeWidth="2"
-                points={
-                  chartShape.length > 0
-                    ? chartShape.map((value, index) => `${(index / (chartShape.length - 1)) * 240},${100 - value}`).join(" ")
-                    : ""
-                }
-              />
-              <polygon
-                fill="url(#priceFill)"
-                points={
-                  chartShape.length > 0
-                    ? `0,100 ${chartShape.map((value, index) => `${(index / (chartShape.length - 1)) * 240},${100 - value}`).join(" ")} 240,100`
-                    : ""
-                }
-              />
-            </svg>
-            {chartShape.length === 0 ? (
+            {bars.length > 0 ? <LightweightCandlestickChart bars={bars} /> : null}
+            {bars.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center bg-[rgba(7,9,15,0.48)]">
                 <span className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1 text-xs text-[var(--nq-text-secondary)]">
                   No market history returned for {signal?.symbol ?? "selected symbol"}
@@ -119,24 +114,26 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
           </div>
         </div>
         <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Dynamic model weights</p>
-          <div className="h-[140px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={weightData} margin={{ top: 8, right: 10, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                <XAxis dataKey="model" tick={{ fill: "#8B9BB4", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#8B9BB4", fontSize: 11 }} domain={[0, 0.5]} />
-                <Tooltip
-                  contentStyle={{
-                    background: "#121826",
-                    border: "1px solid #263349",
-                    borderRadius: 8,
-                    color: "#E8EAED",
-                  }}
-                />
-                <Line type="monotone" dataKey="weight" stroke="#00D4FF" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="mb-2 flex items-center gap-1">
+            {([
+              ["indicators", "Indicators"],
+              ["signals", "Signals"],
+              ["orderflow", "Order Flow"],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSubTab(key)}
+                className={`rounded border px-2 py-1 text-[10px] ${subTab === key ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]" : "border-[var(--nq-border)] text-[var(--nq-text-secondary)]"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="h-[140px] rounded bg-[rgba(255,255,255,0.02)] p-2">
+            {subTab === "signals" ? <SimpleBarChart data={weightData.map((item) => ({ ...item, label: item.label.slice(0, 8) }))} yTickFormatter={(value) => `${(value * 100).toFixed(0)}%`} /> : null}
+            {subTab === "indicators" ? <SimpleLineAreaChart data={indicatorSeries.length > 0 ? indicatorSeries : [{ label: "1", value: 0 }]} mode="line" stroke="var(--nq-accent-purple)" yTickFormatter={(value) => `${value.toFixed(2)}%`} /> : null}
+            {subTab === "orderflow" ? <SimpleBarChart data={orderFlowBars.length > 0 ? orderFlowBars : [{ label: "1", value: 0, color: "rgba(255,255,255,0.2)" }]} /> : null}
           </div>
         </div>
       </div>

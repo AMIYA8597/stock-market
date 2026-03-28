@@ -344,6 +344,16 @@ class Settings(BaseSettings):
         description="Production frontend URL"
     )
 
+    # ─── Billing & Email Security ───────────────────────────────────────
+    PAYMENT_WEBHOOK_SECRET: str = Field(
+        default="dev-webhook-secret",
+        description="Shared secret for payment webhook signature validation"
+    )
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
+        default=30,
+        description="Password reset token validity window in minutes"
+    )
+
     # ─── WebSocket ────────────────────────────────────────────────────────
     WEBSOCKET_HEARTBEAT_INTERVAL: int = Field(
         default=30,

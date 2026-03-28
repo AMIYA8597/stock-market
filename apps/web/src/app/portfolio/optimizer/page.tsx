@@ -4,6 +4,13 @@ import { useMemo, useState } from "react";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { contractsApi, type PortfolioOptimizeResponse } from "@/lib/contracts-api";
+import {
+  ChartCard,
+  SimpleScatterFrontier,
+  type FrontierPoint,
+  SimpleDonutChart,
+  type DonutSlice,
+} from "@/components/charts";
 
 const DEFAULT_UNIVERSE = "RELIANCE.NS,TCS.NS,INFY.NS,HDFCBANK.NS,ICICIBANK.NS,LT.NS,ITC.NS";
 
@@ -53,24 +60,33 @@ export default function PortfolioOptimizerPage(): JSX.Element {
     return Object.entries(result.weights).sort((a, b) => b[1] - a[1]);
   }, [result]);
 
-  const frontierPoints = useMemo(() => {
+  const frontierPoints = useMemo<FrontierPoint[]>(() => {
     if (!result || result.efficient_frontier.length === 0) {
-      return [] as Array<{ x: number; y: number }>;
+      return [];
     }
-
-    const vols = result.efficient_frontier.map((point) => point.vol);
-    const returns = result.efficient_frontier.map((point) => point.return);
-    const minVol = Math.min(...vols);
-    const maxVol = Math.max(...vols);
-    const minRet = Math.min(...returns);
-    const maxRet = Math.max(...returns);
-
-    return result.efficient_frontier.map((point) => {
-      const x = maxVol === minVol ? 50 : 8 + ((point.vol - minVol) / (maxVol - minVol)) * 84;
-      const y = maxRet === minRet ? 50 : 92 - ((point.return - minRet) / (maxRet - minRet)) * 84;
-      return { x, y };
-    });
+    return result.efficient_frontier.map((point, idx) => ({
+      risk: point.vol,
+      ret: point.return,
+      highlight: idx === result.efficient_frontier.length - 1,
+    }));
   }, [result]);
+
+  const donutSlices = useMemo<DonutSlice[]>(() => {
+    const palette = [
+      "rgba(0,212,245,0.85)",
+      "rgba(0,230,118,0.85)",
+      "rgba(139,92,246,0.85)",
+      "rgba(255,184,0,0.85)",
+      "rgba(255,59,92,0.85)",
+      "rgba(226,238,250,0.85)",
+    ];
+
+    return weightsRows.slice(0, 8).map(([ticker, weight], idx) => ({
+      name: ticker,
+      value: weight,
+      color: palette[idx % palette.length] ?? "rgba(0,212,245,0.85)",
+    }));
+  }, [weightsRows]);
 
   const handleOptimize = async (): Promise<void> => {
     setLoading(true);
@@ -203,24 +219,15 @@ export default function PortfolioOptimizerPage(): JSX.Element {
         </section>
 
         <section className="space-y-4">
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Efficient Frontier</h2>
-            <div className="relative h-52 rounded bg-[rgba(255,255,255,0.03)]">
-              {frontierPoints.map((point, idx) => (
-                <span
-                  key={`pt-${idx}`}
-                  className="absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
-                  style={{
-                    left: `${point.x}%`,
-                    top: `${point.y}%`,
-                    background: idx === frontierPoints.length - 1 ? "#00E676" : "rgba(0,212,245,0.65)",
-                    boxShadow: idx === frontierPoints.length - 1 ? "0 0 8px rgba(0,230,118,0.9)" : "none",
-                  }}
-                />
-              ))}
-              {!result ? <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs text-[var(--nq-text-secondary)]">Run optimization to render frontier.</p> : null}
+          <ChartCard title="Efficient Frontier" subtitle="Risk vs return points (highlight = optimized point)">
+            <div className="relative h-52 rounded bg-[rgba(255,255,255,0.03)] p-1">
+              {frontierPoints.length > 0 ? (
+                <SimpleScatterFrontier points={frontierPoints} />
+              ) : (
+                <p className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-xs text-[var(--nq-text-secondary)]">Run optimization to render frontier.</p>
+              )}
             </div>
-          </div>
+          </ChartCard>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
             <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
@@ -247,14 +254,19 @@ export default function PortfolioOptimizerPage(): JSX.Element {
 
             <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
               <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Allocation Summary</h2>
-              <div className="space-y-2 text-xs text-[var(--nq-text-secondary)]">
-                {weightsRows.slice(0, 6).map(([ticker, weight]) => (
-                  <div key={ticker} className="flex items-center justify-between rounded border border-[var(--nq-border)] px-2 py-1">
-                    <span>{ticker}</span>
-                    <span>{formatPercent(weight)}</span>
-                  </div>
-                ))}
-                {weightsRows.length === 0 ? <div className="rounded border border-[var(--nq-border)] px-2 py-1">No optimization response yet.</div> : null}
+              <div className="grid gap-3 xl:grid-cols-[1fr_1fr]">
+                <div className="h-36 rounded bg-[rgba(255,255,255,0.03)] p-1">
+                  {donutSlices.length > 0 ? <SimpleDonutChart data={donutSlices} centerLabel="weights" /> : null}
+                </div>
+                <div className="space-y-2 text-xs text-[var(--nq-text-secondary)]">
+                  {weightsRows.slice(0, 6).map(([ticker, weight]) => (
+                    <div key={ticker} className="flex items-center justify-between rounded border border-[var(--nq-border)] px-2 py-1">
+                      <span>{ticker}</span>
+                      <span>{formatPercent(weight)}</span>
+                    </div>
+                  ))}
+                  {weightsRows.length === 0 ? <div className="rounded border border-[var(--nq-border)] px-2 py-1">No optimization response yet.</div> : null}
+                </div>
               </div>
             </div>
           </div>

@@ -8,6 +8,7 @@ import {
   type BacktestRunResponse,
   type BacktestStatusResponse,
 } from "@/lib/contracts-api";
+import { ChartCard, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
 
 const DEFAULT_SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"];
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
@@ -35,6 +36,7 @@ export default function BacktestLabPage(): JSX.Element {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [wsStatus, setWsStatus] = useState<"connected" | "reconnecting" | "disconnected">("disconnected");
   const [error, setError] = useState<string | null>(null);
+  const [progressHistory, setProgressHistory] = useState<LineAreaPoint[]>([]);
 
   const symbols = useMemo(
     () =>
@@ -108,6 +110,10 @@ export default function BacktestLabPage(): JSX.Element {
             progress_pct: Math.max(0, Math.min(100, nextProgress)),
             result_preview: prev?.result_preview,
           }));
+          setProgressHistory((prev) => {
+            const next = [...prev, { label: String(prev.length + 1), value: Math.max(0, Math.min(100, nextProgress)) }];
+            return next.slice(-80);
+          });
         } catch {
           // Ignore malformed payloads.
         }
@@ -134,6 +140,17 @@ export default function BacktestLabPage(): JSX.Element {
             return;
           }
           setStatus(nextStatus);
+          if (typeof nextStatus.progress_pct === "number") {
+            const nextProgress = nextStatus.progress_pct;
+            setProgressHistory((prev) => {
+              const lastValue = prev.at(-1)?.value ?? null;
+              if (lastValue === nextProgress) {
+                return prev;
+              }
+              const next = [...prev, { label: String(prev.length + 1), value: nextProgress }];
+              return next.slice(-80);
+            });
+          }
           if (nextStatus.status === "COMPLETED" || nextStatus.status === "FAILED") {
             setRunning(false);
           }
@@ -182,6 +199,7 @@ export default function BacktestLabPage(): JSX.Element {
       const runResponse = await contractsApi.runBacktest(payload);
       setJob(runResponse);
       setStatus({ job_id: runResponse.job_id, status: runResponse.status, progress_pct: 0 });
+      setProgressHistory([{ label: "1", value: 0 }]);
       setRunning(true);
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Unable to submit backtest.";
@@ -298,8 +316,7 @@ export default function BacktestLabPage(): JSX.Element {
         </section>
 
         <section className="space-y-4">
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Job Status</h2>
+          <ChartCard title="Job Status" subtitle="WebSocket stream with polling fallback">
             {!job ? <p className="text-sm text-[var(--nq-text-secondary)]">Submit a strategy run to generate a backtest job.</p> : null}
             {job ? (
               <div className="space-y-3 text-sm">
@@ -323,6 +340,15 @@ export default function BacktestLabPage(): JSX.Element {
                   <p className="text-[var(--nq-text-secondary)]">Preview Max Drawdown: {toPercent(status?.result_preview?.max_drawdown)}</p>
                 </div>
 
+                <div className="h-[140px] rounded bg-[rgba(255,255,255,0.02)] p-2">
+                  <SimpleLineAreaChart
+                    data={progressHistory.length > 0 ? progressHistory : [{ label: "1", value: 0 }]}
+                    mode="line"
+                    stroke="var(--nq-accent-cyan)"
+                    yTickFormatter={(value) => `${value.toFixed(0)}%`}
+                  />
+                </div>
+
                 <div className="flex items-center gap-3">
                   <Link
                     href={`/backtest-lab/results/${encodeURIComponent(job.job_id)}`}
@@ -334,7 +360,7 @@ export default function BacktestLabPage(): JSX.Element {
                 </div>
               </div>
             ) : null}
-          </div>
+          </ChartCard>
 
           <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
             <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Current Run Snapshot</h2>

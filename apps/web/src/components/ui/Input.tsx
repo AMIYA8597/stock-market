@@ -8,9 +8,9 @@ const Input = React.forwardRef<
   <input
     type={type}
     className={cn(
-      'flex h-10 w-full rounded-md border border-[var(--border-muted)] bg-[var(--bg-elevated)] px-3 py-2',
-      'text-sm text-[var(--text-primary)] placeholder:text-[var(--text-muted)]',
-      'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-cyan)]',
+      'flex h-10 w-full rounded-[var(--ds-radius-lg)] border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-2)] px-3 py-2',
+      'text-sm text-[var(--ds-text-primary)] placeholder:text-[var(--ds-text-muted)]',
+      'shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all duration-300 focus-visible:-translate-y-[1px] focus-visible:border-[var(--ds-color-primary-300)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-color-primary-400)]/25',
       'disabled:cursor-not-allowed disabled:opacity-50',
       className
     )}

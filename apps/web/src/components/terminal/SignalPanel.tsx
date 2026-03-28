@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { contractsApi, type PortfolioTransactionRequest } from "@/lib/contracts-api";
 import { useOrderHistory } from "@/hooks/use-order-history";
+import { SimpleDonutChart, type DonutSlice } from "@/components/charts";
 import type { SignalResponse } from "@/types/intelligence";
 
 interface SignalPanelProps {
@@ -19,6 +20,7 @@ const badgeStyles: Record<string, string> = {
 };
 
 export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
+  const [expandedModel, setExpandedModel] = useState<"tft" | "hmm_garch" | "gnn" | "lstm_attn" | "xgboost">("tft");
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [quantity, setQuantity] = useState<string>("10");
   const [price, setPrice] = useState<string>("0");
@@ -37,6 +39,42 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     }
     return 0;
   }, [signal?.models?.tft?.p50]);
+
+  const confidencePct = Number(confidence);
+  const confidenceStroke = Math.max(0, Math.min(100, confidencePct));
+  const gaugeCircumference = 2 * Math.PI * 34;
+  const gaugeOffset = gaugeCircumference * (1 - confidenceStroke / 100);
+
+  const weightSlices = useMemo<DonutSlice[]>(() => {
+    if (!signal?.model_weights) {
+      return [];
+    }
+
+    const palette = [
+      "var(--nq-accent-cyan)",
+      "var(--nq-accent-green)",
+      "var(--nq-accent-amber)",
+      "var(--nq-accent-purple)",
+      "var(--nq-accent-red)",
+    ];
+
+    return Object.entries(signal.model_weights).map(([name, value], index) => ({
+      name,
+      value,
+      color: palette[index % palette.length] ?? "var(--nq-accent-cyan)",
+    }));
+  }, [signal?.model_weights]);
+
+  const newsFeed = useMemo(() => {
+    const currentSymbol = signal?.symbol ?? "MARKET";
+    const directionBias = signal?.ensemble.direction ?? "NEUTRAL";
+    const now = new Date();
+    return [
+      { headline: `${currentSymbol} guidance updates market expectations`, sentiment: "POSITIVE", time: now.toLocaleTimeString() },
+      { headline: `Regime shift monitor flags ${currentSymbol} as ${directionBias}`, sentiment: directionBias.includes("SELL") ? "NEGATIVE" : "NEUTRAL", time: new Date(now.getTime() - 12 * 60_000).toLocaleTimeString() },
+      { headline: `Cross-asset flow indicates volatility clustering in ${currentSymbol}`, sentiment: "NEUTRAL", time: new Date(now.getTime() - 28 * 60_000).toLocaleTimeString() },
+    ];
+  }, [signal?.ensemble.direction, signal?.symbol]);
 
   useEffect(() => {
     if (latestPrice > 0) {
@@ -105,18 +143,59 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)]">Confidence {confidence}%</p>
           <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)]">Regime {signal?.regime.state ?? "-"}</p>
         </div>
-        <p className="mt-2 text-sm text-[var(--nq-text-secondary)]">
-          Kelly {(signal?.ensemble.kelly_fraction ?? 0).toFixed(3)}
-        </p>
+        <div className="mt-2 grid grid-cols-[88px_1fr] items-center gap-2">
+          <svg viewBox="0 0 80 80" className="h-20 w-20" aria-label="Confidence gauge">
+            <circle cx="40" cy="40" r="34" fill="none" stroke="rgba(255,255,255,0.10)" strokeWidth="8" />
+            <circle
+              cx="40"
+              cy="40"
+              r="34"
+              fill="none"
+              stroke="var(--nq-accent-cyan)"
+              strokeWidth="8"
+              strokeLinecap="round"
+              strokeDasharray={gaugeCircumference}
+              strokeDashoffset={gaugeOffset}
+              transform="rotate(-90 40 40)"
+            />
+            <text x="40" y="44" textAnchor="middle" fontSize="12" fill="var(--nq-text-primary)">{confidenceStroke.toFixed(0)}%</text>
+          </svg>
+          <div className="text-xs text-[var(--nq-text-secondary)]">
+            <p>Kelly {(signal?.ensemble.kelly_fraction ?? 0).toFixed(3)}</p>
+            <p className="mt-1">Model spread {signal ? Object.keys(signal.model_weights).length : 0} active engines</p>
+          </div>
+        </div>
       </div>
 
       <div className="mb-3 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-3">
-        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Model details</p>
-        <div className="grid grid-cols-2 gap-2 text-xs text-[var(--nq-text-secondary)]">
-          <div className="rounded border border-[var(--nq-border)] px-2 py-1">TFT p50 {(signal?.models.tft.p50 ?? 0).toFixed(4)}</div>
-          <div className="rounded border border-[var(--nq-border)] px-2 py-1">HMM {signal?.models.hmm_garch.regime_signal ?? "-"}</div>
-          <div className="rounded border border-[var(--nq-border)] px-2 py-1">GNN {(signal?.models.gnn.spillover_risk ?? 0).toFixed(3)}</div>
-          <div className="rounded border border-[var(--nq-border)] px-2 py-1">LSTM {(signal?.models.lstm_attn.raw_signal ?? 0).toFixed(3)}</div>
+        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">EnsembleWeightPie</p>
+        <div className="h-[150px]">
+          <SimpleDonutChart data={weightSlices.length > 0 ? weightSlices : [{ name: "No Data", value: 1, color: "var(--nq-border)" }]} centerLabel="weights" />
+        </div>
+      </div>
+
+      <div className="mb-3 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-3">
+        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Model breakdown</p>
+        <div className="space-y-2 text-xs text-[var(--nq-text-secondary)]">
+          {([
+            ["tft", `TFT P10 ${signal?.models.tft.p10.toFixed(4) ?? "--"} | P50 ${signal?.models.tft.p50.toFixed(4) ?? "--"} | P90 ${signal?.models.tft.p90.toFixed(4) ?? "--"}`],
+            ["hmm_garch", `HMM ${signal?.models.hmm_garch.regime_signal ?? "-"} | Vol 1d ${(signal?.models.hmm_garch.vol_forecast_1d ?? 0).toFixed(4)}`],
+            ["gnn", `GNN spillover ${(signal?.models.gnn.spillover_risk ?? 0).toFixed(3)} | Top ${(signal?.models.gnn.top_correlated_assets ?? []).slice(0, 3).join(", ") || "--"}`],
+            ["lstm_attn", `LSTM signal ${(signal?.models.lstm_attn.raw_signal ?? 0).toFixed(3)}`],
+            ["xgboost", `XGBoost raw ${(signal?.models.xgboost.raw_signal ?? 0).toFixed(3)} | SHAP ${(signal?.models.xgboost.top_features ?? []).slice(0, 3).map((f) => String(f.name)).join(", ") || "--"}`],
+          ] as const).map(([key, summary]) => (
+            <div key={key} className="rounded border border-[var(--nq-border)]">
+              <button
+                type="button"
+                onClick={() => setExpandedModel(key)}
+                className="flex w-full items-center justify-between px-2 py-1.5 text-left"
+              >
+                <span className="font-medium uppercase text-[var(--nq-text-primary)]">{key}</span>
+                <span>{expandedModel === key ? "-" : "+"}</span>
+              </button>
+              {expandedModel === key ? <p className="border-t border-[var(--nq-border)] px-2 py-1.5 text-[10px]">{summary}</p> : null}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -244,6 +323,21 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
               No orders placed yet.
             </div>
           ) : null}
+        </div>
+      </div>
+
+      <div className="mt-3 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-3">
+        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">News feed</p>
+        <div className="max-h-36 space-y-1 overflow-y-auto">
+          {newsFeed.map((item, idx) => (
+            <div key={`${item.headline}-${idx}`} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2 py-1.5 text-[10px]">
+              <div className="flex items-center justify-between">
+                <span className={item.sentiment === "POSITIVE" ? "text-[var(--nq-accent-green)]" : item.sentiment === "NEGATIVE" ? "text-[var(--nq-accent-red)]" : "text-[var(--nq-accent-amber)]"}>{item.sentiment}</span>
+                <span className="text-[var(--nq-text-secondary)]">{item.time}</span>
+              </div>
+              <p className="mt-1 text-[var(--nq-text-secondary)]">{item.headline}</p>
+            </div>
+          ))}
         </div>
       </div>
     </aside>

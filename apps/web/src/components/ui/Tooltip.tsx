@@ -25,8 +25,8 @@ const Tooltip = React.forwardRef<
       {isVisible && (
         <div
           className={cn(
-            'absolute z-50 px-2 py-1 text-xs font-medium rounded whitespace-nowrap',
-            'bg-[var(--bg-overlay)] text-[var(--text-primary)] border border-[var(--border-strong)]',
+            'absolute z-50 rounded-[var(--ds-radius-lg)] border border-[var(--ds-border-strong)] px-2 py-1 text-xs font-medium whitespace-nowrap',
+            'bg-[var(--ds-surface-3)] text-[var(--ds-text-primary)] shadow-[var(--ds-shadow-sm)]',
             sideClasses[side],
             className
           )}
