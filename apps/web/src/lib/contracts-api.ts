@@ -52,6 +52,73 @@ export interface PortfolioRiskMetrics {
   cvar_95: number;
 }
 
+export interface PaymentMethod {
+  code: "UPI" | "CARD" | "NETBANKING";
+  label: string;
+  enabled: boolean;
+  min_amount: number;
+  max_amount: number;
+}
+
+export interface PaymentMethodsResponse {
+  methods: PaymentMethod[];
+  generated_at: string;
+}
+
+export interface PaymentIntentRequest {
+  amount: number;
+  currency?: "INR";
+  method: "UPI" | "CARD" | "NETBANKING";
+  description?: string;
+}
+
+export interface PaymentIntentResponse {
+  intent_id: string;
+  provider_ref: string;
+  amount: number;
+  currency: string;
+  method: string;
+  status: "requires_confirmation" | "confirmed" | "failed";
+  created_at: string;
+}
+
+export interface PaymentConfirmRequest {
+  intent_id: string;
+  confirmation_code: string;
+}
+
+export interface PaymentConfirmResponse {
+  payment_id: string;
+  intent_id: string;
+  status: "succeeded" | "failed";
+  credited_amount: number;
+  wallet_balance: number;
+  completed_at: string;
+}
+
+export interface WalletBalanceResponse {
+  currency: string;
+  wallet_balance: number;
+  updated_at: string;
+}
+
+export interface PaymentHistoryItem {
+  payment_id: string;
+  intent_id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  status: string;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface PaymentHistoryResponse {
+  items: PaymentHistoryItem[];
+  total: number;
+  limit: number;
+}
+
 export interface PortfolioTransactionRequest {
   symbol: string;
   type: "BUY" | "SELL";
@@ -300,19 +367,69 @@ export const contractsApi = {
   },
 
   getPortfolioHoldings(): Promise<PortfolioHoldingsResponse> {
-    return getJson<PortfolioHoldingsResponse>("/portfolio/holdings");
+    return getJson<Record<string, unknown>>("/portfolio/holdings").then((raw) => {
+      const rawHoldings = Array.isArray(raw.holdings) ? (raw.holdings as Record<string, unknown>[]) : [];
+      return {
+        holdings: rawHoldings.map((holding) => ({
+          symbol: String(holding.symbol ?? ""),
+          quantity: Number(holding.quantity ?? 0),
+          avg_buy_price: Number(holding.avg_buy_price ?? holding.avg_price ?? 0),
+          ltp: Number(holding.ltp ?? holding.current_price ?? 0),
+          unrealized_pnl: Number(holding.unrealized_pnl ?? 0),
+        })),
+        total_unrealized_pnl: Number(raw.total_unrealized_pnl ?? 0),
+      };
+    });
   },
 
   getPortfolioPerformance(): Promise<PortfolioPerformanceResponse> {
-    return getJson<PortfolioPerformanceResponse>("/portfolio/performance");
+    return getJson<Record<string, unknown>>("/portfolio/performance").then((raw) => {
+      const rawSeries = Array.isArray(raw.series) ? (raw.series as Record<string, unknown>[]) : [];
+      return {
+        series: rawSeries.map((point) => ({
+          date: String(point.date ?? new Date().toISOString()),
+          portfolio_value: Number(point.portfolio_value ?? 0),
+          benchmark_value: Number(point.benchmark_value ?? 0),
+        })),
+        total_return: Number(raw.total_return ?? 0),
+        benchmark_return: Number(raw.benchmark_return ?? 0),
+      };
+    });
   },
 
   getPortfolioRiskMetrics(): Promise<PortfolioRiskMetrics> {
-    return getJson<PortfolioRiskMetrics>("/portfolio/risk-metrics");
+    return getJson<Record<string, unknown>>("/portfolio/risk-metrics").then((raw) => ({
+      sharpe: Number(raw.sharpe ?? raw.sharpe_ratio ?? 0),
+      sortino: Number(raw.sortino ?? raw.sortino_ratio ?? 0),
+      beta: Number(raw.beta ?? 0),
+      alpha: Number(raw.alpha ?? 0),
+      var_95: Number(raw.var_95 ?? 0),
+      cvar_95: Number(raw.cvar_95 ?? 0),
+    }));
   },
 
   postPortfolioTransaction(payload: PortfolioTransactionRequest): Promise<PortfolioTransactionResponse> {
     return postJson<PortfolioTransactionResponse, PortfolioTransactionRequest>("/portfolio/transaction", payload);
+  },
+
+  getPaymentMethods(): Promise<PaymentMethodsResponse> {
+    return getJson<PaymentMethodsResponse>("/payments/methods");
+  },
+
+  getWalletBalance(): Promise<WalletBalanceResponse> {
+    return getJson<WalletBalanceResponse>("/payments/balance");
+  },
+
+  createPaymentIntent(payload: PaymentIntentRequest): Promise<PaymentIntentResponse> {
+    return postJson<PaymentIntentResponse, PaymentIntentRequest>("/payments/intents", payload);
+  },
+
+  confirmPaymentIntent(payload: PaymentConfirmRequest): Promise<PaymentConfirmResponse> {
+    return postJson<PaymentConfirmResponse, PaymentConfirmRequest>("/payments/confirm", payload);
+  },
+
+  getPaymentHistory(limit: number = 20): Promise<PaymentHistoryResponse> {
+    return getJson<PaymentHistoryResponse>(`/payments/history?limit=${limit}`);
   },
 
   getModelAccuracy(): Promise<ModelAccuracyItem[]> {

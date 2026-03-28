@@ -78,7 +78,7 @@ export const authApi = {
     email: string;
     password: string;
     full_name: string;
-  }): Promise<TokenResponse> {
+  }): Promise<{ id: string; email: string; full_name: string; created_at: string }> {
     return fetchApi("/auth/register", {
       method: "POST",
       body: JSON.stringify(data),
@@ -86,7 +86,7 @@ export const authApi = {
   },
 
   login(email: string, password: string): Promise<TokenResponse> {
-    return fetchApi("/auth/login", {
+    return fetchApi("/auth/token", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });

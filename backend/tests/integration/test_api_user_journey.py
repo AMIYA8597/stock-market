@@ -43,6 +43,31 @@ def test_core_api_user_journey_flow() -> None:
     assert signal_payload["symbol"] == "RELIANCE.NS"
     assert signal_payload["ensemble"]["direction"] in {"BUY", "SELL", "NEUTRAL", "STRONG_BUY", "STRONG_SELL"}
 
+    payment_intent = client.post(
+        "/api/v1/payments/intents",
+        json={
+            "amount": 10000,
+            "currency": "INR",
+            "method": "UPI",
+            "description": "Wallet funding for trading",
+        },
+    )
+    assert payment_intent.status_code == 200
+    payment_intent_payload = payment_intent.json()
+    assert payment_intent_payload["status"] == "requires_confirmation"
+
+    payment_confirm = client.post(
+        "/api/v1/payments/confirm",
+        json={
+            "intent_id": payment_intent_payload["intent_id"],
+            "confirmation_code": "000000",
+        },
+    )
+    assert payment_confirm.status_code == 200
+    payment_confirm_payload = payment_confirm.json()
+    assert payment_confirm_payload["status"] == "succeeded"
+    assert float(payment_confirm_payload["wallet_balance"]) >= 10000.0
+
     order = client.post(
         "/api/v1/portfolio/transaction",
         json={

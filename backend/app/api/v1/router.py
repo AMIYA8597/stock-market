@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1 import alerts, backtest, explain, market, models, portfolio, regime, screener, signals
+from app.api.v1 import alerts, backtest, explain, market, models, payments, portfolio, regime, screener, signals
 from app.core.dependencies import get_db
 
 router = APIRouter()
@@ -21,6 +21,7 @@ router.include_router(regime.router)
 router.include_router(explain.router)
 router.include_router(backtest.router)
 router.include_router(portfolio.router, prefix="/portfolio")
+router.include_router(payments.router, prefix="/payments")
 router.include_router(screener.router)
 router.include_router(alerts.router)
 router.include_router(models.router)
@@ -50,6 +51,13 @@ class TokenResponse(BaseModel):
     expires_in: int = 86400
 
 
+class UserProfileResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    is_active: bool = True
+
+
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
@@ -77,6 +85,12 @@ async def post_token(request: LoginRequest, db: AsyncSession = Depends(get_db)) 
     return TokenResponse(access_token=f"access.{uuid4().hex}", token_type="bearer", expires_in=86400)
 
 
+@router.post("/auth/login", response_model=TokenResponse, tags=["authentication"])
+async def post_login(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    """Compatibility alias for clients using /auth/login."""
+    return await post_token(request=request, db=db)
+
+
 @router.post("/auth/refresh", response_model=TokenResponse, tags=["authentication"])
 async def post_refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     _ = db
@@ -84,6 +98,21 @@ async def post_refresh_token(request: RefreshTokenRequest, db: AsyncSession = De
         raise HTTPException(status_code=401, detail="invalid refresh token")
 
     return TokenResponse(access_token=f"access.{uuid4().hex}", token_type="bearer", expires_in=86400)
+
+
+@router.get("/auth/me", response_model=UserProfileResponse, tags=["authentication"])
+async def get_auth_me() -> UserProfileResponse:
+    return UserProfileResponse(
+        id=str(uuid4()),
+        email="trader@example.com",
+        full_name="Quant Trader",
+        is_active=True,
+    )
+
+
+@router.post("/auth/logout", status_code=204, response_class=Response, tags=["authentication"])
+async def post_auth_logout() -> Response:
+    return Response(status_code=204)
 
 
 @router.get("/health", tags=["system"])
