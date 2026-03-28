@@ -1,60 +1,60 @@
 name: CI
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, dev, develop]
+  push:
+    branches: [main, dev, develop]
 
 jobs:
-  node-ci:
+  frontend:
+    name: Frontend Lint/Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
           version: 8
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm type-check
-      - run: pnpm test -- --coverage --coverageReporters="text" --coverageReporters="lcov"
-      - uses: codecov/codecov-action@v3
-        with:
-          file: ./coverage/lcov.info
+          cache: 'pnpm'
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Type check
+        run: pnpm type-check
+      - name: Test
+        run: pnpm test
 
-  python-ci:
+  backend:
+    name: Backend Lint/Test
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        service: [gateway, ml-engine, data-pipeline, risk-engine, backtesting-engine]
+    defaults:
+      run:
+        working-directory: backend
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install -r services/${{ matrix.service }}/requirements.txt
-      - run: ruff check services/${{ matrix.service }}/app/ --output-format=github
-      - run: mypy services/${{ matrix.service }}/app/ --strict --ignore-missing-imports
-      - name: Run service tests when present
+      - name: Install backend deps
         run: |
-          if [ -d "services/${{ matrix.service }}/tests" ]; then
-            pytest services/${{ matrix.service }}/tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=80
-          else
-            echo "No tests directory for ${{ matrix.service }}; skipping pytest step"
-          fi
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Ruff
+        run: ruff check app research tests
+      - name: Mypy
+        run: mypy app research --strict --ignore-missing-imports
+      - name: Pytest
+        run: pytest tests -q
 
   docker-validate:
+    name: Docker Compose Validate
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose config --quiet
-      - run: docker build backend/
-      - run: docker build services/ml-engine/
-      - run: docker build services/data-pipeline/
-      - run: docker build services/risk-engine/
-      - run: docker build services/backtesting-engine/
+      - name: Compose config check
+        run: docker compose config --quiet

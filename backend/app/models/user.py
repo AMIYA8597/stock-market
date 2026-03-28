@@ -63,11 +63,33 @@ class User(Base):
         nullable=True,
         doc="User full name for display",
     )
+    role: Mapped[str] = mapped_column(
+        String(24),
+        default="USER",
+        nullable=False,
+        index=True,
+        doc="Application role (USER|ADMIN)",
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,
         nullable=False,
         doc="Account active status",
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc="Last successful login timestamp",
+    )
+    failed_login_attempts: Mapped[int] = mapped_column(
+        default=0,
+        nullable=False,
+        doc="Consecutive failed logins for lockout policy",
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc="Temporary lockout end time",
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -99,6 +121,15 @@ class User(Base):
             return True
         except VerifyMismatchError:
             return False
+
+    @property
+    def password_hash(self) -> str:
+        """Compatibility alias for code expecting password_hash naming."""
+        return self.hashed_password
+
+    @password_hash.setter
+    def password_hash(self, value: str) -> None:
+        self.hashed_password = value
 
     @staticmethod
     def hash_password(password: str) -> str:

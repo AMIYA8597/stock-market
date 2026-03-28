@@ -7,6 +7,7 @@ Models use SQLAlchemy 2.0 with async/await support.
 
 # User & Authentication
 from app.models.user import User  # noqa: F401
+from app.models.auth_token import PasswordResetToken, RefreshSession  # noqa: F401
 
 # Asset Metadata
 from app.models.asset import Symbol  # noqa: F401
@@ -28,6 +29,10 @@ from app.models.transactions import Transaction  # noqa: F401
 
 # Alerts & Monitoring
 from app.models.alert import Alert  # noqa: F401
+from app.models.notification import Notification  # noqa: F401
+from app.models.blog import BlogPost  # noqa: F401
+from app.models.payment import PaymentTransaction  # noqa: F401
+from app.models.email_job import EmailJob  # noqa: F401
 
 # Backtest & Analysis
 from app.models.backtest import BacktestJob  # noqa: F401

@@ -1,16 +1,16 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Button } from '@/components/ui/Button';
-import { Badge } from '@/components/ui/Badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
-import { DataTable, type Column } from '@/components/ui/DataTable';
-import { RangeSlider } from '@/components/ui/RangeSlider';
-import { Tooltip } from '@/components/ui/Tooltip';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Button } from '../../components/ui/Button';
+import { Badge } from '../../components/ui/Badge';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '../../components/ui/Card';
+import { Input } from '../../components/ui/Input';
+import { Select } from '../../components/ui/Select';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/Tabs';
+import { DataTable, type Column } from '../../components/ui/DataTable';
+import { RangeSlider } from '../../components/ui/RangeSlider';
+import { Tooltip } from '../../components/ui/Tooltip';
+import { Skeleton } from '../../components/ui/Skeleton';
 
 interface Person {
   id: string;
@@ -61,10 +61,10 @@ export default function ComponentShowcasePage() {
       render: (value) => {
         const profit = typeof value === 'number' ? value : 0;
         return (
-        <span className={profit > 0 ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'}>
-          {profit > 0 ? '+' : ''}₹{profit.toFixed(2)}
-        </span>
-      );
+          <span className={profit > 0 ? 'text-[var(--accent-green)]' : 'text-[var(--accent-red)]'}>
+            {profit > 0 ? '+' : ''}₹{profit.toFixed(2)}
+          </span>
+        );
       },
     },
   ];
@@ -253,7 +253,6 @@ export default function ComponentShowcasePage() {
                   setSortOrder('asc');
                 }
               }}
-              onRowClick={(row) => console.log('Clicked:', row.name)}
             />
           </CardContent>
         </Card>

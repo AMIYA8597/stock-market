@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '@/lib/utils';
+import { cn } from '../../lib/utils';
 
 interface TabsContextValue {
   value: string;
@@ -59,8 +59,8 @@ const TabsList = React.forwardRef<HTMLDivElement, TabsListProps>(
     <div
       ref={ref}
       className={cn(
-        'inline-flex h-10 items-center justify-center rounded-md bg-[var(--bg-elevated)] p-1',
-        'border border-[var(--border-subtle)]',
+        'inline-flex h-10 items-center justify-center rounded-[var(--ds-radius-lg)] bg-[var(--ds-surface-2)] p-1',
+        'border border-[var(--ds-border-subtle)]',
         className
       )}
       {...props}
@@ -77,12 +77,12 @@ const TabsTrigger = React.forwardRef<HTMLButtonElement, TabsTriggerProps>(
       <button
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium',
-          'ring-offset-background transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-cyan)]',
+          'inline-flex items-center justify-center whitespace-nowrap rounded-[var(--ds-radius-lg)] px-3 py-1.5 text-sm font-medium',
+          'transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-color-primary-300)]',
           'disabled:pointer-events-none disabled:opacity-50',
           tabs.value === value
-            ? 'bg-[var(--bg-surface)] text-[var(--text-primary)] shadow-sm'
-            : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]',
+            ? 'bg-[var(--ds-surface-1)] text-[var(--ds-text-primary)] shadow-[var(--ds-shadow-sm)]'
+            : 'text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]',
           className
         )}
         onClick={() => tabs.setValue(value)}
@@ -105,7 +105,7 @@ const TabsContent = React.forwardRef<HTMLDivElement, TabsContentProps>(
       <div
         ref={ref}
         className={cn(
-          'mt-2 ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-cyan)]',
+          'mt-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-color-primary-300)]',
           className
         )}
         {...props}

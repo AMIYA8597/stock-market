@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { contractsApi, type RegimeCurrentResponse, type RegimeHistoryPoint, type RegimeStatisticsItem } from "@/lib/contracts-api";
+import { ChartCard, SimpleLineAreaChart, type LineAreaPoint, SimpleHeatGrid, type HeatCell } from "@/components/charts";
 
 const STATE_ORDER = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"] as const;
 
@@ -76,22 +77,20 @@ export default function RegimeAnalysisPage(): JSX.Element {
     return current.probs[current.state];
   }, [current]);
 
-  const transitionCells = useMemo(() => {
-    return (current?.transition_matrix ?? []).flatMap((row, rowIdx) => row.map((value, colIdx) => ({ value, rowIdx, colIdx })));
+  const transitionCells = useMemo<HeatCell[]>(() => {
+    return (current?.transition_matrix ?? []).flatMap((row, rowIdx) => row.map((value, colIdx) => ({ value, row: rowIdx, col: colIdx })));
   }, [current?.transition_matrix]);
 
-  const historyBars = useMemo(() => {
+  const volSeries = useMemo<LineAreaPoint[]>(() => {
     const recent = history.slice(-90);
     if (recent.length === 0) {
-      return [] as number[];
+      return [];
     }
 
-    const vols = recent.map((item) => item.cond_vol);
-    const min = Math.min(...vols);
-    const max = Math.max(...vols);
-    const range = Math.max(max - min, 1e-9);
-
-    return vols.map((vol) => 8 + ((vol - min) / range) * 86);
+    return recent.map((item, idx) => ({
+      label: String(idx + 1),
+      value: item.cond_vol,
+    }));
   }, [history]);
 
   const regimeBands = useMemo(() => {
@@ -133,8 +132,7 @@ export default function RegimeAnalysisPage(): JSX.Element {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_1fr]">
         <section className="space-y-4">
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Regime Bands (Recent Distribution)</h2>
+          <ChartCard title="Regime Bands (Recent Distribution)">
             <div className="relative h-[120px] overflow-hidden rounded bg-[rgba(255,255,255,0.02)]">
               <div className="absolute inset-0 flex">
                 {(loading ? [{ color: "var(--nq-regime-bull)", width: 100 }] : regimeBands).map((band, index) => (
@@ -149,18 +147,18 @@ export default function RegimeAnalysisPage(): JSX.Element {
                 </div>
               ))}
             </div>
-          </div>
+          </ChartCard>
 
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Conditional Volatility Forecast</h2>
+          <ChartCard title="Conditional Volatility Forecast" subtitle="Rolling conditional volatility from regime model">
             <div className="h-[220px] rounded bg-[rgba(255,255,255,0.02)] p-2">
-              <div className="flex h-full items-end gap-[2px]">
-                {(loading ? Array.from({ length: 90 }, () => 18) : historyBars).map((height, idx) => (
-                  <div key={`vol-${idx}`} className="w-full rounded-sm bg-[var(--nq-accent-red)]/55" style={{ height: `${height}%` }} />
-                ))}
-              </div>
+              <SimpleLineAreaChart
+                data={loading ? Array.from({ length: 24 }, (_, idx) => ({ label: String(idx + 1), value: 0.12 })) : volSeries}
+                mode="line"
+                stroke="var(--nq-accent-red)"
+                yTickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
+              />
             </div>
-          </div>
+          </ChartCard>
         </section>
 
         <aside className="space-y-4">
@@ -174,23 +172,21 @@ export default function RegimeAnalysisPage(): JSX.Element {
             </div>
           </div>
 
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Transition Matrix</h2>
-            <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
-              {(loading
-                ? Array.from({ length: 16 }, (_, index) => ({ value: 0.25, rowIdx: Math.floor(index / 4), colIdx: index % 4 }))
-                : transitionCells
-              ).map((cell) => (
-                <div
-                  key={`tm-${cell.rowIdx}-${cell.colIdx}`}
-                  className="rounded border border-[var(--nq-border)] py-2"
-                  style={{ background: `rgba(0,212,245,${0.08 + cell.value * 0.45})` }}
-                >
-                  {(cell.value * 100).toFixed(1)}%
-                </div>
-              ))}
-            </div>
-          </div>
+          <ChartCard title="Transition Matrix" subtitle="4x4 probability heatmap">
+            <SimpleHeatGrid
+              rows={4}
+              cols={4}
+              cells={loading
+                ? Array.from({ length: 16 }, (_, index) => ({
+                    row: Math.floor(index / 4),
+                    col: index % 4,
+                    value: 0.25,
+                  }))
+                : transitionCells}
+              min={0}
+              max={1}
+            />
+          </ChartCard>
 
           <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
             <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">State Statistics</h2>

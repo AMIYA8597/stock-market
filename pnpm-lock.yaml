@@ -20,6 +20,15 @@ importers:
 
   apps/web:
     dependencies:
+      '@fontsource/instrument-sans':
+        specifier: ^5.1.1
+        version: 5.2.8
+      '@fontsource/manrope':
+        specifier: ^5.2.6
+        version: 5.2.8
+      '@fontsource/space-mono':
+        specifier: ^5.1.1
+        version: 5.2.9
       '@hookform/resolvers':
         specifier: ^3.9.0
         version: 3.10.0(react-hook-form@7.71.2)
@@ -384,6 +393,18 @@ packages:
 
   /@floating-ui/utils@0.2.11:
     resolution: {integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==}
+    dev: false
+
+  /@fontsource/instrument-sans@5.2.8:
+    resolution: {integrity: sha512-TJRYVbjZPx4DGMMU5lb5eFKrP3iLe9h7rz8Pk+dP958IZKiyHjYGXXwQZapVbBXcQN+YOiviVhAWxrjv8g6Z6g==}
+    dev: false
+
+  /@fontsource/manrope@5.2.8:
+    resolution: {integrity: sha512-gJHJmcuUk7qWcNCfcAri/DJQtXtBYqi9yKratr4jXhSo0I3xUtNNKI+igQIcw5c+m95g0vounk8ZnX/kb8o0TA==}
+    dev: false
+
+  /@fontsource/space-mono@5.2.9:
+    resolution: {integrity: sha512-b61faFOHEISQ/pD25G+cfGY9o/WW6lRv6hBQQfpWvEJ4y1V+S4gmth95EVyBE2VL3qDYHeVQ8nBzrplzdXTDDg==}
     dev: false
 
   /@hookform/resolvers@3.10.0(react-hook-form@7.71.2):

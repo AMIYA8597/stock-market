@@ -3,6 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { contractsApi, type DriftItem, type EnsembleWeightPoint, type ModelAccuracyItem } from "@/lib/contracts-api";
+import {
+  ChartCard,
+  SimpleBarChart,
+  type SimpleBarPoint,
+  SimpleLineAreaChart,
+  type LineAreaPoint,
+} from "@/components/charts";
 
 function formatRatio(value: number | null | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -84,6 +91,80 @@ export default function ModelMonitorPage(): JSX.Element {
     }));
   }, [accuracy]);
 
+  const accuracyBarData = useMemo<SimpleBarPoint[]>(() => {
+    if (modelBars.length === 0) {
+      return [
+        { label: "tft", value: 0.15, color: "rgba(0,230,118,0.55)" },
+        { label: "lstm", value: 0.13, color: "rgba(0,212,245,0.55)" },
+        { label: "xgb", value: 0.12, color: "rgba(139,92,246,0.55)" },
+      ];
+    }
+    return modelBars.map((item) => ({
+      label: item.model,
+      value: item.accuracy,
+      color: "rgba(0,230,118,0.55)",
+    }));
+  }, [modelBars]);
+
+  const tftWeightTrend = useMemo<LineAreaPoint[]>(() => {
+    if (weightColumns.length === 0) {
+      return Array.from({ length: 24 }, (_, idx) => ({ label: String(idx + 1), value: 0.2 }));
+    }
+    return weightColumns.map((point, idx) => ({
+      label: String(idx + 1),
+      value: point.tft,
+    }));
+  }, [weightColumns]);
+
+  const residualDistributionBars = useMemo<SimpleBarPoint[]>(() => {
+    const residuals = drift[0]?.residual_distribution ?? Array.from({ length: 20 }, () => 0.1);
+    return residuals.slice(0, 24).map((value, idx) => ({
+      label: String(idx + 1),
+      value: Math.abs(value),
+      color: "rgba(139,92,246,0.55)",
+    }));
+  }, [drift]);
+
+  const modelHealthStatus = useMemo(() => {
+    return accuracy.map((item) => {
+      const driftStatus = drift.find((d) => d.model === item.model);
+      const isDrifting = driftStatus?.drift_detected ?? false;
+      const accuracy_pct = item.directional_accuracy;
+
+      let status: "healthy" | "warning" | "critical";
+      if (isDrifting) {
+        status = "critical";
+      } else if (accuracy_pct < 0.50) {
+        status = "warning";
+      } else {
+        status = "healthy";
+      }
+
+      return {
+        model: item.model,
+        status,
+        accuracy: accuracy_pct,
+        isDrifting,
+      };
+    });
+  }, [accuracy, drift]);
+
+  const ensembleStability = useMemo(() => {
+    if (weightColumns.length < 2) {
+      return 0.85;
+    }
+    const values = weightColumns.map((w) => w.tft);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+    const stdDev = Math.sqrt(variance);
+    const cv = stdDev / mean;
+    return Math.max(0, 1 - cv);
+  }, [weightColumns]);
+
+  const driftAlertCount = useMemo(() => {
+    return drift.filter((d) => d.drift_detected).length;
+  }, [drift]);
+
   return (
     <motion.main
       initial={{ opacity: 0, y: 10 }}
@@ -111,35 +192,105 @@ export default function ModelMonitorPage(): JSX.Element {
         ))}
       </section>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
-        <article className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Ensemble Weight Evolution</h2>
-          <div className="h-40 rounded bg-[rgba(255,255,255,0.03)] p-2">
-            <div className="grid h-full grid-cols-5 gap-1">
-              {["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost"].map((modelKey) => (
-                <div key={modelKey} className="flex h-full flex-col justify-end gap-[2px]">
-                  {(weightColumns.length === 0 ? Array.from({ length: 20 }, () => 20) : weightColumns.map((point) => point[modelKey as keyof EnsembleWeightPoint] as number)).map((weightValue, index) => (
-                    <div key={`${modelKey}-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-cyan)]/42" style={{ height: `${Math.max(6, weightValue * 100)}%` }} />
-                  ))}
-                </div>
-              ))}
+      {/* Drift Alert Banner */}
+      {driftAlertCount > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-4 rounded border border-[var(--nq-accent-red)]/50 bg-[var(--nq-accent-red)]/10 px-4 py-3"
+        >
+          <div className="flex items-center gap-2">
+            <div className="h-2 w-2 rounded-full bg-[var(--nq-accent-red)]" style={{ animation: "pulse 2s infinite" }} />
+            <div className="text-sm font-medium text-[var(--nq-accent-red)]">
+              ⚠️ {driftAlertCount} model{driftAlertCount !== 1 ? "s" : ""} detected drift in this window. Monitor closely.
             </div>
           </div>
-        </article>
+        </motion.div>
+      )}
 
-        <article className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Model Accuracy Grid</h2>
-          <div className="h-40 rounded bg-[rgba(255,255,255,0.03)] p-2">
-            <div className="flex h-full items-end gap-2">
-              {(modelBars.length === 0 ? Array.from({ length: 6 }, () => ({ model: "--", accuracy: 0.15 })) : modelBars).map((bar, index) => (
-                <div key={`${bar.model}-${index}`} className="flex h-full w-full flex-col items-center justify-end gap-2">
-                  <div className="w-full rounded-sm bg-[var(--nq-accent-green)]/55" style={{ height: `${Math.max(10, bar.accuracy * 100)}%` }} />
-                  <span className="text-[10px] text-[var(--nq-text-secondary)]">{bar.model}</span>
-                </div>
-              ))}
+      {/* Ensemble Stability Indicator */}
+      <div className="mt-4 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-medium text-[var(--nq-text-primary)]">Ensemble Stability</h2>
+            <p className="text-xs text-[var(--nq-text-secondary)]">Weight variance normalized coefficient</p>
+          </div>
+          <div className="text-right">
+            <div className="text-lg font-semibold">{(ensembleStability * 100).toFixed(1)}%</div>
+            <div
+              className={`text-xs font-medium ${
+                ensembleStability > 0.75
+                  ? "text-[var(--nq-accent-green)]"
+                  : ensembleStability > 0.5
+                    ? "text-[var(--nq-accent-amber)]"
+                    : "text-[var(--nq-accent-red)]"
+              }`}
+            >
+              {ensembleStability > 0.75 ? "Stable" : ensembleStability > 0.5 ? "Moderate" : "Volatile"}
             </div>
           </div>
-        </article>
+        </div>
+        <div className="mt-3 h-2 rounded-full bg-[rgba(255,255,255,0.05)]">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              ensembleStability > 0.75
+                ? "bg-[var(--nq-accent-green)]"
+                : ensembleStability > 0.5
+                  ? "bg-[var(--nq-accent-amber)]"
+                  : "bg-[var(--nq-accent-red)]"
+            }`}
+            style={{ width: `${ensembleStability * 100}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Model Health Grid */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {modelHealthStatus.map((item) => (
+          <div
+            key={item.model}
+            className={`rounded border p-3 transition-all duration-300 ${
+              item.status === "critical"
+                ? "border-[var(--nq-accent-red)]/50 bg-[var(--nq-accent-red)]/10"
+                : item.status === "warning"
+                  ? "border-[var(--nq-accent-amber)]/50 bg-[var(--nq-accent-amber)]/10"
+                  : "border-[var(--nq-border)] bg-[var(--nq-bg-card)]"
+            }`}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <div className="font-semibold text-[var(--nq-text-primary)]" style={{ textTransform: "uppercase", fontSize: "0.75rem" }}>
+                {item.model}
+              </div>
+              <div
+                className={`inline-block rounded-full px-2 py-1 text-[10px] font-bold ${
+                  item.status === "critical"
+                    ? "bg-[var(--nq-accent-red)]/30 text-[var(--nq-accent-red)]"
+                    : item.status === "warning"
+                      ? "bg-[var(--nq-accent-amber)]/30 text-[var(--nq-accent-amber)]"
+                      : "bg-[var(--nq-accent-green)]/30 text-[var(--nq-accent-green)]"
+                }`}
+              >
+                {item.status.toUpperCase()}
+              </div>
+            </div>
+            <div className="text-sm font-medium">{(item.accuracy * 100).toFixed(1)}%</div>
+            {item.isDrifting && <div className="mt-1 text-[10px] text-[var(--nq-accent-red)]">Drift Detected</div>}
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <ChartCard title="Ensemble Weight Evolution" subtitle="TFT rolling weight (recent samples)">
+          <div className="h-40 rounded bg-[rgba(255,255,255,0.03)] p-2">
+            <SimpleLineAreaChart data={tftWeightTrend} mode="line" stroke="var(--nq-accent-cyan)" yTickFormatter={(value) => `${(value * 100).toFixed(0)}%`} />
+          </div>
+        </ChartCard>
+
+        <ChartCard title="Model Accuracy Grid" subtitle="Directional accuracy by model">
+          <div className="h-40 rounded bg-[rgba(255,255,255,0.03)] p-2">
+            <SimpleBarChart data={accuracyBarData} yTickFormatter={(value) => `${(value * 100).toFixed(0)}%`} />
+          </div>
+        </ChartCard>
 
         <article className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Drift Detection</h2>
@@ -168,18 +319,12 @@ export default function ModelMonitorPage(): JSX.Element {
           </table>
         </article>
 
-        <article className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Residual Distribution</h2>
+        <ChartCard title="Residual Distribution" subtitle="Absolute residual histogram">
           <div className="h-40 rounded bg-[rgba(255,255,255,0.03)] p-2">
-            <div className="flex h-full items-end gap-[3px]">
-              {(drift[0]?.residual_distribution ?? Array.from({ length: 20 }, () => 0.1)).slice(0, 24).map((value, index) => {
-                const normalized = Math.min(100, Math.max(5, Math.abs(value) * 100));
-                return <div key={`hist-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-purple)]/52" style={{ height: `${normalized}%` }} />;
-              })}
-            </div>
+            <SimpleBarChart data={residualDistributionBars} />
           </div>
           <p className="mt-2 text-xs text-[var(--nq-text-secondary)]">Active drift flags: {drift.filter((item) => item.drift_detected).length}</p>
-        </article>
+        </ChartCard>
       </div>
     </motion.main>
   );
