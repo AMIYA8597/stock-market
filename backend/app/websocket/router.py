@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from hashlib import sha256
 from random import Random
@@ -49,13 +50,16 @@ async def ws_prices(websocket: WebSocket):
     subscribed_symbols: set[str] = set()
     try:
         while True:
-            payload = await websocket.receive_json()
-            action = str(payload.get("action", "")).lower()
-            symbols = [str(s).upper() for s in payload.get("symbols", [])]
-            if action == "subscribe":
-                subscribed_symbols.update(symbols)
-            elif action == "unsubscribe":
-                subscribed_symbols.difference_update(symbols)
+            try:
+                payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+                action = str(payload.get("action", "")).lower()
+                symbols = [str(s).upper() for s in payload.get("symbols", [])]
+                if action == "subscribe":
+                    subscribed_symbols.update(symbols)
+                elif action == "unsubscribe":
+                    subscribed_symbols.difference_update(symbols)
+            except TimeoutError:
+                pass
 
             for symbol in sorted(subscribed_symbols):
                 rng = Random(_seed(symbol))
@@ -69,6 +73,11 @@ async def ws_prices(websocket: WebSocket):
                         "timestamp": datetime.now(UTC).isoformat(),
                     },
                 )
+            if not subscribed_symbols:
+                await manager.send_personal(
+                    websocket,
+                    {"type": "heartbeat", "channel": "prices", "timestamp": datetime.now(UTC).isoformat()},
+                )
     except WebSocketDisconnect:
         await manager.disconnect(websocket, channel)
 
@@ -81,13 +90,16 @@ async def ws_signals(websocket: WebSocket):
     subscribed_symbols: set[str] = set()
     try:
         while True:
-            payload = await websocket.receive_json()
-            action = str(payload.get("action", "")).lower()
-            symbols = [str(s).upper() for s in payload.get("symbols", [])]
-            if action == "subscribe":
-                subscribed_symbols.update(symbols)
-            elif action == "unsubscribe":
-                subscribed_symbols.difference_update(symbols)
+            try:
+                payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+                action = str(payload.get("action", "")).lower()
+                symbols = [str(s).upper() for s in payload.get("symbols", [])]
+                if action == "subscribe":
+                    subscribed_symbols.update(symbols)
+                elif action == "unsubscribe":
+                    subscribed_symbols.difference_update(symbols)
+            except TimeoutError:
+                pass
 
             for symbol in sorted(subscribed_symbols):
                 rng = Random(_seed(f"signal:{symbol}"))
@@ -101,7 +113,13 @@ async def ws_signals(websocket: WebSocket):
                         "signal": round(score, 4),
                         "confidence": round(0.55 + rng.random() * 0.4, 4),
                         "direction": direction,
+                        "timestamp": datetime.now(UTC).isoformat(),
                     },
+                )
+            if not subscribed_symbols:
+                await manager.send_personal(
+                    websocket,
+                    {"type": "heartbeat", "channel": "signals", "timestamp": datetime.now(UTC).isoformat()},
                 )
     except WebSocketDisconnect:
         await manager.disconnect(websocket, channel)
@@ -114,7 +132,10 @@ async def ws_alerts(websocket: WebSocket):
     await manager.connect(websocket, channel)
     try:
         while True:
-            await websocket.receive_text()
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=3.0)
+            except TimeoutError:
+                pass
             await manager.send_personal(
                 websocket,
                 {
@@ -137,7 +158,10 @@ async def ws_backtest_progress(websocket: WebSocket):
     progress = 0
     try:
         while True:
-            await websocket.receive_text()
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
+            except TimeoutError:
+                pass
             progress = min(progress + 10, 100)
             await manager.send_personal(
                 websocket,

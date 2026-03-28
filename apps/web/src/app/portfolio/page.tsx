@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type PortfolioHolding, type PortfolioPerformancePoint, type PortfolioRiskMetrics } from "@/lib/contracts-api";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
@@ -108,7 +109,15 @@ export default function PortfolioPage(): JSX.Element {
   return (
     <main className="min-h-screen bg-[var(--nq-bg-base)] p-6 text-[var(--nq-text-primary)]">
       <h1 className="mb-2 text-2xl font-semibold">Portfolio</h1>
-      <p className="mb-4 text-xs text-[var(--nq-text-secondary)]">Live contracts: portfolio holdings, risk metrics, performance, and ws price feed ({status}).</p>
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <p className="text-xs text-[var(--nq-text-secondary)]">Live contracts: portfolio holdings, risk metrics, performance, and ws price feed ({status}).</p>
+        <Link
+          href="/portfolio/orders"
+          className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+        >
+          View order history
+        </Link>
+      </div>
       {error ? <p className="mb-2 text-sm text-[var(--nq-accent-red)]">{error}</p> : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

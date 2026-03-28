@@ -55,7 +55,7 @@ class Disable2FA(BaseModel):
     """Schema for disabling 2FA."""
 
     password: str
-    backup_codes: list[str] = Field(..., min_items=10, max_items=10)
+    backup_codes: list[str] = Field(..., min_length=10, max_length=10)
 
 
 class ChangePassword(BaseModel):

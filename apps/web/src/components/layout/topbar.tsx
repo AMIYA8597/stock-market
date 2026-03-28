@@ -1,6 +1,6 @@
 "use client";
 
-import { Search, Bell, Wifi, WifiOff, Command, Menu } from "lucide-react";
+import { Search, Bell, Wifi, WifiOff, Command, Menu, Moon, Sun } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
 
 interface TopbarProps {
@@ -9,7 +9,7 @@ interface TopbarProps {
 }
 
 export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
-  const { openCommandPalette, toggleMobileSidebar } = useUIStore();
+  const { openCommandPalette, toggleMobileSidebar, themeMode, toggleThemeMode } = useUIStore();
 
   return (
     <header
@@ -62,6 +62,19 @@ export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
         </div>
 
         {/* Notifications */}
+        <button
+          onClick={toggleThemeMode}
+          className="flex h-9 w-9 items-center justify-center rounded-nq hover:bg-nq-bg-card transition-colors"
+          aria-label="Toggle theme"
+          title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {themeMode === "dark" ? (
+            <Sun className="h-4.5 w-4.5 text-nq-text-secondary" />
+          ) : (
+            <Moon className="h-4.5 w-4.5 text-nq-text-secondary" />
+          )}
+        </button>
+
         <button className="relative flex h-9 w-9 items-center justify-center rounded-nq hover:bg-nq-bg-card transition-colors">
           <Bell className="h-4.5 w-4.5 text-nq-text-secondary" />
           {alertCount > 0 && (

@@ -1,5 +1,3 @@
-"""Compatibility export for API v1 router."""
+"""API v1 package."""
 
-from app.api.v1.router import api_router
-
-__all__ = ["api_router"]
+__all__: list[str] = []

@@ -1,53 +1,150 @@
-"""Market data request/response schemas."""
-
-from __future__ import annotations
+"""Market data request/response schemas (Pydantic v2)."""
 
 from datetime import datetime
-from typing import List, Optional
+from decimal import Decimal
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
+# ─────────────────────────────────────────────────────────────━━
+# Embedded Models (used in multiple responses)
+# ─────────────────────────────────────────────────────────────━━
+
+class RegimeData(BaseModel):
+    """Regime state object."""
+    state: str = Field(..., description="bull|bear|sideways|crisis")
+    probs: list[float] = Field(..., description="[P(bull), P(bear), P(sideways), P(crisis)]")
+
+
+class SignalData(BaseModel):
+    """Signal object."""
+    direction: str = Field(..., description="STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL")
+    confidence: float = Field(..., ge=0.0, le=1.0)
+
+
+# ─────────────────────────────────────────────────────────────━━
+# Market Endpoints
+# ─────────────────────────────────────────────────────────────━━
+
 class QuoteResponse(BaseModel):
-    """Real-time quote response."""
-    symbol: str
-    price: float
-    change: float
-    change_percent: float
-    volume: float
-    high: float
-    low: float
-    open: float
-    previous_close: float
+    """GET /market/quote/{symbol} response."""
+    ticker: str
+    name: str
+    price: Decimal = Field(..., decimal_places=8)
+    change: Decimal = Field(..., decimal_places=8)
+    change_pct: Decimal = Field(..., decimal_places=4)
+    volume: Decimal = Field(..., decimal_places=4)
+    market_cap: Optional[Decimal] = Field(None, decimal_places=2)
+    pe_ratio: Optional[Decimal] = Field(None, decimal_places=4)
+    week_52_high: Optional[Decimal] = Field(None, decimal_places=8)
+    week_52_low: Optional[Decimal] = Field(None, decimal_places=8)
+    regime: RegimeData
+    signal: SignalData
     timestamp: datetime
 
 
 class OHLCVBar(BaseModel):
-    """Single OHLCV data point."""
-    timestamp: datetime
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-    adjusted_close: Optional[float] = None
+    """Single OHLCV candle."""
+    time: datetime
+    open: Decimal = Field(..., decimal_places=8)
+    high: Decimal = Field(..., decimal_places=8)
+    low: Decimal = Field(..., decimal_places=8)
+    close: Decimal = Field(..., decimal_places=8)
+    volume: Decimal = Field(..., decimal_places=4)
 
 
 class HistoryResponse(BaseModel):
-    """Historical OHLCV data response."""
+    """GET /market/history/{symbol} response."""
     symbol: str
-    interval: str
-    bars: List[OHLCVBar]
-    count: int
+    interval: str = Field(..., description="1m|5m|15m|1h|1d")
+    data: list[OHLCVBar]
 
 
-class ScreenerFilter(BaseModel):
-    """Screener query filter parameters."""
-    asset_class: Optional[str] = None
-    exchange: Optional[str] = None
-    sector: Optional[str] = None
-    min_market_cap: Optional[float] = None
-    max_market_cap: Optional[float] = None
+class IndexData(BaseModel):
+    """Single index in indices response."""
+    name: str
+    ticker: str
+    value: Decimal = Field(..., decimal_places=8)
+    change: Decimal = Field(..., decimal_places=8)
+    change_pct: Decimal = Field(..., decimal_places=4)
+    regime_state: str = Field(..., description="bull|bear|sideways|crisis")
+    timestamp: datetime
+
+
+class IndicesResponse(BaseModel):
+    """GET /market/indices response."""
+    indices: list[IndexData]
+
+
+class MoverData(BaseModel):
+    """Single asset in movers response."""
+    ticker: str
+    name: str
+    exchange: str
+    price: Decimal = Field(..., decimal_places=8)
+    change_pct: Decimal = Field(..., decimal_places=4)
+    volume: Decimal = Field(..., decimal_places=4)
+    signal_direction: str
+    signal_confidence: float
+    rank: int
+
+
+class MoversResponse(BaseModel):
+    """GET /market/movers response."""
+    assets: list[MoverData]
+    exchange: str
+    type: str = Field(..., description="gainers|losers|volume|momentum")
+    generated_at: datetime
+
+
+class SectorNode(BaseModel):
+    """Sector treemap node."""
+    ticker: str
+    name: str
+    value: Decimal = Field(..., decimal_places=4)
+    metric_value: Decimal = Field(..., decimal_places=4)
+    exchange: str
+
+
+class HeatmapResponse(BaseModel):
+    """GET /market/heatmap response."""
+    exchange: str
+    metric: str = Field(..., description="return_1d|return_5d|volume_surge")
+    sectors: dict[str, list[SectorNode]]
+    generated_at: datetime
+
+
+class SearchResult(BaseModel):
+    """Single search result."""
+    ticker: str
+    name: str
+    exchange: str
+    asset_type: str = Field(..., description="EQUITY|CRYPTO|INDEX|ETF|FOREX")
+
+
+class SearchResponse(BaseModel):
+    """GET /market/search response."""
+    query: str
+    results: list[SearchResult]
+    total_matched: int
+
+
+class EconomicEvent(BaseModel):
+    """Single economic calendar event."""
+    date: datetime
+    event_name: str
+    country: str
+    importance: str = Field(..., description="low|medium|high")
+    forecast: Optional[str] = None
+    previous: Optional[str] = None
+
+
+class EconomicCalendarResponse(BaseModel):
+    """GET /market/economic-calendar response."""
+    events: list[EconomicEvent]
+    period_start: datetime
+    period_end: datetime
     min_price: Optional[float] = None
     max_price: Optional[float] = None
     rsi_min: Optional[float] = None
@@ -79,7 +176,7 @@ class ScreenerResult(BaseModel):
 
 class ScreenerResponse(BaseModel):
     """Screener response with pagination."""
-    results: List[ScreenerResult]
+    results: list[ScreenerResult]
     total: int
     limit: int
     offset: int

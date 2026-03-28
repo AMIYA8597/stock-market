@@ -1,42 +1,89 @@
-"""Alert model for user-configurable market alerts."""
+"""User-configurable trading alerts model.
+
+Alerts can be price-based, volume-based, sentiment-based, or ML signal-based.
+"""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, DateTime, Numeric, String, UUID as SQLA_UUID, ForeignKey, func
+from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
+from app.database.connection import Base
 
 
 class Alert(Base):
+    """User-configurable market alert.
+    
+    Fields:
+        id (UUID): Unique alert identifier, primary key.
+        user_id (UUID): Foreign key to User.
+        symbol_id (int): Foreign key to Symbol (nullable for portfolio-level alerts).
+        alert_type (str): Alert category (PRICE_ABOVE, PRICE_BELOW, RSI_OB, etc.).
+        threshold (Decimal): Numeric threshold value for comparison.
+        is_triggered (bool): Whether alert has been triggered.
+        triggered_at (datetime): When alert was triggered (nullable).
+        created_at (datetime): When alert was created (UTC).
+    
+    Alert Types:
+        - PRICE_ABOVE / PRICE_BELOW: Price levels
+        - RSI_OB / RSI_OS: RSI overbought/oversold
+        - MACD_CROSS: MACD indicator crossover
+        - SIGNAL_CHANGE: ML signal direction change
+        - REGIME_CHANGE: HMM regime state transition
+    """
+
     __tablename__ = "alerts"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    symbol: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    id: Mapped[UUID] = mapped_column(
+        SQLA_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        doc="Unique alert identifier",
+    )
+    user_id: Mapped[UUID] = mapped_column(
+        SQLA_UUID(as_uuid=True),
+        ForeignKey("users.id"),
+        nullable=False,
+        index=True,
+        doc="Foreign key to users",
+    )
+    symbol_id: Mapped[int | None] = mapped_column(
+        ForeignKey("symbols.id"),
+        nullable=True,
+        index=True,
+        doc="Foreign key to symbols (nullable for portfolio-level)",
+    )
     alert_type: Mapped[str] = mapped_column(
-        String(30), nullable=False,
-        comment="price_cross | rsi_threshold | ml_signal | sentiment_spike | volume_anomaly",
+        String(32),
+        nullable=False,
+        doc="Alert type (PRICE_ABOVE, PRICE_BELOW, RSI_OB, MACD_CROSS, SIGNAL_CHANGE, REGIME_CHANGE)",
     )
-    condition_json: Mapped[str] = mapped_column(
-        Text, nullable=False,
-        comment='Alert condition as JSON, e.g. {"operator": "gt", "value": 150.0}',
+    threshold: Mapped[Decimal | None] = mapped_column(
+        Numeric(20, 8),
+        nullable=True,
+        doc="Numeric threshold for comparison",
     )
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    is_triggered: Mapped[bool] = mapped_column(Boolean, default=False)
-    triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    notification_method: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="in_app",
-        comment="in_app | email | both",
+    is_triggered: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        doc="Whether alert has been triggered",
+    )
+    triggered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc="When alert was last triggered",
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        doc="Created timestamp (UTC)",
     )
 
-    # Relationships
-    user = relationship("User", back_populates="alerts")
-
     def __repr__(self) -> str:
-        return f"<Alert(symbol='{self.symbol}', type='{self.alert_type}', triggered={self.is_triggered})>"
+        return f"<Alert(user_id={self.user_id}, type='{self.alert_type}', triggered={self.is_triggered})>"

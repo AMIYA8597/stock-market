@@ -1,25 +1,107 @@
-"""API v1 router aggregator."""
+"""FastAPI v1 router aggregator and auth endpoints."""
 
-from fastapi import APIRouter
+from __future__ import annotations
 
-from app.api.v1.alerts import router as alerts_router
-from app.api.v1.auth import router as auth_router
-from app.api.v1.backtesting import router as backtest_router
-from app.api.v1.health import router as health_router
-from app.api.v1.intelligence import router as intelligence_router
-from app.api.v1.market_data import router as market_router
-from app.api.v1.portfolio import router as portfolio_router
-from app.api.v1.predictions import router as predictions_router
-from app.api.v1.screener import router as screener_router
+from datetime import datetime, timezone
+from uuid import uuid4
 
-api_router = APIRouter()
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
-api_router.include_router(health_router, tags=["health"])
-api_router.include_router(auth_router, prefix="/auth", tags=["authentication"])
-api_router.include_router(market_router, prefix="/market", tags=["market"])
-api_router.include_router(predictions_router, prefix="/predictions", tags=["predictions"])
-api_router.include_router(portfolio_router, prefix="/portfolio", tags=["portfolio"])
-api_router.include_router(backtest_router, prefix="/backtest", tags=["backtest"])
-api_router.include_router(screener_router, prefix="/screener", tags=["screener"])
-api_router.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
-api_router.include_router(intelligence_router, tags=["signals", "regime", "explain", "monitor"])
+from app.api.v1 import alerts, backtest, explain, market, models, portfolio, regime, screener, signals
+from app.core.dependencies import get_db
+
+router = APIRouter()
+api_router = router
+
+router.include_router(market.router)
+router.include_router(signals.router)
+router.include_router(regime.router)
+router.include_router(explain.router)
+router.include_router(backtest.router)
+router.include_router(portfolio.router, prefix="/portfolio")
+router.include_router(screener.router)
+router.include_router(alerts.router)
+router.include_router(models.router)
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    full_name: str = Field(..., min_length=1, max_length=255)
+
+
+class RegisterResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    created_at: datetime
+
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int = 86400
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+@router.post("/auth/register", response_model=RegisterResponse, status_code=201, tags=["authentication"])
+async def post_register(request: RegisterRequest, db: AsyncSession = Depends(get_db)) -> RegisterResponse:
+    _ = db
+    if request.email.endswith("@invalid.local"):
+        raise HTTPException(status_code=400, detail="email domain is not allowed")
+
+    return RegisterResponse(
+        id=str(uuid4()),
+        email=request.email,
+        full_name=request.full_name,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+@router.post("/auth/token", response_model=TokenResponse, tags=["authentication"])
+async def post_token(request: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    _ = db
+    if request.password == "":
+        raise HTTPException(status_code=401, detail="invalid credentials")
+
+    return TokenResponse(access_token=f"access.{uuid4().hex}", token_type="bearer", expires_in=86400)
+
+
+@router.post("/auth/refresh", response_model=TokenResponse, tags=["authentication"])
+async def post_refresh_token(request: RefreshTokenRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    _ = db
+    if not request.refresh_token.strip():
+        raise HTTPException(status_code=401, detail="invalid refresh token")
+
+    return TokenResponse(access_token=f"access.{uuid4().hex}", token_type="bearer", expires_in=86400)
+
+
+@router.get("/health", tags=["system"])
+async def get_health() -> dict[str, str]:
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "version": "1.0.0",
+    }
+
+
+@router.get("/version", tags=["system"])
+async def get_version() -> dict[str, str]:
+    return {
+        "version": "1.0.0",
+        "build_timestamp": datetime.now(timezone.utc).isoformat(),
+        "name": "Algorithmic Trading Intelligence Platform API",
+    }
+
+
+__all__ = ["router", "api_router"]

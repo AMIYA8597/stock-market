@@ -46,6 +46,37 @@ class StudentTHMM:
         self.sigma2_ = np.ones(self.n_states)
         self.nu_ = np.full(self.n_states, 8.0)
 
+    def init_params(self, seed: int | None = None) -> None:
+        """Initialize parameters randomly for reproducible experimentation.
+
+        Args:
+            seed: Random seed for reproducibility. If None, uses unseeded random state.
+
+        **Initialization:**
+            - π: Uniform (K=4 states equally probable)
+            - A: Uniform transition matrix (persistent but not deterministic)
+            - μ: Random quantiles of standard normal
+            - σ²: Random in [0.25, 1.0]²
+            - ν: Random degrees of freedom in [4, 15]
+        """
+        if seed is not None:
+            np.random.seed(seed)
+
+        # Initialize transition probabilities: slightly biased toward diagonal (persistence)
+        self.A_ = np.random.dirichlet([1.0] * self.n_states, size=self.n_states)
+
+        # Initialize state probabilities uniformly
+        self.pi_ = np.ones(self.n_states) / self.n_states
+
+        # Initialize means: random quantiles
+        self.mu_ = np.random.randn(self.n_states) * 0.02
+
+        # Initialize variances: random in [0.25, 1.0]
+        self.sigma2_ = 0.25 + 0.75 * np.random.rand(self.n_states)
+
+        # Initialize degrees of freedom: in [4, 15] (heavier tails than Gaussian)
+        self.nu_ = 4.0 + 11.0 * np.random.rand(self.n_states)
+
     def _emission_logprob(self, returns: np.ndarray) -> np.ndarray:
         return np.column_stack([
             _student_t_logpdf(returns, self.mu_[k], self.sigma2_[k], self.nu_[k]) for k in range(self.n_states)

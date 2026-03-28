@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Sans, Manrope, Space_Mono } from "next/font/google";
+import Script from "next/script";
+import { ThemeSync } from "@/components/common/theme-sync";
 import { Providers } from "@/lib/providers";
 import "./globals.css";
 
@@ -64,11 +66,19 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`dark ${berkeleyMonoFallback.variable} ${instrumentSans.variable} ${cabinetGroteskFallback.variable}`}
+      className={`${berkeleyMonoFallback.variable} ${instrumentSans.variable} ${cabinetGroteskFallback.variable}`}
       suppressHydrationWarning
     >
+      <head>
+        <Script id="nq-theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('nq-theme');var m=t==='light'?'light':'dark';document.documentElement.classList.remove('dark','light');document.documentElement.classList.add(m);}catch(e){document.documentElement.classList.add('dark');}})();`}
+        </Script>
+      </head>
       <body className="min-h-screen bg-nq-bg-primary antialiased">
-        <Providers>{children}</Providers>
+        <Providers>
+          <ThemeSync />
+          {children}
+        </Providers>
       </body>
     </html>
   );

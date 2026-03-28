@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { Moon, Sun } from "lucide-react";
 
 import { contractsApi, type PortfolioHoldingsResponse } from "@/lib/contracts-api";
+import { useUIStore } from "@/stores/ui-store";
 import type { SignalResponse } from "@/types/intelligence";
 
 interface TopBarProps {
@@ -14,6 +16,8 @@ interface TopBarProps {
 
 export default function TopBar({ selectedSignal, refreshing, signalStreamStatus }: TopBarProps): JSX.Element {
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
+  const themeMode = useUIStore((state) => state.themeMode);
+  const toggleThemeMode = useUIStore((state) => state.toggleThemeMode);
 
   useEffect(() => {
     let mounted = true;
@@ -46,6 +50,7 @@ export default function TopBar({ selectedSignal, refreshing, signalStreamStatus 
     { href: "/research", label: "Research" },
     { href: "/backtest-lab", label: "Backtest" },
     { href: "/portfolio", label: "Portfolio" },
+    { href: "/portfolio/orders", label: "Orders" },
     { href: "/screener", label: "Screener" },
     { href: "/alerts", label: "Alerts" },
   ];
@@ -88,6 +93,15 @@ export default function TopBar({ selectedSignal, refreshing, signalStreamStatus 
           <span className="text-xs text-[var(--nq-text-secondary)]">Search symbols, research views, and macro events</span>
         </div>
         <div className="flex w-full items-center justify-between gap-2 lg:w-auto">
+          <button
+            type="button"
+            onClick={toggleThemeMode}
+            className="inline-flex items-center gap-1 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] transition hover:border-[var(--nq-border-hover)] sm:text-xs"
+            title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          >
+            {themeMode === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+            {themeMode === "dark" ? "Light" : "Dark"}
+          </button>
           <span className="hidden items-center gap-1 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] sm:inline-flex">
             <span
               className={`h-1.5 w-1.5 rounded-full ${

@@ -1,84 +1,162 @@
-"""Portfolio management schemas."""
-
-from __future__ import annotations
+"""Portfolio management schemas (Pydantic v2)."""
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from decimal import Decimal
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
 
-class PortfolioCreate(BaseModel):
-    """Create a new portfolio."""
-    name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
-    initial_capital: float = Field(default=100000.0, gt=0)
+# ─────────────────────────────────────────────────────────────━━
+# Portfolio Holdings
+# ─────────────────────────────────────────────────────────────━━
 
-
-class HoldingAdd(BaseModel):
-    """Add or update a holding in a portfolio."""
+class HoldingData(BaseModel):
+    """Single holding in portfolio."""
     symbol: str
-    quantity: float = Field(..., gt=0)
-    avg_cost: float = Field(..., gt=0)
+    quantity: Decimal = Field(..., gt=0, decimal_places=8)
+    avg_price: Decimal = Field(..., gt=0, decimal_places=8)
+    current_price: Decimal = Field(..., gt=0, decimal_places=8)
+    unrealized_pnl: Decimal = Field(..., decimal_places=2)
+    unrealized_pnl_pct: Decimal = Field(..., decimal_places=4)
+    in_position_days: int
 
 
-class HoldingResponse(BaseModel):
-    """Portfolio holding with current market data."""
+class HoldingsResponse(BaseModel):
+    """GET /portfolio/holdings response."""
+    holdings: list[HoldingData]
+    total_invested: Decimal = Field(..., decimal_places=2)
+    total_current_value: Decimal = Field(..., decimal_places=2)
+    total_unrealized_pnl: Decimal = Field(..., decimal_places=2)
+    total_unrealized_pnl_pct: Decimal = Field(..., decimal_places=4)
+    cash_balance: Decimal = Field(..., decimal_places=2)
+    portfolio_value: Decimal = Field(..., decimal_places=2)
+    timestamp: datetime
+
+
+# ─────────────────────────────────────────────────────────────━━
+# Transactions
+# ─────────────────────────────────────────────────────────────━━
+
+class TransactionRequest(BaseModel):
+    """POST /portfolio/transaction request body."""
     symbol: str
-    quantity: float
-    avg_cost: float
-    current_price: Optional[float] = None
-    market_value: Optional[float] = None
-    pnl: Optional[float] = None
-    pnl_percent: Optional[float] = None
-    weight: Optional[float] = None
-    added_at: datetime
-
-    model_config = {"from_attributes": True}
+    type: str = Field(..., description="BUY|SELL")
+    quantity: Decimal = Field(..., gt=0, decimal_places=8)
+    price: Decimal = Field(..., gt=0, decimal_places=8)
+    brokerage: Optional[Decimal] = Field(default=0, ge=0, decimal_places=4)
+    stt: Optional[Decimal] = Field(default=0, ge=0, decimal_places=4)
 
 
-class PortfolioResponse(BaseModel):
-    """Portfolio summary response."""
-    id: int
-    name: str
-    description: Optional[str]
-    initial_capital: float
-    holdings: List[HoldingResponse]
-    total_value: Optional[float] = None
-    total_pnl: Optional[float] = None
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
+class TransactionResponse(BaseModel):
+    """POST /portfolio/transaction response."""
+    transaction_id: str
+    symbol: str
+    type: str
+    quantity: Decimal = Field(..., decimal_places=8)
+    price: Decimal = Field(..., decimal_places=8)
+    net_amount: Decimal = Field(..., decimal_places=2)
+    timestamp: datetime
+    portfolio_updated: bool
 
 
-class RiskMetrics(BaseModel):
-    """Portfolio risk metrics."""
-    var_95: float = Field(..., description="Value at Risk at 95% confidence")
-    var_99: float = Field(..., description="Value at Risk at 99% confidence")
-    cvar_95: float = Field(..., description="Conditional VaR (Expected Shortfall) 95%")
-    max_drawdown: float
-    sharpe_ratio: Optional[float] = None
-    sortino_ratio: Optional[float] = None
-    beta: Optional[float] = None
-    alpha: Optional[float] = None
-    correlation_matrix: Optional[Dict[str, Dict[str, float]]] = None
+# ─────────────────────────────────────────────────────────────━━
+# Portfolio Performance
+# ─────────────────────────────────────────────────────────────━━
+
+class PerformancePoint(BaseModel):
+    """Single point in performance time-series."""
+    date: datetime
+    portfolio_value: Decimal = Field(..., decimal_places=2)
+    benchmark_value: Decimal = Field(..., decimal_places=2)
+    daily_return: Decimal = Field(..., decimal_places=6)
+    benchmark_return: Decimal = Field(..., decimal_places=6)
 
 
-class OptimizeRequest(BaseModel):
-    """Portfolio optimization request."""
-    portfolio_id: int
-    method: str = Field(
-        default="max_sharpe",
-        pattern="^(max_sharpe|min_volatility|efficient_risk|hrp)$",
-    )
-    risk_free_rate: float = Field(default=0.05)
-    target_return: Optional[float] = None
+class PerformanceResponse(BaseModel):
+    """GET /portfolio/performance response."""
+    series: list[PerformancePoint]
+    start_date: datetime
+    end_date: datetime
+    total_return: Decimal = Field(..., decimal_places=4)
+    benchmark_return: Decimal = Field(..., decimal_places=4)
+    excess_return: Decimal = Field(..., decimal_places=4)
 
 
-class OptimizeResponse(BaseModel):
-    """Portfolio optimization result."""
+# ─────────────────────────────────────────────────────────────━━
+# Risk Metrics
+# ─────────────────────────────────────────────────────────────━━
+
+class RiskMetricsResponse(BaseModel):
+    """GET /portfolio/risk-metrics response."""
+    sharpe_ratio: Decimal = Field(..., decimal_places=4)
+    sortino_ratio: Decimal = Field(..., decimal_places=4)
+    beta: Decimal = Field(..., decimal_places=4)
+    alpha: Decimal = Field(..., decimal_places=4)
+    max_drawdown: Decimal = Field(..., decimal_places=4)
+    var_95: Decimal = Field(..., decimal_places=4, description="Value at Risk 95%")
+    cvar_95: Decimal = Field(..., decimal_places=4, description="Conditional VaR 95% (Expected Shortfall)")
+    treynor_ratio: Decimal = Field(..., decimal_places=4)
+    information_ratio: Decimal = Field(..., decimal_places=4)
+    calmar_ratio: Decimal = Field(..., decimal_places=4)
+    portfolio_volatility: Decimal = Field(..., gt=0, decimal_places=4)
+    benchmark_volatility: Decimal = Field(..., gt=0, decimal_places=4)
+
+
+# ─────────────────────────────────────────────────────────────━━
+# Portfolio Optimization
+# ─────────────────────────────────────────────────────────────━━
+
+class OptimizationConstraints(BaseModel):
+    """Portfolio optimization constraints."""
+    max_weight: Decimal = Field(default=Decimal("0.20"), ge=0, le=1, decimal_places=4)
+    min_weight: Decimal = Field(default=Decimal("0.0"), ge=0, le=1, decimal_places=4)
+    sector_limits: Optional[dict[str, Decimal]] = None
+    max_turnover: Optional[Decimal] = Field(None, ge=0, decimal_places=4)
+    leverage_limit: Decimal = Field(default=Decimal("1.0"), ge=1, decimal_places=2)
+
+
+class OptimizationRequest(BaseModel):
+    """POST /portfolio/optimize request body."""
+    universe: list[str] = Field(..., min_length=2, max_length=500)
+    method: str = Field(..., description="hrp|black_litterman|cvar|mean_variance")
+    constraints: Optional[OptimizationConstraints] = None
+    use_ml_views: bool = True
+
+
+class OptimizedWeight(BaseModel):
+    """Single optimized weight."""
+    symbol: str
+    weight: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+
+
+class EfficientFrontierPoint(BaseModel):
+    """Single point on efficient frontier."""
+    expected_return: Decimal = Field(..., decimal_places=4)
+    expected_volatility: Decimal = Field(..., decimal_places=4)
+    sharpe_ratio: Decimal = Field(..., decimal_places=4)
+    weights: dict[str, Decimal]
+
+
+class HRPDendrogramNode(BaseModel):
+    """Single node in HRP dendrogram."""
+    symbols: list[str]
+    left: Optional['HRPDendrogramNode'] = None
+    right: Optional['HRPDendrogramNode'] = None
+    distance: Decimal = Field(..., decimal_places=6)
+
+
+HRPDendrogramNode.model_rebuild()
+
+
+class OptimizationResponse(BaseModel):
+    """POST /portfolio/optimize response."""
     method: str
-    weights: Dict[str, float]
-    expected_return: float
-    expected_volatility: float
-    sharpe_ratio: float
+    weights: list[OptimizedWeight]
+    expected_return: Decimal = Field(..., decimal_places=4)
+    expected_volatility: Decimal = Field(..., decimal_places=4)
+    sharpe_ratio: Decimal = Field(..., decimal_places=4)
+    efficient_frontier: Optional[list[EfficientFrontierPoint]] = None
+    hrp_dendrogram: Optional[dict] = None
+    bl_posterior_returns: Optional[dict[str, Decimal]] = None
+    timestamp: datetime
