@@ -15,6 +15,7 @@ from loguru import logger
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.events import shutdown_events, startup_events
+from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, parse_rate_limit
 from app.websocket.router import router as websocket_router
 
 settings = get_settings()
@@ -48,6 +49,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SecurityHeadersMiddleware)
+if settings.RATE_LIMIT_ENABLED:
+    app.add_middleware(RateLimitMiddleware, config=parse_rate_limit(settings.DEFAULT_RATE_LIMIT))
 
 # ─── Mount API v1 ─────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)

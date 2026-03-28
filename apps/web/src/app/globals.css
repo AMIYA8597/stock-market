@@ -63,6 +63,39 @@
     --font-jetbrains: var(--font-berkeley);
   }
 
+  .light {
+    --bg-base: #f4f7fb;
+    --bg-surface: #ffffff;
+    --bg-elevated: #edf3ff;
+    --bg-overlay: #dce8ff;
+    --border-subtle: rgba(15, 23, 42, 0.12);
+    --border-muted: rgba(15, 23, 42, 0.18);
+    --border-strong: rgba(15, 23, 42, 0.25);
+    --text-primary: #0e1b33;
+    --text-secondary: #40536f;
+    --text-muted: #6f7f96;
+    --accent-cyan: #0087c9;
+    --accent-green: #0a9a55;
+    --accent-red: #cf1f45;
+    --accent-amber: #af6f00;
+    --accent-purple: #5448d3;
+    --regime-bull: rgba(10, 154, 85, 0.15);
+    --regime-bear: rgba(207, 31, 69, 0.15);
+    --regime-side: rgba(175, 111, 0, 0.13);
+    --regime-crisis: rgba(160, 22, 47, 0.17);
+
+    --nq-accent-hover: #0094da;
+    --nq-accent-muted: rgba(0, 135, 201, 0.1);
+
+    --nq-bull-muted: rgba(10, 154, 85, 0.2);
+    --nq-bull-bg: rgba(10, 154, 85, 0.08);
+
+    --nq-bear-muted: rgba(207, 31, 69, 0.2);
+    --nq-bear-bg: rgba(207, 31, 69, 0.08);
+
+    --nq-warning-muted: rgba(175, 111, 0, 0.1);
+  }
+
   * {
     border-color: var(--nq-border);
   }

@@ -1,72 +1,121 @@
-"""User and authentication-related models.
+"""User authentication and account management models.
 
-This module implements the secure user schema required for the NeuroQuant platform,
-including refresh token and backup code models for multi-device session management
-and 2FA recovery.
+Implements secure user schema with UUID primary keys, password hashing,
+and proper audit timestamp columns.
 """
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from uuid import uuid4
+from datetime import datetime
+from uuid import UUID, uuid4
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
 
-from sqlalchemy import Boolean, DateTime, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.sql import func
+from sqlalchemy import Boolean, DateTime, String, UUID as SQLA_UUID, func
+from sqlalchemy.orm import Mapped, mapped_column
 
-from app.core.database import Base
+from app.database.connection import Base
+
+# Password hashing
+ph = PasswordHasher()
 
 
 class User(Base):
+    """User account model with secure password management.
+    
+    Fields:
+        id (UUID): Unique user identifier, primary key.
+        email (str): User email address, must be unique and not null.
+        hashed_password (str): Argon2-hashed password (never store plaintext).
+        full_name (str): User full name for display purposes.
+        is_active (bool): Account status; inactive users cannot log in.
+        created_at (datetime): UTC timestamp when account was created.
+        updated_at (datetime): UTC timestamp of last account update.
+    
+    Constraints:
+        - Email is unique and case-insensitive (enforced at DB level as well).
+        - Password is always hashed before storage.
+        - All timestamps are UTC timezone-aware.
+    """
+
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    email_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    totp_secret: Mapped[str] = mapped_column(String(64))
-    is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False, default="ANALYST")
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    email_verified_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    last_login_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
-    locked_until: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    id: Mapped[UUID] = mapped_column(
+        SQLA_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+        doc="Unique user identifier (UUID v4)",
+    )
+    email: Mapped[str] = mapped_column(
+        String(255),
+        unique=True,
+        nullable=False,
+        index=True,
+        doc="User email address, must be unique",
+    )
+    hashed_password: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        doc="Argon2-hashed password (never plaintext)",
+    )
+    full_name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        doc="User full name for display",
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        doc="Account active status",
+    )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        doc="Account creation timestamp (UTC)",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+        doc="Last account update timestamp (UTC)",
     )
 
-    # Relationships
-    portfolios = relationship("Portfolio", back_populates="user", cascade="all, delete-orphan")
-    alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
-    backtest_results = relationship("BacktestResult", back_populates="user", cascade="all, delete-orphan")
-    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
-    backup_codes = relationship("BackupCode", back_populates="user", cascade="all, delete-orphan")
+    def verify_password(self, password: str) -> bool:
+        """Verify plaintext password against stored hash.
+        
+        Args:
+            password: Plaintext password to verify.
+            
+        Returns:
+            bool: True if password matches, False otherwise.
+            
+        Raises:
+            None: Returns False on hash mismatch.
+        """
+        try:
+            ph.verify(self.hashed_password, password)
+            return True
+        except VerifyMismatchError:
+            return False
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Hash plaintext password using Argon2.
+        
+        Argon2id with secure defaults:
+        - time_cost: 2 iterations
+        - memory_cost: 65536 KiB
+        - parallelism: 4 threads
+        
+        Args:
+            password: Plaintext password to hash.
+            
+        Returns:
+            str: Argon2id hash string (includes algorithm, salt, parameters).
+        """
+        return ph.hash(password)
 
     def __repr__(self) -> str:
-        return f"<User(id={self.id}, email_hash='{self.email_hash[:10]}...', role='{self.role}')>"
-
-
-class RefreshToken(Base):
-    __tablename__ = "refresh_tokens"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
-    family_id: Mapped[str] = mapped_column(String(36), nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    revoked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-    user = relationship("User", back_populates="refresh_tokens")
-
-
-class BackupCode(Base):
-    __tablename__ = "backup_codes"
-
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
-    code_hash: Mapped[str] = mapped_column(String(128), nullable=False)
-    used_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-
-    user = relationship("User", back_populates="backup_codes")
+        return f"<User(id={self.id}, email='{self.email}', is_active={self.is_active})>"

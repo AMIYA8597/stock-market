@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Dict, List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 SignalDirection = Literal["STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"]
@@ -55,6 +55,8 @@ class RegimeDetails(BaseModel):
 
 
 class SignalResponse(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+
     symbol: str
     timestamp: datetime
     ensemble: EnsembleSignal

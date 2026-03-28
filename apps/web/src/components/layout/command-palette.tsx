@@ -54,6 +54,7 @@ const PAGE_SHORTCUTS: SearchItem[] = [
   { symbol: "PAGE_RESEARCH", name: "Open Research", type: "page", route: "/research" },
   { symbol: "PAGE_BACKTEST", name: "Open Backtest Lab", type: "page", route: "/backtest-lab" },
   { symbol: "PAGE_PORTFOLIO", name: "Open Portfolio", type: "page", route: "/portfolio" },
+  { symbol: "PAGE_ORDERS", name: "Open Order History", type: "page", route: "/portfolio/orders" },
   { symbol: "PAGE_MONITOR", name: "Open Model Monitor", type: "page", route: "/model-monitor" },
   { symbol: "PAGE_ALERTS", name: "Open Alerts", type: "page", route: "/alerts" },
 ];

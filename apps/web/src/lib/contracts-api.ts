@@ -52,6 +52,26 @@ export interface PortfolioRiskMetrics {
   cvar_95: number;
 }
 
+export interface PortfolioTransactionRequest {
+  symbol: string;
+  type: "BUY" | "SELL";
+  quantity: number;
+  price: number;
+  brokerage?: number;
+  stt?: number;
+}
+
+export interface PortfolioTransactionResponse {
+  transaction_id: string;
+  symbol: string;
+  type: "BUY" | "SELL";
+  quantity: number;
+  price: number;
+  net_amount: number;
+  timestamp: string;
+  portfolio_updated: boolean;
+}
+
 export interface ModelAccuracyItem {
   model: "tft" | "hmm_garch" | "gnn" | "lstm_attn" | "xgboost" | "ensemble";
   precision: number;
@@ -289,6 +309,10 @@ export const contractsApi = {
 
   getPortfolioRiskMetrics(): Promise<PortfolioRiskMetrics> {
     return getJson<PortfolioRiskMetrics>("/portfolio/risk-metrics");
+  },
+
+  postPortfolioTransaction(payload: PortfolioTransactionRequest): Promise<PortfolioTransactionResponse> {
+    return postJson<PortfolioTransactionResponse, PortfolioTransactionRequest>("/portfolio/transaction", payload);
   },
 
   getModelAccuracy(): Promise<ModelAccuracyItem[]> {

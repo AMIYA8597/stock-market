@@ -49,14 +49,6 @@ async def get_factor_exposure(
     return intelligence_service.get_factor_exposure(symbol=symbol, window_days=window_days)
 
 
-@router.get("/signals/{symbol}", response_model=SignalResponse)
-async def get_signal(symbol: str) -> SignalResponse:
-    """Return the latest ensemble and model-level signal for a symbol."""
-    if len(symbol.strip()) < 2:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid symbol")
-    return intelligence_service.get_signal(symbol)
-
-
 @router.get("/signals/bulk", response_model=List[SignalResponse])
 async def get_bulk_signals(symbols: str = Query(..., description="Comma separated symbols, max 50")) -> List[SignalResponse]:
     """Return parallel signal snapshots for up to 50 symbols."""
@@ -66,6 +58,14 @@ async def get_bulk_signals(symbols: str = Query(..., description="Comma separate
     if len(parsed) > 50:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Maximum 50 symbols")
     return intelligence_service.get_bulk_signals(parsed)
+
+
+@router.get("/signals/{symbol}", response_model=SignalResponse)
+async def get_signal(symbol: str) -> SignalResponse:
+    """Return the latest ensemble and model-level signal for a symbol."""
+    if len(symbol.strip()) < 2:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid symbol")
+    return intelligence_service.get_signal(symbol)
 
 
 @router.get("/signals/history/{symbol}", response_model=List[SignalHistoryPoint])

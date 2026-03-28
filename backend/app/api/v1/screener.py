@@ -1,61 +1,77 @@
-"""Stock screener API endpoints."""
+"""Stock screener endpoints router (POST/GET /screener/*)."""
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from datetime import datetime, timezone
+from decimal import Decimal
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
-router = APIRouter()
+from app.core.dependencies import get_db
+from app.schemas.screener import (
+    ScreenerPreset,
+    ScreenerPresetsResponse,
+    ScreenerResult,
+    ScreenerRunRequest,
+    ScreenerRunResponse,
+)
+
+router = APIRouter(prefix="/screener", tags=["screener"])
 
 
-class ScreenerRequest(BaseModel):
-    exchange: List[str] = Field(default=["NSE"])
-    filters: Dict[str, Any] = Field(default_factory=dict)
-    sort_by: str = "sharpe_21d"
-    limit: int = Field(default=50, ge=1, le=200)
+@router.post("/run", response_model=ScreenerRunResponse)
+async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depends(get_db)) -> ScreenerRunResponse:
+    _ = db
+    max_items = min(request.limit, 20)
+    data = [
+        ScreenerResult(
+            ticker="RELIANCE.NS",
+            name="Reliance Industries",
+            exchange=request.exchange[0] if request.exchange else "NSE",
+            asset_type="EQUITY",
+            price=Decimal("2521.30000000"),
+            change_pct=Decimal("1.3600"),
+            pe_ratio=Decimal("24.1200"),
+            rsi=Decimal("58.1000"),
+            signal_direction="BUY",
+            signal_confidence=Decimal("0.7300"),
+            regime_state="bull",
+            momentum_21d=Decimal("0.0610"),
+            volume_ratio=Decimal("1.4200"),
+        ),
+        ScreenerResult(
+            ticker="TCS.NS",
+            name="Tata Consultancy Services",
+            exchange=request.exchange[0] if request.exchange else "NSE",
+            asset_type="EQUITY",
+            price=Decimal("4242.70000000"),
+            change_pct=Decimal("0.9400"),
+            pe_ratio=Decimal("27.9800"),
+            rsi=Decimal("55.8000"),
+            signal_direction="BUY",
+            signal_confidence=Decimal("0.6900"),
+            regime_state="bull",
+            momentum_21d=Decimal("0.0480"),
+            volume_ratio=Decimal("1.1900"),
+        ),
+    ][:max_items]
+
+    return ScreenerRunResponse(
+        results=data,
+        total_matched=len(data),
+        filters_applied=request.model_dump(),
+        generated_at=datetime.now(timezone.utc),
+    )
 
 
-@router.post("/run")
-async def run_screener(payload: ScreenerRequest):
-    """Run screener over selected exchange universe and return ranked list."""
-    results = [
-        {
-            "ticker": ticker,
-            "name": ticker.replace(".NS", " Ltd"),
-            "price": 1000 + (idx * 37),
-            "pe": 16 + idx * 0.3,
-            "rsi": 35 + idx * 0.6,
-            "signal": "BUY" if idx % 2 == 0 else "STRONG_BUY",
-            "sharpe_21d": 1.0 + idx * 0.02,
-        }
-        for idx, ticker in enumerate([
-            "RELIANCE.NS",
-            "TCS.NS",
-            "INFY.NS",
-            "HDFCBANK.NS",
-            "ICICIBANK.NS",
-            "LT.NS",
-        ][: payload.limit])
+@router.get("/presets", response_model=ScreenerPresetsResponse)
+async def get_screener_presets(db: AsyncSession = Depends(get_db)) -> ScreenerPresetsResponse:
+    _ = db
+    now = datetime.now(timezone.utc)
+    presets = [
+        ScreenerPreset(name="value_stocks", description="Low PE and stable trend", filters_json={"pe_ratio_max": 20, "rsi_min": 35}, created_at=now),
+        ScreenerPreset(name="momentum", description="Strong 21d momentum with volume support", filters_json={"momentum_21d_min": 0.05, "volume_ratio_min": 1.3}, created_at=now),
+        ScreenerPreset(name="regime_aligned_buys", description="BUY signals aligned with bull regime", filters_json={"signal_direction": ["BUY", "STRONG_BUY"], "regime_compatible": True}, created_at=now),
     ]
-    return {
-        "results": results,
-        "total_matched": len(results),
-        "filters_applied": payload.filters,
-        "exchange": payload.exchange,
-        "sort_by": payload.sort_by,
-    }
-
-
-@router.get("/presets")
-async def screener_presets():
-    """Return preconfigured screener presets."""
-    return [
-        {"name": "value_stocks", "description": "Low valuation high-quality basket", "filters_json": {"pe_ratio_max": 20}},
-        {"name": "momentum", "description": "High momentum and trend strength", "filters_json": {"momentum_21d_min": 0.05}},
-        {"name": "oversold_rsi", "description": "Oversold rebounds", "filters_json": {"rsi_max": 30}},
-        {"name": "breakout_candidates", "description": "Breakout setup with volume", "filters_json": {"volume_ratio_min": 1.5}},
-        {"name": "regime_aligned_buys", "description": "Signals aligned to current regime", "filters_json": {"regime_compatible": True}},
-        {"name": "vol_contraction_squeeze", "description": "Volatility squeeze breakouts", "filters_json": {"vol_squeeze": True}},
-    ]
+    return ScreenerPresetsResponse(presets=presets)

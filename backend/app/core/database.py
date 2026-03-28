@@ -1,54 +1,34 @@
+"""SQLAlchemy database configuration and session management.
+
+This module re-exports the core database components:
+- Base: ORM declarative base
+- engine: AsyncEngine for async operations
+- async_session_factory: Session factory
+- get_session: Deprecated function (use get_db from dependencies)
+
+For new code, import directly from app.database.connection or
+use app.core.dependencies.get_db() for FastAPI dependency injection.
 """
-Async SQLAlchemy engine and session factory.
 
-Uses asyncpg as the async driver for PostgreSQL + TimescaleDB.
-All database operations go through the async session dependency.
-"""
-
-from __future__ import annotations
-
-from typing import AsyncGenerator
-
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.orm import DeclarativeBase
-
-from app.core.config import get_settings
-
-settings = get_settings()
-
-engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=settings.DEBUG,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-)
-
-async_session_factory = async_sessionmaker(
+from app.database.connection import (
+    Base,
+    async_session_factory,
+    drop_db,
     engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
+    get_db_health,
+    get_db,
+    get_session,
+    init_db,
 )
 
+__all__ = [
+    "Base",
+    "engine",
+    "async_session_factory",
+    "get_db",
+    "get_session",
+    "init_db",
+    "drop_db",
+    "get_db_health",
+]
 
-class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy ORM models."""
-
-    pass
-
-
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency that yields an async database session."""
-    async with async_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
