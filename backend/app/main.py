@@ -10,12 +10,22 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from loguru import logger
+
+try:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+except ImportError:  # pragma: no cover
+    sentry_sdk = None
+    FastApiIntegration = None
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.events import shutdown_events, startup_events
 from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, parse_rate_limit
+from app.core.request_id_middleware import RequestIDMiddleware
+from app.core.structured_logging import configure_logging
 from app.websocket.router import router as websocket_router
 
 settings = get_settings()
@@ -41,14 +51,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+configure_logging(settings.ENVIRONMENT)
+
+if settings.SENTRY_DSN and sentry_sdk is not None and FastApiIntegration is not None:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=0.1,
+        environment=settings.ENVIRONMENT,
+    )
+
 # ─── CORS Middleware ───────────────────────────────────────
+app.add_middleware(RequestIDMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=settings.CORS_ALLOW_METHODS,
+    allow_headers=settings.CORS_ALLOW_HEADERS,
 )
+
+if settings.ALLOWED_HOSTS:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 app.add_middleware(SecurityHeadersMiddleware)
 if settings.RATE_LIMIT_ENABLED:

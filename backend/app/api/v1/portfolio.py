@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
     HoldingsResponse,
@@ -76,7 +77,13 @@ async def get_holdings(
             timestamp=datetime.now(timezone.utc),
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Holdings fetch failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message="Failed to fetch holdings.",
+            ).dict(),
+        ) from exc
 
 
 @router.post(
@@ -96,7 +103,13 @@ async def post_transaction(
 
         tx_type = request.type.upper()
         if tx_type not in {"BUY", "SELL"}:
-            raise HTTPException(status_code=400, detail="type must be BUY or SELL")
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="type must be BUY or SELL.",
+                ).dict(),
+            )
 
         gross = request.quantity * request.price
         brokerage = request.brokerage or Decimal("0")
@@ -116,7 +129,13 @@ async def post_transaction(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Transaction failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message="Transaction failed.",
+            ).dict(),
+        ) from exc
 
 
 @router.get(
@@ -164,7 +183,13 @@ async def get_performance(
             excess_return=(total_return - benchmark_return).quantize(Decimal("0.0001")),
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Performance fetch failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message="Failed to fetch performance data.",
+            ).dict(),
+        ) from exc
 
 
 @router.get(
@@ -195,7 +220,13 @@ async def get_risk_metrics(
             benchmark_volatility=Decimal("0.1530"),
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Risk metrics failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message="Failed to fetch risk metrics.",
+            ).dict(),
+        ) from exc
 
 
 @router.post(
@@ -215,7 +246,13 @@ async def post_optimize(
 
         universe = request.universe[:50]
         if len(universe) < 2:
-            raise HTTPException(status_code=400, detail="universe must contain at least 2 symbols")
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="universe must contain at least 2 symbols.",
+                ).dict(),
+            )
 
         per_weight = (Decimal("1") / Decimal(len(universe))).quantize(Decimal("0.0001"))
         weights = [OptimizedWeight(symbol=s, weight=per_weight) for s in universe]
@@ -247,4 +284,10 @@ async def post_optimize(
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Optimization failed: {exc}") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message="Optimization failed.",
+            ).dict(),
+        ) from exc

@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -85,12 +86,19 @@ try:
     JWT_PRIVATE_KEY, JWT_PUBLIC_KEY = _load_jwt_keys()
     JWT_ALGORITHM = settings.JWT_ALGORITHM
 except FileNotFoundError:
-    # Development/test fallback so module import does not hard-fail.
+    is_test = bool(os.getenv("PYTEST_CURRENT_TEST"))
+    if settings.is_production and not is_test:
+        raise RuntimeError(
+            "JWT RSA keys are required in production. "
+            "Set JWT_PRIVATE_KEY_PATH and JWT_PUBLIC_KEY_PATH to valid PEM files."
+        )
+
+    # Development/test fallback so local startup does not hard-fail.
     fallback_secret = settings.FIELD_ENCRYPTION_KEY or secrets.token_urlsafe(32)
     JWT_PRIVATE_KEY = fallback_secret
     JWT_PUBLIC_KEY = fallback_secret
     JWT_ALGORITHM = "HS256"
-    logger.warning("jwt_keys_missing_using_hs256_fallback")
+    logger.warning("jwt_keys_missing_using_hs256_fallback_non_production")
 
 # ─── Field Encryption (Fernet) ──────────────────────────────────────────
 _fernet_cipher: Optional[Fernet] = None

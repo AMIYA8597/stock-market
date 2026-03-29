@@ -7,10 +7,15 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from typing import Deque
+from uuid import uuid4
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse, Response
+
+from app.core.config import get_settings
+
+settings = get_settings()
 
 
 @dataclass(slots=True)
@@ -31,8 +36,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault("X-XSS-Protection", "0")
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
         response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        response.headers.setdefault("Content-Security-Policy", settings.SECURITY_CSP_POLICY)
         if request.url.scheme == "https":
-            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+            response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
         return response
 
 
@@ -49,31 +55,48 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith("/api/docs") or request.url.path.startswith("/api/openapi"):
             return await call_next(request)
 
+        is_auth_path = request.url.path.startswith(f"{settings.API_V1_PREFIX}/auth")
+        active_limit = parse_rate_limit(settings.AUTH_RATE_LIMIT) if is_auth_path else self._config
+
         client_ip = request.client.host if request.client else "unknown"
+        bucket_key = f"{'auth' if is_auth_path else 'default'}:{client_ip}"
         now = time.monotonic()
-        window_start = now - self._config.window_seconds
+        window_start = now - active_limit.window_seconds
 
         async with self._lock:
-            bucket = self._hits[client_ip]
+            bucket = self._hits[bucket_key]
             while bucket and bucket[0] < window_start:
                 bucket.popleft()
 
-            if len(bucket) >= self._config.max_requests:
-                retry_after = int(max(bucket[0] + self._config.window_seconds - now, 1))
+            if len(bucket) >= active_limit.max_requests:
+                retry_after = int(max(bucket[0] + active_limit.window_seconds - now, 1))
+                request_id = request.headers.get("X-Request-ID", f"req_{uuid4().hex[:12]}")
                 return JSONResponse(
                     status_code=429,
                     content={
-                        "detail": "Rate limit exceeded. Please retry later.",
+                        "success": False,
+                        "error": {
+                            "code": "RATE_LIMIT_EXCEEDED",
+                            "message": "Rate limit exceeded. Please retry later.",
+                            "details": [
+                                {
+                                    "field": "request",
+                                    "message": "Too many requests in the current time window.",
+                                    "code": "TOO_MANY_REQUESTS",
+                                }
+                            ],
+                        },
+                        "request_id": request_id,
                         "retry_after_seconds": retry_after,
                     },
-                    headers={"Retry-After": str(retry_after)},
+                    headers={"Retry-After": str(retry_after), "X-Request-ID": request_id},
                 )
 
             bucket.append(now)
 
         response: Response = await call_next(request)
-        response.headers["X-RateLimit-Limit"] = str(self._config.max_requests)
-        response.headers["X-RateLimit-Remaining"] = str(max(self._config.max_requests - len(self._hits[client_ip]), 0))
+        response.headers["X-RateLimit-Limit"] = str(active_limit.max_requests)
+        response.headers["X-RateLimit-Remaining"] = str(max(active_limit.max_requests - len(self._hits[bucket_key]), 0))
         return response
 
 

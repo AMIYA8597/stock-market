@@ -31,7 +31,7 @@ from app.schemas.auth import (
     UserRegister,
     UserResponse,
 )
-from app.schemas.errors import ErrorCode, ErrorResponse, ErrorDetail
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.services.email_service import enqueue_email
 
 settings = get_settings()
@@ -144,6 +144,16 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
+    if user is not None and user.locked_until and user.locked_until > datetime.now(timezone.utc):
+        remaining = (user.locked_until - datetime.now(timezone.utc)).total_seconds()
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=ErrorResponse.create(
+                code=ErrorCode.ACCOUNT_LOCKED,
+                message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
+            ).dict(),
+        )
+
     if user is None or not verify_password(payload.password, user.hashed_password):
         # Generic message prevents user enumeration
         if user is not None:
@@ -207,7 +217,13 @@ async def token_alias(payload: UserLogin, db: AsyncSession = Depends(get_db)) ->
 async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     decoded = decode_token(payload.refresh_token)
     if decoded.get("type") != "refresh":
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INVALID_TOKEN,
+                message="Invalid refresh token.",
+            ).dict(),
+        )
 
     user_id = decoded.get("sub")
     family_id = decoded.get("family")
@@ -228,12 +244,24 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
                 .where(RefreshSession.family_id == family_id)
                 .values(revoked_at=datetime.now(timezone.utc))
             )
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired or revoked")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.TOKEN_EXPIRED,
+                message="Refresh token expired or revoked.",
+            ).dict(),
+        )
 
     user_result = await db.execute(select(User).where(User.id == user_id))
     user = user_result.scalar_one_or_none()
     if user is None or not user.is_active:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User unavailable")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.AUTHENTICATION_FAILED,
+                message="User unavailable.",
+            ).dict(),
+        )
 
     token_row.revoked_at = datetime.now(timezone.utc)
     new_access = create_access_token(user_id=str(user.id), role=user.role)
@@ -259,11 +287,23 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if current_user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user context")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.UNAUTHORIZED,
+                message="Invalid user context.",
+            ).dict(),
+        )
 
     user_id = current_user.get("sub")
     if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user context")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.UNAUTHORIZED,
+                message="Invalid user context.",
+            ).dict(),
+        )
 
     await db.execute(
         RefreshSession.__table__.update()
@@ -296,13 +336,25 @@ async def me(current_user: dict | None = Depends(get_current_user_or_none), db: 
         )
 
     if current_user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid authentication credentials")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INVALID_CREDENTIALS,
+                message="Invalid authentication credentials.",
+            ).dict(),
+        )
 
     user_id = current_user.get("sub")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="User not found.",
+            ).dict(),
+        )
 
     return UserResponse(
         id=str(user.id),
@@ -354,12 +406,24 @@ async def reset_password(payload: ResetPasswordConfirm, db: AsyncSession = Depen
     )
     reset_row = result.scalar_one_or_none()
     if reset_row is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Reset token invalid or expired")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INVALID_TOKEN,
+                message="Reset token invalid or expired.",
+            ).dict(),
+        )
 
     user_result = await db.execute(select(User).where(User.id == reset_row.user_id))
     user = user_result.scalar_one_or_none()
     if user is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="User not found.",
+            ).dict(),
+        )
 
     user.hashed_password = hash_password(payload.new_password)
     reset_row.consumed_at = datetime.now(timezone.utc)

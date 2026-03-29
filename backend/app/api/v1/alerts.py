@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.screener import (
     AlertCreateRequest,
     AlertData,
@@ -57,7 +58,13 @@ async def post_alert(
     _ = current_user
     now = datetime.now(timezone.utc)
     if request.alert_type not in {"PRICE_ABOVE", "PRICE_BELOW", "RSI_OB", "MACD_CROSS", "SIGNAL_CHANGE", "REGIME_CHANGE"}:
-        raise HTTPException(status_code=400, detail="invalid alert_type")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Invalid alert type.",
+            ).dict(),
+        )
 
     return AlertData(
         id=str(uuid4()),

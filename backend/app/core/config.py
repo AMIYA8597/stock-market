@@ -155,6 +155,22 @@ class Settings(BaseSettings):
         default=["http://localhost:3000", "http://localhost:3001"],
         description="List of allowed CORS origins (comma-separated or JSON array)"
     )
+    CORS_ALLOW_METHODS: list[str] = Field(
+        default=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+        description="Allowed CORS HTTP methods"
+    )
+    CORS_ALLOW_HEADERS: list[str] = Field(
+        default=["Authorization", "Content-Type", "X-Request-ID", "Idempotency-Key", "Stripe-Signature"],
+        description="Allowed CORS headers"
+    )
+    ALLOWED_HOSTS: list[str] = Field(
+        default=["localhost", "127.0.0.1"],
+        description="Trusted hosts for Host header validation"
+    )
+    SECURITY_CSP_POLICY: str = Field(
+        default="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; font-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+        description="Content-Security-Policy header value"
+    )
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
@@ -164,6 +180,16 @@ class Settings(BaseSettings):
             if v.startswith("["):
                 return json.loads(v)
             return [origin.strip() for origin in v.split(",")]
+        return v
+
+    @field_validator("CORS_ALLOW_METHODS", "CORS_ALLOW_HEADERS", "ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def assemble_string_list(cls, v: str | list[str]) -> list[str]:
+        """Convert comma-separated string or JSON array to list."""
+        if isinstance(v, str):
+            if v.startswith("["):
+                return json.loads(v)
+            return [item.strip() for item in v.split(",") if item.strip()]
         return v
 
     @field_validator("DEBUG", mode="before")
@@ -346,8 +372,16 @@ class Settings(BaseSettings):
 
     # ─── Billing & Email Security ───────────────────────────────────────
     PAYMENT_WEBHOOK_SECRET: str = Field(
-        default="dev-webhook-secret",
+        default="",
         description="Shared secret for payment webhook signature validation"
+    )
+    PAYMENT_WEBHOOK_TOLERANCE_SECONDS: int = Field(
+        default=300,
+        description="Allowed age (seconds) for payment webhook signatures"
+    )
+    SENTRY_DSN: str = Field(
+        default="",
+        description="Sentry DSN for production error tracking"
     )
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
         default=30,
@@ -372,6 +406,10 @@ class Settings(BaseSettings):
     DEFAULT_RATE_LIMIT: str = Field(
         default="100/minute",
         description="Default rate limit (requests/time_window)"
+    )
+    AUTH_RATE_LIMIT: str = Field(
+        default="10/minute",
+        description="Rate limit specifically for authentication endpoints"
     )
     PREMIUM_RATE_LIMIT: str = Field(
         default="1000/minute",

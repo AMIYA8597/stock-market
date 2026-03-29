@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
 from app.models.payment import PaymentTransaction
+from app.schemas.errors import ErrorCode, ErrorResponse
 
 settings = get_settings()
 router = APIRouter(prefix="/payments", tags=["payments"])
@@ -27,6 +28,53 @@ _ALLOWED_METHODS = {
     "CARD": (Decimal("100.00"), Decimal("500000.00")),
     "NETBANKING": (Decimal("500.00"), Decimal("1000000.00")),
 }
+
+
+def _verify_webhook_signature(payload: bytes, signature_header: str) -> bool:
+    """Verify webhook signature using Stripe-style signed payload format.
+
+    Accepts either:
+    1) Stripe format: t=<unix>,v1=<hex>
+    2) Legacy format: raw hex digest (kept for compatibility outside production)
+    """
+    secret = settings.PAYMENT_WEBHOOK_SECRET
+    if not secret:
+        # Missing secret must fail closed in production.
+        if settings.is_production:
+            return False
+        return False
+
+    if "v1=" in signature_header and "t=" in signature_header:
+        parts = {}
+        for piece in signature_header.split(","):
+            if "=" in piece:
+                k, v = piece.split("=", 1)
+                parts[k.strip()] = v.strip()
+
+        timestamp_raw = parts.get("t")
+        signature_v1 = parts.get("v1")
+        if not timestamp_raw or not signature_v1:
+            return False
+
+        try:
+            timestamp = int(timestamp_raw)
+        except ValueError:
+            return False
+
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        if abs(now_ts - timestamp) > settings.PAYMENT_WEBHOOK_TOLERANCE_SECONDS:
+            return False
+
+        signed_payload = f"{timestamp}.{payload.decode('utf-8')}".encode("utf-8")
+        expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, signature_v1)
+
+    # Legacy fallback should not be accepted in production.
+    if settings.is_production:
+        return False
+
+    expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature_header)
 
 
 class PaymentIntentRequest(BaseModel):
@@ -45,7 +93,13 @@ def _require_idempotency_key(value: str | None) -> str:
     if _compat_test_mode() and (value is None or not value.strip()):
         return f"idem-test-{uuid4().hex}"
     if not value or not value.strip():
-        raise HTTPException(status_code=400, detail="Idempotency-Key header required")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Idempotency-Key header is required.",
+            ).dict(),
+        )
     return value.strip()
 
 
@@ -98,11 +152,23 @@ async def create_intent(
 
     method = payload.method.upper()
     if method not in _ALLOWED_METHODS:
-        raise HTTPException(status_code=400, detail="Unsupported payment method")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INVALID_PAYMENT_METHOD,
+                message="Unsupported payment method.",
+            ).dict(),
+        )
 
     min_amount, max_amount = _ALLOWED_METHODS[method]
     if payload.amount < min_amount or payload.amount > max_amount:
-        raise HTTPException(status_code=400, detail=f"Amount must be between {min_amount} and {max_amount}")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=f"Amount must be between {min_amount} and {max_amount}.",
+            ).dict(),
+        )
 
     if _compat_test_mode():
         existing = next((row for row in _TEST_INTENTS.values() if row["idempotency_key"] == idempotency), None)
@@ -194,7 +260,13 @@ async def confirm_intent(
     if _compat_test_mode():
         row = _TEST_INTENTS.get(payload.intent_id)
         if row is None:
-            raise HTTPException(status_code=404, detail="Payment intent not found")
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="Payment intent not found.",
+                ).dict(),
+            )
         row["status"] = "succeeded"
         credited_amount = Decimal(row["amount"]).quantize(Decimal("0.01"))
         next_balance = (_TEST_BALANCE.get(user_id, Decimal("0.00")) + credited_amount).quantize(Decimal("0.01"))
@@ -215,7 +287,13 @@ async def confirm_intent(
     )
     row = result.scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Payment intent not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="Payment intent not found.",
+            ).dict(),
+        )
 
     if row.status == "succeeded":
         return {
@@ -227,7 +305,13 @@ async def confirm_intent(
         }
 
     if not payload.confirmation_code.strip():
-        raise HTTPException(status_code=400, detail="confirmation_code is required")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="confirmation_code is required.",
+            ).dict(),
+        )
 
     row.status = "succeeded"
     row.confirmed_at = datetime.now(timezone.utc)
@@ -300,16 +384,32 @@ async def stripe_webhook(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     payload = await request.body()
-    if not stripe_signature:
-        raise HTTPException(status_code=400, detail="Missing Stripe-Signature header")
+    if settings.is_production and not settings.PAYMENT_WEBHOOK_SECRET:
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code=ErrorCode.SERVICE_UNAVAILABLE,
+                message="Webhook secret is not configured.",
+            ).dict(),
+        )
 
-    expected = hmac.new(
-        settings.PAYMENT_WEBHOOK_SECRET.encode("utf-8"),
-        payload,
-        hashlib.sha256,
-    ).hexdigest()
-    if not hmac.compare_digest(expected, stripe_signature):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    if not stripe_signature:
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Missing Stripe-Signature header.",
+            ).dict(),
+        )
+
+    if not _verify_webhook_signature(payload, stripe_signature):
+        raise HTTPException(
+            status_code=401,
+            detail=ErrorResponse.create(
+                code=ErrorCode.AUTHENTICATION_FAILED,
+                message="Invalid webhook signature.",
+            ).dict(),
+        )
 
     event = json.loads(payload.decode("utf-8"))
     event_id = str(event.get("id", ""))
@@ -317,7 +417,13 @@ async def stripe_webhook(
     status = str(event.get("data", {}).get("status", "")).lower()
 
     if not event_id or not intent_id:
-        raise HTTPException(status_code=400, detail="Invalid webhook payload")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Invalid webhook payload.",
+            ).dict(),
+        )
 
     duplicate = await db.execute(select(PaymentTransaction).where(PaymentTransaction.provider_event_id == event_id))
     if duplicate.scalar_one_or_none() is not None:
@@ -326,7 +432,13 @@ async def stripe_webhook(
     row_result = await db.execute(select(PaymentTransaction).where(PaymentTransaction.intent_id == intent_id))
     row = row_result.scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Unknown payment intent")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="Unknown payment intent.",
+            ).dict(),
+        )
 
     row.provider_event_id = event_id
     if status in {"succeeded", "paid"}:

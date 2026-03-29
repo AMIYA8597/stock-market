@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, get_redis
 from app.models.blog import BlogPost
+from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/blog", tags=["blog"])
 
@@ -33,7 +34,13 @@ class BlogPostUpdate(BaseModel):
 
 def _admin_only(current_user: dict) -> None:
     if current_user.get("role") != "ADMIN":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(
+            status_code=403,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INSUFFICIENT_PERMISSIONS,
+                message="Admin access is required for this operation.",
+            ).dict(),
+        )
 
 
 @router.get("/posts")
@@ -75,7 +82,13 @@ async def get_post(slug: str, db: AsyncSession = Depends(get_db)) -> dict[str, o
     result = await db.execute(select(BlogPost).where(BlogPost.slug == slug))
     row = result.scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="Post not found.",
+            ).dict(),
+        )
 
     return {
         "slug": row.slug,
@@ -97,7 +110,13 @@ async def create_post(
 
     exists = await db.execute(select(BlogPost).where(BlogPost.slug == payload.slug))
     if exists.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=409, detail="Slug already exists")
+        raise HTTPException(
+            status_code=409,
+            detail=ErrorResponse.create(
+                code=ErrorCode.ALREADY_EXISTS,
+                message="A post with this slug already exists.",
+            ).dict(),
+        )
 
     published_at = datetime.now(timezone.utc) if payload.status == "published" else None
     post = BlogPost(
@@ -126,7 +145,13 @@ async def update_post(
     result = await db.execute(select(BlogPost).where(BlogPost.slug == slug))
     post = result.scalar_one_or_none()
     if post is None:
-        raise HTTPException(status_code=404, detail="Post not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="Post not found.",
+            ).dict(),
+        )
 
     if payload.title is not None:
         post.title = payload.title

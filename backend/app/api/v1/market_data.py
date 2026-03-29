@@ -19,6 +19,7 @@ import yfinance as yf
 from app.core.database import get_db
 from app.database.redis_client import get_redis
 from fastapi import Depends
+from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter()
 
@@ -305,7 +306,13 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
         try:
             quote = await _fetch_quote_from_yfinance(symbol)
         except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"Quote source unavailable: {exc}")
+            raise HTTPException(
+                status_code=503,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.SERVICE_UNAVAILABLE,
+                    message="Quote source unavailable.",
+                ).dict(),
+            ) from exc
 
     if redis is not None:
         try:

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user, get_db
 from app.models.notification import Notification
 from app.models.user import User
+from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
@@ -50,11 +51,23 @@ async def create_notification(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     if current_user.get("role") != "ADMIN":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(
+            status_code=403,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INSUFFICIENT_PERMISSIONS,
+                message="Admin access is required for this operation.",
+            ).dict(),
+        )
 
     user_result = await db.execute(select(User).where(User.id == payload.user_id))
     if user_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Target user not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="Target user not found.",
+            ).dict(),
+        )
 
     row = Notification(
         user_id=payload.user_id,
@@ -80,7 +93,13 @@ async def mark_read(
     )
     row = result.scalar_one_or_none()
     if row is None:
-        raise HTTPException(status_code=404, detail="Notification not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="Notification not found.",
+            ).dict(),
+        )
 
     row.is_read = True
     row.read_at = datetime.now(timezone.utc)

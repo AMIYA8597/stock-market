@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.market import (
     EconomicCalendarResponse,
     EconomicEvent,
@@ -34,7 +35,13 @@ router = APIRouter(prefix="/market", tags=["market"])
 async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)) -> QuoteResponse:
     _ = db
     if not symbol.strip():
-        raise HTTPException(status_code=400, detail="symbol is required")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="symbol is required.",
+            ).dict(),
+        )
 
     return QuoteResponse(
         ticker=symbol.upper(),
