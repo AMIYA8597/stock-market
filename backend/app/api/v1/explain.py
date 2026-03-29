@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.explain import (
     AttentionResponse,
     AttentionTimestep,
@@ -77,7 +78,13 @@ async def post_counterfactual_explanation(
     _ = db
     target = request.target_direction.upper()
     if target not in {"BUY", "SELL"}:
-        raise HTTPException(status_code=400, detail="target_direction must be BUY or SELL")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="target_direction must be BUY or SELL.",
+            ).dict(),
+        )
 
     rows = []
     for _ in range(request.num_cfs):

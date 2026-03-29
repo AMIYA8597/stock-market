@@ -8,13 +8,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_current_user, get_db
 from app.models.blog import BlogPost
 from app.models.user import User
+from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _require_admin(current_user: dict) -> None:
     if current_user.get("role") != "ADMIN":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(
+            status_code=403,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INSUFFICIENT_PERMISSIONS,
+                message="Admin access is required for this operation.",
+            ).dict(),
+        )
 
 
 class AdminUserItem(BaseModel):
@@ -57,7 +64,13 @@ async def update_user_role(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=404,
+            detail=ErrorResponse.create(
+                code=ErrorCode.RESOURCE_NOT_FOUND,
+                message="User not found.",
+            ).dict(),
+        )
 
     user.role = payload.role
     return AdminUserItem(

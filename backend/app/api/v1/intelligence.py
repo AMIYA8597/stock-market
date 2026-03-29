@@ -6,6 +6,7 @@ from typing import List
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.intelligence import (
     CorrelationGraphResponse,
     CounterfactualRequest,
@@ -54,9 +55,21 @@ async def get_bulk_signals(symbols: str = Query(..., description="Comma separate
     """Return parallel signal snapshots for up to 50 symbols."""
     parsed = [item.strip().upper() for item in symbols.split(",") if item.strip()]
     if not parsed:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No symbols provided")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="At least one symbol is required.",
+            ).dict(),
+        )
     if len(parsed) > 50:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Maximum 50 symbols")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=ErrorResponse.create(
+                code=ErrorCode.UNPROCESSABLE,
+                message="A maximum of 50 symbols is allowed.",
+            ).dict(),
+        )
     return intelligence_service.get_bulk_signals(parsed)
 
 
@@ -64,7 +77,13 @@ async def get_bulk_signals(symbols: str = Query(..., description="Comma separate
 async def get_signal(symbol: str) -> SignalResponse:
     """Return the latest ensemble and model-level signal for a symbol."""
     if len(symbol.strip()) < 2:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid symbol")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="Invalid symbol.",
+            ).dict(),
+        )
     return intelligence_service.get_signal(symbol)
 
 

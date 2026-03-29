@@ -7,6 +7,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
+        primary: 'bg-[var(--ds-color-primary-400)] text-[var(--ds-text-invert)] shadow-[var(--ds-shadow-sm)] hover:translate-y-[-1px] hover:bg-[var(--ds-color-primary-300)]',
         default: 'bg-[var(--ds-color-primary-400)] text-[var(--ds-text-invert)] shadow-[var(--ds-shadow-sm)] hover:translate-y-[-1px] hover:bg-[var(--ds-color-primary-300)]',
         secondary: 'bg-[var(--ds-surface-2)] text-[var(--ds-text-primary)] border border-[var(--ds-border-subtle)] hover:bg-[var(--ds-surface-3)]',
         destructive: 'bg-[var(--ds-color-danger-500)] text-white shadow-[var(--ds-shadow-sm)] hover:translate-y-[-1px] hover:brightness-110',
@@ -43,6 +44,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
       disabled={disabled || isLoading}
+      aria-busy={isLoading ? 'true' : undefined}
       {...props}
     >
       {isLoading ? (

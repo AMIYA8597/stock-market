@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
+from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.signal import BulkSignalResponse, HistoricalSignal, SignalHistoryResponse, SignalResponse
 
 router = APIRouter(prefix="/signals", tags=["signals"])
@@ -47,7 +48,13 @@ def _build_signal(symbol: str) -> SignalResponse:
 async def get_signal(symbol: str, db: AsyncSession = Depends(get_db)) -> SignalResponse:
     _ = db
     if not symbol.strip():
-        raise HTTPException(status_code=400, detail="symbol is required")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="symbol is required.",
+            ).dict(),
+        )
     return _build_signal(symbol)
 
 
@@ -59,9 +66,21 @@ async def get_signals_bulk(
     _ = db
     parsed = [s.strip().upper() for s in symbols.split(",") if s.strip()]
     if len(parsed) == 0:
-        raise HTTPException(status_code=400, detail="at least one symbol is required")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="At least one symbol is required.",
+            ).dict(),
+        )
     if len(parsed) > 50:
-        raise HTTPException(status_code=400, detail="maximum 50 symbols allowed")
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.UNPROCESSABLE,
+                message="A maximum of 50 symbols is allowed.",
+            ).dict(),
+        )
 
     signals = [_build_signal(s) for s in parsed]
     return BulkSignalResponse(
