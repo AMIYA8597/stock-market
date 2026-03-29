@@ -160,6 +160,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= 5:
                 user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+            await db.commit()  # CRITICAL: Persist lockout state to DB
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ErrorResponse.create(
@@ -190,6 +191,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()  # Persist successful login state
 
     access_token = create_access_token(user_id=str(user.id), role=user.role)
     refresh_token = create_refresh_token(user_id=str(user.id))

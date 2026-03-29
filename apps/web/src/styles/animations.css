@@ -1,0 +1,235 @@
+@layer base {
+  /* ─── PAGE TRANSITIONS ─── */
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  /* ─── LIST ITEM STAGGERED ENTRANCE ─── */
+  @keyframes listItemFadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ─── BUTTON INTERACTIONS ─── */
+  @keyframes buttonHover {
+    from {
+      transform: scale(1);
+    }
+    to {
+      transform: scale(1.02);
+    }
+  }
+
+  @keyframes buttonActive {
+    from {
+      transform: scale(1.02);
+    }
+    to {
+      transform: scale(0.98);
+    }
+  }
+
+  /* ─── FORM INPUT INTERACTIONS ─── */
+  @keyframes shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    10%, 30%, 50%, 70%, 90% {
+      transform: translateX(-4px);
+    }
+    20%, 40%, 60%, 80% {
+      transform: translateX(4px);
+    }
+  }
+
+  /* ─── SKELETON LOADING ANIMATION ─── */
+  @keyframes skeletonShimmer {
+    0% {
+      background-position: -1000px 0;
+    }
+    100% {
+      background-position: 1000px 0;
+    }
+  }
+
+  /* ─── TOAST NOTIFICATIONS ─── */
+  @keyframes slideInRight {
+    from {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slideOutRight {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(100%);
+    }
+  }
+
+  /* ─── MODAL ANIMATIONS ─── */
+  @keyframes backdropFadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 0.5;
+    }
+  }
+
+  @keyframes modalScaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  /* ─── TOOLTIP/HOVER CARD ANIMATIONS ─── */
+  @keyframes tooltipFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ─── UTILITY CLASSES ─── */
+  .animate-fadeInUp {
+    animation: fadeInUp 300ms ease-out;
+  }
+
+  .animate-fadeOut {
+    animation: fadeOut 200ms ease-in;
+  }
+
+  .animate-listItem {
+    animation: listItemFadeInUp 400ms ease-out backwards;
+  }
+
+  .animate-shake {
+    animation: shake 400ms ease-in-out;
+  }
+
+  .animate-skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-neutral-100) 0%,
+      var(--color-neutral-200) 50%,
+      var(--color-neutral-100) 100%
+    );
+    background-size: 1000px 100%;
+    animation: skeletonShimmer 1.5s infinite;
+  }
+
+  .animate-toastEnter {
+    animation: slideInRight 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animate-toastExit {
+    animation: slideOutRight 200ms ease-in;
+  }
+
+  .animate-backdropEnter {
+    animation: backdropFadeIn 200ms ease-in;
+  }
+
+  .animate-modalEnter {
+    animation: modalScaleIn 250ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .animate-tooltipEnter {
+    animation: tooltipFadeIn 150ms ease-out;
+  }
+
+  /* ─── STAGGERED LIST ITEM DELAYS ─── */
+  .animate-listItem:nth-child(1) {
+    animation-delay: 0ms;
+  }
+  .animate-listItem:nth-child(2) {
+    animation-delay: 50ms;
+  }
+  .animate-listItem:nth-child(3) {
+    animation-delay: 100ms;
+  }
+  .animate-listItem:nth-child(4) {
+    animation-delay: 150ms;
+  }
+  .animate-listItem:nth-child(5) {
+    animation-delay: 200ms;
+  }
+  .animate-listItem:nth-child(n + 6) {
+    animation-delay: calc((n - 6) * 50ms + 250ms);
+  }
+
+  /* ─── BUTTON STATES ─── */
+  button:hover:not(:disabled) {
+    transform: scale(1.02);
+    transition: all var(--transition-fast);
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.98);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+    transition: outline var(--transition-fast);
+  }
+
+  /* ─── INPUT FOCUS ─── */
+  input:focus,
+  textarea:focus,
+  select:focus {
+    border-color: var(--color-primary);
+    transition: border-color var(--transition-normal);
+  }
+
+  /* ─── REDUCED MOTION PREFERENCES ─── */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

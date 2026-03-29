@@ -446,5 +446,6 @@ async def stripe_webhook(
         row.confirmed_at = datetime.now(timezone.utc)
     elif status in {"failed", "canceled"}:
         row.status = "failed"
-
+    
+    await db.commit()  # CRITICAL: Persist webhook event processing
     return {"status": "processed"}
