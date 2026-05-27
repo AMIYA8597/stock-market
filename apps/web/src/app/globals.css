@@ -112,7 +112,7 @@
   body {
     background-color: var(--nq-bg-primary);
     color: var(--nq-text-primary);
-    font-family: var(--font-instrument);
+    font-family: var(--font-cabinet);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }

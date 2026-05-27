@@ -133,7 +133,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   })();
 
   return (
-    <aside className="border-t border-[var(--nq-border)] bg-[var(--nq-bg-secondary)] p-3 lg:border-l lg:border-t-0">
+    <aside className="h-full overflow-y-auto border-t border-[var(--nq-border)] bg-[var(--nq-bg-secondary)] p-3 lg:border-l lg:border-t-0">
       <div className="mb-3 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-3">
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Ensemble signal</p>
         <span className={`inline-flex rounded border px-2 py-1 text-xs font-semibold ${badgeStyles[direction]}`}>

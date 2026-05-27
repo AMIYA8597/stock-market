@@ -81,7 +81,7 @@ export function AdminPanelPage(): JSX.Element {
 
   const filtered = useMemo(
     () => users.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()) || item.email.toLowerCase().includes(query.toLowerCase())),
-    [query]
+    [query, users]
   );
 
   const columns: Column<AdminUser>[] = [

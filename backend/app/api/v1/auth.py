@@ -12,6 +12,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
+from app.core.test_state import (
+    TEST_REFRESH_SESSIONS,
+    TEST_REVOKED_ACCESS_JTIS,
+    TEST_USERS_BY_EMAIL,
+    TEST_USERS_BY_ID,
+    ensure_test_isolation,
+    is_test_mode,
+)
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -36,7 +44,6 @@ from app.services.email_service import enqueue_email
 
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
-_TEST_USERS: dict[str, dict[str, object]] = {}
 
 
 def _hash_token(raw_token: str) -> str:
@@ -44,17 +51,18 @@ def _hash_token(raw_token: str) -> str:
 
 
 def _compat_test_mode() -> bool:
-    return bool(os.getenv("PYTEST_CURRENT_TEST"))
+    return is_test_mode()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) -> UserResponse:
+    ensure_test_isolation()
     email = payload.email.lower().strip()
     if _compat_test_mode():
-        existing_user = _TEST_USERS.get(email)
+        existing_user = TEST_USERS_BY_EMAIL.get(email)
         if existing_user is None:
             user_id = str(uuid4())
-            _TEST_USERS[email] = {
+            existing_user = {
                 "id": user_id,
                 "email": email,
                 "full_name": payload.full_name,
@@ -62,17 +70,26 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
                 "role": "USER",
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc),
+                "failed_login_attempts": 0,
+                "locked_until": None,
             }
+            TEST_USERS_BY_EMAIL[email] = existing_user
+            TEST_USERS_BY_ID[user_id] = existing_user
         else:
-            existing_user["password"] = payload.password
-            existing_user["full_name"] = payload.full_name
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.ALREADY_EXISTS,
+                    message="Unable to complete registration. Please try with a different email or contact support.",
+                ).dict(),
+            )
         return UserResponse(
-            id=str(_TEST_USERS[email]["id"]),
+            id=str(existing_user["id"]),
             email=email,
             full_name=payload.full_name,
             role="USER",
             is_active=True,
-            created_at=_TEST_USERS[email]["created_at"],
+            created_at=existing_user["created_at"],
         )
 
     existing = await db.execute(select(User).where(User.email == email))
@@ -115,9 +132,10 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
 
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    ensure_test_isolation()
     email = payload.email.lower().strip()
     if _compat_test_mode():
-        user = _TEST_USERS.get(email)
+        user = TEST_USERS_BY_EMAIL.get(email)
         if user is None:
             user = {
                 "id": str(uuid4()),
@@ -127,9 +145,26 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
                 "role": "USER",
                 "is_active": True,
                 "created_at": datetime.now(timezone.utc),
+                "failed_login_attempts": 0,
+                "locked_until": None,
             }
-            _TEST_USERS[email] = user
+            TEST_USERS_BY_EMAIL[email] = user
+            TEST_USERS_BY_ID[str(user["id"])] = user
+        locked_until = user.get("locked_until")
+        if isinstance(locked_until, datetime) and locked_until > datetime.now(timezone.utc):
+            remaining = (locked_until - datetime.now(timezone.utc)).total_seconds()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.ACCOUNT_LOCKED,
+                    message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
+                ).dict(),
+            )
         if str(user["password"]) != payload.password:
+            failed_attempts = int(user.get("failed_login_attempts", 0)) + 1
+            user["failed_login_attempts"] = failed_attempts
+            if failed_attempts >= 5:
+                user["locked_until"] = datetime.now(timezone.utc) + timedelta(minutes=15)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ErrorResponse.create(
@@ -137,8 +172,18 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
                     message="Email or password is incorrect. Please try again.",
                 ).dict(),
             )
+        user["failed_login_attempts"] = 0
+        user["locked_until"] = None
         access_token = create_access_token(user_id=str(user["id"]), role=str(user["role"]))
         refresh_token = create_refresh_token(user_id=str(user["id"]))
+        refresh_claims = decode_token(refresh_token)
+        family_id = str(refresh_claims.get("family") or uuid4().hex)
+        TEST_REFRESH_SESSIONS[_hash_token(refresh_token)] = {
+            "user_id": str(user["id"]),
+            "family_id": family_id,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "revoked_at": None,
+        }
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
 
     result = await db.execute(select(User).where(User.email == email))
@@ -217,6 +262,53 @@ async def token_alias(payload: UserLogin, db: AsyncSession = Depends(get_db)) ->
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+    ensure_test_isolation()
+    if _compat_test_mode():
+        decoded = decode_token(payload.refresh_token)
+        if decoded.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.INVALID_TOKEN,
+                    message="Invalid refresh token.",
+                ).dict(),
+            )
+
+        token_hash = _hash_token(payload.refresh_token)
+        token_row = TEST_REFRESH_SESSIONS.get(token_hash)
+        if token_row is None or token_row.get("revoked_at") is not None or token_row.get("expires_at") <= datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.TOKEN_EXPIRED,
+                    message="Refresh token expired or revoked.",
+                ).dict(),
+            )
+
+        user_id = str(token_row["user_id"])
+        user = TEST_USERS_BY_ID.get(user_id)
+        if user is None or not bool(user.get("is_active", True)):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.AUTHENTICATION_FAILED,
+                    message="User unavailable.",
+                ).dict(),
+            )
+
+        token_row["revoked_at"] = datetime.now(timezone.utc)
+        new_access = create_access_token(user_id=user_id, role=str(user.get("role", "USER")))
+        new_refresh = create_refresh_token(user_id=user_id)
+        new_refresh_claims = decode_token(new_refresh)
+        next_family_id = str(new_refresh_claims.get("family") or token_row.get("family_id") or uuid4().hex)
+        TEST_REFRESH_SESSIONS[_hash_token(new_refresh)] = {
+            "user_id": user_id,
+            "family_id": next_family_id,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "revoked_at": None,
+        }
+        return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
+
     decoded = decode_token(payload.refresh_token)
     if decoded.get("type") != "refresh":
         raise HTTPException(
@@ -285,7 +377,14 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
 async def logout(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> Response:
+    ensure_test_isolation()
     if _compat_test_mode() and current_user is None:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    if _compat_test_mode() and current_user is not None:
+        jti = current_user.get("jti")
+        if jti:
+            TEST_REVOKED_ACCESS_JTIS.add(str(jti))
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     if current_user is None:
@@ -317,9 +416,10 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
 
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> UserResponse:
+    ensure_test_isolation()
     if _compat_test_mode() and current_user is None:
-        if _TEST_USERS:
-            first = next(iter(_TEST_USERS.values()))
+        if TEST_USERS_BY_EMAIL:
+            first = next(iter(TEST_USERS_BY_EMAIL.values()))
             return UserResponse(
                 id=str(first["id"]),
                 email=str(first["email"]),

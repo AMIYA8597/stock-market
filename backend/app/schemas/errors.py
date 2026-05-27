@@ -219,7 +219,7 @@ class ErrorResponse(BaseModel):
     
     def dict(self, **kwargs):
         """Override dict() to match FastAPI HTTPException requirements."""
-        return super().dict(**kwargs)
+        return self.model_dump(mode="json", **kwargs)
 
 
 class SuccessResponse(BaseModel):

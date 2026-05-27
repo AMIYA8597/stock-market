@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
+import { Badge } from "@/components/ui/Badge";
+import { Card, CardHeader, CardTitle } from "@/components/dashboard/premium";
 import { contractsApi, type PortfolioOptimizeResponse } from "@/lib/contracts-api";
 import {
   ChartCard,
@@ -127,17 +129,47 @@ export default function PortfolioOptimizerPage(): JSX.Element {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.26, ease: "easeOut" }}
-      className="min-h-screen bg-[var(--nq-bg-base)] p-4 text-[var(--nq-text-primary)] sm:p-6"
+      className="min-h-screen bg-[radial-gradient(1000px_500px_at_0%_0%,rgba(0,212,245,0.12),transparent_45%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.10),transparent_45%),var(--nq-bg-base)] p-4 text-[var(--nq-text-primary)] sm:p-6"
     >
-      <h1 className="mb-4 text-2xl font-semibold">Portfolio Optimizer</h1>
+      <section className="mb-6 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+        <Card glow className="relative overflow-hidden px-6 py-6 sm:px-8">
+          <div className="absolute inset-0 bg-[radial-gradient(1000px_420px_at_0%_0%,rgba(0,212,245,0.16),transparent_45%),radial-gradient(800px_360px_at_100%_0%,rgba(139,92,246,0.14),transparent_45%)]" />
+          <div className="relative space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="bull" className="px-3 py-1.5 text-[10px] uppercase tracking-[0.16em]">Portfolio optimizer</Badge>
+              <Badge variant="outline" className="px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]">HRP · BL · CVaR · MVO</Badge>
+            </div>
+            <h1 className="text-4xl font-semibold tracking-tight text-[var(--nq-text-primary)] sm:text-5xl">Interactive allocation design with a clean risk-return frontier.</h1>
+            <p className="max-w-2xl text-sm leading-7 text-[var(--nq-text-secondary)] sm:text-base">
+              Adjust constraints, toggle ML views, and inspect the resulting weights, efficient frontier, and expected metrics in a single premium workspace.
+            </p>
+          </div>
+        </Card>
+
+        <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
+          {[
+            ["Universe", universeRaw.split(",").filter(Boolean).length.toString()],
+            ["Method", method.replace("_", " ")],
+            ["ML views", useMlViews ? "Enabled" : "Disabled"],
+          ].map(([label, value]) => (
+            <Card key={label} className="p-4">
+              <CardHeader className="mb-3">
+                <CardTitle className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">{label}</CardTitle>
+              </CardHeader>
+              <div className="text-lg font-semibold text-[var(--nq-text-primary)]">{value}</div>
+            </Card>
+          ))}
+        </div>
+      </section>
+
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[2fr_3fr]">
-        <section className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Inputs</h2>
+        <section className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.22)]">
+          <h2 className="mb-4 text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Inputs</h2>
           <div className="space-y-3 text-sm">
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--nq-text-secondary)]">Universe</span>
               <textarea
-                className="h-20 w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-base)] px-3 py-2"
+                className="h-20 w-full rounded-[1rem] border border-white/10 bg-[var(--nq-bg-base)] px-3 py-2 text-[var(--nq-text-primary)] outline-none transition focus:border-[var(--nq-accent)]"
                 value={universeRaw}
                 onChange={(event) => setUniverseRaw(event.target.value)}
               />
@@ -148,7 +180,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
                       key={symbol}
                       type="button"
                       onClick={() => setUniverseRaw((prev) => (prev.includes(symbol) ? prev : `${prev},${symbol}`))}
-                      className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2 py-0.5 text-[10px] text-[var(--nq-text-secondary)] hover:border-[var(--nq-accent-cyan)]"
+                      className="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] text-[var(--nq-text-secondary)] transition hover:border-[var(--nq-accent)] hover:text-[var(--nq-text-primary)]"
                     >
                       {symbol}
                     </button>
@@ -160,7 +192,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
             <label className="block">
               <span className="mb-1 block text-xs text-[var(--nq-text-secondary)]">Method</span>
               <select
-                className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-base)] px-3 py-2"
+                className="w-full rounded-[1rem] border border-white/10 bg-[var(--nq-bg-base)] px-3 py-2 text-[var(--nq-text-primary)] outline-none transition focus:border-[var(--nq-accent)]"
                 value={method}
                 onChange={(event) => setMethod(event.target.value as "hrp" | "black_litterman" | "cvar" | "mean_variance")}
               >
@@ -171,7 +203,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
               </select>
             </label>
 
-            <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-3 text-xs">
+            <div className="rounded-[1rem] border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 text-xs">
               <label className="mb-2 flex items-center justify-between">
                 <span className="text-[var(--nq-text-secondary)]">Max Weight</span>
                 <span>{formatPercent(maxWeight)}</span>
@@ -205,7 +237,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
             </label>
 
             <button
-              className="w-full rounded bg-[var(--nq-accent-cyan)] px-4 py-2 text-sm font-semibold text-[#061219] disabled:cursor-not-allowed disabled:opacity-70"
+              className="w-full rounded-[1rem] bg-[linear-gradient(135deg,var(--nq-accent),#69f5ff)] px-4 py-2 text-sm font-semibold text-[#061219] shadow-[0_14px_28px_rgba(0,212,245,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
               onClick={() => {
                 void handleOptimize();
               }}
@@ -220,7 +252,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
 
         <section className="space-y-4">
           <ChartCard title="Efficient Frontier" subtitle="Risk vs return points (highlight = optimized point)">
-            <div className="relative h-52 rounded bg-[rgba(255,255,255,0.03)] p-1">
+            <div className="relative h-52 rounded-[1rem] bg-[rgba(255,255,255,0.03)] p-1">
               {frontierPoints.length > 0 ? (
                 <SimpleScatterFrontier points={frontierPoints} />
               ) : (
@@ -230,49 +262,53 @@ export default function PortfolioOptimizerPage(): JSX.Element {
           </ChartCard>
 
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_1fr]">
-            <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-              <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Expected Metrics</h2>
+            <Card className="p-4">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Expected Metrics</CardTitle>
+              </CardHeader>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="rounded border border-[var(--nq-border)] p-2">
+                <div className="rounded-[1rem] border border-white/10 p-2">
                   <div className="text-[var(--nq-text-secondary)]">Expected Return</div>
                   <div className="font-semibold">{result ? formatPercent(result.expected_return) : "--"}</div>
                 </div>
-                <div className="rounded border border-[var(--nq-border)] p-2">
+                <div className="rounded-[1rem] border border-white/10 p-2">
                   <div className="text-[var(--nq-text-secondary)]">Expected Vol</div>
                   <div className="font-semibold">{result ? formatPercent(result.expected_vol) : "--"}</div>
                 </div>
-                <div className="rounded border border-[var(--nq-border)] p-2">
+                <div className="rounded-[1rem] border border-white/10 p-2">
                   <div className="text-[var(--nq-text-secondary)]">Sharpe</div>
                   <div className="font-semibold">{result ? result.sharpe_ratio.toFixed(3) : "--"}</div>
                 </div>
-                <div className="rounded border border-[var(--nq-border)] p-2">
+                <div className="rounded-[1rem] border border-white/10 p-2">
                   <div className="text-[var(--nq-text-secondary)]">Assets</div>
                   <div className="font-semibold">{weightsRows.length}</div>
                 </div>
               </div>
-            </div>
+            </Card>
 
-            <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-              <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Allocation Summary</h2>
+            <Card className="p-4">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Allocation Summary</CardTitle>
+              </CardHeader>
               <div className="grid gap-3 xl:grid-cols-[1fr_1fr]">
-                <div className="h-36 rounded bg-[rgba(255,255,255,0.03)] p-1">
+                <div className="h-36 rounded-[1rem] bg-[rgba(255,255,255,0.03)] p-1">
                   {donutSlices.length > 0 ? <SimpleDonutChart data={donutSlices} centerLabel="weights" /> : null}
                 </div>
                 <div className="space-y-2 text-xs text-[var(--nq-text-secondary)]">
                   {weightsRows.slice(0, 6).map(([ticker, weight]) => (
-                    <div key={ticker} className="flex items-center justify-between rounded border border-[var(--nq-border)] px-2 py-1">
+                    <div key={ticker} className="flex items-center justify-between rounded-[1rem] border border-white/10 px-2 py-1">
                       <span>{ticker}</span>
                       <span>{formatPercent(weight)}</span>
                     </div>
                   ))}
-                  {weightsRows.length === 0 ? <div className="rounded border border-[var(--nq-border)] px-2 py-1">No optimization response yet.</div> : null}
+                  {weightsRows.length === 0 ? <div className="rounded-[1rem] border border-white/10 px-2 py-1">No optimization response yet.</div> : null}
                 </div>
               </div>
-            </div>
+            </Card>
           </div>
 
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Weights</h2>
+          <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4">
+            <h2 className="mb-3 text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Weights</h2>
             <div className="overflow-x-auto">
               <table className="min-w-full text-xs">
                 <thead>

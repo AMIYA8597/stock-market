@@ -76,7 +76,7 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
   }, [bars]);
 
   return (
-    <section className="flex min-h-[44vh] flex-col bg-[var(--nq-bg-primary)] p-3 lg:min-h-0">
+    <section className="flex h-full min-h-0 flex-col bg-[var(--nq-bg-primary)] p-3">
       <div className="mb-3 flex items-center justify-between rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">
         <div>
           <h2 className="font-mono text-sm text-[var(--nq-text-primary)]">{signal?.symbol ?? "Select symbol"}</h2>

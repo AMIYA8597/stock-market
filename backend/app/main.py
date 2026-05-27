@@ -8,9 +8,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from loguru import logger
 
 try:
@@ -27,6 +29,7 @@ from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, 
 from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
 from app.websocket.router import router as websocket_router
+from app.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
 
 settings = get_settings()
 
@@ -78,6 +81,51 @@ if settings.ALLOWED_HOSTS:
 app.add_middleware(SecurityHeadersMiddleware)
 if settings.RATE_LIMIT_ENABLED:
     app.add_middleware(RateLimitMiddleware, config=parse_rate_limit(settings.DEFAULT_RATE_LIMIT))
+
+
+def _error_code_for_status(status_code: int) -> ErrorCode:
+    mapping = {
+        400: ErrorCode.VALIDATION_ERROR,
+        401: ErrorCode.UNAUTHORIZED,
+        403: ErrorCode.FORBIDDEN,
+        404: ErrorCode.RESOURCE_NOT_FOUND,
+        409: ErrorCode.ALREADY_EXISTS,
+        429: ErrorCode.RATE_LIMIT_EXCEEDED,
+    }
+    return mapping.get(status_code, ErrorCode.INTERNAL_SERVER_ERROR)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    details = []
+    for error in exc.errors():
+        location = error.get("loc") or []
+        field = ".".join(str(part) for part in location if part not in {"body", "query", "path", "header"}) or None
+        details.append(
+            ErrorDetail(
+                field=field,
+                message=error.get("msg", "Invalid value"),
+                code=str(error.get("type", "invalid_request")).upper(),
+            )
+        )
+
+    payload = ErrorResponse.create(
+        code=ErrorCode.VALIDATION_ERROR,
+        message="Validation failed. Please check your input.",
+        details=details,
+    ).dict()
+    return JSONResponse(status_code=400, content=payload)
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    if isinstance(exc.detail, dict) and {"success", "error", "request_id"}.issubset(exc.detail.keys()):
+        return JSONResponse(status_code=exc.status_code, content=exc.detail, headers=exc.headers)
+
+    code = _error_code_for_status(exc.status_code)
+    message = exc.detail if isinstance(exc.detail, str) else "Request failed."
+    payload = ErrorResponse.create(code=code, message=message).dict()
+    return JSONResponse(status_code=exc.status_code, content=payload, headers=exc.headers)
 
 # ─── Mount API v1 ─────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)

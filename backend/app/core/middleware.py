@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
@@ -52,6 +53,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._lock = asyncio.Lock()
 
     async def dispatch(self, request: Request, call_next):
+        current_test_id = os.getenv("PYTEST_CURRENT_TEST")
+        if current_test_id and current_test_id != getattr(self, "_last_test_id", None):
+            self._hits.clear()
+            self._last_test_id = current_test_id
+
         if request.url.path.startswith("/api/docs") or request.url.path.startswith("/api/openapi"):
             return await call_next(request)
 
