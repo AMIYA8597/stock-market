@@ -19,13 +19,20 @@ export default function TerminalPage(): JSX.Element {
         </div>
       ) : null}
 
-      <Watchlist
-        signals={watchlistSignals}
-        selectedSymbol={selectedSymbol}
-        onSelectSymbol={setSelectedSymbol}
-      />
-      <ChartSection signal={selectedSignal} />
-      <SignalPanel signal={selectedSignal} />
+      <div className="grid h-[calc(100vh-48px)] grid-cols-[280px_1fr_320px] grid-rows-1 overflow-hidden lg:grid-rows-1">
+        <div className="overflow-hidden border-r border-[var(--nq-border)] bg-[var(--nq-bg-secondary)]">
+          <Watchlist signals={watchlistSignals} selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} />
+        </div>
+
+        <div className="overflow-hidden border-r border-[var(--nq-border)] bg-[var(--nq-bg-base)]">
+          <ChartSection signal={selectedSignal} />
+        </div>
+
+        <div className="overflow-hidden bg-[var(--nq-bg-secondary)]">
+          <SignalPanel signal={selectedSignal} />
+        </div>
+      </div>
+
 
       {loading && watchlistSignals.length === 0 ? (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-[rgba(7,9,15,0.45)]">

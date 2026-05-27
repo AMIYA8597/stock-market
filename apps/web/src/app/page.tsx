@@ -1,10 +1,5 @@
-import { PublicLayout } from '@/layouts/PublicLayout';
-import { LandingPage } from '@/modules/public/LandingPage';
+import { redirect } from "next/navigation";
 
-export default function RootPage(): JSX.Element {
-  return (
-    <PublicLayout>
-      <LandingPage />
-    </PublicLayout>
-  );
+export default function RootPage(): null {
+  redirect("/terminal");
 }

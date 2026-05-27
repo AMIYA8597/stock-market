@@ -1542,3 +1542,41 @@ ALWAYS:
 
 
 
+
+
+
+
+Fully rebuild and optimize the stock market platform frontend based on new-prompt.txt. Fix all UI, responsiveness, routing, TypeScript, scalability, layout, chart, component, and performance issues. Generate a clean Bloomberg-style fintech UI using Next.js, React, TypeScript, Tailwind CSS, Shadcn UI, Zustand, React Query, TradingView Charts, D3, and Recharts with reusable scalable architecture, dark theme, responsive layouts, reusable components, proper state management, optimized performance, and locally runnable error-free production-grade code.
+
+
+
+
+
+
+
+
+
+Read the complete `new-prompt.txt` file carefully, especially the frontend UI/UX, architecture, trading terminal, dashboard layouts, charts, research pages, portfolio pages, backtesting pages, component system, design tokens, responsiveness, scalability, and infrastructure sections. Then fully rebuild and optimize the entire stock market platform frontend based on the provided architecture.
+
+Fix all existing issues including broken imports, routing issues, TypeScript errors, build failures, responsiveness problems, scalability issues, inconsistent styling, state management issues, chart rendering issues, layout problems, performance bottlenecks, and component architecture problems.
+
+Generate a complete production-grade frontend using Next.js App Router, React, TypeScript, Tailwind CSS, Shadcn UI, Zustand, React Query, TradingView Lightweight Charts, D3.js, and Recharts.
+
+Ensure:
+
+* fully responsive and scalable UI
+* modern Bloomberg/fintech-style design
+* proper dark theme and color system
+* reusable enterprise-grade components
+* clean folder architecture
+* reusable chart system
+* optimized rendering and performance
+* proper loading states and error boundaries
+* reusable tables, cards, modals, panels, and layouts
+* fully connected pages and components
+* locally runnable project without errors
+* no missing files/imports/routes
+* proper API layer and hooks
+* clean code and scalable architecture
+
+Generate all required pages, layouts, charts, components, hooks, stores, utilities, configs, and setup files completely without skipping anything important.

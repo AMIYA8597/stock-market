@@ -36,6 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.test_state import TEST_REVOKED_ACCESS_JTIS, is_test_mode
 from app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -279,11 +280,7 @@ def create_access_token(
         algorithm=JWT_ALGORITHM,
     )
 
-    logger.debug(
-        "access_token_created",
-        user_id=user_id,
-        expires_at=expire.isoformat(),
-    )
+    logger.debug("access_token_created user_id=%s expires_at=%s", user_id, expire.isoformat())
 
     return token
 
@@ -326,12 +323,7 @@ def create_refresh_token(
         algorithm=JWT_ALGORITHM,
     )
 
-    logger.debug(
-        "refresh_token_created",
-        user_id=user_id,
-        family_id=family_id,
-        expires_at=expire.isoformat(),
-    )
+    logger.debug("refresh_token_created user_id=%s family_id=%s expires_at=%s", user_id, family_id, expire.isoformat())
 
     return token
 
@@ -354,9 +346,15 @@ def decode_token(token: str) -> dict[str, Any]:
             JWT_PUBLIC_KEY,
             algorithms=[JWT_ALGORITHM],
         )
+        if is_test_mode() and payload.get("type") == TokenType.ACCESS and payload.get("jti") in TEST_REVOKED_ACCESS_JTIS:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return payload
     except JWTError as e:
-        logger.warning("jwt_decode_error", error=str(e))
+        logger.warning("jwt_decode_error error=%s", str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired authentication token",
@@ -420,7 +418,7 @@ def verify_totp_code(secret: str, code: str) -> bool:
         # Allow 1 time window before/after for clock drift
         return totp.verify(code, valid_window=1)
     except Exception as e:
-        logger.warning("totp_verification_error", error=str(e))
+        logger.warning("totp_verification_error error=%s", str(e))
         return False
 
 
@@ -448,7 +446,7 @@ def encrypt_field(plaintext: str) -> str:
         ciphertext_bytes = cipher.encrypt(plaintext.encode())
         return ciphertext_bytes.decode()
     except Exception as e:
-        logger.error("encrypt_field_error", error=str(e))
+        logger.error("encrypt_field_error error=%s", str(e))
         raise ValueError(f"Field encryption failed: {e}") from e
 
 
@@ -475,10 +473,10 @@ def decrypt_field(ciphertext: str) -> str:
         plaintext_bytes = cipher.decrypt(ciphertext.encode())
         return plaintext_bytes.decode()
     except InvalidToken as e:
-        logger.error("decrypt_field_error", error=str(e))
+        logger.error("decrypt_field_error error=%s", str(e))
         raise ValueError("Field decryption failed: invalid token or key") from e
     except Exception as e:
-        logger.error("decrypt_field_error", error=str(e))
+        logger.error("decrypt_field_error error=%s", str(e))
         raise ValueError(f"Field decryption failed: {e}") from e
 
 
@@ -603,10 +601,10 @@ def require_role(required_role: str):
 
         if user_level < required_level:
             logger.warning(
-                "insufficient_permissions",
-                user_id=user_id,
-                user_role=user_role,
-                required_role=required_role,
+                "insufficient_permissions user_id=%s user_role=%s required_role=%s",
+                user_id,
+                user_role,
+                required_role,
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

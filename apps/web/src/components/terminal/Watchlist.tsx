@@ -26,7 +26,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
   }, [signals, tab]);
 
   return (
-    <aside className="max-h-[30vh] overflow-hidden border-b border-[var(--nq-border)] bg-[var(--nq-bg-secondary)] p-2 sm:p-3 lg:max-h-none lg:border-b-0 lg:border-r">
+    <aside className="h-full overflow-hidden border-b border-[var(--nq-border)] bg-[var(--nq-bg-secondary)] p-2 sm:p-3 lg:max-h-none lg:border-b-0 lg:border-r">
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-[10px] uppercase tracking-[0.12em] text-[var(--nq-text-secondary)] sm:text-xs">Watchlist</h2>
         <span className="text-[10px] text-[var(--nq-text-secondary)] sm:text-xs">{signals.length} assets</span>
@@ -50,6 +50,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
       </div>
 
       <div className="mb-1.5 flex gap-1.5 overflow-x-auto pb-1 lg:hidden">
+        {/* Mobile-only quick watchlist strip */}
         {visibleSignals.map((item) => {
           const selected = item.symbol === selectedSymbol;
           const regimeDotColor =
