@@ -21,15 +21,11 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker images
+      - name: Build and push backend image
         run: |
           docker build -t neuroquant-backend backend/
           docker tag neuroquant-backend:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-backend:latest
           docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-backend:latest
-
-          docker build -t neuroquant-gateway services/gateway/
-          docker tag neuroquant-gateway:latest ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-gateway:latest
-          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/neuroquant-gateway:latest
 
       - name: Deploy to ECS
         run: |

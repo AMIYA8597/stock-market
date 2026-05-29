@@ -53,25 +53,10 @@ echo "🐍 Installing Python dependencies..."
 python3 -m venv venv
 source venv/bin/activate
 
-# Install backend dependencies
-echo "  → Backend gateway service..."
+# Install the backend stack used by this repository layout
+echo "  → Backend service..."
 pip install --upgrade pip setuptools wheel
-pip install -r services/gateway/requirements.txt
-
-echo "  → ML engine service..."
-pip install -r services/ml-engine/requirements.txt
-
-echo "  → Data pipeline service..."
-pip install -r services/data-pipeline/requirements.txt
-
-echo "  → Risk engine service..."
-pip install -r services/risk-engine/requirements.txt
-
-echo "  → Backtesting service..."
-pip install -r services/backtesting/requirements.txt
-
-echo "  → Alert service..."
-pip install -r services/alert-service/requirements.txt
+pip install -r backend/requirements.txt
 
 # Install frontend dependencies
 echo "📦 Installing Node dependencies with pnpm..."
