@@ -1,0 +1,41 @@
+.terminal-root {
+  min-width: var(--desktop-min-width);
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg-base);
+  color: var(--text-primary);
+}
+
+.terminal-grid {
+  display: grid;
+  grid-template-columns: var(--terminal-sidebar-width) minmax(0, 1fr) var(--terminal-signal-width);
+  grid-template-rows: var(--terminal-topbar-height) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-topbar {
+  grid-column: 1 / span 3;
+  height: var(--terminal-topbar-height);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+}
+
+.terminal-pane {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal-pane--left,
+.terminal-pane--center {
+  border-right: 1px solid var(--border-subtle);
+}
+
+.terminal-pane--left,
+.terminal-pane--right {
+  background: var(--bg-surface);
+}
+
+.terminal-pane--center {
+  background: var(--bg-base);
+}

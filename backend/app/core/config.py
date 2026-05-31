@@ -69,6 +69,10 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://neuroquant:changeme@localhost:5432/neuroquant_db",
         description="Async PostgreSQL database URL (asyncpg driver)"
     )
+    SYNC_DATABASE_URL: str = Field(
+        default="",
+        description="Sync database URL (for Alembic migrations)"
+    )
     DATABASE_POOL_SIZE: int = Field(
         default=20,
         description="SQLAlchemy connection pool size"
@@ -440,6 +444,23 @@ class Settings(BaseSettings):
     def model_checkpoint_path(self) -> Path:
         """Get Path object for model checkpoint directory."""
         return Path(self.MODEL_CHECKPOINT_DIR)
+
+    @property
+    def DATABASE_URL_SYNC(self) -> str:
+        """Get sync database URL for Alembic migrations.
+        
+        Returns the SYNC_DATABASE_URL if set. Otherwise, dynamically converts 
+        DATABASE_URL to its synchronous equivalent.
+        """
+        if self.SYNC_DATABASE_URL:
+            return self.SYNC_DATABASE_URL
+        
+        url = self.DATABASE_URL
+        if url.startswith("postgresql+asyncpg://"):
+            return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+        if url.startswith("sqlite+aiosqlite://"):
+            return url.replace("sqlite+aiosqlite://", "sqlite://")
+        return url
 
 
 # ─── Singleton Getter ──────────────────────────────────────────────────────

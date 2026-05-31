@@ -6,13 +6,15 @@
 @import "@fontsource/space-mono/400.css";
 @import "@fontsource/space-mono/700.css";
 @import "../styles/tokens.css";
+@import "../styles/terminal.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    /* Prompt-aligned core design tokens */
+    color-scheme: dark;
+    /* Core Bloomberg-style design tokens from new-prompt.txt */
     --bg-base: #07090F;
     --bg-surface: #0C1018;
     --bg-elevated: #111926;
@@ -32,6 +34,13 @@
     --regime-bear: rgba(255,59,92,0.15);
     --regime-side: rgba(255,184,0,0.12);
     --regime-crisis: rgba(220,38,38,0.20);
+    /* Terminal layout primitives */
+    --terminal-topbar-height: 48px;
+    --terminal-sidebar-width: 280px;
+    --terminal-signal-width: 320px;
+    --desktop-min-width: 1280px;
+    --layout-base-unit: 8px;
+    --layout-gutter: 16px;
 
     /* Backward-compatible aliases used in existing components */
     --nq-bg-base: var(--bg-base);
@@ -47,6 +56,10 @@
 
     --nq-accent: var(--accent-cyan);
     --nq-accent-cyan: var(--accent-cyan);
+    --nq-accent-green: var(--accent-green);
+    --nq-accent-red: var(--accent-red);
+    --nq-accent-amber: var(--accent-amber);
+    --nq-accent-purple: var(--accent-purple);
     --nq-accent-hover: #33DDFF;
     --nq-accent-muted: rgba(0, 212, 245, 0.1);
 
@@ -64,15 +77,21 @@
     --nq-text-primary: var(--text-primary);
     --nq-text-secondary: var(--text-secondary);
     --nq-text-tertiary: var(--text-muted);
+    --nq-regime-bull: var(--regime-bull);
+    --nq-regime-bear: var(--regime-bear);
+    --nq-regime-side: var(--regime-side);
+    --nq-regime-crisis: var(--regime-crisis);
 
     /* Font vars (set by next/font) */
     --font-instrument: 'Instrument Sans', system-ui, sans-serif;
     --font-cabinet: 'Cabinet Grotesk', 'Manrope', system-ui, sans-serif;
     --font-berkeley: 'Berkeley Mono', 'Space Mono', 'JetBrains Mono', monospace;
+    --font-clash-display: var(--font-cabinet);
     --font-jetbrains: var(--font-berkeley);
   }
 
   .light {
+    color-scheme: light;
     --bg-base: #f4f7fb;
     --bg-surface: #ffffff;
     --bg-elevated: #edf3ff;

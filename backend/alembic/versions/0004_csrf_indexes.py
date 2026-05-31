@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic
 revision = "0004"
-down_revision = "0003_auth_billing_content_notifications"
+down_revision = "003_auth_billing_content_notifications"
 branch_labels = None
 depends_on = None
 
@@ -89,7 +89,7 @@ def upgrade() -> None:
     
     # Alert queries
     op.create_index("ix_alerts_user_id", "alerts", ["user_id"], if_not_exists=True)
-    op.create_index("ix_alerts_symbol", "alerts", ["symbol"], if_not_exists=True)
+    op.create_index("ix_alerts_symbol_id", "alerts", ["symbol_id"], if_not_exists=True)
     op.create_index("ix_alerts_alert_type", "alerts", ["alert_type"], if_not_exists=True)
 
 
@@ -122,7 +122,7 @@ def downgrade() -> None:
         ("ix_blog_posts_status", "blog_posts"),
         ("ix_blog_posts_published_at", "blog_posts"),
         ("ix_alerts_user_id", "alerts"),
-        ("ix_alerts_symbol", "alerts"),
+        ("ix_alerts_symbol_id", "alerts"),
         ("ix_alerts_alert_type", "alerts"),
     ]
     

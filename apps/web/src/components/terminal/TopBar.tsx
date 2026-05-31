@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Moon, Search, Settings2, Sun } from "lucide-react";
 
 import { contractsApi, type PortfolioHoldingsResponse } from "@/lib/contracts-api";
 import { useUIStore } from "@/stores/ui-store";
@@ -14,7 +13,11 @@ interface TopBarProps {
   signalStreamStatus: "connected" | "reconnecting" | "disconnected";
 }
 
-export default function TopBar({ selectedSignal, refreshing, signalStreamStatus }: TopBarProps): JSX.Element {
+export default function TopBar({
+  selectedSignal,
+  refreshing,
+  signalStreamStatus,
+}: TopBarProps): JSX.Element {
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
   const [clock, setClock] = useState<string>(new Date().toLocaleTimeString());
   const [query, setQuery] = useState<string>("");
@@ -70,17 +73,28 @@ export default function TopBar({ selectedSignal, refreshing, signalStreamStatus 
 
   const regime = selectedSignal?.regime.state ?? "SIDEWAYS";
   const direction = selectedSignal?.ensemble.direction ?? "NEUTRAL";
-  const regimeColor = regime === "BULL" ? "bg-[rgba(0,230,118,0.15)] text-[#00E676]" : regime === "BEAR" ? "bg-[rgba(255,59,92,0.15)] text-[#FF3B5C]" : regime === "CRISIS" ? "bg-[rgba(220,38,38,0.20)] text-[#FF6B6B]" : "bg-[rgba(255,184,0,0.12)] text-[#FFB800]";
-  const pnlColor = direction.includes("BUY") ? "text-[#00E676]" : direction.includes("SELL") ? "text-[#FF3B5C]" : "text-[#FFB800]";
-  const navItems = [
-    { href: "/markets", label: "Markets" },
-    { href: "/research", label: "Research" },
-    { href: "/backtest-lab", label: "Backtest" },
-    { href: "/portfolio", label: "Portfolio" },
-    { href: "/portfolio/orders", label: "Orders" },
-    { href: "/screener", label: "Screener" },
-    { href: "/alerts", label: "Alerts" },
-  ];
+
+  const regimeClassName =
+    regime === "BULL"
+      ? "bg-[var(--regime-bull)] text-[var(--accent-green)]"
+      : regime === "BEAR"
+        ? "bg-[var(--regime-bear)] text-[var(--accent-red)]"
+        : regime === "CRISIS"
+          ? "bg-[var(--regime-crisis)] text-[var(--accent-red)]"
+          : "bg-[var(--regime-side)] text-[var(--accent-amber)]";
+
+  const streamClassName =
+    signalStreamStatus === "connected"
+      ? "bg-[var(--accent-green)]"
+      : signalStreamStatus === "reconnecting"
+        ? "bg-[var(--accent-amber)] animate-pulse"
+        : "bg-[var(--accent-red)]";
+
+  const pnlColorClassName = direction.includes("BUY")
+    ? "text-[var(--accent-green)]"
+    : direction.includes("SELL")
+      ? "text-[var(--accent-red)]"
+      : "text-[var(--accent-amber)]";
 
   const { equityValue, unrealizedPnl } = useMemo(() => {
     const holdings = portfolio?.holdings ?? [];
@@ -92,77 +106,74 @@ export default function TopBar({ selectedSignal, refreshing, signalStreamStatus 
   }, [portfolio]);
 
   return (
-    <header className="col-span-1 border-b border-[var(--nq-border)] bg-[linear-gradient(90deg,rgba(10,16,26,0.98),rgba(10,13,20,0.92))] px-3 py-2 sm:px-4 lg:col-span-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <span className="rounded bg-[rgba(0,212,255,0.12)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--nq-accent-cyan)]">
-            NQ
-          </span>
-          <span className="text-sm font-semibold tracking-wide text-[var(--nq-text-primary)] sm:text-base">Trading Terminal</span>
-          <span className="hidden rounded border border-[var(--nq-border)] px-2 py-0.5 text-[10px] text-[var(--nq-text-secondary)] md:inline">
-            {clock}
-          </span>
-          <span className={`rounded-full border border-[var(--nq-border-hover)] px-2 py-0.5 text-[10px] sm:text-xs ${regimeColor}`}>
-            Regime {regime}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2 text-[10px] sm:gap-3 sm:text-xs">
-          <span className="hidden font-mono text-[var(--nq-text-secondary)] md:inline">
-            Equity INR {equityValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-          </span>
-          <span className={`rounded border border-current px-1.5 py-0.5 font-mono ${unrealizedPnl >= 0 ? "text-[#00E676]" : "text-[#FF3B5C]"}`}>
-            Unrealized {unrealizedPnl >= 0 ? "+" : ""}{unrealizedPnl.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-          </span>
-          <span className={`hidden rounded border border-current px-1.5 py-0.5 font-mono sm:inline ${pnlColor}`}>Signal {direction}</span>
-        </div>
+    <header className="flex h-[var(--terminal-topbar-height)] items-center gap-2 px-3 text-xs terminal:px-4">
+      <div className="flex min-w-[220px] items-center gap-2 terminal:min-w-[260px]">
+        <span className="rounded bg-[rgba(0,212,245,0.16)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-cyan)]">
+          NQ
+        </span>
+        <span className="font-display text-sm font-semibold tracking-[0.01em] text-[var(--text-primary)]">
+          NeuroQuant Terminal
+        </span>
+        <span className={`hidden rounded-full px-2 py-0.5 text-[10px] font-medium terminal:inline-flex ${regimeClassName}`}>
+          {regime}
+        </span>
       </div>
 
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <div className="hidden flex-1 items-center gap-2 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 lg:flex">
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search symbols, research views, and macro events"
-            className="w-full bg-transparent text-xs text-[var(--nq-text-primary)] outline-none placeholder:text-[var(--nq-text-secondary)]"
-          />
-          <span className="rounded border border-[var(--nq-border)] px-1.5 py-0.5 text-[10px] text-[var(--nq-text-secondary)]">Ctrl+K</span>
+      <div className="hidden min-w-0 flex-1 items-center gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1 terminal:flex">
+        <Search className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search symbols, research, macro events"
+          className="w-full bg-transparent text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+        />
+        <span className="rounded border border-[var(--border-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-secondary)]">
+          Ctrl+K
+        </span>
+      </div>
+
+      <div className="ml-auto flex min-w-[220px] items-center justify-end gap-2 terminal:min-w-[300px]">
+        <div className="hidden text-right terminal:block">
+          <div className="font-mono text-[11px] text-[var(--text-primary)]">
+            ₹{equityValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+          </div>
+          <div className={`font-mono text-[10px] ${unrealizedPnl >= 0 ? "text-[var(--accent-green)]" : "text-[var(--accent-red)]"}`}>
+            {unrealizedPnl >= 0 ? "+" : ""}
+            {unrealizedPnl.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+          </div>
         </div>
-        <div className="flex w-full items-center justify-between gap-2 lg:w-auto">
-          <button
-            type="button"
-            onClick={toggleThemeMode}
-            className="inline-flex items-center gap-1 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] transition hover:border-[var(--nq-border-hover)] sm:text-xs"
-            title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {themeMode === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            {themeMode === "dark" ? "Light" : "Dark"}
-          </button>
-          <span className="hidden items-center gap-1 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] sm:inline-flex">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                signalStreamStatus === "connected"
-                  ? "bg-[#00E676]"
-                  : signalStreamStatus === "reconnecting"
-                    ? "bg-[#FFB800] animate-pulse"
-                    : "bg-[#FF3B5C]"
-              }`}
-            />
-            {refreshing ? "Syncing" : `Signals ${signalStreamStatus}`}
-          </span>
-          <nav className="flex w-full items-center gap-1 overflow-x-auto pb-0.5 lg:w-auto lg:pb-0">
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="whitespace-nowrap rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] transition hover:border-[var(--nq-border-hover)] hover:text-[var(--nq-text-primary)] sm:text-xs"
-            >
-              {item.label}
-            </Link>
-          ))}
-          </nav>
-        </div>
+
+        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex">
+          <span className={`h-1.5 w-1.5 rounded-full ${streamClassName}`} />
+          {refreshing ? "Syncing" : signalStreamStatus}
+        </span>
+
+        <span className={`hidden rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 font-mono text-[10px] terminal:inline-flex ${pnlColorClassName}`}>
+          {direction}
+        </span>
+
+        <button
+          type="button"
+          onClick={toggleThemeMode}
+          className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] transition hover:border-[var(--border-muted)]"
+          title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {themeMode === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          {themeMode === "dark" ? "Light" : "Dark"}
+        </button>
+
+        <button
+          type="button"
+          className="inline-flex items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)]"
+          aria-label="Terminal settings"
+        >
+          <Settings2 className="h-3.5 w-3.5" />
+        </button>
+
+        <span className="hidden rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 font-mono text-[10px] text-[var(--text-secondary)] xl:inline-flex">
+          {clock}
+        </span>
       </div>
     </header>
   );

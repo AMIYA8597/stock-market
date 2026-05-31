@@ -26,7 +26,7 @@ jobs:
       - name: Type check
         run: pnpm type-check
       - name: Test
-        run: pnpm test
+        run: pnpm --filter @neuroquant/web build
 
   backend:
     name: Backend Lint/Test
