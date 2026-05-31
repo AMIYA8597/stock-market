@@ -15,6 +15,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    is_sqlite = bind.dialect.name == "sqlite"
+
+    if is_sqlite:
+        op.execute("CREATE INDEX IF NOT EXISTS ix_ohlcv_symbol_time_desc ON ohlcv (symbol_id, time DESC)")
+        return
+
     op.execute("SELECT create_hypertable('ohlcv', 'time', chunk_time_interval => INTERVAL '7 days', if_not_exists => TRUE)")
     op.execute("CREATE INDEX IF NOT EXISTS ix_ohlcv_symbol_time_desc ON ohlcv (symbol_id, time DESC)")
 
@@ -40,5 +47,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    bind = op.get_bind()
+    is_sqlite = bind.dialect.name == "sqlite"
+
+    if is_sqlite:
+        op.execute("DROP INDEX IF EXISTS ix_ohlcv_symbol_time_desc")
+        return
+
     op.execute("DROP MATERIALIZED VIEW IF EXISTS ohlcv_1h")
     op.execute("DROP INDEX IF EXISTS ix_ohlcv_symbol_time_desc")

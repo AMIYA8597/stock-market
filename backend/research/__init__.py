@@ -1,5 +1,4 @@
 """Research package for model, backtest, and explainability algorithms."""
 
-from research import backtesting, explainability, feature_engineering, models, portfolio
-
+# Submodules are loaded lazily when explicitly imported.
 __all__ = ["backtesting", "explainability", "feature_engineering", "models", "portfolio"]

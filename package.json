@@ -15,7 +15,7 @@
     "dev":          "turbo run dev --parallel",
     "lint":         "turbo run lint",
     "type-check":   "turbo run type-check",
-    "test:full":    "pnpm --filter @neuroquant/web build && cd backend && python -m pip install --upgrade pip setuptools wheel && python -m pip install pytest aiosqlite && python -m pytest -q",
+    "test:full":    "pnpm --filter @neuroquant/web build && cd backend && python -m pip install --upgrade pip setuptools wheel && python -m pip install -r requirements-core.txt && python -m pytest -q",
     "test":         "pnpm run test:full",
     "test:e2e":     "turbo run test:e2e",
     "clean":        "turbo run clean && rm -rf node_modules",
