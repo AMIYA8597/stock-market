@@ -73,6 +73,10 @@ class Settings(BaseSettings):
         default="",
         description="Sync database URL (for Alembic migrations)"
     )
+    MONGODB_URL: str = Field(
+        default="",
+        description="MongoDB connection URL"
+    )
     DATABASE_POOL_SIZE: int = Field(
         default=20,
         description="SQLAlchemy connection pool size"

@@ -359,11 +359,11 @@ async function postJson<TResponse, TBody>(path: string, body: TBody): Promise<TR
 
 export const contractsApi = {
   getIndices(): Promise<MarketIndex[]> {
-    return getJson<{ indices: MarketIndex[] }>("/market/indices").then((data) => data.indices);
+    return getJson<MarketIndex[]>("/market/indices");
   },
 
   getMovers(exchange: "NSE" | "NYSE" | "CRYPTO" = "NSE", type: "gainers" | "losers" | "volume" | "momentum" = "momentum"): Promise<MarketMover[]> {
-    return getJson<{ assets: MarketMover[] }>(`/market/movers?exchange=${exchange}&type=${type}`).then((data) => data.assets);
+    return getJson<MarketMover[]>(`/market/movers?exchange=${exchange}&type=${type}`);
   },
 
   getPortfolioHoldings(): Promise<PortfolioHoldingsResponse> {
