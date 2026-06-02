@@ -24,6 +24,6 @@ export const intelligenceApi = {
       method: "GET",
       cache: "no-store",
     });
-    return parseJson<SignalResponse[]>(response);
+    return parseJson<{ signals: SignalResponse[] }>(response).then((data) => data.signals);
   },
 };

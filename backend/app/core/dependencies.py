@@ -22,11 +22,12 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.logging import get_logger
 from app.database.connection import async_session_factory
 from app.core.security import decode_token, oauth2_scheme
 from app.database.redis_client import _redis_pool_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 oauth2_scheme_optional = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_PREFIX}/auth/login",

@@ -14,16 +14,16 @@ application initialization and graceful shutdown.
 from __future__ import annotations
 
 import asyncio
-import logging
 from contextlib import suppress
 from typing import Any
 
 from sqlalchemy import text
 
 from app.core.config import get_settings
+from app.core.logging import get_logger
 from app.database.redis_client import _redis_pool_singleton
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 
@@ -53,6 +53,7 @@ async def startup_events() -> dict[str, Any]:
         # }
     """
     services: dict[str, Any] = {}
+    redis_client = None
     
     logger.info("startup_begin")
 

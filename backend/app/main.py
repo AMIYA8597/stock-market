@@ -54,6 +54,8 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+from app.core.logging import setup_logging
+setup_logging()
 configure_logging(settings.ENVIRONMENT)
 
 if settings.SENTRY_DSN and sentry_sdk is not None and FastApiIntegration is not None:

@@ -10,7 +10,7 @@ from app.api.v1 import (
     blog,
     explain,
     health,
-    market,
+    market_data,
     models,
     notifications,
     payments,
@@ -32,7 +32,7 @@ router.include_router(blog.router)
 router.include_router(notifications.router)
 router.include_router(payments.router)
 
-router.include_router(market.router)
+router.include_router(market_data.router, prefix="/market", tags=["market"])
 router.include_router(signals.router)
 router.include_router(regime.router)
 router.include_router(explain.router)
