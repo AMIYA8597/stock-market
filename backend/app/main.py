@@ -22,6 +22,7 @@ except ImportError:  # pragma: no cover
     sentry_sdk = None
     FastApiIntegration = None
 
+
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.events import shutdown_events, startup_events
