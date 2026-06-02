@@ -8,8 +8,7 @@ All database operations use the AsyncSession dependency from app.core.dependenci
 
 from __future__ import annotations
 
-import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
@@ -30,13 +29,13 @@ settings = get_settings()
 # ─── Engine Configuration ────────────────────────────────────────────────
 def _get_engine_kwargs() -> dict:
     """Build engine kwargs based on environment configuration.
-    
+
     Args:
         None
-        
+
     Returns:
         dict: SQLAlchemy AsyncEngine initialization arguments.
-        
+
     Raises:
         None
     """
@@ -88,10 +87,10 @@ logger.debug("database_session_factory_created")
 # ─── ORM Base Class ───────────────────────────────────────────────────────
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models.
-    
+
     All model classes should inherit from this to be tracked
     by the ORM and included in migrations.
-    
+
     Example:
         class User(Base):
             __tablename__ = "users"
@@ -106,17 +105,17 @@ class Base(DeclarativeBase):
 @event.listens_for(engine.sync_engine, "connect")
 def receive_connect(dbapi_conn: any, connection_record: any) -> None:
     """Configure PostgreSQL connection on creation.
-    
+
     Called when a new database connection is created.
     Sets up TimescaleDB-specific settings for hypertables.
-    
+
     Args:
         dbapi_conn: Raw database connection (psycopg2).
         connection_record: SQLAlchemy connection record.
-        
+
     Returns:
         None
-        
+
     Raises:
         None: Exceptions are logged but don't interrupt connection.
     """
@@ -134,17 +133,17 @@ def receive_connect(dbapi_conn: any, connection_record: any) -> None:
 @event.listens_for(engine.sync_engine, "first_connect")
 def receive_first_connect(dbapi_conn: any, connection_record: any) -> None:
     """Initialize database on first connection.
-    
+
     Called exactly once when the first connection is created.
     Initializes TimescaleDB extension if not already present.
-    
+
     Args:
         dbapi_conn: Raw database connection.
         connection_record: SQLAlchemy connection record.
-        
+
     Returns:
         None
-        
+
     Raises:
         None: Exceptions are logged but don't interrupt startup.
     """
@@ -160,13 +159,13 @@ def receive_first_connect(dbapi_conn: any, connection_record: any) -> None:
 # ─── Session Dependency ────────────────────────────────────────────────
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """Get an async database session for dependency injection.
-    
+
     DEPRECATED: Use get_db() from app.core.dependencies instead.
     This function is kept for backwards compatibility.
-    
+
     Yields:
         AsyncSession: SQLAlchemy async session.
-        
+
     Raises:
         Exception: Propagates any database errors.
     """
@@ -190,19 +189,19 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # ─── Utility Functions ────────────────────────────────────────────────
 async def init_db() -> None:
     """Initialize database schema by creating all tables.
-    
+
     Creates all tables defined in Base.metadata.
     Should be called during application startup for new databases.
-    
+
     Args:
         None
-        
+
     Returns:
         None
-        
+
     Raises:
         Exception: If database operations fail.
-        
+
     Example:
         # In main.py startup
         if settings.INIT_DB_ON_STARTUP:
@@ -215,15 +214,15 @@ async def init_db() -> None:
 
 async def drop_db() -> None:
     """Drop all tables from the database.
-    
+
     DANGEROUS: This deletes all data. Only use in development/testing.
-    
+
     Args:
         None
-        
+
     Returns:
         None
-        
+
     Raises:
         Exception: If database operations fail.
     """
@@ -237,13 +236,13 @@ async def drop_db() -> None:
 
 async def get_db_health() -> dict[str, bool]:
     """Check database connection health.
-    
+
     Args:
         None
-        
+
     Returns:
         dict: {"healthy": bool, "connection": bool, "tables": bool}
-        
+
     Raises:
         None: Returns health status even if checks fail.
     """

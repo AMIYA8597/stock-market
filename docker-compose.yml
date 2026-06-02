@@ -179,24 +179,24 @@ services:
       - neuroquant
     restart: unless-stopped
   
-    # ═══════════════════════════════════════════════════════════════════════
-    # Gateway (API Gateway / FastAPI)
-    # ═══════════════════════════════════════════════════════════════════════
-    gateway:
-      build:
-        context: ./services/gateway
-        dockerfile: Dockerfile
-      container_name: ${PROJECT_NAME:-stock-market-project}-gateway-1
-      ports:
-        - "8000:8000"
-      environment:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-      depends_on:
-        - postgres
-        - redis
-      networks:
-        - neuroquant
-      restart: unless-stopped
+  # ═══════════════════════════════════════════════════════════════════════
+  # Gateway (API Gateway / FastAPI)
+  # ═══════════════════════════════════════════════════════════════════════
+  gateway:
+    build:
+      context: ./services/gateway
+      dockerfile: Dockerfile
+    container_name: ${PROJECT_NAME:-stock-market-project}-gateway-1
+    ports:
+      - "8000:8000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - neuroquant
+    restart: unless-stopped
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # VOLUMES (Persistent Storage)

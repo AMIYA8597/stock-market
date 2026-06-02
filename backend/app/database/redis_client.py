@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import timedelta
-from typing import Any, Optional
+from typing import Any
 
 from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
@@ -32,23 +32,23 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 # ─── Singleton Pool ───────────────────────────────────────────────────────
-_redis_pool: Optional[ConnectionPool] = None
-_redis_client: Optional[Redis] = None
+_redis_pool: ConnectionPool | None = None
+_redis_client: Redis | None = None
 _redis_lock = asyncio.Lock()
 
 
 async def _redis_pool_singleton() -> Redis:
     """Get or create singleton Redis connection pool.
-    
+
     Uses double-checked locking pattern for thread-safe lazy initialization.
     Creates a single shared connection pool across all requests.
-    
+
     Returns:
         Redis: Async Redis client from singleton pool.
-        
+
     Raises:
         ConnectionError: If unable to connect to Redis server.
-        
+
     Example:
         redis = await _redis_pool_singleton()
         value = await redis.get("key")
@@ -94,18 +94,18 @@ async def _redis_pool_singleton() -> Redis:
 
 async def get_redis_client() -> Redis:
     """Get Redis async client (alias for _redis_pool_singleton).
-    
+
     Provides clean API for getting Redis client in dependency injection.
-    
+
     Returns:
         Redis: Async Redis client.
-        
+
     Raises:
         ConnectionError: If unable to connect.
-        
+
     Example:
         from app.core.dependencies import get_redis
-        
+
         @app.get("/cache")
         async def get_cache(redis: Annotated[Redis, Depends(get_redis)]):
             value = await redis.get("key")
@@ -121,15 +121,15 @@ async def get_redis() -> Redis:
 
 async def close_redis() -> None:
     """Close Redis connection pool.
-    
+
     Should be called during application shutdown.
-    
+
     Args:
         None
-        
+
     Returns:
         None
-        
+
     Raises:
         None: Exceptions are logged but suppressed.
     """
@@ -153,18 +153,18 @@ async def cache_get(
     default: Any = None,
 ) -> Any:
     """Get value from Redis cache with JSON deserialization.
-    
+
     Args:
         redis: Redis client instance.
         key: Cache key.
         default: Default value if key doesn't exist.
-        
+
     Returns:
         The cached value (JSON-deserialized) or default.
-        
+
     Raises:
         None: Exceptions are logged and default is returned.
-        
+
     Example:
         value = await cache_get(redis, "user:123", default={})
     """
@@ -187,22 +187,22 @@ async def cache_set(
     redis: Redis,
     key: str,
     value: Any,
-    ttl: Optional[timedelta] = None,
+    ttl: timedelta | None = None,
 ) -> bool:
     """Set value in Redis cache with JSON serialization.
-    
+
     Args:
         redis: Redis client instance.
         key: Cache key.
         value: Value to cache (will be JSON-serialized if dict/list).
         ttl: Time-to-live duration (None = no expiration).
-        
+
     Returns:
         bool: True if set successfully, False otherwise.
-        
+
     Raises:
         None: Exceptions are logged and False is returned.
-        
+
     Example:
         success = await cache_set(
             redis,
@@ -234,14 +234,14 @@ async def cache_set(
 
 async def cache_delete(redis: Redis, key: str) -> bool:
     """Delete value from Redis cache.
-    
+
     Args:
         redis: Redis client instance.
         key: Cache key to delete.
-        
+
     Returns:
         bool: True if key existed and was deleted.
-        
+
     Raises:
         None: Exceptions are logged and False is returned.
     """
@@ -255,14 +255,14 @@ async def cache_delete(redis: Redis, key: str) -> bool:
 
 async def cache_exists(redis: Redis, key: str) -> bool:
     """Check if key exists in Redis cache.
-    
+
     Args:
         redis: Redis client instance.
         key: Cache key to check.
-        
+
     Returns:
         bool: True if key exists.
-        
+
     Raises:
         None: Exceptions are logged and False is returned.
     """
@@ -281,18 +281,18 @@ async def publish_message(
     message: dict[str, Any],
 ) -> int:
     """Publish message to Redis Pub/Sub channel.
-    
+
     Args:
         redis: Redis client instance.
         channel: Channel name to publish to.
         message: Message dict (will be JSON-serialized).
-        
+
     Returns:
         int: Number of subscribers that received the message.
-        
+
     Raises:
         None: Exceptions are logged and 0 is returned.
-        
+
     Example:
         subscribers = await publish_message(
             redis,
@@ -318,10 +318,10 @@ async def publish_message(
 # ─── Health Check ────────────────────────────────────────────────────────
 async def get_redis_health() -> dict[str, Any]:
     """Check Redis server health and pool status.
-    
+
     Args:
         None
-        
+
     Returns:
         dict: {
             "connected": bool,
@@ -329,7 +329,7 @@ async def get_redis_health() -> dict[str, Any]:
             "memory_used_mb": float,
             "connected_clients": int,
         }
-        
+
     Raises:
         None: Returns partial health info even if checks fail.
     """

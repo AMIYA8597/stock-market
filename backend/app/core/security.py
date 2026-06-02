@@ -18,13 +18,12 @@ All cryptographic operations use industry-standard libraries:
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Annotated, Any, Optional
+from typing import Annotated, Any
 
 import pyotp
 from cryptography.fernet import Fernet, InvalidToken
@@ -32,13 +31,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.test_state import TEST_REVOKED_ACCESS_JTIS, is_test_mode
-from app.models.user import User
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -60,13 +57,13 @@ JWT_PUBLIC_KEY_PATH = _PROJECT_ROOT / "keys" / "public.pem"
 
 def _load_jwt_keys() -> tuple[str, str]:
     """Load RSA keys for JWT signing/verification.
-    
+
     Args:
         None
-        
+
     Returns:
         tuple[str, str]: (private_key, public_key) PEM-encoded strings.
-        
+
     Raises:
         RuntimeError: If JWT RSA keys cannot be found at expected paths.
     """
@@ -76,9 +73,9 @@ def _load_jwt_keys() -> tuple[str, str]:
             f"Run: python -m scripts.generate_jwt_keys"
         )
 
-    with open(JWT_PRIVATE_KEY_PATH, "r") as f:
+    with open(JWT_PRIVATE_KEY_PATH) as f:
         private_key = f.read()
-    with open(JWT_PUBLIC_KEY_PATH, "r") as f:
+    with open(JWT_PUBLIC_KEY_PATH) as f:
         public_key = f.read()
 
     return private_key, public_key
@@ -103,18 +100,18 @@ except FileNotFoundError:
     logger.warning("jwt_keys_missing_using_hs256_fallback_non_production")
 
 # ─── Field Encryption (Fernet) ──────────────────────────────────────────
-_fernet_cipher: Optional[Fernet] = None
+_fernet_cipher: Fernet | None = None
 
 
 def _get_fernet_cipher() -> Fernet:
     """Get or initialize Fernet cipher for field encryption.
-    
+
     Args:
         None
-        
+
     Returns:
         Fernet: Initialized cipher instance.
-        
+
     Raises:
         RuntimeError: If encryption is enabled but key is not set.
     """
@@ -147,7 +144,7 @@ oauth2_scheme = OAuth2PasswordBearer(
 # ─── Enums ──────────────────────────────────────────────────────────────
 class UserRole:
     """Role-based access control hierarchy.
-    
+
     Roles are ordered by privilege level:
     ADMIN (5) > RESEARCHER (4) > ANALYST (3) > VIEWER (2) > API_USER (1)
     """
@@ -175,13 +172,13 @@ class TokenType:
 # ─── Password Functions ──────────────────────────────────────────────────
 def validate_password_strength(password: str) -> tuple[bool, str]:
     """Validate password against security requirements.
-    
+
     Args:
         password: Plain text password to validate.
-        
+
     Returns:
         tuple[bool, str]: (is_valid, error_message).
-        
+
     Raises:
         None
     """
@@ -202,13 +199,13 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
 
 def hash_password(password: str) -> str:
     """Hash a plaintext password using Argon2id.
-    
+
     Args:
         password: Plain text password.
-        
+
     Returns:
         str: Hashed password (Argon2 format).
-        
+
     Raises:
         ValueError: If password validation fails.
     """
@@ -221,14 +218,14 @@ def hash_password(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plaintext password against an Argon2 hash.
-    
+
     Args:
         plain_password: Plain text password to verify.
         hashed_password: Stored password hash.
-        
+
     Returns:
         bool: True if password matches, False otherwise.
-        
+
     Raises:
         None
     """
@@ -242,26 +239,26 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # ─── JWT Functions ──────────────────────────────────────────────────────
 def create_access_token(
     user_id: str,
-    role: Optional[str] = None,
-    expires_delta: Optional[timedelta] = None,
+    role: str | None = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a JWT access token.
-    
+
     Args:
         user_id: Subject (user ID) for the token.
         role: User role for RBAC (optional).
         expires_delta: Custom expiration time (uses default if None).
-        
+
     Returns:
         str: Encoded JWT access token.
-        
+
     Raises:
         None
     """
     if expires_delta is None:
         expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + expires_delta
 
     payload = {
@@ -288,24 +285,24 @@ def create_access_token(
 
 def create_refresh_token(
     user_id: str,
-    expires_delta: Optional[timedelta] = None,
+    expires_delta: timedelta | None = None,
 ) -> str:
     """Create a JWT refresh token for obtaining new access tokens.
-    
+
     Args:
         user_id: Subject (user ID) for the token.
         expires_delta: Custom expiration time (uses default if None).
-        
+
     Returns:
         str: Encoded JWT refresh token.
-        
+
     Raises:
         None
     """
     if expires_delta is None:
         expires_delta = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + expires_delta
 
     family_id = secrets.token_urlsafe(32)
@@ -331,13 +328,13 @@ def create_refresh_token(
 
 def decode_token(token: str) -> dict[str, Any]:
     """Decode and validate a JWT token.
-    
+
     Args:
         token: JWT token string.
-        
+
     Returns:
         dict: Decoded token payload.
-        
+
     Raises:
         HTTPException: 401 if token is invalid, expired, or tampered.
     """
@@ -366,13 +363,13 @@ def decode_token(token: str) -> dict[str, Any]:
 # ─── TOTP 2FA Functions ─────────────────────────────────────────────────
 def generate_totp_secret() -> str:
     """Generate a new TOTP secret for 2FA setup.
-    
+
     Args:
         None
-        
+
     Returns:
         str: Base32-encoded TOTP secret.
-        
+
     Raises:
         None
     """
@@ -385,15 +382,15 @@ def get_totp_uri(
     issuer: str = "NeuroQuant",
 ) -> str:
     """Generate TOTP provisioning URI for QR code generation.
-    
+
     Args:
         secret: TOTP secret (from generate_totp_secret()).
         email: User email address.
         issuer: Issuer name (displayed in authenticator app).
-        
+
     Returns:
         str: otpauth:// URI suitable for QR code encoding.
-        
+
     Raises:
         None
     """
@@ -403,14 +400,14 @@ def get_totp_uri(
 
 def verify_totp_code(secret: str, code: str) -> bool:
     """Verify a TOTP code entered by the user.
-    
+
     Args:
         secret: TOTP secret (stored in User.totp_secret).
         code: 6-digit code entered by user.
-        
+
     Returns:
         bool: True if code is valid, False otherwise.
-        
+
     Raises:
         None
     """
@@ -426,13 +423,13 @@ def verify_totp_code(secret: str, code: str) -> bool:
 # ─── Field Encryption Functions ─────────────────────────────────────────
 def encrypt_field(plaintext: str) -> str:
     """Encrypt sensitive field data using Fernet (AES-128-CBC).
-    
+
     Args:
         plaintext: Unencrypted data.
-        
+
     Returns:
         str: Base64-encoded ciphertext.
-        
+
     Raises:
         RuntimeError: If encryption is not configured.
     """
@@ -453,13 +450,13 @@ def encrypt_field(plaintext: str) -> str:
 
 def decrypt_field(ciphertext: str) -> str:
     """Decrypt sensitive field data using Fernet.
-    
+
     Args:
         ciphertext: Base64-encoded ciphertext.
-        
+
     Returns:
         str: Decrypted plaintext.
-        
+
     Raises:
         ValueError: If decryption fails (invalid key or corrupted data).
     """
@@ -484,16 +481,16 @@ def decrypt_field(ciphertext: str) -> str:
 # ─── Email Hashing ──────────────────────────────────────────────────────
 def hash_email(email: str) -> str:
     """Hash email for privacy (SHA-256).
-    
+
     Used to store email hash in database for unique lookups without
     exposing plaintext email in logs.
-    
+
     Args:
         email: Plain text email address.
-        
+
     Returns:
         str: SHA-256 hexadecimal digest.
-        
+
     Raises:
         None
     """
@@ -507,17 +504,17 @@ async def get_current_user(
     db: Annotated[AsyncSession, Depends(lambda: None)],  # Placeholder
 ) -> dict[str, Any]:
     """Get current authenticated user from JWT token.
-    
+
     This is a dependency function to be used in FastAPI route handlers.
     Validates JWT signature and expiration, then fetches user from database.
-    
+
     Args:
         token: Bearer token from Authorization header.
         db: Async database session (injected by FastAPI).
-        
+
     Returns:
         dict: User data from decoded JWT token.
-        
+
     Raises:
         HTTPException: 401 if token invalid/expired or 404 if user not found.
     """
@@ -541,18 +538,18 @@ async def get_current_user(
 
 async def get_current_user_or_none(
     token: Annotated[str, Depends(oauth2_scheme)] = None,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Get current user if authenticated, otherwise None.
-    
+
     Use this dependency when authentication is optional (e.g., public endpoints
     that show different data for authenticated users).
-    
+
     Args:
         token: Bearer token from Authorization header (optional).
-        
+
     Returns:
         dict or None: User data if authenticated, None otherwise.
-        
+
     Raises:
         None
     """
@@ -567,18 +564,18 @@ async def get_current_user_or_none(
 
 def require_role(required_role: str):
     """Dependency factory for role-based access control.
-    
+
     Example:
         @app.get("/admin/users")
         async def list_users(current_user = Depends(require_role("ADMIN"))):
             ...
-    
+
     Args:
         required_role: Minimum required role (e.g., "ADMIN", "ANALYST").
-        
+
     Returns:
         Callable: Dependency function that checks user role.
-        
+
     Raises:
         HTTPException: 403 if user lacks required role.
     """

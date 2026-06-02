@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
@@ -61,14 +61,14 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
         results=data,
         total_matched=len(data),
         filters_applied=request.model_dump(),
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
 @router.get("/presets", response_model=ScreenerPresetsResponse)
 async def get_screener_presets(db: AsyncSession = Depends(get_db)) -> ScreenerPresetsResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     presets = [
         ScreenerPreset(name="value_stocks", description="Low PE and stable trend", filters_json={"pe_ratio_max": 20, "rsi_min": 35}, created_at=now),
         ScreenerPreset(name="momentum", description="Strong 21d momentum with volume support", filters_json={"momentum_21d_min": 0.05, "volume_ratio_min": 1.3}, created_at=now),

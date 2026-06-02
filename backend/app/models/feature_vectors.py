@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Integer, JSON, ForeignKey, UniqueConstraint, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -18,17 +18,17 @@ from app.database.connection import Base
 
 class FeatureVector(Base):
     """Feature vector store (TimescaleDB hypertable).
-    
+
     Fields:
         time (datetime): Feature timestamp (hypertable time column), primary key.
         symbol_id (int): Foreign key to Symbol, primary key.
         features (dict): 80+ computed float features as JSONB.
         feature_version (str): Feature version ID for schema tracking (v1, v2, etc.).
-    
+
     Primary Key: (time, symbol_id)
     Hypertable: Will be converted in migration 002
     Indexes: (symbol_id, time DESC) for fast range queries
-    
+
     Feature Naming Convention:
         - price_factors: log_return, momentum_10d, high_52w, drawdown_from_high
         - volatility_factors: parkinson_vol, garch_vol, vol_of_vol
@@ -37,7 +37,7 @@ class FeatureVector(Base):
         - cross_sectional: z_score, rank_percentile, sector_relative
         - sentiment: finbert_score, news_volume
         - factor_betas: mkt_beta, smb_beta, hml_beta, rmw_beta, cma_beta
-    
+
     Schema Evolution:
         - feature_version tracks schema version for backward compatibility
         - Features are added/removed via migration with version bump

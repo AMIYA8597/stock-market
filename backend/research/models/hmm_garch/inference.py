@@ -7,8 +7,8 @@ from typing import Any
 
 import numpy as np
 
-from research.models.hmm_garch.regime_detector import RegimeDetectionResult, detect_regime
 from research.models.hmm_garch.hmm import StudentTHMM
+from research.models.hmm_garch.regime_detector import RegimeDetectionResult, detect_regime
 
 
 @dataclass(slots=True)

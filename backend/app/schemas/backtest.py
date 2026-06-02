@@ -2,10 +2,8 @@
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ─────────────────────────────────────────────────────────────━━
 # Backtest Request
@@ -33,8 +31,8 @@ class BacktestRequest(BaseModel):
     date_from: date
     date_to: date
     initial_capital: Decimal = Field(..., gt=0, decimal_places=2)
-    walk_forward: Optional[WalkForwardConfig] = None
-    monte_carlo: Optional[MonteCarloConfig] = None
+    walk_forward: WalkForwardConfig | None = None
+    monte_carlo: MonteCarloConfig | None = None
 
 
 # ─────────────────────────────────────────────────────────────━━
@@ -46,10 +44,10 @@ class BacktestStatusResponse(BaseModel):
     job_id: str
     status: str = Field(..., description="PENDING|RUNNING|DONE|FAILED")
     progress_pct: int = Field(..., ge=0, le=100)
-    current_date: Optional[date] = None
-    equity_value: Optional[Decimal] = None
-    estimated_remaining_seconds: Optional[int] = None
-    error_message: Optional[str] = None
+    current_date: date | None = None
+    equity_value: Decimal | None = None
+    estimated_remaining_seconds: int | None = None
+    error_message: str | None = None
 
 
 # ─────────────────────────────────────────────────────────────━━
@@ -83,7 +81,7 @@ class EquityCurvePoint(BaseModel):
     """Single point in equity curve."""
     date: date
     portfolio_value: Decimal = Field(..., decimal_places=2)
-    benchmark_value: Optional[Decimal] = Field(None, decimal_places=2)
+    benchmark_value: Decimal | None = Field(None, decimal_places=2)
 
 
 class DrawdownPoint(BaseModel):
@@ -139,16 +137,16 @@ class BacktestResultsResponse(BaseModel):
     date_from: date
     date_to: date
     initial_capital: Decimal = Field(..., decimal_places=2)
-    
+
     metrics: BacktestMetrics
     equity_curve: list[EquityCurvePoint]
     drawdown_series: list[DrawdownPoint]
     trade_log: list[TradeLogEntry]
-    
-    walk_forward: Optional[WalkForwardMetrics] = None
-    monte_carlo: Optional[MonteCarloResults] = None
-    statistical_tests: Optional[StatisticalTests] = None
-    
+
+    walk_forward: WalkForwardMetrics | None = None
+    monte_carlo: MonteCarloResults | None = None
+    statistical_tests: StatisticalTests | None = None
+
     status: str = "DONE"
     completed_at: datetime
 

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Boolean, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -16,7 +16,7 @@ from app.database.connection import Base
 
 class Symbol(Base):
     """Tradeable instrument metadata.
-    
+
     Fields:
         id (int): Serial primary key, used as foreign key in time-series tables.
         ticker (str): Unique ticker symbol (e.g., RELIANCE.NS, AAPL, BTC-USD).
@@ -29,7 +29,7 @@ class Symbol(Base):
         currency (str): Currency of price quotes (USD, INR, etc.).
         is_active (bool): Whether symbol is actively traded and updated.
         created_at (datetime): Timestamp when symbol was added to database.
-    
+
     Constraints:
         - ticker is globally unique.
         - All timestamps are UTC timezone-aware.

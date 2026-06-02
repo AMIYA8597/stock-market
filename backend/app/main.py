@@ -9,9 +9,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from loguru import logger
 
@@ -26,11 +26,12 @@ except ImportError:  # pragma: no cover
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.events import shutdown_events, startup_events
+from app.core.logging import setup_logging
 from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, parse_rate_limit
 from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
-from app.websocket.router import router as websocket_router
 from app.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
+from app.websocket.router import router as websocket_router
 
 settings = get_settings()
 
@@ -55,7 +56,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-from app.core.logging import setup_logging
 setup_logging()
 configure_logging(settings.ENVIRONMENT)
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -11,8 +10,8 @@ from pydantic import BaseModel, Field
 class ForecastRequest(BaseModel):
     """Request to generate a price forecast."""
     symbol: str
-    horizons: List[int] = Field(default=[1, 5, 30], description="Forecast horizons in days")
-    models: Optional[List[str]] = Field(
+    horizons: list[int] = Field(default=[1, 5, 30], description="Forecast horizons in days")
+    models: list[str] | None = Field(
         default=None,
         description="Specific models to use. None = all available.",
     )
@@ -25,16 +24,16 @@ class ForecastPoint(BaseModel):
     predicted_price: float
     predicted_direction: str
     confidence: float
-    prediction_low: Optional[float] = None
-    prediction_high: Optional[float] = None
+    prediction_low: float | None = None
+    prediction_high: float | None = None
 
 
 class ModelForecast(BaseModel):
     """Forecast results from a single model."""
     model_name: str
-    forecasts: List[ForecastPoint]
-    feature_importance: Optional[Dict[str, float]] = None
-    attention_weights: Optional[List[float]] = None
+    forecasts: list[ForecastPoint]
+    feature_importance: dict[str, float] | None = None
+    attention_weights: list[float] | None = None
 
 
 class ForecastResponse(BaseModel):
@@ -42,7 +41,7 @@ class ForecastResponse(BaseModel):
     symbol: str
     current_price: float
     generated_at: datetime
-    model_results: List[ModelForecast]
+    model_results: list[ModelForecast]
 
 
 class SignalResponse(BaseModel):

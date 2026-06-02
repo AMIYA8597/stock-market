@@ -15,7 +15,7 @@ class FeatureBuilder(ABC):
 
     name: str
 
-    def fit(self, frame: pd.DataFrame) -> "FeatureBuilder":
+    def fit(self, frame: pd.DataFrame) -> FeatureBuilder:
         """Optional fit hook for builders that require calibration."""
         del frame
         return self

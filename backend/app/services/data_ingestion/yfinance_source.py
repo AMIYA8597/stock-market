@@ -10,7 +10,6 @@ import yfinance as yf
 
 from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
 
-
 _YF_INTERVAL_MAP: dict[Interval, str] = {
     "1m": "1m",
     "5m": "5m",

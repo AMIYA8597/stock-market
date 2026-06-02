@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -28,7 +28,7 @@ router = APIRouter(prefix="/explain", tags=["explainability"])
 @router.get("/shap/{symbol}", response_model=SHAPResponse)
 async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) -> SHAPResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = [
         SHAPContribution(name="momentum_21d", shap_value=Decimal("0.012300"), feature_value=Decimal("0.06100000"), percentile_rank=Decimal("88.20")),
         SHAPContribution(name="volatility_10d", shap_value=Decimal("-0.006800"), feature_value=Decimal("0.01340000"), percentile_rank=Decimal("43.10")),
@@ -47,7 +47,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
 @router.get("/attention/{symbol}", response_model=AttentionResponse)
 async def get_attention_explanation(symbol: str, db: AsyncSession = Depends(get_db)) -> AttentionResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     weights = [
         [Decimal("0.04"), Decimal("0.08"), Decimal("0.12"), Decimal("0.10"), Decimal("0.07")],
         [Decimal("0.03"), Decimal("0.07"), Decimal("0.13"), Decimal("0.11"), Decimal("0.06")],
@@ -107,5 +107,5 @@ async def post_counterfactual_explanation(
         counterfactuals=rows,
         original_signal=Decimal("-0.1200"),
         original_confidence=Decimal("0.6100"),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )

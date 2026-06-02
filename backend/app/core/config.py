@@ -21,16 +21,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Global application settings loaded from environment variables.
-    
+
     All configuration is read from the environment or .env file.
     Environment variables take precedence over .env values.
-    
+
     Args:
         None: Settings are automatically loaded from environment.
-        
+
     Returns:
         Settings: Singleton instance with all validated settings.
-        
+
     Raises:
         ValidationError: If required environment variables are missing or invalid.
     """
@@ -452,13 +452,13 @@ class Settings(BaseSettings):
     @property
     def DATABASE_URL_SYNC(self) -> str:
         """Get sync database URL for Alembic migrations.
-        
-        Returns the SYNC_DATABASE_URL if set. Otherwise, dynamically converts 
+
+        Returns the SYNC_DATABASE_URL if set. Otherwise, dynamically converts
         DATABASE_URL to its synchronous equivalent.
         """
         if self.SYNC_DATABASE_URL:
             return self.SYNC_DATABASE_URL
-        
+
         url = self.DATABASE_URL
         if url.startswith("postgresql+asyncpg://"):
             return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
@@ -471,10 +471,10 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """Return cached application settings singleton.
-    
+
     Uses functools.lru_cache to ensure only one Settings instance
     is created and reused throughout the application lifetime.
-    
+
     Returns:
         Settings: The global settings instance.
     """

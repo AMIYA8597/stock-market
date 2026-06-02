@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import DateTime, Numeric, String, Integer, JSON, ForeignKey, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -17,7 +17,7 @@ from app.database.connection import Base
 
 class EnsembleSignal(Base):
     """Final ensemble trading signal (combined from all models).
-    
+
     Fields:
         time (datetime): Signal timestamp (UTC), primary key.
         symbol_id (int): Foreign key to Symbol, primary key.
@@ -27,10 +27,10 @@ class EnsembleSignal(Base):
         model_weights (dict): Per-model weights in ensemble: {model_name: weight}.
         regime_state (int): Current HMM regime state (0=bull, 1=bear, 2=sideways, 3=crisis).
         kelly_fraction (Decimal): Position sizing fraction using Kelly criterion.
-    
+
     Primary Key: (time, symbol_id)
     Indexes: Implicit on primary key columns
-    
+
     Direction Mapping:
         signal < -0.6 -> STRONG_SELL
         -0.6 <= signal < -0.2 -> SELL

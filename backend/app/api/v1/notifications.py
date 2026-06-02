@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -102,5 +102,5 @@ async def mark_read(
         )
 
     row.is_read = True
-    row.read_at = datetime.now(timezone.utc)
+    row.read_at = datetime.now(UTC)
     return {"status": "ok"}

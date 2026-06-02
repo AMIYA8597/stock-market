@@ -10,31 +10,30 @@ Implements synchronizer token pattern for CSRF protection:
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.csrf_token import CSRFToken
 from app.core.config import get_settings
+from app.models.csrf_token import CSRFToken
 
 settings = get_settings()
 
 
 async def generate_csrf_token(db: AsyncSession, user_id: str) -> str:
     """Generate a new CSRF token for the user.
-    
+
     Args:
         db: Database session
         user_id: User ID to associate token with
-        
+
     Returns:
         str: Base64-encoded CSRF token
     """
     token_value = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-    
+    expires_at = datetime.now(UTC) + timedelta(hours=24)
+
     csrf=CSRFToken(
         token=token_value,
         user_id=user_id,
@@ -42,18 +41,18 @@ async def generate_csrf_token(db: AsyncSession, user_id: str) -> str:
     )
     db.add(csrf)
     await db.commit()
-    
+
     return token_value
 
 
 async def validate_csrf_token(db: AsyncSession, user_id: str, token: str) -> bool:
     """Validate a CSRF token.
-    
+
     Args:
         db: Database session
         user_id: User ID that should own the token
         token: Token value to validate
-        
+
     Returns:
         bool: True if token is valid, False otherwise
     """
@@ -62,34 +61,34 @@ async def validate_csrf_token(db: AsyncSession, user_id: str, token: str) -> boo
             and_(
                 CSRFToken.user_id == user_id,
                 CSRFToken.token == token,
-                CSRFToken.expires_at > datetime.now(timezone.utc),
+                CSRFToken.expires_at > datetime.now(UTC),
                 CSRFToken.used_at.is_(None),
             )
         )
     )
     csrf_row = result.scalar_one_or_none()
-    
+
     if csrf_row is None:
         return False
-    
+
     # Mark token as used (one-time use)
-    csrf_row.used_at = datetime.now(timezone.utc)
+    csrf_row.used_at = datetime.now(UTC)
     await db.commit()
-    
+
     return True
 
 
 async def cleanup_expired_tokens(db: AsyncSession) -> int:
     """Delete expired CSRF tokens.
-    
+
     Returns:
         int: Number of tokens deleted
     """
     from sqlalchemy import delete
-    
+
     result = await db.execute(
         delete(CSRFToken).where(
-            CSRFToken.expires_at < datetime.now(timezone.utc)
+            CSRFToken.expires_at < datetime.now(UTC)
         )
     )
     await db.commit()

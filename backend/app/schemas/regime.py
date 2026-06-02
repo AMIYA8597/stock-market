@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -28,8 +27,8 @@ class RegimeHistoryPoint(BaseModel):
     state_index: int
     probs: list[Decimal]
     cond_vol: Decimal = Field(..., gt=0, decimal_places=6)
-    cond_vol_5d: Optional[Decimal] = None
-    cond_vol_21d: Optional[Decimal] = None
+    cond_vol_5d: Decimal | None = None
+    cond_vol_21d: Decimal | None = None
 
 
 class RegimeHistoryResponse(BaseModel):

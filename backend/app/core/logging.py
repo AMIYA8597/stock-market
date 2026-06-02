@@ -15,6 +15,7 @@ import logging
 import logging.config
 import sys
 from contextvars import ContextVar
+from datetime import UTC
 from typing import Any
 
 import structlog
@@ -71,14 +72,14 @@ def set_request_id(request_id: str) -> None:
 # ─── Standard Logging Configuration ────────────────────────────────────────
 def configure_stdlib_logging() -> None:
     """Configure Python's standard logging module.
-    
+
     Sets up root logger and structlog integration.
     In development: pretty console output.
     In production: JSON output for ELK/CloudWatch.
-    
+
     Returns:
         None
-        
+
     Raises:
         None
     """
@@ -152,9 +153,9 @@ def add_timestamp(
     event_dict: dict[str, Any],
 ) -> dict[str, Any]:
     """Add ISO 8601 timestamp to event dict."""
-    from datetime import datetime, timezone
+    from datetime import datetime
 
-    event_dict["timestamp"] = datetime.now(timezone.utc).isoformat()
+    event_dict["timestamp"] = datetime.now(UTC).isoformat()
     return event_dict
 
 
@@ -164,12 +165,12 @@ def development_renderer(
     event_dict: dict[str, Any],
 ) -> str:
     """Pretty-print logs for development (human-readable).
-    
+
     Args:
         logger: The logger instance.
         method_name: The name of the method called on the logger.
         event_dict: The dictionary of event key-value pairs.
-        
+
     Returns:
         str: Formatted log message.
     """
@@ -213,12 +214,12 @@ def json_renderer(
     event_dict: dict[str, Any],
 ) -> str:
     """Serialize logs to JSON for production (ELK ingestion).
-    
+
     Args:
         logger: The logger instance.
         method_name: The name of the method called on the logger.
         event_dict: The dictionary of event key-value pairs.
-        
+
     Returns:
         str: JSON-serialized log line.
     """
@@ -228,11 +229,11 @@ def json_renderer(
 # ─── Safe Print Logger for Unicode/Windows Compatibility ──────────────────
 class SafePrintLogger:
     """A structlog-compatible logger that safely writes UTF-8 to sys.stdout.
-    
+
     Prevents UnicodeEncodeError crashes on Windows hosts (like CP1252 streams)
     by writing encoded bytes directly to standard output's binary stream wrapper.
     """
-    
+
     def __init__(self, file: Any = None) -> None:
         self._file = file or sys.stdout
 
@@ -259,7 +260,7 @@ class SafePrintLogger:
 
 class SafePrintLoggerFactory:
     """Factory for SafePrintLogger."""
-    
+
     def __init__(self, file: Any = None) -> None:
         self._file = file
 
@@ -270,14 +271,14 @@ class SafePrintLoggerFactory:
 # ─── Setup Function ───────────────────────────────────────────────────────
 def setup_logging() -> None:
     """Configure structlog for production or development.
-    
+
     This function must be called during application initialization.
     It configures both standard logging and structlog with appropriate
     processors and renderers based on the environment.
-    
+
     Returns:
         None
-        
+
     Raises:
         None
     """
@@ -332,10 +333,10 @@ def setup_logging() -> None:
 # ─── Helper Function ──────────────────────────────────────────────────────
 def get_logger(name: str) -> Any:
     """Get a logger instance with the given name.
-    
+
     Args:
         name: Logger name (typically __name__ of the module).
-        
+
     Returns:
         Logger: A structlog logger instance.
     """

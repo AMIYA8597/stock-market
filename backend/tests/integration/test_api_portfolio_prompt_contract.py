@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from app.api.v1.portfolio import router as portfolio_router
 
-
 app = FastAPI()
 app.include_router(portfolio_router, prefix="/api/v1/portfolio")
 client = TestClient(app)

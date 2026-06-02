@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Dict, List, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 SignalDirection = Literal["STRONG_BUY", "BUY", "NEUTRAL", "SELL", "STRONG_SELL"]
 
@@ -28,17 +27,17 @@ class HMMGarchSignal(BaseModel):
 class GNNSignal(BaseModel):
     spillover_risk: float
     embedding_norm: float
-    top_correlated_assets: List[str]
+    top_correlated_assets: list[str]
 
 
 class LSTMAttnSignal(BaseModel):
     raw_signal: float
-    attention_peaks: List[Dict[str, float]]
+    attention_peaks: list[dict[str, float]]
 
 
 class XGBoostSignal(BaseModel):
     raw_signal: float
-    top_features: List[Dict[str, float | str]]
+    top_features: list[dict[str, float | str]]
 
 
 class EnsembleSignal(BaseModel):
@@ -50,8 +49,8 @@ class EnsembleSignal(BaseModel):
 
 class RegimeDetails(BaseModel):
     state: Literal["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
-    probs: Dict[str, float]
-    transition_probs: Dict[str, float]
+    probs: dict[str, float]
+    transition_probs: dict[str, float]
 
 
 class SignalResponse(BaseModel):
@@ -60,8 +59,8 @@ class SignalResponse(BaseModel):
     symbol: str
     timestamp: datetime
     ensemble: EnsembleSignal
-    models: Dict[str, TFTSignal | HMMGarchSignal | GNNSignal | LSTMAttnSignal | XGBoostSignal]
-    model_weights: Dict[str, float]
+    models: dict[str, TFTSignal | HMMGarchSignal | GNNSignal | LSTMAttnSignal | XGBoostSignal]
+    model_weights: dict[str, float]
     regime: RegimeDetails
 
 
@@ -74,8 +73,8 @@ class SignalHistoryPoint(BaseModel):
 
 class RegimeCurrentResponse(BaseModel):
     state: Literal["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
-    probs: Dict[str, float]
-    transition_matrix: List[List[float]]
+    probs: dict[str, float]
+    transition_matrix: list[list[float]]
     cond_vol_1d: float
     cond_vol_5d: float
     cond_vol_21d: float
@@ -86,7 +85,7 @@ class RegimeCurrentResponse(BaseModel):
 class RegimeHistoryPoint(BaseModel):
     time: date
     state: Literal["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
-    probs: Dict[str, float]
+    probs: dict[str, float]
     cond_vol: float
 
 
@@ -107,7 +106,7 @@ class SHAPContribution(BaseModel):
 
 class ExplainShapResponse(BaseModel):
     model: Literal["xgboost"]
-    feature_contributions: List[SHAPContribution]
+    feature_contributions: list[SHAPContribution]
     base_value: float
     output_value: float
     waterfall_ready: bool
@@ -120,9 +119,9 @@ class AttentionTopTimestep(BaseModel):
 
 class ExplainAttentionResponse(BaseModel):
     model: Literal["tft", "lstm_attn"]
-    weights: List[List[float]]
-    mean_weights: List[float]
-    top_timesteps: List[AttentionTopTimestep]
+    weights: list[list[float]]
+    mean_weights: list[float]
+    top_timesteps: list[AttentionTopTimestep]
 
 
 class CounterfactualFeatureChange(BaseModel):
@@ -133,7 +132,7 @@ class CounterfactualFeatureChange(BaseModel):
 
 class CounterfactualResponse(BaseModel):
     cf_id: str
-    changed_features: List[CounterfactualFeatureChange]
+    changed_features: list[CounterfactualFeatureChange]
     resulting_signal: SignalDirection
     proximity_score: float
 
@@ -156,7 +155,7 @@ class DriftItem(BaseModel):
     model: Literal["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
     adwin_p_value: float
     drift_detected: bool
-    residual_distribution: List[float]
+    residual_distribution: list[float]
     ks_stat: float
 
 
@@ -193,9 +192,9 @@ class CorrelationEdge(BaseModel):
 class CorrelationGraphResponse(BaseModel):
     window_days: int
     central_asset: str
-    nodes: List[CorrelationNode]
-    edges: List[CorrelationEdge]
-    top_correlates: List[Dict[str, float | str]]
+    nodes: list[CorrelationNode]
+    edges: list[CorrelationEdge]
+    top_correlates: list[dict[str, float | str]]
 
 
 class FactorExposureItem(BaseModel):
@@ -206,5 +205,5 @@ class FactorExposureItem(BaseModel):
 class FactorExposureResponse(BaseModel):
     symbol: str
     window_days: int
-    exposures: List[FactorExposureItem]
-    metrics: Dict[str, float]
+    exposures: list[FactorExposureItem]
+    metrics: dict[str, float]

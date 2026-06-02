@@ -2,10 +2,8 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ─────────────────────────────────────────────────────────────━━
 # Embedded Models (used in multiple responses)
@@ -35,10 +33,10 @@ class QuoteResponse(BaseModel):
     change: Decimal = Field(..., decimal_places=8)
     change_pct: Decimal = Field(..., decimal_places=4)
     volume: Decimal = Field(..., decimal_places=4)
-    market_cap: Optional[Decimal] = Field(None, decimal_places=2)
-    pe_ratio: Optional[Decimal] = Field(None, decimal_places=4)
-    week_52_high: Optional[Decimal] = Field(None, decimal_places=8)
-    week_52_low: Optional[Decimal] = Field(None, decimal_places=8)
+    market_cap: Decimal | None = Field(None, decimal_places=2)
+    pe_ratio: Decimal | None = Field(None, decimal_places=4)
+    week_52_high: Decimal | None = Field(None, decimal_places=8)
+    week_52_low: Decimal | None = Field(None, decimal_places=8)
     regime: RegimeData
     signal: SignalData
     timestamp: datetime
@@ -136,8 +134,8 @@ class EconomicEvent(BaseModel):
     event_name: str
     country: str
     importance: str = Field(..., description="low|medium|high")
-    forecast: Optional[str] = None
-    previous: Optional[str] = None
+    forecast: str | None = None
+    previous: str | None = None
 
 
 class EconomicCalendarResponse(BaseModel):
@@ -145,13 +143,13 @@ class EconomicCalendarResponse(BaseModel):
     events: list[EconomicEvent]
     period_start: datetime
     period_end: datetime
-    min_price: Optional[float] = None
-    max_price: Optional[float] = None
-    rsi_min: Optional[float] = None
-    rsi_max: Optional[float] = None
-    above_sma_200: Optional[bool] = None
-    volume_surge: Optional[bool] = None
-    ml_confidence_min: Optional[float] = Field(None, ge=0, le=100)
+    min_price: float | None = None
+    max_price: float | None = None
+    rsi_min: float | None = None
+    rsi_max: float | None = None
+    above_sma_200: bool | None = None
+    volume_surge: bool | None = None
+    ml_confidence_min: float | None = Field(None, ge=0, le=100)
     sort_by: str = Field(default="market_cap", description="Field to sort by")
     sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
     limit: int = Field(default=50, ge=1, le=500)
@@ -163,15 +161,15 @@ class ScreenerResult(BaseModel):
     symbol: str
     name: str
     asset_class: str
-    exchange: Optional[str]
-    sector: Optional[str]
+    exchange: str | None
+    sector: str | None
     price: float
     change_percent: float
     volume: float
-    market_cap: Optional[float]
-    rsi: Optional[float]
-    ml_signal: Optional[str]
-    ml_confidence: Optional[float]
+    market_cap: float | None
+    rsi: float | None
+    ml_signal: str | None
+    ml_confidence: float | None
 
 
 class ScreenerResponse(BaseModel):

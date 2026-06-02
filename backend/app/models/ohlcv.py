@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Integer, Numeric, String, UniqueConstraint, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -18,7 +18,7 @@ from app.database.connection import Base
 
 class OHLCV(Base):
     """OHLCV candlestick data (TimescaleDB hypertable).
-    
+
     Fields:
         time (datetime): Candlestick timestamp (hypertable time column), PK.
         symbol_id (int): Foreign key to Symbol, PK.
@@ -29,11 +29,11 @@ class OHLCV(Base):
         volume (Decimal): Trade volume in units (96-bit, 4 decimal places).
         adjusted_close (Decimal): Adjusted close price (optional, 64-bit).
         interval (str): Timeframe (1m, 5m, 15m, 1h, 1d), PK.
-    
+
     Primary Key: (time, symbol_id, interval)
     Hypertable: Will be converted in migration 002
     Indexes: (symbol_id, time DESC) for fast range queries
-    
+
     Constraints:
         - Uses Decimal for financial precision (no float rounding).
         - Time column partitioned hourly/daily by TimescaleDB.

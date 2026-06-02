@@ -196,7 +196,7 @@ class TemporalFusionTransformer(nn.Module):
             >>> pred, attn_w = model(x_h, x_f)
             >>> p10, p50, p90 = pred[..., 0], pred[..., 1], pred[..., 2]
         """
-        batch_size = x_hist.shape[0]
+        x_hist.shape[0]
 
         # 1. Variable selection
         hist_sel, _ = self.vsn(x_hist)  # (batch, T_hist, hidden_dim)

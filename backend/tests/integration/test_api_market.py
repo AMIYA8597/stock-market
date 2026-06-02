@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from app.api.v1.market_data import router as market_router
 
-
 app = FastAPI()
 app.include_router(market_router, prefix="/api/v1/market")
 client = TestClient(app)
