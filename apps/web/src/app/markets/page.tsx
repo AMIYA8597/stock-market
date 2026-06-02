@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type MarketIndex, type MarketMover } from "@/lib/contracts-api";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { safeFormat } from "@/lib/formatters";
 
 const sections = [
   {
@@ -86,8 +87,8 @@ export default function MarketsPage(): JSX.Element {
         {(loading ? [] : indices.slice(0, 4)).map((indexItem) => (
           <div key={indexItem.ticker} className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-4 py-3">
             <div className="text-xs text-[var(--nq-text-secondary)]">{indexItem.name}</div>
-            <div className="mt-1 text-sm font-semibold">{indexItem.value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</div>
-            <div className="mt-1 text-xs">{indexItem.change_pct >= 0 ? "+" : ""}{indexItem.change_pct.toFixed(2)}%</div>
+            <div className="mt-1 text-sm font-semibold">{Number(indexItem.value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</div>
+            <div className="mt-1 text-xs">{Number(indexItem.change_pct) >= 0 ? "+" : ""}{safeFormat(indexItem.change_pct, 2)}%</div>
           </div>
         ))}
         {loading
@@ -120,8 +121,8 @@ export default function MarketsPage(): JSX.Element {
                 </div>
                 <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">{item.name}</div>
                 <div className="mt-2 flex items-center justify-between text-xs">
-                  <span>{livePrice.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-                  <span>{liveChange >= 0 ? "+" : ""}{liveChange.toFixed(2)}%</span>
+                  <span>{Number(livePrice).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+                  <span>{Number(liveChange) >= 0 ? "+" : ""}{safeFormat(liveChange, 2)}%</span>
                 </div>
               </Link>
             );

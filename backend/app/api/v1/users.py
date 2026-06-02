@@ -47,6 +47,28 @@ async def get_profile(current_user: dict = Depends(get_current_user), db: AsyncS
             is_active=bool(user.get("is_active", True)),
         )
 
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_user_by_id
+        user = await mongo_get_user_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="User profile not found.",
+                ).dict(),
+            )
+        return UserProfileResponse(
+            id=str(user["_id"]),
+            email=user["email"],
+            full_name=user.get("full_name"),
+            role=user["role"],
+            is_active=user["is_active"],
+        )
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
@@ -74,6 +96,30 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
 ) -> UserProfileResponse:
     user_id = current_user.get("sub")
+    
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_user_by_id, mongo_update_user
+        user = await mongo_get_user_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="User profile not found.",
+                ).dict(),
+            )
+        await mongo_update_user(user_id, {"full_name": payload.full_name})
+        return UserProfileResponse(
+            id=user_id,
+            email=user["email"],
+            full_name=payload.full_name,
+            role=user["role"],
+            is_active=user["is_active"],
+        )
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:

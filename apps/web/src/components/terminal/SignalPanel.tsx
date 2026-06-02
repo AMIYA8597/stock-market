@@ -5,6 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { contractsApi, type PortfolioTransactionRequest } from "@/lib/contracts-api";
 import { useOrderHistory } from "@/hooks/use-order-history";
 import { SimpleDonutChart, type DonutSlice } from "@/components/charts";
+import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
 
 interface SignalPanelProps {
@@ -30,7 +31,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   const { orders, addOrder, clearOrders } = useOrderHistory();
 
   const direction = signal?.ensemble.direction ?? "NEUTRAL";
-  const confidence = signal ? (signal.ensemble.confidence * 100).toFixed(1) : "0.0";
+  const confidence = signal ? safeFormat(Number(signal.ensemble.confidence) * 100, 1, "0.0") : "0.0";
   const featureRows = (signal?.models.xgboost.top_features ?? []).slice(0, 5);
   const latestPrice = useMemo(() => {
     const median = signal?.models?.tft?.p50;
@@ -78,7 +79,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
 
   useEffect(() => {
     if (latestPrice > 0) {
-      setPrice(latestPrice.toFixed(4));
+      setPrice(safeFormat(latestPrice, 4, "0"));
     }
   }, [latestPrice]);
 
@@ -158,10 +159,10 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
               strokeDashoffset={gaugeOffset}
               transform="rotate(-90 40 40)"
             />
-            <text x="40" y="44" textAnchor="middle" fontSize="12" fill="var(--nq-text-primary)">{confidenceStroke.toFixed(0)}%</text>
+            <text x="40" y="44" textAnchor="middle" fontSize="12" fill="var(--nq-text-primary)">{safeFormat(confidenceStroke, 0)}%</text>
           </svg>
           <div className="text-xs text-[var(--nq-text-secondary)]">
-            <p>Kelly {(signal?.ensemble.kelly_fraction ?? 0).toFixed(3)}</p>
+            <p>Kelly {safeFormat(signal?.ensemble.kelly_fraction, 3, "0.000")}</p>
             <p className="mt-1">Model spread {signal ? Object.keys(signal.model_weights).length : 0} active engines</p>
           </div>
         </div>
@@ -178,11 +179,11 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Model breakdown</p>
         <div className="space-y-2 text-xs text-[var(--nq-text-secondary)]">
           {([
-            ["tft", `TFT P10 ${signal?.models.tft.p10.toFixed(4) ?? "--"} | P50 ${signal?.models.tft.p50.toFixed(4) ?? "--"} | P90 ${signal?.models.tft.p90.toFixed(4) ?? "--"}`],
-            ["hmm_garch", `HMM ${signal?.models.hmm_garch.regime_signal ?? "-"} | Vol 1d ${(signal?.models.hmm_garch.vol_forecast_1d ?? 0).toFixed(4)}`],
-            ["gnn", `GNN spillover ${(signal?.models.gnn.spillover_risk ?? 0).toFixed(3)} | Top ${(signal?.models.gnn.top_correlated_assets ?? []).slice(0, 3).join(", ") || "--"}`],
-            ["lstm_attn", `LSTM signal ${(signal?.models.lstm_attn.raw_signal ?? 0).toFixed(3)}`],
-            ["xgboost", `XGBoost raw ${(signal?.models.xgboost.raw_signal ?? 0).toFixed(3)} | SHAP ${(signal?.models.xgboost.top_features ?? []).slice(0, 3).map((f) => String(f.name)).join(", ") || "--"}`],
+            ["tft", `TFT P10 ${safeFormat(signal?.models?.tft?.p10, 4)} | P50 ${safeFormat(signal?.models?.tft?.p50, 4)} | P90 ${safeFormat(signal?.models?.tft?.p90, 4)}`],
+            ["hmm_garch", `HMM ${signal?.models?.hmm_garch?.regime_signal ?? "-"} | Vol 1d ${safeFormat(signal?.models?.hmm_garch?.vol_forecast_1d, 4, "0.0000")}`],
+            ["gnn", `GNN spillover ${safeFormat(signal?.models?.gnn?.spillover_risk, 3, "0.000")} | Top ${(signal?.models?.gnn?.top_correlated_assets ?? []).slice(0, 3).join(", ") || "--"}`],
+            ["lstm_attn", `LSTM signal ${safeFormat(signal?.models?.lstm_attn?.raw_signal, 3, "0.000")}`],
+            ["xgboost", `XGBoost raw ${safeFormat(signal?.models?.xgboost?.raw_signal, 3, "0.000")} | SHAP ${(signal?.models?.xgboost?.top_features ?? []).slice(0, 3).map((f) => String(f.name)).join(", ") || "--"}`],
           ] as const).map(([key, summary]) => (
             <div key={key} className="rounded border border-[var(--nq-border)]">
               <button
@@ -205,7 +206,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           {featureRows.map((feature) => (
             <div key={String(feature.name)} className="flex justify-between">
               <span>{String(feature.name)}</span>
-              <span>{Number(feature.shap_value).toFixed(4)}</span>
+              <span>{safeFormat(feature.shap_value, 4)}</span>
             </div>
           ))}
           {featureRows.length === 0 ? <div className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1">No feature attribution received yet.</div> : null}

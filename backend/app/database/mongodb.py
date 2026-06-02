@@ -28,9 +28,26 @@ def get_mongo_db() -> Any:
     global client, db
     if client is None and settings.MONGODB_URL:
         try:
-            client = AsyncIOMotorClient(settings.MONGODB_URL)
-            # Fetch database name from connection string or default to 'neuroquant'
-            db_name = client.get_default_database().name if client.get_default_database() is not None else "neuroquant"
+            import urllib.parse
+            url = settings.MONGODB_URL
+            if url.startswith("mongodb+srv://") or url.startswith("mongodb://"):
+                prefix, rest = url.split("://", 1)
+                if "@" in rest:
+                    creds, host_part = rest.rsplit("@", 1)
+                    if ":" in creds:
+                        username, password = creds.split(":", 1)
+                        unquoted_user = urllib.parse.unquote(username)
+                        unquoted_pass = urllib.parse.unquote(password)
+                        encoded_user = urllib.parse.quote_plus(unquoted_user)
+                        encoded_pass = urllib.parse.quote_plus(unquoted_pass)
+                        url = f"{prefix}://{encoded_user}:{encoded_pass}@{host_part}"
+            client = AsyncIOMotorClient(url)
+            try:
+                db_name = client.get_default_database().name
+                if not db_name:
+                    db_name = "neuroquant"
+            except Exception:
+                db_name = "neuroquant"
             db = client[db_name]
             logger.info(f"💾 Connected to MongoDB database: '{db_name}'")
         except Exception as e:
@@ -289,4 +306,126 @@ async def get_live_price(symbol: str) -> float:
             "HDFCBANK.NS": 1580.0,
         }
         return fallbacks.get(sym, 100.0)
+
+
+# ─── Alert Collection CRUD Helpers ───────────────────────────────────────
+
+async def mongo_get_alerts(user_id: str) -> list[dict[str, Any]]:
+    database = get_mongo_db()
+    if database is None:
+        return []
+    try:
+        cursor = database.alerts.find({"user_id": user_id})
+        results = await cursor.to_list(length=100)
+        return results
+    except Exception as e:
+        logger.error(f"mongo_get_alerts_error: {e}")
+        return []
+
+
+async def mongo_create_alert(user_id: str, alert_data: dict[str, Any]) -> dict[str, Any]:
+    database = get_mongo_db()
+    if database is None:
+        raise RuntimeError("MongoDB not initialized")
+    doc = {
+        "_id": str(uuid4()),
+        "user_id": user_id,
+        "symbol": alert_data["symbol"].upper().strip(),
+        "alert_type": alert_data["alert_type"],
+        "threshold": float(alert_data["threshold"]),
+        "name": alert_data.get("name") or f"{alert_data['symbol']} alert",
+        "enabled": alert_data.get("enabled", True),
+        "is_triggered": False,
+        "triggered_at": None,
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC)
+    }
+    await database.alerts.insert_one(doc)
+    return doc
+
+
+async def mongo_update_alert(user_id: str, alert_id: str, update_data: dict[str, Any]) -> dict[str, Any] | None:
+    database = get_mongo_db()
+    if database is None:
+        return None
+    try:
+        # Convert any Decimal or numeric values
+        set_dict = {}
+        for k, v in update_data.items():
+            if k == "threshold" and v is not None:
+                set_dict[k] = float(v)
+            elif k in {"name", "enabled", "is_triggered"} and v is not None:
+                set_dict[k] = v
+        
+        set_dict["updated_at"] = datetime.now(UTC)
+        await database.alerts.update_one(
+            {"_id": alert_id, "user_id": user_id},
+            {"$set": set_dict}
+        )
+        updated = await database.alerts.find_one({"_id": alert_id, "user_id": user_id})
+        return updated
+    except Exception as e:
+        logger.error(f"mongo_update_alert_error: {e}")
+        return None
+
+
+async def mongo_delete_alert(user_id: str, alert_id: str) -> bool:
+    database = get_mongo_db()
+    if database is None:
+        return False
+    try:
+        res = await database.alerts.delete_one({"_id": alert_id, "user_id": user_id})
+        return res.deleted_count > 0
+    except Exception as e:
+        logger.error(f"mongo_delete_alert_error: {e}")
+        return False
+
+
+# ─── Notification Collection CRUD Helpers ────────────────────────────────
+
+async def mongo_get_notifications(user_id: str) -> list[dict[str, Any]]:
+    database = get_mongo_db()
+    if database is None:
+        return []
+    try:
+        cursor = database.notifications.find({"user_id": user_id}).sort("created_at", -1)
+        results = await cursor.to_list(length=100)
+        return results
+    except Exception as e:
+        logger.error(f"mongo_get_notifications_error: {e}")
+        return []
+
+
+async def mongo_create_notification(notification_data: dict[str, Any]) -> dict[str, Any]:
+    database = get_mongo_db()
+    if database is None:
+        raise RuntimeError("MongoDB not initialized")
+    doc = {
+        "_id": str(uuid4()),
+        "user_id": notification_data["user_id"],
+        "title": notification_data["title"],
+        "message": notification_data["message"],
+        "level": notification_data.get("level", "info"),
+        "is_read": False,
+        "created_at": datetime.now(UTC),
+        "read_at": None
+    }
+    await database.notifications.insert_one(doc)
+    return doc
+
+
+async def mongo_mark_notification_read(user_id: str, notification_id: str) -> bool:
+    database = get_mongo_db()
+    if database is None:
+        return False
+    try:
+        res = await database.notifications.update_one(
+            {"_id": notification_id, "user_id": user_id},
+            {"$set": {"is_read": True, "read_at": datetime.now(UTC)}}
+        )
+        return res.modified_count > 0
+    except Exception as e:
+        logger.error(f"mongo_mark_notification_read_error: {e}")
+        return False
+
 

@@ -26,11 +26,21 @@ async def readiness_check() -> dict[str, object]:
     db_ok = False
     redis_ok = False
 
+    from app.core.config import get_settings
+    settings = get_settings()
+
     try:
-        async for db in get_db():
-            await db.execute(text("SELECT 1"))
-            db_ok = True
-            break
+        if settings.MONGODB_URL:
+            from app.database.mongodb import get_mongo_db
+            mongo_db = get_mongo_db()
+            if mongo_db is not None:
+                await mongo_db.command("ping")
+                db_ok = True
+        else:
+            async for db in get_db():
+                await db.execute(text("SELECT 1"))
+                db_ok = True
+                break
     except Exception:
         db_ok = False
 

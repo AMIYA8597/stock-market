@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { marketApi } from "@/lib/api-client";
+import { safeFormat } from "@/lib/formatters";
 import type { OHLCVBar } from "@neuroquant/types";
 import type { SignalResponse } from "@/types/intelligence";
 import { LightweightCandlestickChart, SimpleLineAreaChart, type LineAreaPoint, SimpleBarChart, type SimpleBarPoint } from "@/components/charts";
@@ -23,7 +24,7 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
         color: "rgba(0,212,245,0.6)",
       }))
     : [];
-  const confidence = signal ? (signal.ensemble.confidence * 100).toFixed(1) : "--";
+  const confidence = signal ? safeFormat(Number(signal.ensemble.confidence) * 100, 1) : "--";
 
   useEffect(() => {
     let mounted = true;
@@ -34,6 +35,7 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
         return;
       }
 
+      
       try {
         const history = await marketApi.getHistory(signal.symbol, timeframe);
         if (mounted) {
@@ -131,8 +133,8 @@ export default function ChartSection({ signal }: ChartSectionProps): JSX.Element
             ))}
           </div>
           <div className="h-[140px] rounded bg-[rgba(255,255,255,0.02)] p-2">
-            {subTab === "signals" ? <SimpleBarChart data={weightData.map((item) => ({ ...item, label: item.label.slice(0, 8) }))} yTickFormatter={(value) => `${(value * 100).toFixed(0)}%`} /> : null}
-            {subTab === "indicators" ? <SimpleLineAreaChart data={indicatorSeries.length > 0 ? indicatorSeries : [{ label: "1", value: 0 }]} mode="line" stroke="var(--nq-accent-purple)" yTickFormatter={(value) => `${value.toFixed(2)}%`} /> : null}
+            {subTab === "signals" ? <SimpleBarChart data={weightData.map((item) => ({ ...item, label: item.label.slice(0, 8) }))} yTickFormatter={(value) => `${safeFormat(Number(value) * 100, 0)}%`} /> : null}
+            {subTab === "indicators" ? <SimpleLineAreaChart data={indicatorSeries.length > 0 ? indicatorSeries : [{ label: "1", value: 0 }]} mode="line" stroke="var(--nq-accent-purple)" yTickFormatter={(value) => `${safeFormat(value, 2)}%`} /> : null}
             {subTab === "orderflow" ? <SimpleBarChart data={orderFlowBars.length > 0 ? orderFlowBars : [{ label: "1", value: 0, color: "rgba(255,255,255,0.2)" }]} /> : null}
           </div>
         </div>

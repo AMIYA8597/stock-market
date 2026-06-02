@@ -15,6 +15,7 @@ interface UsePriceFeedState {
 }
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+const cleanWsUrl = WS_URL.endsWith("/ws") ? WS_URL.slice(0, -3) : WS_URL;
 
 export function usePriceFeed(symbols: string[]): UsePriceFeedState {
   const wsRef = useRef<WebSocket | null>(null);
@@ -42,7 +43,7 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
     }
 
     setStatus("reconnecting");
-    const ws = new WebSocket(`${WS_URL}/ws/prices`);
+    const ws = new WebSocket(`${cleanWsUrl}/ws/prices`);
     wsRef.current = ws;
 
     ws.onopen = () => {

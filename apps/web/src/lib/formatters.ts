@@ -77,6 +77,15 @@ export function formatNumber(value: number, decimals = 2): string {
 }
 
 /**
+ * Safely format any value (string, number, null, undefined) as a decimal string
+ */
+export function safeFormat(value: unknown, decimals = 2, fallback = "--"): string {
+  if (value === null || value === undefined) return fallback;
+  const num = Number(value);
+  return Number.isNaN(num) ? fallback : num.toFixed(decimals);
+}
+
+/**
  * Determine color class based on value
  */
 export function getChangeColor(value: number): string {

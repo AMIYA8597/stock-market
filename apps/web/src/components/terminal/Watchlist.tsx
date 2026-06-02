@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
 
 interface WatchlistProps {
@@ -22,7 +23,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
     if (tab === "watchlist") {
       return signals.slice(0, 8);
     }
-    return [...signals].sort((a, b) => b.ensemble.confidence - a.ensemble.confidence);
+    return [...signals].sort((a, b) => Number(b.ensemble.confidence) - Number(a.ensemble.confidence));
   }, [signals, tab]);
 
   return (
@@ -82,7 +83,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
                 </span>
               </div>
               <div className="mt-1 text-[10px] text-[var(--nq-text-secondary)]">
-                Confidence {(item.ensemble.confidence * 100).toFixed(1)}%
+                Confidence {safeFormat(Number(item.ensemble.confidence) * 100, 1)}%
               </div>
               <div className="mt-0.5 text-[10px] text-[var(--nq-text-secondary)]">
                 {new Date(item.timestamp).toLocaleTimeString()}
@@ -124,7 +125,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
                 </div>
                 <span className="text-right">
                   <span className={`block text-xs font-medium ${directionColor(item.ensemble.direction)}`}>{item.ensemble.direction}</span>
-                  <span className="block text-[10px] text-[var(--nq-text-secondary)]">{(item.ensemble.confidence * 100).toFixed(1)}%</span>
+                  <span className="block text-[10px] text-[var(--nq-text-secondary)]">{safeFormat(Number(item.ensemble.confidence) * 100, 1)}%</span>
                 </span>
               </div>
               <div className="mt-1 flex items-center justify-between text-[10px] text-[var(--nq-text-secondary)]">

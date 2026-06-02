@@ -25,6 +25,27 @@ class NotificationCreate(BaseModel):
 @router.get("")
 async def list_notifications(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, object]:
     user_id = current_user.get("sub")
+
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_notifications
+        rows = await mongo_get_notifications(user_id)
+        return {
+            "items": [
+                {
+                    "id": str(row["_id"]),
+                    "title": row["title"],
+                    "message": row["message"],
+                    "level": row["level"],
+                    "is_read": row["is_read"],
+                    "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else str(row["created_at"]),
+                }
+                for row in rows
+            ]
+        }
+
     result = await db.execute(
         select(Notification).where(Notification.user_id == user_id).order_by(Notification.created_at.desc()).limit(100)
     )
@@ -59,6 +80,28 @@ async def create_notification(
             ).dict(),
         )
 
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_user_by_id, mongo_create_notification
+        user = await mongo_get_user_by_id(payload.user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="Target user not found.",
+                ).dict(),
+            )
+        row = await mongo_create_notification({
+            "user_id": payload.user_id,
+            "title": payload.title,
+            "message": payload.message,
+            "level": payload.level,
+        })
+        return {"id": str(row["_id"])}
+
     user_result = await db.execute(select(User).where(User.id == payload.user_id))
     if user_result.scalar_one_or_none() is None:
         raise HTTPException(
@@ -88,6 +131,23 @@ async def mark_read(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     user_id = current_user.get("sub")
+
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_mark_notification_read
+        ok = await mongo_mark_notification_read(user_id, notification_id)
+        if not ok:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="Notification not found.",
+                ).dict(),
+            )
+        return {"status": "ok"}
+
     result = await db.execute(
         select(Notification).where(Notification.id == notification_id, Notification.user_id == user_id)
     )

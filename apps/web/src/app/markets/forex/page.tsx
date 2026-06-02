@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { marketApi } from "@/lib/api-client";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { safeFormat } from "@/lib/formatters";
 import { AmbientLucideBackground } from "@/components/common/ambient-lucide-background";
 import type { Quote } from "@neuroquant/types";
 
@@ -64,8 +65,8 @@ export default function ForexPage(): JSX.Element {
           return (
             <div key={pair} className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-4 py-3 text-sm">
               <div className="font-medium">{pair}</div>
-              <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">Spot {spot.toFixed(4)}</div>
-              <div className="mt-1 text-xs">Move {move >= 0 ? "+" : ""}{move.toFixed(2)}%</div>
+              <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">Spot {safeFormat(spot, 4)}</div>
+              <div className="mt-1 text-xs">Move {Number(move) >= 0 ? "+" : ""}{safeFormat(move, 2)}%</div>
             </div>
           );
         })}
