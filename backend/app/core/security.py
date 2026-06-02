@@ -36,10 +36,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.logging import get_logger
 from app.core.test_state import TEST_REVOKED_ACCESS_JTIS, is_test_mode
 from app.models.user import User
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 # ─── Password Hashing (Argon2id) ─────────────────────────────────────────

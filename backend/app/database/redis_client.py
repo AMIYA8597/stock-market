@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 from datetime import timedelta
 from typing import Any, Optional
 
@@ -27,8 +26,9 @@ from redis.asyncio import Redis
 from redis.asyncio.connection import ConnectionPool
 
 from app.core.config import get_settings
+from app.core.logging import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 settings = get_settings()
 
 # ─── Singleton Pool ───────────────────────────────────────────────────────

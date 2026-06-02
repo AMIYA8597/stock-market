@@ -359,11 +359,11 @@ async function postJson<TResponse, TBody>(path: string, body: TBody): Promise<TR
 
 export const contractsApi = {
   getIndices(): Promise<MarketIndex[]> {
-    return getJson<MarketIndex[]>("/market/indices");
+    return getJson<{ indices: MarketIndex[] }>("/market/indices").then((data) => data.indices);
   },
 
   getMovers(exchange: "NSE" | "NYSE" | "CRYPTO" = "NSE", type: "gainers" | "losers" | "volume" | "momentum" = "momentum"): Promise<MarketMover[]> {
-    return getJson<MarketMover[]>(`/market/movers?exchange=${exchange}&type=${type}`);
+    return getJson<{ assets: MarketMover[] }>(`/market/movers?exchange=${exchange}&type=${type}`).then((data) => data.assets);
   },
 
   getPortfolioHoldings(): Promise<PortfolioHoldingsResponse> {
@@ -465,7 +465,7 @@ export const contractsApi = {
   },
 
   getRegimeHistory(days: number = 252): Promise<RegimeHistoryPoint[]> {
-    return getJson<RegimeHistoryPoint[]>(`/regime/history?days=${days}`);
+    return getJson<{ data: RegimeHistoryPoint[] }>(`/regime/history?days=${days}`).then((data) => data.data);
   },
 
   getRegimeStatistics(): Promise<RegimeStatisticsItem[]> {

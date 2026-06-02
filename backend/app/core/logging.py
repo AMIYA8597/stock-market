@@ -225,6 +225,48 @@ def json_renderer(
     return json.dumps(event_dict, default=str)
 
 
+# ─── Safe Print Logger for Unicode/Windows Compatibility ──────────────────
+class SafePrintLogger:
+    """A structlog-compatible logger that safely writes UTF-8 to sys.stdout.
+    
+    Prevents UnicodeEncodeError crashes on Windows hosts (like CP1252 streams)
+    by writing encoded bytes directly to standard output's binary stream wrapper.
+    """
+    
+    def __init__(self, file: Any = None) -> None:
+        self._file = file or sys.stdout
+
+    def msg(self, message: str) -> None:
+        try:
+            # Write to the underlying binary buffer if available to avoid encoding issues
+            if hasattr(self._file, "buffer") and self._file.buffer is not None:
+                self._file.buffer.write((message + "\n").encode("utf-8", errors="replace"))
+                self._file.flush()
+            else:
+                self._file.write(message + "\n")
+                self._file.flush()
+        except Exception:
+            # Fallback to standard write with try-except to avoid crashing the application
+            try:
+                self._file.write(message.encode("ascii", errors="replace").decode("ascii") + "\n")
+                self._file.flush()
+            except Exception:
+                pass
+
+    # Map all levels to msg
+    log = debug = info = warn = warning = error = err = fatal = critical = msg
+
+
+class SafePrintLoggerFactory:
+    """Factory for SafePrintLogger."""
+    
+    def __init__(self, file: Any = None) -> None:
+        self._file = file
+
+    def __call__(self, *args: Any, **kwargs: Any) -> SafePrintLogger:
+        return SafePrintLogger(self._file)
+
+
 # ─── Setup Function ───────────────────────────────────────────────────────
 def setup_logging() -> None:
     """Configure structlog for production or development.
@@ -239,6 +281,15 @@ def setup_logging() -> None:
     Raises:
         None
     """
+    # Reconfigure stdout/stderr to UTF-8 to prevent cp1252 encoding crashes on Windows
+    import sys
+    from contextlib import suppress
+    with suppress(AttributeError, OSError):
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
     # Configure standard library logging first
     configure_stdlib_logging()
 
@@ -261,7 +312,7 @@ def setup_logging() -> None:
             log_renderer,
         ],
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=SafePrintLoggerFactory(),
         cache_logger_on_first_use=True,
     )
 
