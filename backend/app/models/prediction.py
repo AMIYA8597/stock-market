@@ -9,7 +9,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import DateTime, Numeric, String, Integer, BigInteger, JSON, ForeignKey, func
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -17,7 +17,7 @@ from app.database.connection import Base
 
 class MLPrediction(Base):
     """ML model prediction with quantile forecasts and explanations.
-    
+
     Fields:
         id (int): Big serial primary key.
         time (datetime): Prediction timestamp (UTC).
@@ -33,7 +33,7 @@ class MLPrediction(Base):
         attention_weights (dict): Attention weight array (for TFT, LSTM-Attn).
         actual_return (Decimal): Realized return (filled retrospectively).
         created_at (datetime): Prediction creation timestamp (UTC).
-    
+
     Indexes:
         - (symbol_id, time DESC, model_name) for fast prediction lookup
     """

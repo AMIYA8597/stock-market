@@ -13,7 +13,7 @@ Mathematical Reference:
 import asyncio
 import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -26,13 +26,13 @@ class SignalPrediction(BaseModel):
 
     model_name: str
     p50_return: float = Field(..., description="Median predicted return")
-    p10_return: Optional[float] = Field(None, description="10th percentile")
-    p90_return: Optional[float] = Field(None, description="90th percentile")
+    p10_return: float | None = Field(None, description="10th percentile")
+    p90_return: float | None = Field(None, description="90th percentile")
     raw_signal: float = Field(..., description="Continuous signal ∈ [-1, +1]")
     confidence: float = Field(..., description="Model confidence ∈ [0, 1]")
     horizon_days: int = Field(default=1)
-    shap_values: Optional[dict[str, float]] = None
-    attention_weights: Optional[dict[str, float]] = None
+    shap_values: dict[str, float] | None = None
+    attention_weights: dict[str, float] | None = None
 
 
 class RegimeState(BaseModel):
@@ -63,7 +63,7 @@ class EnsembleSignal(BaseModel):
 class MLOrchestrator:
     """
     Unified ML inference orchestrator.
-    
+
     Responsibilities:
       1. Load all trained model checkpoints
       2. Run parallel inference for symbol across all models
@@ -71,7 +71,7 @@ class MLOrchestrator:
       4. Aggregate signals → composite signal + confidence
       5. Compute Kelly position sizing
       6. Return structured ensemble signal
-    
+
     Performance target: < 100ms for single asset inference
     """
 
@@ -79,11 +79,11 @@ class MLOrchestrator:
         self,
         model_checkpoint_dir: str = "/app/data/models",
         regime_detector=None,  # HMM-GARCH regime detector
-        rolling_performance: Optional[dict[str, float]] = None,
+        rolling_performance: dict[str, float] | None = None,
         current_regime: int = 0,  # 0=bull, 1=bear, 2=sideways, 3=crisis
     ):
         """Initialize orchestrator with trained models.
-        
+
         Args:
             model_checkpoint_dir: Path to saved model checkpoints
             regime_detector: Fitted HMM-GARCH regime detector instance
@@ -94,7 +94,7 @@ class MLOrchestrator:
         self.regime_detector = regime_detector
         self.rolling_performance = rolling_performance or {}
         self.current_regime = current_regime
-        
+
         # Model instances (lazy-loaded on first inference)
         self.models: dict[str, Any] = {}
         self.model_names = [
@@ -104,11 +104,11 @@ class MLOrchestrator:
             "lstm_attention",
             "xgboost",
         ]
-        
+
         # Pre-trained regime-conditional model weights
         # Shape: 4 regimes × 5 models
         self.regime_weights_matrix = self._init_regime_weights()
-        
+
         logger.info(
             f"MLOrchestrator initialized; "
             f"checkpoint_dir={model_checkpoint_dir}; "
@@ -144,7 +144,7 @@ class MLOrchestrator:
         self,
         symbol: str,
         features: dict[str, float],
-        historical_prices: Optional[np.ndarray] = None,
+        historical_prices: np.ndarray | None = None,
     ) -> dict[str, float]:
         """Extract common signal inputs with conservative defaults."""
         momentum_1d = self._feature_get(features, "momentum_1d", "return_1d")
@@ -179,16 +179,16 @@ class MLOrchestrator:
 
     def _init_regime_weights(self) -> np.ndarray:
         """Initialize regime-conditional weights (trained offline).
-        
+
         Each row = regime state (bull/bear/sideways/crisis)
         Each col = model (TFT/HMM/GNN/LSTM/XGB)
-        
+
         Semantic interpretation:
           - Bull regime: favor TFT (trend-following) + GNN (contagion early warning)
           - Bear regime: favor HMM-GARCH (vol forecasting) + XGBoost (robust)
           - Sideways: favor mean-reversion models (LSTM+Attn)
           - Crisis: favor defensive HMM + risk models
-        
+
         Returns:
             np.ndarray shape (4, 5) with weights summing to 1.0 per row
         """
@@ -205,7 +205,7 @@ class MLOrchestrator:
             ],
             dtype=np.float32,
         )
-        
+
         # Verify normalization
         assert np.allclose(weights.sum(axis=1), 1.0), "Weights must sum to 1 per regime"
         return weights
@@ -214,59 +214,59 @@ class MLOrchestrator:
         self,
         symbol: str,
         features: dict[str, float],
-        historical_prices: Optional[np.ndarray] = None,
-        regime_state: Optional[int] = None,
-        rolling_performance: Optional[dict[str, float]] = None,
+        historical_prices: np.ndarray | None = None,
+        regime_state: int | None = None,
+        rolling_performance: dict[str, float] | None = None,
     ) -> EnsembleSignal:
         """Run end-to-end inference for symbol across all models.
-        
+
         Args:
             symbol: Asset ticker
             features: Dict of 80+ computed features (from feature pipeline)
             historical_prices: Optional [T] array of past prices for context
             regime_state: Current HMM regime (0-3); defaults to self.current_regime
             rolling_performance: Override rolling Sharpe scores
-        
+
         Returns:
             EnsembleSignal with aggregated signal, confidence, direction, Kelly
-        
+
         Raises:
             ValueError: If features incomplete or models not loaded
             RuntimeError: If inference fails on any model
         """
         regime_state = self.current_regime if regime_state is None else regime_state
         rolling_perf = rolling_performance or self.rolling_performance
-        
+
         try:
             # 1. Run parallel inference across all models (timeout: 50ms)
             start_time = datetime.utcnow()
-            
+
             individual_signals = await asyncio.wait_for(
                 self._parallel_inference(symbol, features, historical_prices),
                 timeout=0.050,
             )
-            
+
             infer_time = (datetime.utcnow() - start_time).total_seconds() * 1000
             logger.debug(f"Parallel inference completed in {infer_time:.2f}ms")
-            
+
             # 2. Aggregate signals using dynamic weights
             aggregated_signal, signal_confidence = self._aggregate_signals(
                 individual_signals, regime_state, rolling_perf
             )
-            
+
             # 3. Compute Kelly position sizing
             kelly_fraction = self._compute_kelly_fraction(
                 signal=aggregated_signal,
                 confidence=signal_confidence,
                 regime_state=regime_state,
             )
-            
+
             # 4. Map continuous signal → discrete direction
             direction = self._signal_to_direction(aggregated_signal)
-            
+
             # 5. Get current regime state details
             regime_info = self._get_regime_info(regime_state)
-            
+
             # 6. Construct ensemble signal response
             ensemble_signal = EnsembleSignal(
                 symbol=symbol,
@@ -287,10 +287,10 @@ class MLOrchestrator:
                     "model_agreement": self._compute_agreement(individual_signals),
                 },
             )
-            
+
             return ensemble_signal
-            
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             logger.error(f"Inference timeout for {symbol}; falling back to HMM-only")
             return await self._fallback_inference(symbol, features, regime_state)
         except Exception as e:
@@ -301,10 +301,10 @@ class MLOrchestrator:
         self,
         symbol: str,
         features: dict[str, float],
-        historical_prices: Optional[np.ndarray] = None,
+        historical_prices: np.ndarray | None = None,
     ) -> dict[str, SignalPrediction]:
         """Run inference on all models in parallel.
-        
+
         Returns:
             Dict of model_name -> SignalPrediction
         """
@@ -315,16 +315,16 @@ class MLOrchestrator:
             self._infer_lstm_attention(symbol, features, historical_prices),
             self._infer_xgboost(symbol, features),
         ]
-        
+
         results = await asyncio.gather(*tasks, return_exceptions=False)
-        
-        return {name: result for name, result in zip(self.model_names, results)}
+
+        return {name: result for name, result in zip(self.model_names, results, strict=False)}
 
     async def _infer_tft(
         self,
         symbol: str,
         features: dict[str, float],
-        historical_prices: Optional[np.ndarray],
+        historical_prices: np.ndarray | None,
     ) -> SignalPrediction:
         """Temporal Fusion Transformer inference."""
         sig = self._extract_signal_inputs(symbol, features, historical_prices)
@@ -422,7 +422,7 @@ class MLOrchestrator:
         self,
         symbol: str,
         features: dict[str, float],
-        historical_prices: Optional[np.ndarray],
+        historical_prices: np.ndarray | None,
     ) -> SignalPrediction:
         """LSTM + Attention mechanism inference."""
         sig = self._extract_signal_inputs(symbol, features, historical_prices)
@@ -485,17 +485,17 @@ class MLOrchestrator:
         rolling_performance: dict[str, float],
     ) -> tuple[float, float]:
         """Aggregate individual model signals using dynamic weights.
-        
+
         Mathematical formulation:
           w_k(t) = 0.6 * softmax(rolling_sharpe) + 0.4 * regime_weight
           S(t) = Σ_k w_k(t) * s_k(t)
           C(t) = 1 - std(s_1..K(t)) / 2
-        
+
         Args:
             individual_signals: Dict of model signals
             regime_state: Current HMM state (0-3)
             rolling_performance: Dict of rolling Sharpe ratios
-        
+
         Returns:
             (aggregated_signal, confidence)
         """
@@ -503,29 +503,29 @@ class MLOrchestrator:
             [s.raw_signal for s in individual_signals.values()],
             dtype=np.float32,
         )
-        
+
         # Regime-conditional base weights
         regime_weights = self.regime_weights_matrix[regime_state]  # shape (5,)
-        
+
         # Rolling performance weights (softmax of Sharpe ratios)
         sharpes = np.array(
             [rolling_performance.get(m, 0.0) for m in self.model_names],
             dtype=np.float32,
         )
         perf_weights = self._softmax(sharpes)  # shape (5,)
-        
+
         # Blend: 60% performance, 40% regime allocation
         final_weights = 0.6 * perf_weights + 0.4 * regime_weights
         final_weights /= final_weights.sum()  # Renormalize
-        
+
         # Weighted signal aggregation
         aggregated_signal = np.sum(signals * final_weights).astype(float)
-        
+
         # Confidence = 1 - (std of signals) / 2
         # [interpretation: low std → high agreement → high confidence]
         signal_std = np.std(signals)
         confidence = max(0.0, min(1.0, 1.0 - signal_std / 2.0))
-        
+
         return float(aggregated_signal), float(confidence)
 
     def _compute_kelly_fraction(
@@ -535,17 +535,17 @@ class MLOrchestrator:
         regime_state: int,
     ) -> float:
         """Compute Kelly position sizing.
-        
+
         Mathematical formulation:
           f* = confidence * signal * (μ_regime / σ²_regime)
           f_half = f* / 2  [half-Kelly for safety]
           f_capped = min(f_half, 0.25)  [cap at 25%]
-        
+
         Args:
             signal: Aggregated signal ∈ [-1, +1]
             confidence: Signal confidence ∈ [0, 1]
             regime_state: Current regime (0-3)
-        
+
         Returns:
             Kelly fraction ∈ [0, 0.25]
         """
@@ -556,29 +556,29 @@ class MLOrchestrator:
             2: {"mu": 0.0002, "vol": 0.008},  # sideways
             3: {"mu": -0.0010, "vol": 0.025},  # crisis
         }
-        
+
         params = regime_params[regime_state]
         mu = params["mu"]
         vol = params["vol"]
-        
+
         # Kelly calculation
         b = mu / (vol ** 2) if vol > 0 else 0
         f_star = confidence * signal * b
-        
+
         # Half-Kelly for risk management
         f_half = f_star / 2.0
-        
+
         # Cap at maximum
         f_capped = np.clip(f_half, -0.25, 0.25)
-        
+
         return float(f_capped)
 
     def _signal_to_direction(self, signal: float) -> str:
         """Map continuous signal to discrete direction.
-        
+
         Args:
             signal: Value ∈ [-1, +1]
-        
+
         Returns:
             Direction string
         """
@@ -634,7 +634,7 @@ class MLOrchestrator:
 
     def _compute_agreement(self, signals: dict[str, SignalPrediction]) -> float:
         """Compute inter-model agreement metric.
-        
+
         Returns:
             Value ∈ [0, 1] where 1 = perfect agreement
         """

@@ -6,7 +6,6 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-
 # ─────────────────────────────────────────────────────────────━━
 # Portfolio Holdings
 # ─────────────────────────────────────────────────────────────━━
@@ -44,8 +43,8 @@ class TransactionRequest(BaseModel):
     type: str = Field(..., description="BUY|SELL")
     quantity: Decimal = Field(..., gt=0, decimal_places=8)
     price: Decimal = Field(..., gt=0, decimal_places=8)
-    brokerage: Optional[Decimal] = Field(default=0, ge=0, decimal_places=4)
-    stt: Optional[Decimal] = Field(default=0, ge=0, decimal_places=4)
+    brokerage: Decimal | None = Field(default=0, ge=0, decimal_places=4)
+    stt: Decimal | None = Field(default=0, ge=0, decimal_places=4)
 
 
 class TransactionResponse(BaseModel):
@@ -111,8 +110,8 @@ class OptimizationConstraints(BaseModel):
     """Portfolio optimization constraints."""
     max_weight: Decimal = Field(default=Decimal("0.20"), ge=0, le=1, decimal_places=4)
     min_weight: Decimal = Field(default=Decimal("0.0"), ge=0, le=1, decimal_places=4)
-    sector_limits: Optional[dict[str, Decimal]] = None
-    max_turnover: Optional[Decimal] = Field(None, ge=0, decimal_places=4)
+    sector_limits: dict[str, Decimal] | None = None
+    max_turnover: Decimal | None = Field(None, ge=0, decimal_places=4)
     leverage_limit: Decimal = Field(default=Decimal("1.0"), ge=1, decimal_places=2)
 
 
@@ -120,7 +119,7 @@ class OptimizationRequest(BaseModel):
     """POST /portfolio/optimize request body."""
     universe: list[str] = Field(..., min_length=2, max_length=500)
     method: str = Field(..., description="hrp|black_litterman|cvar|mean_variance")
-    constraints: Optional[OptimizationConstraints] = None
+    constraints: OptimizationConstraints | None = None
     use_ml_views: bool = True
 
 
@@ -156,7 +155,7 @@ class OptimizationResponse(BaseModel):
     expected_return: Decimal = Field(..., decimal_places=4)
     expected_volatility: Decimal = Field(..., decimal_places=4)
     sharpe_ratio: Decimal = Field(..., decimal_places=4)
-    efficient_frontier: Optional[list[EfficientFrontierPoint]] = None
-    hrp_dendrogram: Optional[dict] = None
-    bl_posterior_returns: Optional[dict[str, Decimal]] = None
+    efficient_frontier: list[EfficientFrontierPoint] | None = None
+    hrp_dendrogram: dict | None = None
+    bl_posterior_returns: dict[str, Decimal] | None = None
     timestamp: datetime

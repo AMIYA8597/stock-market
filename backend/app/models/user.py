@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from datetime import datetime
 from uuid import UUID, uuid4
+
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
-
-from sqlalchemy import Boolean, DateTime, String, UUID as SQLA_UUID, func
+from sqlalchemy import UUID as SQLA_UUID
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -22,7 +23,7 @@ ph = PasswordHasher()
 
 class User(Base):
     """User account model with secure password management.
-    
+
     Fields:
         id (UUID): Unique user identifier, primary key.
         email (str): User email address, must be unique and not null.
@@ -31,7 +32,7 @@ class User(Base):
         is_active (bool): Account status; inactive users cannot log in.
         created_at (datetime): UTC timestamp when account was created.
         updated_at (datetime): UTC timestamp of last account update.
-    
+
     Constraints:
         - Email is unique and case-insensitive (enforced at DB level as well).
         - Password is always hashed before storage.
@@ -106,13 +107,13 @@ class User(Base):
 
     def verify_password(self, password: str) -> bool:
         """Verify plaintext password against stored hash.
-        
+
         Args:
             password: Plaintext password to verify.
-            
+
         Returns:
             bool: True if password matches, False otherwise.
-            
+
         Raises:
             None: Returns False on hash mismatch.
         """
@@ -134,15 +135,15 @@ class User(Base):
     @staticmethod
     def hash_password(password: str) -> str:
         """Hash plaintext password using Argon2.
-        
+
         Argon2id with secure defaults:
         - time_cost: 2 iterations
         - memory_cost: 65536 KiB
         - parallelism: 4 threads
-        
+
         Args:
             password: Plaintext password to hash.
-            
+
         Returns:
             str: Argon2id hash string (includes algorithm, salt, parameters).
         """

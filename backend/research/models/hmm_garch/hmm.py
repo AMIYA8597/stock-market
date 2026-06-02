@@ -201,14 +201,14 @@ class StudentTHMM:
 
         t_steps, k_states = log_b.shape
         log_pi = np.log(self.pi_ + _EPS)
-        log_A = np.log(self.A_ + _EPS)
+        log_a = np.log(self.A_ + _EPS)
 
         delta = np.zeros((t_steps, k_states))
         psi_idx = np.zeros((t_steps, k_states), dtype=int)
 
         delta[0] = log_pi + log_b[0]
         for t in range(1, t_steps):
-            score = delta[t - 1][:, None] + log_A
+            score = delta[t - 1][:, None] + log_a
             psi_idx[t] = np.argmax(score, axis=0)
             delta[t] = np.max(score, axis=0) + log_b[t]
 

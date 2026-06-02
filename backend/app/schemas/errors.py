@@ -20,28 +20,27 @@ This ensures:
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Optional
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from enum import StrEnum
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
 
-class ErrorCode(str, Enum):
+class ErrorCode(StrEnum):
     """Standardized error codes — single source of truth for all errors.
-    
+
     Each code is returned in error.code field for client-side handling.
     Clients can switch on these codes rather than parsing error messages.
     """
-    
+
     # Validation errors (400)
     VALIDATION_ERROR = "VALIDATION_ERROR"
     INVALID_REQUEST = "INVALID_REQUEST"
     INVALID_EMAIL = "INVALID_EMAIL"
     PASSWORD_TOO_WEAK = "PASSWORD_TOO_WEAK"
     INVALID_PHONE = "INVALID_PHONE"
-    
+
     # Authentication errors (401)
     AUTHENTICATION_FAILED = "AUTHENTICATION_FAILED"
     INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
@@ -51,25 +50,25 @@ class ErrorCode(str, Enum):
     SESSION_EXPIRED = "SESSION_EXPIRED"
     MFA_REQUIRED = "MFA_REQUIRED"
     INVALID_2FA = "INVALID_2FA"
-    
+
     # Authorization errors (403)
     AUTHORIZATION_FAILED = "AUTHORIZATION_FAILED"
     FORBIDDEN = "FORBIDDEN"
     INSUFFICIENT_PERMISSIONS = "INSUFFICIENT_PERMISSIONS"
     ACCOUNT_INACTIVE = "ACCOUNT_INACTIVE"
     ACCOUNT_LOCKED = "ACCOUNT_LOCKED"
-    
+
     # Resource errors (404, 409, 422)
     RESOURCE_NOT_FOUND = "RESOURCE_NOT_FOUND"
     CONFLICT = "CONFLICT"
     ALREADY_EXISTS = "ALREADY_EXISTS"
     CANNOT_DELETE = "CANNOT_DELETE"
     UNPROCESSABLE = "UNPROCESSABLE"
-    
+
     # Rate limiting (429)
     RATE_LIMIT_EXCEEDED = "RATE_LIMIT_EXCEEDED"
     TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS"
-    
+
     # Payment errors (402, 402-specific)
     PAYMENT_REQUIRED = "PAYMENT_REQUIRED"
     PAYMENT_FAILED = "PAYMENT_FAILED"
@@ -77,7 +76,7 @@ class ErrorCode(str, Enum):
     INSUFFICIENT_FUNDS = "INSUFFICIENT_FUNDS"
     INVALID_PAYMENT_METHOD = "INVALID_PAYMENT_METHOD"
     PAYMENT_PROCESSING = "PAYMENT_PROCESSING"
-    
+
     # Server errors (500, 503)
     INTERNAL_SERVER_ERROR = "INTERNAL_SERVER_ERROR"
     NOT_IMPLEMENTED = "NOT_IMPLEMENTED"
@@ -89,8 +88,8 @@ class ErrorCode(str, Enum):
 
 class ErrorDetail(BaseModel):
     """Single field-level error detail (used for validation errors)."""
-    
-    field: Optional[str] = Field(
+
+    field: str | None = Field(
         None,
         description="Field name if this is a validation error (e.g., 'email', 'password')",
     )
@@ -108,7 +107,7 @@ class ErrorDetail(BaseModel):
 
 class ErrorInfo(BaseModel):
     """Container for error information."""
-    
+
     code: str = Field(
         ...,
         description="Machine-readable error code from ErrorCode enum",
@@ -127,13 +126,13 @@ class ErrorInfo(BaseModel):
 
 class ErrorResponse(BaseModel):
     """Standard error response format for all API endpoints.
-    
+
     Every error response must use this format to ensure:
     - Consistent structure across all endpoints
     - Request tracing via request_id
     - Field-level validation error details
     - Machine-readable error codes
-    
+
     Example:
         {
             "success": false,
@@ -151,7 +150,7 @@ class ErrorResponse(BaseModel):
             "request_id": "550e8400-e29b-41d4-a716-446655440000"
         }
     """
-    
+
     success: bool = Field(
         False,
         description="Always false for error responses",
@@ -165,29 +164,29 @@ class ErrorResponse(BaseModel):
         description="Unique request ID for tracing (UUID v4)",
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="UTC timestamp when error was generated",
     )
-    
+
     @classmethod
     def create(
         cls,
         code: ErrorCode | str,
         message: str,
-        details: Optional[list[ErrorDetail]] = None,
-        request_id: Optional[str] = None,
+        details: list[ErrorDetail] | None = None,
+        request_id: str | None = None,
     ) -> ErrorResponse:
         """Factory method to create a standardized error response.
-        
+
         Args:
             code: ErrorCode enum or string code
             message: Human-readable error message
             details: Optional list of field-level error details
             request_id: Optional UUID; generated if not provided
-            
+
         Returns:
             ErrorResponse: Complete error response ready to return to client
-            
+
         Example:
             raise HTTPException(
                 status_code=400,
@@ -205,7 +204,7 @@ class ErrorResponse(BaseModel):
             )
         """
         code_value = code.value if isinstance(code, ErrorCode) else code
-        
+
         return cls(
             success=False,
             error=ErrorInfo(
@@ -214,9 +213,9 @@ class ErrorResponse(BaseModel):
                 details=details or [],
             ),
             request_id=request_id or str(uuid4()),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
-    
+
     def dict(self, **kwargs):
         """Override dict() to match FastAPI HTTPException requirements."""
         return self.model_dump(mode="json", **kwargs)
@@ -224,9 +223,9 @@ class ErrorResponse(BaseModel):
 
 class SuccessResponse(BaseModel):
     """Standard success response envelope (optional; for consistency)."""
-    
+
     success: bool = Field(True, description="Always true for success responses")
-    data: Optional[dict | list] = Field(
+    data: dict | list | None = Field(
         None,
         description="Response data (varies by endpoint)",
     )
@@ -235,6 +234,6 @@ class SuccessResponse(BaseModel):
         description="Unique request ID for tracing",
     )
     timestamp: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
+        default_factory=lambda: datetime.now(UTC),
         description="UTC timestamp when response was generated",
     )

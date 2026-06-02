@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -118,7 +118,7 @@ async def create_post(
             ).dict(),
         )
 
-    published_at = datetime.now(timezone.utc) if payload.status == "published" else None
+    published_at = datetime.now(UTC) if payload.status == "published" else None
     post = BlogPost(
         slug=payload.slug,
         title=payload.title,
@@ -162,6 +162,6 @@ async def update_post(
     if payload.status is not None:
         post.status = payload.status
         if payload.status == "published" and post.published_at is None:
-            post.published_at = datetime.now(timezone.utc)
+            post.published_at = datetime.now(UTC)
 
     return {"id": str(post.id), "slug": post.slug}

@@ -15,8 +15,8 @@ from app.database.connection import (
     async_session_factory,
     drop_db,
     engine,
-    get_db_health,
     get_db,
+    get_db_health,
     get_session,
     init_db,
 )

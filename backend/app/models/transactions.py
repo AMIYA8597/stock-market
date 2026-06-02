@@ -9,7 +9,8 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Numeric, String, UUID as SQLA_UUID, ForeignKey, func
+from sqlalchemy import UUID as SQLA_UUID
+from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base

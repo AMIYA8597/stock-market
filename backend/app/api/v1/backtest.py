@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
@@ -137,5 +137,5 @@ async def get_backtest_results(job_id: str, db: AsyncSession = Depends(get_db)) 
             multiple_testing_correction="Bonferroni",
         ),
         status="DONE",
-        completed_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(UTC),
     )

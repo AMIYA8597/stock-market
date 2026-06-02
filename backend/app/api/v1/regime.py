@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/regime", tags=["regime"])
 @router.get("/current", response_model=RegimeCurrentResponse)
 async def get_regime_current(db: AsyncSession = Depends(get_db)) -> RegimeCurrentResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return RegimeCurrentResponse(
         state="bull",
         state_index=0,
@@ -49,7 +49,7 @@ async def get_regime_history(
     db: AsyncSession = Depends(get_db),
 ) -> RegimeHistoryResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     points: list[RegimeHistoryPoint] = []
     transitions = 0
 

@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 import numpy as np
 import pandas as pd
 
-from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.pipeline import FeaturePipeline
+from research.feature_engineering.price_factors import PriceFactorsBuilder
 
 
 def _build_input_frame(rows: int = 320) -> pd.DataFrame:

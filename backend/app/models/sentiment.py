@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Numeric, String, Text, Integer, BigInteger, ForeignKey, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -16,7 +16,7 @@ from app.database.connection import Base
 
 class NewsSentiment(Base):
     """Financial news sentiment analysis.
-    
+
     Fields:
         id (int): Big serial primary key.
         symbol_id (int): Foreign key to Symbol (nullable for market-wide news).
@@ -27,7 +27,7 @@ class NewsSentiment(Base):
         sentiment_score (Decimal): FinBERT probability score [0, 1].
         published_at (datetime): News publication timestamp (UTC).
         processed_at (datetime): When sentiment was analyzed (UTC).
-    
+
     Indexes:
         - (symbol_id, published_at DESC) for time-series lookup
     """

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -30,7 +30,7 @@ async def get_alerts(
 ) -> AlertListResponse:
     _ = db
     _ = current_user
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     items = [
         AlertData(
             id=str(uuid4()),
@@ -56,7 +56,7 @@ async def post_alert(
 ) -> AlertData:
     _ = db
     _ = current_user
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if request.alert_type not in {"PRICE_ABOVE", "PRICE_BELOW", "RSI_OB", "MACD_CROSS", "SIGNAL_CHANGE", "REGIME_CHANGE"}:
         raise HTTPException(
             status_code=400,
@@ -89,7 +89,7 @@ async def patch_alert(
 ) -> AlertUpdateResponse:
     _ = db
     _ = current_user
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     alert = AlertData(
         id=alert_id,
         symbol="RELIANCE.NS",
@@ -113,4 +113,4 @@ async def delete_alert(
 ) -> AlertDeleteResponse:
     _ = db
     _ = current_user
-    return AlertDeleteResponse(id=alert_id, deleted_at=datetime.now(timezone.utc))
+    return AlertDeleteResponse(id=alert_id, deleted_at=datetime.now(UTC))

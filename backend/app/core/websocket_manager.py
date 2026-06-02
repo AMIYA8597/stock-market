@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections import defaultdict
-from typing import Any, Dict, Set
+from typing import Any
 
 from fastapi import WebSocket
 from loguru import logger
@@ -24,7 +24,7 @@ class ConnectionManager:
     """
 
     def __init__(self) -> None:
-        self._channels: Dict[str, Set[WebSocket]] = defaultdict(set)
+        self._channels: dict[str, set[WebSocket]] = defaultdict(set)
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket, channel: str) -> None:

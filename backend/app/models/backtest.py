@@ -6,12 +6,13 @@ Monte Carlo simulation, and full performance metrics.
 
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import date, datetime
 from decimal import Decimal
-from uuid import UUID, uuid4
 from typing import Any
+from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Date, Numeric, String, UUID as SQLA_UUID, ForeignKey, JSON, func
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import UUID as SQLA_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -19,7 +20,7 @@ from app.database.connection import Base
 
 class BacktestJob(Base):
     """Asynchronous backtest job and results.
-    
+
     Fields:
         id (UUID): Unique job identifier, primary key.
         user_id (UUID): Foreign key to User.
@@ -33,7 +34,7 @@ class BacktestJob(Base):
         results (dict): Complete results JSON (equity curve, trades, metrics).
         created_at (datetime): When job was submitted (UTC).
         completed_at (datetime): When job completed (UTC, nullable).
-    
+
     Status Values:
         - PENDING: Job queued, not yet running
         - RUNNING: Currently executing backtest

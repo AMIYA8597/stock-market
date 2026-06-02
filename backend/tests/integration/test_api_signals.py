@@ -3,7 +3,6 @@ from fastapi.testclient import TestClient
 
 from app.api.v1.intelligence import router as intelligence_router
 
-
 app = FastAPI()
 app.include_router(intelligence_router, prefix="/api/v1")
 client = TestClient(app)

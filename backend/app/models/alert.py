@@ -9,7 +9,8 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, UUID as SQLA_UUID, ForeignKey, func
+from sqlalchemy import UUID as SQLA_UUID
+from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -17,7 +18,7 @@ from app.database.connection import Base
 
 class Alert(Base):
     """User-configurable market alert.
-    
+
     Fields:
         id (UUID): Unique alert identifier, primary key.
         user_id (UUID): Foreign key to User.
@@ -27,7 +28,7 @@ class Alert(Base):
         is_triggered (bool): Whether alert has been triggered.
         triggered_at (datetime): When alert was triggered (nullable).
         created_at (datetime): When alert was created (UTC).
-    
+
     Alert Types:
         - PRICE_ABOVE / PRICE_BELOW: Price levels
         - RSI_OB / RSI_OS: RSI overbought/oversold

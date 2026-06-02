@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.email_job import EmailJob
 from tasks.email_tasks import send_email_task
-
 
 TEMPLATES: dict[str, str] = {
     "welcome": "Hello {full_name}, welcome to NeuroQuant.",
@@ -41,4 +40,4 @@ def mark_email_job_state(job: EmailJob, status: str, error: str | None = None) -
     job.status = status
     job.last_error = error
     job.attempts += 1
-    job.updated_at = datetime.now(timezone.utc)
+    job.updated_at = datetime.now(UTC)

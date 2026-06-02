@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Integer, Numeric, ARRAY
+from sqlalchemy import ARRAY, DateTime, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -17,7 +17,7 @@ from app.database.connection import Base
 
 class RegimeState(Base):
     """Hidden Markov Model regime detection output.
-    
+
     Fields:
         time (datetime): Regime timestamp (UTC), primary key.
         viterbi_state (int): Most likely state (0=bull, 1=bear, 2=sideways, 3=crisis).
@@ -25,21 +25,21 @@ class RegimeState(Base):
         conditional_vol (Decimal): GARCH(1,1) conditional volatility forecast (1-day).
         vol_forecast_5d (Decimal): 5-day conditional volatility forecast.
         vol_forecast_21d (Decimal): 21-day conditional volatility forecast.
-    
+
     Primary Key: time
     Indexes: Implicit on primary key
-    
+
     Regime States:
         0 = BULL: Rising prices, low volatility, positive returns
-        1 = BEAR: Declining prices, medium volatility, negative returns  
+        1 = BEAR: Declining prices, medium volatility, negative returns
         2 = SIDEWAYS: Oscillating prices, medium volatility, near-zero returns
         3 = CRISIS: High volatility, sharp declines, large negative returns
-    
+
     Probabilities:
         - state_probs is a 4-element array summing to 1.0
         - Viterbi state is argmax of state_probs
         - Probabilities reflect regime transition uncertainty
-    
+
     Volatility Forecasts:
         - All forecasts are annualized percentage volatility
         - Computed per-state from GARCH(1,1) estimation

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -14,9 +14,9 @@ from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
     HoldingsResponse,
+    OptimizationRequest,
     OptimizationResponse,
     OptimizedWeight,
-    OptimizationRequest,
     PerformancePoint,
     PerformanceResponse,
     RiskMetricsResponse,
@@ -45,28 +45,28 @@ async def get_holdings(
         user_id = current_user.get("sub") if current_user else "test-user-id"
 
         if settings.MONGODB_URL:
-            from app.database.mongodb import mongo_get_portfolio, get_live_price
-            
+            from app.database.mongodb import get_live_price, mongo_get_portfolio
+
             portfolio = await mongo_get_portfolio(user_id)
             cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
             mongo_holdings = portfolio.get("holdings", [])
-            
+
             holdings = []
             total_invested = Decimal("0.0")
             total_current_value = Decimal("0.0")
-            
+
             for h in mongo_holdings:
                 symbol = h["symbol"].upper()
                 qty = Decimal(str(h["quantity"]))
                 avg_p = Decimal(str(h["avg_price"]))
-                
+
                 # Fetch live price
                 curr_p_val = await get_live_price(symbol)
                 curr_p = Decimal(str(curr_p_val))
-                
+
                 unrealized_pnl = (curr_p - avg_p) * qty
                 unrealized_pnl_pct = (curr_p - avg_p) / avg_p if avg_p > 0 else Decimal("0.0")
-                
+
                 holdings.append(
                     HoldingData(
                         symbol=symbol,
@@ -93,7 +93,7 @@ async def get_holdings(
                 total_unrealized_pnl_pct=total_unrealized_pnl_pct.quantize(Decimal("0.0001")),
                 cash_balance=cash_balance.quantize(Decimal("0.01")),
                 portfolio_value=portfolio_value.quantize(Decimal("0.01")),
-                timestamp=datetime.now(timezone.utc),
+                timestamp=datetime.now(UTC),
             )
 
         # Fallback static mock holdings
@@ -130,7 +130,7 @@ async def get_holdings(
             total_unrealized_pnl_pct=Decimal("0.0141"),
             cash_balance=Decimal("832524.90"),
             portfolio_value=Decimal("1002360.00"),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
     except Exception as exc:
         raise HTTPException(
@@ -159,7 +159,7 @@ async def post_transaction(
 
         user_id = current_user.get("sub") if current_user else "test-user-id"
         tx_type = request.type.upper()
-        
+
         if tx_type not in {"BUY", "SELL"}:
             raise HTTPException(
                 status_code=400,
@@ -172,24 +172,28 @@ async def post_transaction(
         gross = request.quantity * request.price
         brokerage = request.brokerage or Decimal("0")
         stt = request.stt or Decimal("0")
-        
+
         if tx_type == "BUY":
             net_amount = gross + brokerage + stt
         else:
             net_amount = gross - brokerage - stt
 
         if settings.MONGODB_URL:
-            from app.database.mongodb import mongo_get_portfolio, mongo_save_portfolio, mongo_add_transaction
-            
+            from app.database.mongodb import (
+                mongo_add_transaction,
+                mongo_get_portfolio,
+                mongo_save_portfolio,
+            )
+
             # Fetch and lock/update portfolio in Mongo
             portfolio = await mongo_get_portfolio(user_id)
             cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
             holdings = portfolio.get("holdings", [])
-            
+
             symbol = request.symbol.upper().strip()
             qty = Decimal(str(request.quantity))
             price = Decimal(str(request.price))
-            
+
             if tx_type == "BUY":
                 if cash_balance < net_amount:
                     raise HTTPException(
@@ -200,17 +204,17 @@ async def post_transaction(
                         ).dict(),
                     )
                 new_cash = cash_balance - net_amount
-                
+
                 # Update holding
                 found = False
                 for h in holdings:
                     if h["symbol"].upper() == symbol:
                         h_qty = Decimal(str(h["quantity"]))
                         h_avg = Decimal(str(h["avg_price"]))
-                        
+
                         new_qty = h_qty + qty
                         new_avg = (h_qty * h_avg + qty * price) / new_qty
-                        
+
                         h["quantity"] = float(new_qty)
                         h["avg_price"] = float(new_avg)
                         found = True
@@ -238,18 +242,18 @@ async def post_transaction(
                         ).dict(),
                     )
                 new_cash = cash_balance + net_amount
-                
+
                 h_qty = Decimal(str(found_h["quantity"]))
                 new_qty = h_qty - qty
                 if new_qty <= 0:
                     holdings.remove(found_h)
                 else:
                     found_h["quantity"] = float(new_qty)
-            
+
             # Save transaction & portfolio in Mongo
             await mongo_save_portfolio(user_id, float(new_cash), holdings)
             tx = await mongo_add_transaction(user_id, symbol, tx_type, float(qty), float(price), float(net_amount))
-            
+
             return TransactionResponse(
                 transaction_id=str(tx["transaction_id"]),
                 symbol=symbol,
@@ -269,7 +273,7 @@ async def post_transaction(
             quantity=request.quantity,
             price=request.price,
             net_amount=net_amount.quantize(Decimal("0.01")),
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             portfolio_updated=True,
         )
     except HTTPException:
@@ -298,7 +302,7 @@ async def get_performance(
         _ = db
         _ = current_user
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         points: list[PerformancePoint] = []
         base_port = Decimal("1000000.00")
         base_bench = Decimal("1000000.00")
@@ -425,7 +429,7 @@ async def post_optimize(
             efficient_frontier=frontier,
             hrp_dendrogram=None,
             bl_posterior_returns=None,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
     except HTTPException:
         raise

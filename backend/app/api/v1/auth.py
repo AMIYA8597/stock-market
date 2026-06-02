@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
@@ -11,7 +10,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    hash_password,
+    verify_password,
+)
 from app.core.test_state import (
     TEST_REFRESH_SESSIONS,
     TEST_REVOKED_ACCESS_JTIS,
@@ -19,13 +25,6 @@ from app.core.test_state import (
     TEST_USERS_BY_ID,
     ensure_test_isolation,
     is_test_mode,
-)
-from app.core.security import (
-    create_access_token,
-    create_refresh_token,
-    decode_token,
-    hash_password,
-    verify_password,
 )
 from app.models.auth_token import PasswordResetToken, RefreshSession
 from app.models.user import User
@@ -69,7 +68,7 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
                 "password": payload.password,
                 "role": "USER",
                 "is_active": True,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
                 "failed_login_attempts": 0,
                 "locked_until": None,
             }
@@ -93,7 +92,7 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
         )
 
     if settings.MONGODB_URL:
-        from app.database.mongodb import mongo_get_user_by_email, mongo_create_user
+        from app.database.mongodb import mongo_create_user, mongo_get_user_by_email
         existing_user = await mongo_get_user_by_email(email)
         if existing_user is not None:
             raise HTTPException(
@@ -109,7 +108,7 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
             "full_name": payload.full_name,
             "role": "USER",
             "is_active": True,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         })
         return UserResponse(
             id=str(user["_id"]),
@@ -172,15 +171,15 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
                 "password": payload.password,
                 "role": "USER",
                 "is_active": True,
-                "created_at": datetime.now(timezone.utc),
+                "created_at": datetime.now(UTC),
                 "failed_login_attempts": 0,
                 "locked_until": None,
             }
             TEST_USERS_BY_EMAIL[email] = user
             TEST_USERS_BY_ID[str(user["id"])] = user
         locked_until = user.get("locked_until")
-        if isinstance(locked_until, datetime) and locked_until > datetime.now(timezone.utc):
-            remaining = (locked_until - datetime.now(timezone.utc)).total_seconds()
+        if isinstance(locked_until, datetime) and locked_until > datetime.now(UTC):
+            remaining = (locked_until - datetime.now(UTC)).total_seconds()
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=ErrorResponse.create(
@@ -192,7 +191,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             failed_attempts = int(user.get("failed_login_attempts", 0)) + 1
             user["failed_login_attempts"] = failed_attempts
             if failed_attempts >= 5:
-                user["locked_until"] = datetime.now(timezone.utc) + timedelta(minutes=15)
+                user["locked_until"] = datetime.now(UTC) + timedelta(minutes=15)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ErrorResponse.create(
@@ -209,16 +208,20 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
         TEST_REFRESH_SESSIONS[_hash_token(refresh_token)] = {
             "user_id": str(user["id"]),
             "family_id": family_id,
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
             "revoked_at": None,
         }
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
 
     if settings.MONGODB_URL:
-        from app.database.mongodb import mongo_get_user_by_email, mongo_update_user, mongo_save_refresh_session
+        from app.database.mongodb import (
+            mongo_get_user_by_email,
+            mongo_save_refresh_session,
+            mongo_update_user,
+        )
         user = await mongo_get_user_by_email(email)
-        if user is not None and user.get("locked_until") and user["locked_until"] > datetime.now(timezone.utc):
-            remaining = (user["locked_until"] - datetime.now(timezone.utc)).total_seconds()
+        if user is not None and user.get("locked_until") and user["locked_until"] > datetime.now(UTC):
+            remaining = (user["locked_until"] - datetime.now(UTC)).total_seconds()
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=ErrorResponse.create(
@@ -232,7 +235,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
                 failed_attempts = user.get("failed_login_attempts", 0) + 1
                 locked_until = None
                 if failed_attempts >= 5:
-                    locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+                    locked_until = datetime.now(UTC) + timedelta(minutes=15)
                 await mongo_update_user(user["_id"], {
                     "failed_login_attempts": failed_attempts,
                     "locked_until": locked_until
@@ -257,7 +260,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
         await mongo_update_user(user["_id"], {
             "failed_login_attempts": 0,
             "locked_until": None,
-            "last_login_at": datetime.now(timezone.utc)
+            "last_login_at": datetime.now(UTC)
         })
 
         access_token = create_access_token(user_id=str(user["_id"]), role=str(user["role"]))
@@ -269,7 +272,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             "user_id": str(user["_id"]),
             "token_hash": _hash_token(refresh_token),
             "family_id": family_id,
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         })
 
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
@@ -277,8 +280,8 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    if user is not None and user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        remaining = (user.locked_until - datetime.now(timezone.utc)).total_seconds()
+    if user is not None and user.locked_until and user.locked_until > datetime.now(UTC):
+        remaining = (user.locked_until - datetime.now(UTC)).total_seconds()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=ErrorResponse.create(
@@ -292,7 +295,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
         if user is not None:
             user.failed_login_attempts += 1
             if user.failed_login_attempts >= 5:
-                user.locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+                user.locked_until = datetime.now(UTC) + timedelta(minutes=15)
             await db.commit()  # CRITICAL: Persist lockout state to DB
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -311,8 +314,8 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             ).dict(),
         )
 
-    if user.locked_until and user.locked_until > datetime.now(timezone.utc):
-        remaining = (user.locked_until - datetime.now(timezone.utc)).total_seconds()
+    if user.locked_until and user.locked_until > datetime.now(UTC):
+        remaining = (user.locked_until - datetime.now(UTC)).total_seconds()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=ErrorResponse.create(
@@ -323,7 +326,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
 
     user.failed_login_attempts = 0
     user.locked_until = None
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
     await db.commit()  # Persist successful login state
 
     access_token = create_access_token(user_id=str(user.id), role=user.role)
@@ -336,7 +339,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             user_id=user.id,
             token_hash=_hash_token(refresh_token),
             family_id=family_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
 
@@ -364,7 +367,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
 
         token_hash = _hash_token(payload.refresh_token)
         token_row = TEST_REFRESH_SESSIONS.get(token_hash)
-        if token_row is None or token_row.get("revoked_at") is not None or token_row.get("expires_at") <= datetime.now(timezone.utc):
+        if token_row is None or token_row.get("revoked_at") is not None or token_row.get("expires_at") <= datetime.now(UTC):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ErrorResponse.create(
@@ -384,7 +387,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
                 ).dict(),
             )
 
-        token_row["revoked_at"] = datetime.now(timezone.utc)
+        token_row["revoked_at"] = datetime.now(UTC)
         new_access = create_access_token(user_id=user_id, role=str(user.get("role", "USER")))
         new_refresh = create_refresh_token(user_id=user_id)
         new_refresh_claims = decode_token(new_refresh)
@@ -392,7 +395,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
         TEST_REFRESH_SESSIONS[_hash_token(new_refresh)] = {
             "user_id": user_id,
             "family_id": next_family_id,
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
             "revoked_at": None,
         }
         return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
@@ -412,7 +415,13 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
     token_hash = _hash_token(payload.refresh_token)
 
     if settings.MONGODB_URL:
-        from app.database.mongodb import mongo_get_refresh_session, mongo_revoke_refresh_session_family, mongo_get_user_by_id, mongo_save_refresh_session, get_mongo_db
+        from app.database.mongodb import (
+            get_mongo_db,
+            mongo_get_refresh_session,
+            mongo_get_user_by_id,
+            mongo_revoke_refresh_session_family,
+            mongo_save_refresh_session,
+        )
         token_row = await mongo_get_refresh_session(token_hash)
         if token_row is None:
             if family_id:
@@ -424,7 +433,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
                     message="Refresh token expired or revoked.",
                 ).dict(),
             )
-        
+
         user = await mongo_get_user_by_id(token_row["user_id"])
         if user is None or not user.get("is_active", True):
             raise HTTPException(
@@ -434,11 +443,11 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
                     message="User unavailable.",
                 ).dict(),
             )
-        
+
         database = get_mongo_db()
         await database.refresh_sessions.update_one(
             {"token_hash": token_hash},
-            {"$set": {"revoked_at": datetime.now(timezone.utc)}}
+            {"$set": {"revoked_at": datetime.now(UTC)}}
         )
 
         new_access = create_access_token(user_id=str(user["_id"]), role=user["role"])
@@ -450,7 +459,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
             "user_id": str(user["_id"]),
             "token_hash": _hash_token(new_refresh),
             "family_id": next_family_id,
-            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         })
 
         return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
@@ -459,7 +468,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
         select(RefreshSession).where(
             RefreshSession.token_hash == token_hash,
             RefreshSession.revoked_at.is_(None),
-            RefreshSession.expires_at > datetime.now(timezone.utc),
+            RefreshSession.expires_at > datetime.now(UTC),
         )
     )
     token_row = token_row_result.scalar_one_or_none()
@@ -468,7 +477,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
             await db.execute(
                 RefreshSession.__table__.update()
                 .where(RefreshSession.family_id == family_id)
-                .values(revoked_at=datetime.now(timezone.utc))
+                .values(revoked_at=datetime.now(UTC))
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -489,7 +498,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
             ).dict(),
         )
 
-    token_row.revoked_at = datetime.now(timezone.utc)
+    token_row.revoked_at = datetime.now(UTC)
     new_access = create_access_token(user_id=str(user.id), role=user.role)
     new_refresh = create_refresh_token(user_id=str(user.id))
     new_refresh_claims = decode_token(new_refresh)
@@ -500,7 +509,7 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
             user_id=user.id,
             token_hash=_hash_token(new_refresh),
             family_id=next_family_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+            expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
 
@@ -546,7 +555,7 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
     await db.execute(
         RefreshSession.__table__.update()
         .where(RefreshSession.user_id == user_id, RefreshSession.revoked_at.is_(None))
-        .values(revoked_at=datetime.now(timezone.utc))
+        .values(revoked_at=datetime.now(UTC))
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -571,7 +580,7 @@ async def me(current_user: dict | None = Depends(get_current_user_or_none), db: 
             full_name="Quant Trader",
             role="USER",
             is_active=True,
-            created_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
         )
 
     if current_user is None:
@@ -635,7 +644,7 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
         return AuthMessage(message="If an account exists, a reset email has been queued")
 
     raw_token = secrets.token_urlsafe(36)
-    expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
 
     db.add(
         PasswordResetToken(
@@ -661,7 +670,7 @@ async def reset_password(payload: ResetPasswordConfirm, db: AsyncSession = Depen
         select(PasswordResetToken).where(
             PasswordResetToken.token_hash == token_hash,
             PasswordResetToken.consumed_at.is_(None),
-            PasswordResetToken.expires_at > datetime.now(timezone.utc),
+            PasswordResetToken.expires_at > datetime.now(UTC),
         )
     )
     reset_row = result.scalar_one_or_none()
@@ -686,6 +695,6 @@ async def reset_password(payload: ResetPasswordConfirm, db: AsyncSession = Depen
         )
 
     user.hashed_password = hash_password(payload.new_password)
-    reset_row.consumed_at = datetime.now(timezone.utc)
+    reset_row.consumed_at = datetime.now(UTC)
 
     return AuthMessage(message="Password reset complete")

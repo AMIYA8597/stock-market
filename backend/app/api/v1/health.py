@@ -1,8 +1,7 @@
 """Health check endpoint."""
 
-from sqlalchemy import text
-
 from fastapi import APIRouter, HTTPException
+from sqlalchemy import text
 
 from app.core.dependencies import get_db, get_redis
 

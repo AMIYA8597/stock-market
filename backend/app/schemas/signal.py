@@ -2,10 +2,8 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
-from pydantic import BaseModel, Field, ConfigDict
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ─────────────────────────────────────────────────────────────━━
 # TFT Model Output
@@ -63,7 +61,7 @@ class SignalResponse(BaseModel):
     timestamp: datetime
     ensemble: EnsembleSignal
     models: dict = Field(
-        ..., 
+        ...,
         description="tft, hmm_garch, gnn, lstm_attn, xgboost model outputs"
     )
     model_weights: dict[str, Decimal] = Field(..., description="per-model weight")
@@ -85,7 +83,7 @@ class HistoricalSignal(BaseModel):
     signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
     confidence: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4)
     direction: str
-    actual_return: Optional[Decimal] = Field(None, decimal_places=6)
+    actual_return: Decimal | None = Field(None, decimal_places=6)
 
 
 class SignalHistoryResponse(BaseModel):
@@ -94,4 +92,4 @@ class SignalHistoryResponse(BaseModel):
     model: str = Field(..., description="ensemble|tft|hmm_garch|gnn|lstm_attn|xgboost")
     period_days: int
     data: list[HistoricalSignal]
-    accuracy_metrics: Optional[dict] = None
+    accuracy_metrics: dict | None = None

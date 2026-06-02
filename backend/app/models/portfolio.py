@@ -9,7 +9,8 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, UUID as SQLA_UUID, ForeignKey, UniqueConstraint, func
+from sqlalchemy import UUID as SQLA_UUID
+from sqlalchemy import DateTime, ForeignKey, Numeric, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -17,7 +18,7 @@ from app.database.connection import Base
 
 class PortfolioHolding(Base):
     """User portfolio position in a single symbol.
-    
+
     Fields:
         id (UUID): Unique holding identifier, primary key.
         user_id (UUID): Foreign key to User.
@@ -26,7 +27,7 @@ class PortfolioHolding(Base):
         avg_buy_price (Decimal): Average purchase price per unit.
         realized_pnl (Decimal): Realized profit/loss from closed positions.
         updated_at (datetime): Last update timestamp (UTC).
-    
+
     Constraints:
         - UNIQUE(user_id, symbol_id): One holding per symbol per user.
         - Uses Decimal for financial precision.

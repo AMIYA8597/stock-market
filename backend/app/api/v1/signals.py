@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -10,13 +10,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
 from app.schemas.errors import ErrorCode, ErrorResponse
-from app.schemas.signal import BulkSignalResponse, HistoricalSignal, SignalHistoryResponse, SignalResponse
+from app.schemas.signal import (
+    BulkSignalResponse,
+    HistoricalSignal,
+    SignalHistoryResponse,
+    SignalResponse,
+)
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
 
 def _build_signal(symbol: str) -> SignalResponse:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return SignalResponse(
         symbol=symbol.upper(),
         timestamp=now,
@@ -72,7 +77,7 @@ async def get_signals_bulk(
     return BulkSignalResponse(
         symbols=parsed,
         signals=signals,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         total_symbols=len(parsed),
         processed_symbols=len(signals),
     )
@@ -101,7 +106,7 @@ async def get_signal_history(
     db: AsyncSession = Depends(get_db),
 ) -> SignalHistoryResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     rows = []
     for i in range(min(days, 90)):

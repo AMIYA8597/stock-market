@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db
 from app.models.payment import PaymentTransaction
 from app.schemas.errors import ErrorCode, ErrorResponse
 
@@ -61,11 +61,11 @@ def _verify_webhook_signature(payload: bytes, signature_header: str) -> bool:
         except ValueError:
             return False
 
-        now_ts = int(datetime.now(timezone.utc).timestamp())
+        now_ts = int(datetime.now(UTC).timestamp())
         if abs(now_ts - timestamp) > settings.PAYMENT_WEBHOOK_TOLERANCE_SECONDS:
             return False
 
-        signed_payload = f"{timestamp}.{payload.decode('utf-8')}".encode("utf-8")
+        signed_payload = f"{timestamp}.{payload.decode('utf-8')}".encode()
         expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, signature_v1)
 
@@ -120,7 +120,7 @@ async def methods() -> dict[str, object]:
             {"code": code, "min_amount": str(bounds[0]), "max_amount": str(bounds[1]), "enabled": True}
             for code, bounds in _ALLOWED_METHODS.items()
         ],
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -185,7 +185,7 @@ async def create_intent(
 
         intent_id = f"pi_{uuid4().hex}"
         provider_ref = f"gw_{uuid4().hex[:18]}"
-        created_at = datetime.now(timezone.utc).isoformat()
+        created_at = datetime.now(UTC).isoformat()
         row = {
             "intent_id": intent_id,
             "provider_ref": provider_ref,
@@ -276,7 +276,7 @@ async def confirm_intent(
             "status": row["status"],
             "credited_amount": str(credited_amount),
             "wallet_balance": str(next_balance),
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
         }
 
     result = await db.execute(
@@ -314,7 +314,7 @@ async def confirm_intent(
         )
 
     row.status = "succeeded"
-    row.confirmed_at = datetime.now(timezone.utc)
+    row.confirmed_at = datetime.now(UTC)
 
     wallet_result = await db.execute(
         select(PaymentTransaction).where(
@@ -443,9 +443,9 @@ async def stripe_webhook(
     row.provider_event_id = event_id
     if status in {"succeeded", "paid"}:
         row.status = "succeeded"
-        row.confirmed_at = datetime.now(timezone.utc)
+        row.confirmed_at = datetime.now(UTC)
     elif status in {"failed", "canceled"}:
         row.status = "failed"
-    
+
     await db.commit()  # CRITICAL: Persist webhook event processing
     return {"status": "processed"}

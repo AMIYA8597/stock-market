@@ -20,11 +20,13 @@ from app.schemas.intelligence import (
     CounterfactualResponse,
     DriftItem,
     EconomicCalendarEvent,
+    EnsembleSignal,
     EnsembleWeightPoint,
     ExplainAttentionResponse,
     ExplainShapResponse,
     FactorExposureItem,
     FactorExposureResponse,
+    GNNSignal,
     HMMGarchSignal,
     LSTMAttnSignal,
     ModelAccuracyItem,
@@ -33,14 +35,11 @@ from app.schemas.intelligence import (
     RegimeHistoryPoint,
     RegimeStatisticsItem,
     SHAPContribution,
+    SignalHistoryPoint,
     SignalResponse,
     TFTSignal,
     XGBoostSignal,
-    GNNSignal,
-    EnsembleSignal,
-    SignalHistoryPoint,
 )
-
 
 REGIME_STATES = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
 MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]

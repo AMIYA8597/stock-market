@@ -2,10 +2,8 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, Field
-
 
 # ─────────────────────────────────────────────────────────────━━
 # Screener
@@ -13,16 +11,16 @@ from pydantic import BaseModel, Field
 
 class ScreenerFilterConfig(BaseModel):
     """Screener filter configuration."""
-    asset_class: Optional[str] = None
-    exchange: Optional[list[str]] = None
-    market_cap_min: Optional[Decimal] = None
-    market_cap_max: Optional[Decimal] = None
-    pe_ratio_max: Optional[Decimal] = None
-    rsi_min: Optional[Decimal] = None
-    rsi_max: Optional[Decimal] = None
-    momentum_21d_min: Optional[Decimal] = None
-    volume_ratio_min: Optional[Decimal] = None
-    signal_direction: Optional[list[str]] = None
+    asset_class: str | None = None
+    exchange: list[str] | None = None
+    market_cap_min: Decimal | None = None
+    market_cap_max: Decimal | None = None
+    pe_ratio_max: Decimal | None = None
+    rsi_min: Decimal | None = None
+    rsi_max: Decimal | None = None
+    momentum_21d_min: Decimal | None = None
+    volume_ratio_min: Decimal | None = None
+    signal_direction: list[str] | None = None
     regime_compatible: bool = False
 
 
@@ -42,8 +40,8 @@ class ScreenerResult(BaseModel):
     asset_type: str
     price: Decimal = Field(..., decimal_places=8)
     change_pct: Decimal = Field(..., decimal_places=4)
-    pe_ratio: Optional[Decimal] = None
-    rsi: Optional[Decimal] = None
+    pe_ratio: Decimal | None = None
+    rsi: Decimal | None = None
     signal_direction: str
     signal_confidence: Decimal = Field(..., ge=0, le=1, decimal_places=4)
     regime_state: str
@@ -78,9 +76,9 @@ class ScreenerPresetsResponse(BaseModel):
 
 class AlertCreateRequest(BaseModel):
     """POST /alerts request body."""
-    symbol: Optional[str] = None
+    symbol: str | None = None
     alert_type: str = Field(..., description="PRICE_ABOVE|PRICE_BELOW|RSI_OB|MACD_CROSS|SIGNAL_CHANGE|REGIME_CHANGE")
-    threshold: Optional[Decimal] = None
+    threshold: Decimal | None = None
     name: str = Field(..., min_length=1, max_length=100)
     enabled: bool = True
 
@@ -88,13 +86,13 @@ class AlertCreateRequest(BaseModel):
 class AlertData(BaseModel):
     """Alert object."""
     id: str
-    symbol: Optional[str] = None
+    symbol: str | None = None
     alert_type: str
-    threshold: Optional[Decimal] = None
+    threshold: Decimal | None = None
     name: str
     enabled: bool
     is_triggered: bool
-    triggered_at: Optional[datetime] = None
+    triggered_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -107,9 +105,9 @@ class AlertListResponse(BaseModel):
 
 class AlertUpdateRequest(BaseModel):
     """PATCH /alerts/{id} request body."""
-    name: Optional[str] = None
-    threshold: Optional[Decimal] = None
-    enabled: Optional[bool] = None
+    name: str | None = None
+    threshold: Decimal | None = None
+    enabled: bool | None = None
 
 
 class AlertUpdateResponse(BaseModel):

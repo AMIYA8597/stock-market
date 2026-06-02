@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from random import Random
 from typing import Literal
-import asyncio
-import json
 
-from fastapi import APIRouter, HTTPException, Query
+import yfinance as yf
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from pydantic import BaseModel
-import yfinance as yf
-
 from app.core.database import get_db
 from app.database.redis_client import get_redis
-from fastapi import Depends
 from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter()

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from torch import Tensor
 from torch.optim import AdamW
 
 from research.models.gnn.graph_builder import build_correlation_graph

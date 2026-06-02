@@ -7,7 +7,6 @@ import os
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass
-from typing import Deque
 from uuid import uuid4
 
 from fastapi import Request
@@ -49,7 +48,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def __init__(self, app, config: RateLimitConfig | None = None):
         super().__init__(app)
         self._config = config or RateLimitConfig()
-        self._hits: dict[str, Deque[float]] = defaultdict(deque)
+        self._hits: dict[str, deque[float]] = defaultdict(deque)
         self._lock = asyncio.Lock()
 
     async def dispatch(self, request: Request, call_next):

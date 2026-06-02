@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -56,7 +56,7 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)) -> QuoteRes
         week_52_low=Decimal("2121.10000000"),
         regime=RegimeData(state="bull", probs=[0.61, 0.13, 0.21, 0.05]),
         signal=SignalData(direction="BUY", confidence=0.73),
-        timestamp=datetime.now(timezone.utc),
+        timestamp=datetime.now(UTC),
     )
 
 
@@ -69,7 +69,7 @@ async def get_history(
 ) -> HistoryResponse:
     _ = db
     _ = period
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = []
     for i in range(30):
         t = now - timedelta(days=(29 - i))
@@ -90,7 +90,7 @@ async def get_history(
 @router.get("/indices", response_model=IndicesResponse)
 async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
     _ = db
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return IndicesResponse(
         indices=[
             IndexData(name="NIFTY 50", ticker="^NSEI", value=Decimal("22430.22000000"), change=Decimal("180.42000000"), change_pct=Decimal("0.8100"), regime_state="bull", timestamp=now),
@@ -130,7 +130,7 @@ async def get_movers(
             rank=2,
         ),
     ]
-    return MoversResponse(assets=assets, exchange=exchange, type=type, generated_at=datetime.now(timezone.utc))
+    return MoversResponse(assets=assets, exchange=exchange, type=type, generated_at=datetime.now(UTC))
 
 
 @router.get("/heatmap", response_model=HeatmapResponse)
@@ -148,7 +148,7 @@ async def get_heatmap(
             SectorNode(ticker="TCS.NS", name="TCS", value=Decimal("920.11"), metric_value=Decimal("0.94"), exchange=exchange)
         ],
     }
-    return HeatmapResponse(exchange=exchange, metric=metric, sectors=sectors, generated_at=datetime.now(timezone.utc))
+    return HeatmapResponse(exchange=exchange, metric=metric, sectors=sectors, generated_at=datetime.now(UTC))
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -169,7 +169,7 @@ async def search_symbols(
 @router.get("/economic-calendar", response_model=EconomicCalendarResponse)
 async def get_economic_calendar(db: AsyncSession = Depends(get_db)) -> EconomicCalendarResponse:
     _ = db
-    start = datetime.now(timezone.utc)
+    start = datetime.now(UTC)
     end = start + timedelta(days=30)
     events = [
         EconomicEvent(date=start + timedelta(days=2), event_name="RBI Policy Rate", country="India", importance="high", forecast="6.50%", previous="6.50%"),

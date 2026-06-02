@@ -29,22 +29,22 @@ settings = get_settings()
 
 async def startup_events() -> dict[str, Any]:
     """Initialize background tasks and services on startup.
-    
+
     Called during FastAPI application startup. Initializes:
     - Redis connection pool
     - Database connection pool
     - Background tasks (price/signal broadcasters)
     - Model cache warmup
     - Health monitoring
-    
+
     All errors are logged but non-critical failures don't prevent startup.
-    
+
     Returns:
         dict[str, Any]: Dictionary of initialized services and tasks.
-        
+
     Raises:
         RuntimeError: Only if critical service initialization fails.
-        
+
     Example:
         services = await startup_events()
         # services = {
@@ -54,7 +54,7 @@ async def startup_events() -> dict[str, Any]:
     """
     services: dict[str, Any] = {}
     redis_client = None
-    
+
     logger.info("startup_begin")
 
     try:
@@ -176,24 +176,24 @@ async def startup_events() -> dict[str, Any]:
 
 async def shutdown_events(services: dict[str, Any]) -> None:
     """Gracefully shutdown services and cancel background tasks.
-    
+
     Called during FastAPI application shutdown. Cleanly closes:
     - Background tasks (broadcasters, workers)
     - Database connection pool
     - Redis connection pool
-    
+
     Uses asyncio.CancelledError suppression to ensure all cleanup occurs
     even if individual tasks fail.
-    
+
     Args:
         services: Dictionary of initialized services from startup_events().
-        
+
     Returns:
         None
-        
+
     Raises:
         None: All exceptions are logged but suppressed to ensure cleanup completes.
-        
+
     Example:
         services = await startup_events()
         # ... application runs ...
@@ -245,10 +245,10 @@ async def shutdown_events(services: dict[str, Any]) -> None:
 # ─── Helper: Lifespan Context Manager ──────────────────────────────────
 async def lifespan(app: Any):
     """FastAPI lifespan context manager for startup/shutdown.
-    
+
     Usage in main.py:
         from contextlib import asynccontextmanager
-        
+
         @asynccontextmanager
         async def lifespan(app):
             # Startup
@@ -256,15 +256,15 @@ async def lifespan(app: Any):
             yield
             # Shutdown
             await shutdown_events(services)
-        
+
         app = FastAPI(lifespan=lifespan)
-    
+
     Args:
         app: FastAPI application instance.
-        
+
     Yields:
         None
-        
+
     Raises:
         None: Exceptions from startup/shutdown are logged and handled.
     """

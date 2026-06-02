@@ -13,8 +13,8 @@ These functions are used as FastAPI `Depends()` parameters in route handlers.
 
 from __future__ import annotations
 
-import logging
-from typing import Annotated, AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
+from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -23,8 +23,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.database.connection import async_session_factory
 from app.core.security import decode_token, oauth2_scheme
+from app.database.connection import async_session_factory
 from app.database.redis_client import _redis_pool_singleton
 
 logger = get_logger(__name__)
@@ -38,16 +38,16 @@ oauth2_scheme_optional = OAuth2PasswordBearer(
 # ─── Database Session ─────────────────────────────────────────────────────
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Provide an async SQLAlchemy session for database operations.
-    
+
     This dependency injects a database session into route handlers.
     The session is automatically committed on success or rolled back on error.
-    
+
     Yields:
         AsyncSession: SQLAlchemy async session for ORM operations.
-        
+
     Raises:
         Exception: Any database errors are propagated to the route handler.
-        
+
     Example:
         @app.get("/users")
         async def get_users(db: Annotated[AsyncSession, Depends(get_db)]):
@@ -70,16 +70,16 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 # ─── Redis Client ────────────────────────────────────────────────────────
 async def get_redis() -> Redis:
     """Get Redis async client from singleton pool.
-    
+
     Returns the same connection pool instance across all requests.
     Handles automatic connection initialization and error recovery.
-    
+
     Returns:
         Redis: Async Redis client connected to configured server.
-        
+
     Raises:
         ConnectionError: If Redis server is unreachable.
-        
+
     Example:
         @app.get("/cache/key")
         async def get_cached(
@@ -106,13 +106,13 @@ async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
 ) -> dict:
     """Get the current authenticated user from JWT token.
-    
+
     Validates JWT signature and expiration. Returns decoded token payload
     containing user_id and role.
-    
+
     Args:
         token: Bearer token from Authorization header (injected by oauth2_scheme).
-        
+
     Returns:
         dict: Token payload with keys: user_id, role, type, iat, exp, jti.
 
@@ -163,21 +163,21 @@ async def get_current_user(
 
 async def get_current_user_or_none(
     token: Annotated[str | None, Depends(oauth2_scheme_optional)] = None,
-) -> Optional[dict]:
+) -> dict | None:
     """Get current user if authenticated, otherwise None.
-    
+
     Use this dependency for endpoints where authentication is optional.
     If no token is provided, returns None instead of raising an error.
-    
+
     Args:
         token: Bearer token from Authorization header (optional).
-        
+
     Returns:
         dict or None: Token payload if authenticated, None otherwise.
-        
+
     Raises:
         None: Always succeeds, even without token.
-        
+
     Example:
         @app.get("/public/data")
         async def public_data(
@@ -203,18 +203,18 @@ async def get_current_user_or_none(
 # ─── Role-Based Access Control ───────────────────────────────────────────
 def require_role(required_role: str):
     """Dependency factory for role-based access control.
-    
+
     Creates a dependency that verifies the current user has at least
     the required role level according to the role hierarchy:
-    
+
         ADMIN (5) > RESEARCHER (4) > ANALYST (3) > VIEWER (2) > API_USER (1)
-    
+
     Args:
         required_role: Minimum required role (ADMIN, RESEARCHER, ANALYST, VIEWER, API_USER).
-        
+
     Returns:
         Callable: Dependency function for use in route handlers.
-        
+
     Raises:
         HTTPException: 403 if user lacks required role.
 
@@ -264,16 +264,16 @@ def require_role(required_role: str):
 # ─── Request Context ────────────────────────────────────────────────────
 class RequestContext:
     """Context container for current request.
-    
+
     Holds request-scoped data like correlation ID, user info, etc.
     """
 
     def __init__(
         self,
-        user_id: Optional[str] = None,
-        role: Optional[str] = None,
-        correlation_id: Optional[str] = None,
-        request_id: Optional[str] = None,
+        user_id: str | None = None,
+        role: str | None = None,
+        correlation_id: str | None = None,
+        request_id: str | None = None,
     ):
         self.user_id = user_id
         self.role = role
@@ -282,16 +282,16 @@ class RequestContext:
 
 
 async def get_request_context(
-    current_user: Annotated[Optional[dict], Depends(get_current_user_or_none)] = None,
+    current_user: Annotated[dict | None, Depends(get_current_user_or_none)] = None,
 ) -> RequestContext:
     """Create request context from current user.
-    
+
     Args:
         current_user: Current authenticated user (optional).
-        
+
     Returns:
         RequestContext: Context object with user and request info.
-        
+
     Example:
         @app.get("/data")
         async def get_data(
@@ -312,7 +312,7 @@ class PaginationParams:
 
     def __init__(self, skip: int = 0, limit: int = 100):
         """Initialize pagination parameters.
-        
+
         Args:
             skip: Number of records to skip (offset).
             limit: Maximum records to return.
@@ -326,14 +326,14 @@ async def get_pagination(
     limit: int = 100,
 ) -> PaginationParams:
     """Get pagination parameters from query string.
-    
+
     Args:
         skip: Offset (default 0).
         limit: Limit per page (default 100, capped at 1000).
-        
+
     Returns:
         PaginationParams: Validated pagination parameters.
-        
+
     Example:
         @app.get("/items")
         async def list_items(
