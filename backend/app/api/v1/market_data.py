@@ -9,8 +9,10 @@ from hashlib import sha256
 from random import Random
 from typing import Literal
 
+import pandas as pd
 import yfinance as yf
 from fastapi import APIRouter, Depends, HTTPException, Query
+from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -364,6 +366,41 @@ async def get_history(
         rows = []
 
     if not rows:
+        try:
+            # Adjust period/interval compatibility for yfinance
+            yf_period = period
+            if interval == "1m" and period not in {"1d", "5d", "7d"}:
+                yf_period = "5d"
+            elif interval in {"5m", "15m"} and period not in {"1d", "5d", "1mo", "3mo"}:
+                yf_period = "1mo"
+            elif interval == "1h" and period not in {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y"}:
+                yf_period = "1mo"
+
+            def _fetch_yf_history() -> pd.DataFrame:
+                ticker = yf.Ticker(symbol)
+                return ticker.history(period=yf_period, interval=interval)
+
+            df = await asyncio.to_thread(_fetch_yf_history)
+            if not df.empty:
+                rows = []
+                for idx, row in df.iterrows():
+                    # Convert pandas index Timestamp to datetime
+                    dt = idx.to_pydatetime()
+                    rows.append(
+                        {
+                            "time": dt,
+                            "open": float(row["Open"]),
+                            "high": float(row["High"]),
+                            "low": float(row["Low"]),
+                            "close": float(row["Close"]),
+                            "volume": float(row["Volume"]),
+                        }
+                    )
+        except Exception as e:
+            logger.warning(f"Error fetching yfinance history for {symbol}: {e}")
+            rows = []
+
+    if not rows:
         rng = Random(_seed(f"{symbol}:{interval}:{period}"))
         start = datetime.now(UTC) - timedelta(days=29)
         price = 1000.0 + rng.random() * 1200.0
@@ -413,45 +450,85 @@ async def get_indices() -> list[IndexResponse]:
         ("Bitcoin", "BTC-USD"),
         ("Ethereum", "ETH-USD"),
     ]
-    def _pull_index(name: str, ticker: str) -> IndexResponse:
-        try:
-            hist = yf.Ticker(ticker).history(period="2d", interval="1d")
-            if hist.empty:
-                raise ValueError("No index history")
-            latest = hist.iloc[-1]
-            prev_close = float(latest.get("Close", 0.0))
-            if len(hist) > 1:
-                prev_close = float(hist.iloc[-2].get("Close", prev_close))
-            value = float(latest.get("Close", 0.0))
-            change = value - prev_close
-            change_pct = 0.0 if prev_close == 0 else (change / prev_close) * 100.0
-            probs = _state_probs_from_signal(max(-1.0, min(1.0, change_pct / 3.0)))
-            regime_state = max(probs, key=probs.get).upper()
-            return IndexResponse(
-                name=name,
-                ticker=ticker,
-                value=round(value, 2),
-                change=round(change, 2),
-                change_pct=round(change_pct, 3),
-                regime_state=regime_state,
-            )
-        except Exception:
-            rng = Random(_seed(ticker))
-            value = round(1000 + rng.random() * 22000, 2)
-            change_pct = round(-2 + rng.random() * 4, 3)
-            change = round(value * change_pct / 100, 2)
-            regime_state = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"][int(rng.random() * 4) % 4]
-            return IndexResponse(
-                name=name,
-                ticker=ticker,
-                value=value,
-                change=change,
-                change_pct=change_pct,
-                regime_state=regime_state,
-            )
+    tickers = [t for n, t in index_universe]
 
-    rows = await asyncio.to_thread(lambda: [_pull_index(name, ticker) for name, ticker in index_universe])
-    return rows
+    def _fetch_all_indices() -> pd.DataFrame:
+        return yf.download(tickers, period="2d", interval="1d", group_by="ticker", progress=False)
+
+    try:
+        df = await asyncio.to_thread(_fetch_all_indices)
+        rows = []
+        for name, ticker in index_universe:
+            try:
+                if len(tickers) == 1:
+                    symbol_df = df
+                else:
+                    symbol_df = df[ticker]
+
+                if symbol_df.empty or len(symbol_df) < 1:
+                    raise ValueError("No index history")
+
+                latest = symbol_df.iloc[-1]
+                value = float(latest.get("Close", 0.0))
+                prev_close = value
+                if len(symbol_df) > 1:
+                    prev_close = float(symbol_df.iloc[-2].get("Close", value))
+
+                change = value - prev_close
+                change_pct = 0.0 if prev_close == 0 else (change / prev_close) * 100.0
+                probs = _state_probs_from_signal(max(-1.0, min(1.0, change_pct / 3.0)))
+                regime_state = max(probs, key=probs.get).upper()
+
+                rows.append(
+                    IndexResponse(
+                        name=name,
+                        ticker=ticker,
+                        value=round(value, 2),
+                        change=round(change, 2),
+                        change_pct=round(change_pct, 3),
+                        regime_state=regime_state,
+                    )
+                )
+            except Exception as e:
+                logger.warning(f"Error fetching ticker {ticker}: {e}")
+                # Fallback to random generator if single ticker fetch fails
+                rng = Random(_seed(ticker))
+                value = round(1000.0 + rng.random() * 22000.0, 2)
+                change_pct = round(-2.0 + rng.random() * 4.0, 3)
+                change = round(value * change_pct / 100.0, 2)
+                regime_state = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"][int(rng.random() * 4) % 4]
+                rows.append(
+                    IndexResponse(
+                        name=name,
+                        ticker=ticker,
+                        value=value,
+                        change=change,
+                        change_pct=change_pct,
+                        regime_state=regime_state,
+                    )
+                )
+        return rows
+    except Exception as e:
+        logger.error(f"Error fetching batch indices: {e}")
+        # Fallback to random generator if the entire download fails
+        rows = []
+        for name, ticker in index_universe:
+            rng = Random(_seed(ticker))
+            value = round(1000.0 + rng.random() * 22000.0, 2)
+            change_pct = round(-2.0 + rng.random() * 4.0, 3)
+            change = round(value * change_pct / 100.0, 2)
+            regime_state = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"][int(rng.random() * 4) % 4]
+            rows.append(
+                IndexResponse(
+                    name=name,
+                    ticker=ticker,
+                    value=value,
+                    change=change,
+                    change_pct=change_pct,
+                    regime_state=regime_state,
+                )
+            )
+        return rows
 
 @router.get("/movers", response_model=list[MoverResponse])
 async def get_movers(
@@ -520,6 +597,103 @@ async def get_movers(
         result = (await db.execute(query, where_params)).mappings().all()
     except Exception:
         result = []
+
+    if not result:
+        try:
+            ticker_map = {
+                "NSE": [
+                    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
+                    "BHARTIARTL.NS", "SBIN.NS", "ITC.NS", "HINDUNILVR.NS", "LT.NS",
+                    "AXISBANK.NS", "KOTAKBANK.NS", "SUNPHARMA.NS", "TITAN.NS", "MARUTI.NS",
+                    "TATASTEEL.NS", "WIPRO.NS", "BAJFINANCE.NS", "ADANIENT.NS", "POWERGRID.NS"
+                ],
+                "NYSE": [
+                    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "JPM", "V", "UNH",
+                    "MA", "HD", "PG", "LLY", "AVGO", "COST", "ADBE", "CRM", "NFLX", "AMD"
+                ],
+                "CRYPTO": [
+                    "BTC-USD", "ETH-USD", "BNB-USD", "SOL-USD", "XRP-USD", "ADA-USD",
+                    "DOGE-USD", "AVAX-USD", "DOT-USD", "LINK-USD", "SHIB-USD", "LTC-USD",
+                    "UNI-USD", "MATIC-USD", "ICP-USD", "NEAR-USD", "BCH-USD", "FIL-USD",
+                    "ATOM-USD", "XLM-USD"
+                ]
+            }
+            symbols = ticker_map.get(exchange, ticker_map["NSE"])
+
+            def _fetch_all_movers() -> pd.DataFrame:
+                return yf.download(symbols, period="2d", interval="1d", group_by="ticker", progress=False)
+
+            df = await asyncio.to_thread(_fetch_all_movers)
+            generated = []
+            for sym in symbols:
+                try:
+                    if len(symbols) == 1:
+                        symbol_df = df
+                    else:
+                        symbol_df = df[sym]
+
+                    if symbol_df.empty or len(symbol_df) < 1:
+                        continue
+
+                    latest = symbol_df.iloc[-1]
+                    price = float(latest.get("Close", 100.0))
+                    volume = int(float(latest.get("Volume", 0.0) or 0.0))
+                    prev_price = price
+                    if len(symbol_df) > 1:
+                        prev_price = float(symbol_df.iloc[-2].get("Close", price))
+
+                    change_pct = 0.0
+                    if prev_price > 0:
+                        change_pct = ((price - prev_price) / prev_price) * 100.0
+
+                    short_name = sym.split(".")[0].upper()
+                    generated.append(
+                        {
+                            "ticker": sym,
+                            "name": short_name,
+                            "exchange": exchange,
+                            "latest_close": price,
+                            "latest_volume": volume,
+                            "change_pct": change_pct,
+                            "direction": "STRONG_BUY" if change_pct > 2.0 else "BUY" if change_pct > 0.5 else "STRONG_SELL" if change_pct < -2.0 else "SELL" if change_pct < -0.5 else "NEUTRAL",
+                            "confidence": round(0.55 + min(abs(change_pct) * 0.1, 0.4), 3),
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Error parsing movers symbol {sym}: {e}")
+
+            if len(generated) < 20:
+                rng = Random(_seed(f"movers-pad:{exchange}:{type}"))
+                needed = 20 - len(generated)
+                for i in range(needed):
+                    change_pct = rng.uniform(-3.2, 3.6)
+                    generated.append(
+                        {
+                            "ticker": f"STOCK{len(generated)+1:02d}.{ 'NS' if exchange == 'NSE' else 'US' }",
+                            "name": f"Stock {len(generated)+1:02d}",
+                            "exchange": exchange,
+                            "latest_close": 100.0 + rng.random() * 4000.0,
+                            "latest_volume": int(100_000 + rng.random() * 4_500_000),
+                            "change_pct": change_pct,
+                            "direction": "STRONG_BUY" if change_pct > 2.0 else "BUY" if change_pct > 0.5 else "STRONG_SELL" if change_pct < -2.0 else "SELL" if change_pct < -0.5 else "NEUTRAL",
+                            "confidence": round(0.55 + rng.random() * 0.4, 3),
+                        }
+                    )
+
+            # Sort based on requested type
+            if type == "gainers":
+                generated.sort(key=lambda x: x["change_pct"], reverse=True)
+            elif type == "losers":
+                generated.sort(key=lambda x: x["change_pct"], reverse=False)
+            elif type == "volume":
+                generated.sort(key=lambda x: x["latest_volume"], reverse=True)
+            else:  # momentum / default
+                generated.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
+
+            result = generated[:20]
+        except Exception as e:
+            logger.error(f"Error fetching batch movers: {e}")
+            result = []
 
     if not result:
         rng = Random(_seed(f"movers:{exchange}:{type}"))
