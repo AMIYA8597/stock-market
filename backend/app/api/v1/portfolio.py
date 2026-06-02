@@ -36,11 +36,67 @@ async def get_holdings(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> HoldingsResponse:
-    """Return a schema-valid holdings snapshot for the authenticated user."""
+    """Return a holdings snapshot for the authenticated user (backed by MongoDB if configured)."""
     try:
-        _ = db
-        _ = current_user
+        from app.core.config import get_settings
+        settings = get_settings()
 
+        # Resolve user ID (fallback to test-user-id if unauthenticated)
+        user_id = current_user.get("sub") if current_user else "test-user-id"
+
+        if settings.MONGODB_URL:
+            from app.database.mongodb import mongo_get_portfolio, get_live_price
+            
+            portfolio = await mongo_get_portfolio(user_id)
+            cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
+            mongo_holdings = portfolio.get("holdings", [])
+            
+            holdings = []
+            total_invested = Decimal("0.0")
+            total_current_value = Decimal("0.0")
+            
+            for h in mongo_holdings:
+                symbol = h["symbol"].upper()
+                qty = Decimal(str(h["quantity"]))
+                avg_p = Decimal(str(h["avg_price"]))
+                
+                # Fetch live price
+                curr_p_val = await get_live_price(symbol)
+                curr_p = Decimal(str(curr_p_val))
+                
+                unrealized_pnl = (curr_p - avg_p) * qty
+                unrealized_pnl_pct = (curr_p - avg_p) / avg_p if avg_p > 0 else Decimal("0.0")
+                
+                holdings.append(
+                    HoldingData(
+                        symbol=symbol,
+                        quantity=qty,
+                        avg_price=avg_p,
+                        current_price=curr_p,
+                        unrealized_pnl=unrealized_pnl.quantize(Decimal("0.01")),
+                        unrealized_pnl_pct=unrealized_pnl_pct.quantize(Decimal("0.0001")),
+                        in_position_days=h.get("in_position_days", 1),
+                    )
+                )
+                total_invested += avg_p * qty
+                total_current_value += curr_p * qty
+
+            total_unrealized_pnl = total_current_value - total_invested
+            total_unrealized_pnl_pct = total_unrealized_pnl / total_invested if total_invested > 0 else Decimal("0.0")
+            portfolio_value = total_current_value + cash_balance
+
+            return HoldingsResponse(
+                holdings=holdings,
+                total_invested=total_invested.quantize(Decimal("0.01")),
+                total_current_value=total_current_value.quantize(Decimal("0.01")),
+                total_unrealized_pnl=total_unrealized_pnl.quantize(Decimal("0.01")),
+                total_unrealized_pnl_pct=total_unrealized_pnl_pct.quantize(Decimal("0.0001")),
+                cash_balance=cash_balance.quantize(Decimal("0.01")),
+                portfolio_value=portfolio_value.quantize(Decimal("0.01")),
+                timestamp=datetime.now(timezone.utc),
+            )
+
+        # Fallback static mock holdings
         holdings = [
             HoldingData(
                 symbol="RELIANCE.NS",
@@ -81,7 +137,7 @@ async def get_holdings(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message="Failed to fetch holdings.",
+                message=f"Failed to fetch holdings: {str(exc)}",
             ).dict(),
         ) from exc
 
@@ -96,12 +152,14 @@ async def post_transaction(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> TransactionResponse:
-    """Record a transaction and return normalized cost output."""
+    """Record a transaction and update cash/holdings inside MongoDB if configured."""
     try:
-        _ = db
-        _ = current_user
+        from app.core.config import get_settings
+        settings = get_settings()
 
+        user_id = current_user.get("sub") if current_user else "test-user-id"
         tx_type = request.type.upper()
+        
         if tx_type not in {"BUY", "SELL"}:
             raise HTTPException(
                 status_code=400,
@@ -114,8 +172,96 @@ async def post_transaction(
         gross = request.quantity * request.price
         brokerage = request.brokerage or Decimal("0")
         stt = request.stt or Decimal("0")
-        net_amount = gross + brokerage + stt
+        
+        if tx_type == "BUY":
+            net_amount = gross + brokerage + stt
+        else:
+            net_amount = gross - brokerage - stt
 
+        if settings.MONGODB_URL:
+            from app.database.mongodb import mongo_get_portfolio, mongo_save_portfolio, mongo_add_transaction
+            
+            # Fetch and lock/update portfolio in Mongo
+            portfolio = await mongo_get_portfolio(user_id)
+            cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
+            holdings = portfolio.get("holdings", [])
+            
+            symbol = request.symbol.upper().strip()
+            qty = Decimal(str(request.quantity))
+            price = Decimal(str(request.price))
+            
+            if tx_type == "BUY":
+                if cash_balance < net_amount:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=ErrorResponse.create(
+                            code=ErrorCode.VALIDATION_ERROR,
+                            message=f"Insufficient cash balance. Required: {net_amount}, Available: {cash_balance}",
+                        ).dict(),
+                    )
+                new_cash = cash_balance - net_amount
+                
+                # Update holding
+                found = False
+                for h in holdings:
+                    if h["symbol"].upper() == symbol:
+                        h_qty = Decimal(str(h["quantity"]))
+                        h_avg = Decimal(str(h["avg_price"]))
+                        
+                        new_qty = h_qty + qty
+                        new_avg = (h_qty * h_avg + qty * price) / new_qty
+                        
+                        h["quantity"] = float(new_qty)
+                        h["avg_price"] = float(new_avg)
+                        found = True
+                        break
+                if not found:
+                    holdings.append({
+                        "symbol": symbol,
+                        "quantity": float(qty),
+                        "avg_price": float(price),
+                        "in_position_days": 1
+                    })
+            else:  # SELL
+                # Check holding
+                found_h = None
+                for h in holdings:
+                    if h["symbol"].upper() == symbol:
+                        found_h = h
+                        break
+                if not found_h or Decimal(str(found_h["quantity"])) < qty:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=ErrorResponse.create(
+                            code=ErrorCode.VALIDATION_ERROR,
+                            message=f"Insufficient holdings of {symbol} to sell.",
+                        ).dict(),
+                    )
+                new_cash = cash_balance + net_amount
+                
+                h_qty = Decimal(str(found_h["quantity"]))
+                new_qty = h_qty - qty
+                if new_qty <= 0:
+                    holdings.remove(found_h)
+                else:
+                    found_h["quantity"] = float(new_qty)
+            
+            # Save transaction & portfolio in Mongo
+            await mongo_save_portfolio(user_id, float(new_cash), holdings)
+            tx = await mongo_add_transaction(user_id, symbol, tx_type, float(qty), float(price), float(net_amount))
+            
+            return TransactionResponse(
+                transaction_id=str(tx["transaction_id"]),
+                symbol=symbol,
+                type=tx_type,
+                quantity=qty,
+                price=price,
+                net_amount=net_amount.quantize(Decimal("0.01")),
+                timestamp=tx["timestamp"],
+                portfolio_updated=True,
+            )
+
+        # Mock fallback response
         return TransactionResponse(
             transaction_id=str(uuid4()),
             symbol=request.symbol.upper(),
@@ -133,7 +279,7 @@ async def post_transaction(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message="Transaction failed.",
+                message=f"Transaction failed: {str(exc)}",
             ).dict(),
         ) from exc
 

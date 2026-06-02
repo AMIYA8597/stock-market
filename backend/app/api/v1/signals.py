@@ -44,20 +44,6 @@ def _build_signal(symbol: str) -> SignalResponse:
     )
 
 
-@router.get("/{symbol}", response_model=SignalResponse)
-async def get_signal(symbol: str, db: AsyncSession = Depends(get_db)) -> SignalResponse:
-    _ = db
-    if not symbol.strip():
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="symbol is required.",
-            ).dict(),
-        )
-    return _build_signal(symbol)
-
-
 @router.get("/bulk", response_model=BulkSignalResponse)
 async def get_signals_bulk(
     symbols: str = Query(..., min_length=1, max_length=500),
@@ -90,6 +76,21 @@ async def get_signals_bulk(
         total_symbols=len(parsed),
         processed_symbols=len(signals),
     )
+
+
+@router.get("/{symbol}", response_model=SignalResponse)
+async def get_signal(symbol: str, db: AsyncSession = Depends(get_db)) -> SignalResponse:
+    _ = db
+    if not symbol.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="symbol is required.",
+            ).dict(),
+        )
+    return _build_signal(symbol)
+
 
 
 @router.get("/history/{symbol}", response_model=SignalHistoryResponse)

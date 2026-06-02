@@ -92,6 +92,34 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
             created_at=existing_user["created_at"],
         )
 
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_user_by_email, mongo_create_user
+        existing_user = await mongo_get_user_by_email(email)
+        if existing_user is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.ALREADY_EXISTS,
+                    message="Unable to complete registration. Please try with a different email or contact support.",
+                ).dict(),
+            )
+        user = await mongo_create_user({
+            "email": email,
+            "hashed_password": hash_password(payload.password),
+            "full_name": payload.full_name,
+            "role": "USER",
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc),
+        })
+        return UserResponse(
+            id=str(user["_id"]),
+            email=user["email"],
+            full_name=user["full_name"],
+            role=user["role"],
+            is_active=user["is_active"],
+            created_at=user["created_at"],
+        )
+
     existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none() is not None:
         # Use generic message to prevent user enumeration
@@ -184,6 +212,66 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
             "revoked_at": None,
         }
+        return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_user_by_email, mongo_update_user, mongo_save_refresh_session
+        user = await mongo_get_user_by_email(email)
+        if user is not None and user.get("locked_until") and user["locked_until"] > datetime.now(timezone.utc):
+            remaining = (user["locked_until"] - datetime.now(timezone.utc)).total_seconds()
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.ACCOUNT_LOCKED,
+                    message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
+                ).dict(),
+            )
+
+        if user is None or not verify_password(payload.password, user["hashed_password"]):
+            if user is not None:
+                failed_attempts = user.get("failed_login_attempts", 0) + 1
+                locked_until = None
+                if failed_attempts >= 5:
+                    locked_until = datetime.now(timezone.utc) + timedelta(minutes=15)
+                await mongo_update_user(user["_id"], {
+                    "failed_login_attempts": failed_attempts,
+                    "locked_until": locked_until
+                })
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.INVALID_CREDENTIALS,
+                    message="Email or password is incorrect. Please try again.",
+                ).dict(),
+            )
+
+        if not user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.ACCOUNT_INACTIVE,
+                    message="Your account is inactive. Please contact support.",
+                ).dict(),
+            )
+
+        await mongo_update_user(user["_id"], {
+            "failed_login_attempts": 0,
+            "locked_until": None,
+            "last_login_at": datetime.now(timezone.utc)
+        })
+
+        access_token = create_access_token(user_id=str(user["_id"]), role=str(user["role"]))
+        refresh_token = create_refresh_token(user_id=str(user["_id"]))
+        refresh_claims = decode_token(refresh_token)
+        family_id = str(refresh_claims.get("family") or uuid4().hex)
+
+        await mongo_save_refresh_session({
+            "user_id": str(user["_id"]),
+            "token_hash": _hash_token(refresh_token),
+            "family_id": family_id,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        })
+
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
 
     result = await db.execute(select(User).where(User.email == email))
@@ -323,6 +411,50 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
     family_id = decoded.get("family")
     token_hash = _hash_token(payload.refresh_token)
 
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_refresh_session, mongo_revoke_refresh_session_family, mongo_get_user_by_id, mongo_save_refresh_session, get_mongo_db
+        token_row = await mongo_get_refresh_session(token_hash)
+        if token_row is None:
+            if family_id:
+                await mongo_revoke_refresh_session_family(family_id)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.TOKEN_EXPIRED,
+                    message="Refresh token expired or revoked.",
+                ).dict(),
+            )
+        
+        user = await mongo_get_user_by_id(token_row["user_id"])
+        if user is None or not user.get("is_active", True):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.AUTHENTICATION_FAILED,
+                    message="User unavailable.",
+                ).dict(),
+            )
+        
+        database = get_mongo_db()
+        await database.refresh_sessions.update_one(
+            {"token_hash": token_hash},
+            {"$set": {"revoked_at": datetime.now(timezone.utc)}}
+        )
+
+        new_access = create_access_token(user_id=str(user["_id"]), role=user["role"])
+        new_refresh = create_refresh_token(user_id=str(user["_id"]))
+        new_refresh_claims = decode_token(new_refresh)
+        next_family_id = str(new_refresh_claims.get("family") or family_id or uuid4().hex)
+
+        await mongo_save_refresh_session({
+            "user_id": str(user["_id"]),
+            "token_hash": _hash_token(new_refresh),
+            "family_id": next_family_id,
+            "expires_at": datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        })
+
+        return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
+
     token_row_result = await db.execute(
         select(RefreshSession).where(
             RefreshSession.token_hash == token_hash,
@@ -406,6 +538,11 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
             ).dict(),
         )
 
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_revoke_user_sessions
+        await mongo_revoke_user_sessions(user_id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
     await db.execute(
         RefreshSession.__table__.update()
         .where(RefreshSession.user_id == user_id, RefreshSession.revoked_at.is_(None))
@@ -447,6 +584,27 @@ async def me(current_user: dict | None = Depends(get_current_user_or_none), db: 
         )
 
     user_id = current_user.get("sub")
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_user_by_id
+        user = await mongo_get_user_by_id(user_id)
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="User not found.",
+                ).dict(),
+            )
+        return UserResponse(
+            id=str(user["_id"]),
+            email=user["email"],
+            full_name=user.get("full_name"),
+            role=user["role"],
+            is_active=user["is_active"],
+            created_at=user["created_at"],
+        )
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None:
