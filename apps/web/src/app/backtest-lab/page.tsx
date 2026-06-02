@@ -12,15 +12,21 @@ import {
   type BacktestStatusResponse,
 } from "@/lib/contracts-api";
 import { ChartCard, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
+import { safeFormat } from "@/lib/formatters";
 
 const DEFAULT_SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"];
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+const cleanWsUrl = WS_URL.endsWith("/ws") ? WS_URL.slice(0, -3) : WS_URL;
 
-function toPercent(value: number | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
+function toPercent(value: unknown): string {
+  if (value === null || value === undefined) {
     return "--";
   }
-  return `${(value * 100).toFixed(2)}%`;
+  const num = Number(value);
+  if (Number.isNaN(num)) {
+    return "--";
+  }
+  return `${(num * 100).toFixed(2)}%`;
 }
 
 export default function BacktestLabPage(): JSX.Element {
@@ -83,7 +89,7 @@ export default function BacktestLabPage(): JSX.Element {
 
     try {
       setWsStatus("reconnecting");
-      ws = new WebSocket(`${WS_URL}/ws/backtest-progress`);
+      ws = new WebSocket(`${cleanWsUrl}/ws/backtest-progress`);
 
       ws.onopen = () => {
         setWsStatus("connected");
@@ -370,7 +376,7 @@ export default function BacktestLabPage(): JSX.Element {
                 </div>
 
                 <div className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-3 py-2 text-xs">
-                  <p className="text-[var(--nq-text-secondary)]">Preview Sharpe: {status?.result_preview?.sharpe?.toFixed(3) ?? "--"}</p>
+                  <p className="text-[var(--nq-text-secondary)]">Preview Sharpe: {safeFormat(status?.result_preview?.sharpe, 3)}</p>
                   <p className="text-[var(--nq-text-secondary)]">Preview Max Drawdown: {toPercent(status?.result_preview?.max_drawdown)}</p>
                 </div>
 
@@ -379,7 +385,7 @@ export default function BacktestLabPage(): JSX.Element {
                     data={progressHistory.length > 0 ? progressHistory : [{ label: "1", value: 0 }]}
                     mode="line"
                     stroke="var(--nq-accent-cyan)"
-                    yTickFormatter={(value) => `${value.toFixed(0)}%`}
+                    yTickFormatter={(value) => `${safeFormat(value, 0)}%`}
                   />
                 </div>
 

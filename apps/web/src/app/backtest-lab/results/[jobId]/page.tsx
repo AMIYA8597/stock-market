@@ -5,9 +5,13 @@ import { useParams } from "next/navigation";
 import { contractsApi, type BacktestResultsResponse } from "@/lib/contracts-api";
 import { Badge } from "@/components/ui/Badge";
 import { ChartCard } from "@/components/charts";
+import { safeFormat } from "@/lib/formatters";
 
-function pct(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
+function pct(value: unknown): string {
+  if (value === null || value === undefined) return "--";
+  const num = Number(value);
+  if (Number.isNaN(num)) return "--";
+  return `${(num * 100).toFixed(2)}%`;
 }
 
 export default function BacktestResultPage(): JSX.Element {
@@ -81,7 +85,7 @@ export default function BacktestResultPage(): JSX.Element {
         {[
           ["Total Return", result ? pct(result.metrics.total_return) : "--"],
           ["CAGR", result ? pct(result.metrics.cagr) : "--"],
-          ["Sharpe", result ? result.metrics.sharpe.toFixed(3) : "--"],
+          ["Sharpe", result ? safeFormat(result.metrics.sharpe, 3) : "--"],
           ["Max Drawdown", result ? pct(result.metrics.max_drawdown) : "--"],
         ].map(([label, value]) => (
           <div key={label} className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3">
@@ -124,7 +128,7 @@ export default function BacktestResultPage(): JSX.Element {
             <div key={`fold-${idx}`} className="rounded-[1rem] border border-white/10 bg-white/[0.04] px-3 py-2">
               <div className="flex items-center justify-between text-[var(--nq-text-primary)]">
                 <span>Fold {idx + 1}</span>
-                <span className={sharpe >= 0 ? "text-[var(--nq-bull)]" : "text-[var(--nq-bear)]"}>{sharpe.toFixed(2)}</span>
+                <span className={Number(sharpe) >= 0 ? "text-[var(--nq-bull)]" : "text-[var(--nq-bear)]"}>{safeFormat(sharpe, 2)}</span>
               </div>
             </div>
           ))}

@@ -29,7 +29,31 @@ async def get_alerts(
     current_user: dict = Depends(get_current_user),
 ) -> AlertListResponse:
     _ = db
-    _ = current_user
+    user_id = current_user.get("sub")
+
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_get_alerts
+        rows = await mongo_get_alerts(user_id)
+        items = [
+            AlertData(
+                id=str(row["_id"]),
+                symbol=row["symbol"],
+                alert_type=row["alert_type"],
+                threshold=Decimal(str(row["threshold"])),
+                name=row["name"],
+                enabled=row["enabled"],
+                is_triggered=row["is_triggered"],
+                triggered_at=row["triggered_at"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
+            for row in rows
+        ]
+        return AlertListResponse(alerts=items, total_count=len(items))
+
     now = datetime.now(UTC)
     items = [
         AlertData(
@@ -55,8 +79,8 @@ async def post_alert(
     current_user: dict = Depends(get_current_user),
 ) -> AlertData:
     _ = db
-    _ = current_user
-    now = datetime.now(UTC)
+    user_id = current_user.get("sub")
+
     if request.alert_type not in {"PRICE_ABOVE", "PRICE_BELOW", "RSI_OB", "MACD_CROSS", "SIGNAL_CHANGE", "REGIME_CHANGE"}:
         raise HTTPException(
             status_code=400,
@@ -66,6 +90,32 @@ async def post_alert(
             ).dict(),
         )
 
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_create_alert
+        row = await mongo_create_alert(user_id, {
+            "symbol": request.symbol,
+            "alert_type": request.alert_type,
+            "threshold": float(request.threshold),
+            "name": request.name,
+            "enabled": request.enabled,
+        })
+        return AlertData(
+            id=str(row["_id"]),
+            symbol=row["symbol"],
+            alert_type=row["alert_type"],
+            threshold=Decimal(str(row["threshold"])),
+            name=row["name"],
+            enabled=row["enabled"],
+            is_triggered=row["is_triggered"],
+            triggered_at=row["triggered_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+
+    now = datetime.now(UTC)
     return AlertData(
         id=str(uuid4()),
         symbol=request.symbol,
@@ -88,7 +138,44 @@ async def patch_alert(
     current_user: dict = Depends(get_current_user),
 ) -> AlertUpdateResponse:
     _ = db
-    _ = current_user
+    user_id = current_user.get("sub")
+
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_update_alert
+        update_dict = {}
+        if request.threshold is not None:
+            update_dict["threshold"] = float(request.threshold)
+        if request.name is not None:
+            update_dict["name"] = request.name
+        if request.enabled is not None:
+            update_dict["enabled"] = request.enabled
+
+        row = await mongo_update_alert(user_id, alert_id, update_dict)
+        if row is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="Alert not found.",
+                ).dict(),
+            )
+        alert = AlertData(
+            id=str(row["_id"]),
+            symbol=row["symbol"],
+            alert_type=row["alert_type"],
+            threshold=Decimal(str(row["threshold"])),
+            name=row["name"],
+            enabled=row["enabled"],
+            is_triggered=row["is_triggered"],
+            triggered_at=row["triggered_at"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+        return AlertUpdateResponse(alert=alert)
+
     now = datetime.now(UTC)
     alert = AlertData(
         id=alert_id,
@@ -112,5 +199,25 @@ async def delete_alert(
     current_user: dict = Depends(get_current_user),
 ) -> AlertDeleteResponse:
     _ = db
-    _ = current_user
+    user_id = current_user.get("sub")
+
+    from app.core.config import get_settings
+    settings = get_settings()
+
+    if settings.MONGODB_URL:
+        from app.database.mongodb import mongo_delete_alert
+        ok = await mongo_delete_alert(user_id, alert_id)
+        if not ok:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="Alert not found or already deleted.",
+                ).dict(),
+            )
+        return AlertDeleteResponse(id=alert_id, deleted_at=datetime.now(UTC))
+
     return AlertDeleteResponse(id=alert_id, deleted_at=datetime.now(UTC))
+
+
+

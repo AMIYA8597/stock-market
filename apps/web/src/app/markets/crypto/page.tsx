@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type MarketMover } from "@/lib/contracts-api";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { safeFormat } from "@/lib/formatters";
 
 export default function CryptoPage(): JSX.Element {
   const [coins, setCoins] = useState<MarketMover[]>([]);
@@ -49,7 +50,7 @@ export default function CryptoPage(): JSX.Element {
     if (coins.length === 0) {
       return 0;
     }
-    const sum = coins.reduce((acc, item) => acc + item.confidence, 0);
+    const sum = coins.reduce((acc, item) => acc + Number(item.confidence || 0), 0);
     return sum / coins.length;
   }, [coins]);
 
@@ -62,7 +63,7 @@ export default function CryptoPage(): JSX.Element {
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
           ["Tracked Assets", String(coins.length)],
-          ["Avg Confidence", `${(avgConfidence * 100).toFixed(1)}%`],
+          ["Avg Confidence", `${safeFormat(avgConfidence * 100, 1)}%`],
           ["Top Signal", coins[0]?.signal_direction ?? "--"],
           ["Top Exchange", coins[0]?.exchange ?? "CRYPTO"],
         ].map(([k, v]) => (
@@ -90,8 +91,8 @@ export default function CryptoPage(): JSX.Element {
             </div>
             <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">{coin.name}</div>
             <div className="mt-2 flex items-center justify-between text-xs">
-              <span>{livePrice.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-              <span>{liveChange >= 0 ? "+" : ""}{liveChange.toFixed(2)}%</span>
+              <span>{Number(livePrice).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+              <span>{Number(liveChange) >= 0 ? "+" : ""}{safeFormat(liveChange, 2)}%</span>
             </div>
           </Link>
           );

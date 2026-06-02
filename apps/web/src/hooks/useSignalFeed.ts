@@ -16,6 +16,7 @@ interface UseSignalFeedState {
 }
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
+const cleanWsUrl = WS_URL.endsWith("/ws") ? WS_URL.slice(0, -3) : WS_URL;
 
 export function useSignalFeed(symbols: string[]): UseSignalFeedState {
   const wsRef = useRef<WebSocket | null>(null);
@@ -40,7 +41,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
     }
 
     setStatus("reconnecting");
-    const ws = new WebSocket(`${WS_URL}/ws/signals`);
+    const ws = new WebSocket(`${cleanWsUrl}/ws/signals`);
     wsRef.current = ws;
 
     ws.onopen = () => {

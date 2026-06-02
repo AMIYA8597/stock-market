@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type MarketMover } from "@/lib/contracts-api";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { safeFormat } from "@/lib/formatters";
 
 export default function StocksUniversePage(): JSX.Element {
   const [symbols, setSymbols] = useState<MarketMover[]>([]);
@@ -78,8 +79,8 @@ export default function StocksUniversePage(): JSX.Element {
                   <p className="mt-0.5 text-xs text-[var(--nq-text-secondary)] lg:hidden">{item.name}</p>
                 </div>
                 <span className="hidden text-[var(--nq-text-secondary)] lg:block">{item.exchange}</span>
-                <span className="lg:text-right">{livePrice.toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
-                <span className={`lg:text-right ${changeColor}`}>{liveChange >= 0 ? "+" : ""}{liveChange.toFixed(2)}%</span>
+                <span className="lg:text-right">{Number(livePrice).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</span>
+                <span className={`lg:text-right ${changeColor}`}>{Number(liveChange) >= 0 ? "+" : ""}{safeFormat(liveChange, 2)}%</span>
                 <div className="flex items-center justify-between lg:justify-end">
                   <span className="text-xs text-[var(--nq-text-secondary)] lg:hidden">Signal</span>
                   <span>{item.signal_direction}</span>
