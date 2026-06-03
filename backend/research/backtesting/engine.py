@@ -76,7 +76,8 @@ def run_vectorized_backtest(
 
     pnl = np.sum(position_returns * initial_capital, axis=1) - np.sum(costs, axis=1)
     equity = initial_capital + np.cumsum(pnl)
-    daily = np.where(equity[:-1] == 0.0, 0.0, np.diff(equity, prepend=equity[:1]) / np.where(np.concatenate(([initial_capital], equity[:-1])) == 0.0, 1.0, np.concatenate(([initial_capital], equity[:-1]))))
+    prev_equity = np.concatenate(([initial_capital], equity[:-1]))
+    daily = np.where(prev_equity == 0.0, 0.0, np.diff(equity, prepend=[initial_capital]) / np.where(prev_equity == 0.0, 1.0, prev_equity))
 
     return BacktestResult(
         daily_returns=daily,

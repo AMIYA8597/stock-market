@@ -7,7 +7,7 @@ import TopBar from "@/components/terminal/TopBar";
 import Watchlist from "@/components/terminal/Watchlist";
 import { useTerminalData } from "@/hooks/useTerminalData";
 
-export default function TerminalPage(): JSX.Element {
+export default function RootPage(): JSX.Element {
   const { selectedSignal, selectedSymbol, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol } = useTerminalData();
 
   return (

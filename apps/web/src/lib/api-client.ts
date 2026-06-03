@@ -277,14 +277,22 @@ export const paymentsApi = {
 
 const normalizeInterval = (interval: string): string => {
   const map: Record<string, string> = {
-    "1D": "1d",
-    "1H": "1h",
-    "15M": "15m",
-    "5M": "5m",
     "1M": "1m",
+    "3M": "3m",
+    "5M": "5m",
+    "10M": "10m",
+    "15M": "15m",
+    "30M": "30m",
+    "45M": "45m",
+    "1H": "1h",
+    "2H": "2h",
+    "4H": "4h",
+    "1D": "1d",
+    "1W": "1w",
+    "1MO": "1mo",
   };
   const upper = interval.toUpperCase();
-  return map[upper] ?? interval;
+  return map[upper] ?? interval.toLowerCase();
 };
 
 const mapQuote = (raw: UnknownRecord): Quote => {

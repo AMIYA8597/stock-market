@@ -21,6 +21,7 @@ export default function TopBar({
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
   const [clock, setClock] = useState<string>("");
   const [query, setQuery] = useState<string>("");
+  const [mounted, setMounted] = useState<boolean>(false);
   const searchRef = useRef<HTMLInputElement | null>(null);
   const themeMode = useUIStore((state) => state.themeMode);
   const toggleThemeMode = useUIStore((state) => state.toggleThemeMode);
@@ -48,6 +49,7 @@ export default function TopBar({
   }, []);
 
   useEffect(() => {
+    setMounted(true);
     setClock(new Date().toLocaleTimeString());
     const timer = setInterval(() => {
       setClock(new Date().toLocaleTimeString());
@@ -113,7 +115,8 @@ export default function TopBar({
           NQ
         </span>
         <span className="font-display text-sm font-semibold tracking-[0.01em] text-[var(--text-primary)]">
-          NeuroQuant Terminal
+          {/* NeuroQuant Terminal */}
+          NeuroQuant
         </span>
         <span className={`hidden rounded-full px-2 py-0.5 text-[10px] font-medium terminal:inline-flex ${regimeClassName}`}>
           {regime}
@@ -173,7 +176,7 @@ export default function TopBar({
         </button>
 
         <span className="hidden rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 font-mono text-[10px] text-[var(--text-secondary)] xl:inline-flex">
-          {clock}
+          {mounted ? clock : "--:--:--"}
         </span>
       </div>
     </header>

@@ -28,7 +28,7 @@ const Header = (): JSX.Element => {
   const { status: connectionStatus } = usePriceFeed(['NIFTY50']);
 
   const navItems = [
-    { href: '/terminal', label: 'Terminal' },
+    { href: '/', label: 'Terminal' },
     { href: '/markets', label: 'Markets' },
     { href: '/portfolio', label: 'Portfolio' },
     { href: '/portfolio/funds', label: 'Funds' },

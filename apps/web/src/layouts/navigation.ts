@@ -22,7 +22,7 @@ export interface NavItem {
 
 export const dashboardNavItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Terminal', href: '/terminal', icon: CandlestickChart },
+  { label: 'Terminal', href: '/', icon: CandlestickChart },
   { label: 'Markets', href: '/markets', icon: BarChart3 },
   { label: 'Research', href: '/research', icon: BookOpen },
   { label: 'Backtest Lab', href: '/backtest-lab', icon: FlaskConical },

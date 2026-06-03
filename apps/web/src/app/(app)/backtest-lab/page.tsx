@@ -93,6 +93,7 @@ export default function BacktestLabPage(): JSX.Element {
 
       ws.onopen = () => {
         setWsStatus("connected");
+        ws?.send(JSON.stringify({ action: "subscribe", job_id: job.job_id }));
       };
 
       ws.onmessage = (event) => {

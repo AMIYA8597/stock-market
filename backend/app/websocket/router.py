@@ -152,26 +152,78 @@ async def ws_alerts(websocket: WebSocket):
 
 @router.websocket("/backtest-progress")
 async def ws_backtest_progress(websocket: WebSocket):
+    from app.api.v1.backtest import BACKTEST_PROGRESS
+    from app.models.backtest import BacktestJob
+    from app.database.connection import async_session_factory
+    from sqlalchemy import select
+    from uuid import UUID
+
     manager = get_connection_manager()
     channel = "backtest:progress"
     await manager.connect(websocket, channel)
-    progress = 0
+    
+    subscribed_job_id = None
+    
     try:
         while True:
             try:
-                await asyncio.wait_for(websocket.receive_text(), timeout=2.0)
-            except TimeoutError:
+                msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+                if isinstance(msg, dict) and msg.get("action") == "subscribe":
+                    subscribed_job_id = msg.get("job_id")
+            except asyncio.TimeoutError:
                 pass
-            progress = min(progress + 10, 100)
-            await manager.send_personal(
-                websocket,
-                {
-                    "type": "progress",
-                    "job_id": "BT-2026-001",
-                    "pct": progress,
-                    "current_date": datetime.now(UTC).date().isoformat(),
-                    "equity_value": round(1_000_000 * (1 + progress / 1000), 2),
-                },
-            )
+            except Exception:
+                pass
+
+            if not subscribed_job_id:
+                if BACKTEST_PROGRESS:
+                    subscribed_job_id = list(BACKTEST_PROGRESS.keys())[-1]
+                else:
+                    async with async_session_factory() as session:
+                        stmt = select(BacktestJob).order_by(BacktestJob.created_at.desc()).limit(1)
+                        res = await session.execute(stmt)
+                        job = res.scalar_one_or_none()
+                        if job:
+                            subscribed_job_id = str(job.id)
+
+            if subscribed_job_id:
+                pct = BACKTEST_PROGRESS.get(subscribed_job_id)
+                if pct is None:
+                    try:
+                        job_uuid = UUID(subscribed_job_id)
+                        async with async_session_factory() as session:
+                            stmt = select(BacktestJob).where(BacktestJob.id == job_uuid)
+                            res = await session.execute(stmt)
+                            job = res.scalar_one_or_none()
+                            if job:
+                                if job.status in ("COMPLETED", "DONE"):
+                                    pct = 100
+                                elif job.status == "FAILED":
+                                    pct = 100
+                                else:
+                                    pct = 0
+                            else:
+                                pct = 0
+                    except Exception:
+                        pct = 0
+
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "progress",
+                        "job_id": subscribed_job_id,
+                        "pct": pct,
+                        "current_date": datetime.now(UTC).date().isoformat(),
+                        "equity_value": round(1_000_000 * (1 + pct / 1000), 2),
+                    },
+                )
+                if pct >= 100:
+                    await asyncio.sleep(2.0)
+            else:
+                await manager.send_personal(
+                    websocket,
+                    {"type": "heartbeat", "channel": "backtest", "timestamp": datetime.now(UTC).isoformat()},
+                )
+                await asyncio.sleep(2.0)
     except WebSocketDisconnect:
         await manager.disconnect(websocket, channel)

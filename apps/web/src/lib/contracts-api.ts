@@ -190,6 +190,9 @@ export interface BacktestResultsResponse {
     cagr: number;
     sharpe: number;
     max_drawdown: number;
+    win_rate: number;
+    profit_factor: number;
+    num_trades: number;
   };
   equity_curve: Array<{ date: string; portfolio_value: number; benchmark_value: number }>;
   drawdown_series: Array<{ date: string; drawdown_pct: number }>;
@@ -331,6 +334,19 @@ export interface FactorExposureResponse {
   metrics: Record<string, number>;
 }
 
+export interface JournalEntry {
+  id: string;
+  symbol: string;
+  notes: string;
+  tags?: string | null;
+  rating?: number | null;
+  entry_price?: number | null;
+  exit_price?: number | null;
+  quantity?: number | null;
+  direction?: string | null;
+  created_at: string;
+}
+
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 async function getJson<T>(path: string): Promise<T> {
@@ -361,11 +377,11 @@ async function postJson<TResponse, TBody>(path: string, body: TBody): Promise<TR
 
 export const contractsApi = {
   getIndices(): Promise<MarketIndex[]> {
-    return getJson<{ indices: MarketIndex[] }>("/market/indices").then((res) => res.indices || []);
+    return getJson<MarketIndex[]>("/market/indices");
   },
 
   getMovers(exchange: "NSE" | "NYSE" | "CRYPTO" = "NSE", type: "gainers" | "losers" | "volume" | "momentum" = "momentum"): Promise<MarketMover[]> {
-    return getJson<{ assets: MarketMover[] }>(`/market/movers?exchange=${exchange}&type=${type}`).then((res) => res.assets || []);
+    return getJson<MarketMover[]>(`/market/movers?exchange=${exchange}&type=${type}`);
   },
 
   getPortfolioHoldings(): Promise<PortfolioHoldingsResponse> {
@@ -506,5 +522,22 @@ export const contractsApi = {
 
   getFactorExposure(symbol: string = "RELIANCE.NS", windowDays: number = 126): Promise<FactorExposureResponse> {
     return getJson<FactorExposureResponse>(`/research/factor-exposure?symbol=${encodeURIComponent(symbol)}&window_days=${windowDays}`);
+  },
+
+  getJournals(): Promise<JournalEntry[]> {
+    return getJson<JournalEntry[]>("/journal");
+  },
+
+  createJournal(payload: Partial<JournalEntry>): Promise<JournalEntry> {
+    return postJson<JournalEntry, Partial<JournalEntry>>("/journal", payload);
+  },
+
+  deleteJournal(id: string): Promise<boolean> {
+    return fetch(`${API_URL}/journal/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    }).then((res) => {
+      if (!res.ok) throw new Error("Failed to delete journal entry");
+      return true;
+    });
   },
 };

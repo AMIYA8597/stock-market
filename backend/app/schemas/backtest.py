@@ -48,6 +48,7 @@ class BacktestStatusResponse(BaseModel):
     equity_value: Decimal | None = None
     estimated_remaining_seconds: int | None = None
     error_message: str | None = None
+    result_preview: dict | None = None
 
 
 # ─────────────────────────────────────────────────────────────━━
@@ -58,6 +59,7 @@ class BacktestMetrics(BaseModel):
     """Core backtest performance metrics."""
     total_return: Decimal = Field(..., decimal_places=4)
     cagr: Decimal = Field(..., decimal_places=4)
+    sharpe: Decimal = Field(..., decimal_places=4)
     sharpe_ratio: Decimal = Field(..., decimal_places=4)
     sortino_ratio: Decimal = Field(..., decimal_places=4)
     calmar_ratio: Decimal = Field(..., decimal_places=4)
@@ -158,3 +160,4 @@ class BacktestRunResponse(BaseModel):
     estimated_seconds: int
     universe_size: int
     period_days: int
+    strategy_name: str = "custom"
