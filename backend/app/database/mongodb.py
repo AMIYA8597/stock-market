@@ -21,11 +21,23 @@ settings = get_settings()
 
 client: AsyncIOMotorClient | None = None
 db: Any = None
+_client_loop: Any = None
 
 
 def get_mongo_db() -> Any:
     """Return initialized MongoDB database instance if MONGODB_URL is configured."""
-    global client, db
+    global client, db, _client_loop
+    import asyncio
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if client is not None and _client_loop is not None and current_loop != _client_loop:
+        logger.debug("🔄 Event loop changed/restarted. Re-initializing AsyncIOMotorClient.")
+        client = None
+        db = None
+
     if client is None and settings.MONGODB_URL:
         try:
             import urllib.parse
@@ -41,7 +53,8 @@ def get_mongo_db() -> Any:
                         encoded_user = urllib.parse.quote_plus(unquoted_user)
                         encoded_pass = urllib.parse.quote_plus(unquoted_pass)
                         url = f"{prefix}://{encoded_user}:{encoded_pass}@{host_part}"
-            client = AsyncIOMotorClient(url)
+            client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000)
+            _client_loop = current_loop
             try:
                 db_name = client.get_default_database().name
                 if not db_name:
@@ -53,7 +66,9 @@ def get_mongo_db() -> Any:
         except Exception as e:
             logger.error(f"❌ Failed to connect to MongoDB: {e}", exc_info=True)
             db = None
+            _client_loop = None
     return db
+
 
 
 # ─── User Collection CRUD Helpers ────────────────────────────────────────
@@ -223,31 +238,36 @@ async def mongo_save_portfolio(user_id: str, cash_balance: float, holdings: list
 
 async def mongo_add_transaction(user_id: str, symbol: str, tx_type: str, quantity: float, price: float, net_amount: float) -> dict[str, Any]:
     database = get_mongo_db()
-    if database is None:
-        # Mock transaction doc
-        return {
-            "transaction_id": str(uuid4()),
-            "symbol": symbol.upper(),
-            "type": tx_type,
-            "quantity": quantity,
-            "price": price,
-            "net_amount": net_amount,
-            "timestamp": datetime.now(UTC)
-        }
-
-    doc = {
-        "_id": str(uuid4()),
-        "user_id": user_id,
+    fallback_doc = {
+        "transaction_id": str(uuid4()),
         "symbol": symbol.upper(),
         "type": tx_type.upper(),
         "quantity": float(quantity),
         "price": float(price),
         "net_amount": float(net_amount),
-        "timestamp": datetime.now(UTC),
+        "timestamp": datetime.now(UTC)
     }
-    await database.transactions.insert_one(doc)
-    doc["transaction_id"] = doc["_id"]
-    return doc
+    if database is None:
+        return fallback_doc
+
+    try:
+        doc = {
+            "_id": fallback_doc["transaction_id"],
+            "user_id": user_id,
+            "symbol": fallback_doc["symbol"],
+            "type": fallback_doc["type"],
+            "quantity": fallback_doc["quantity"],
+            "price": fallback_doc["price"],
+            "net_amount": fallback_doc["net_amount"],
+            "timestamp": fallback_doc["timestamp"],
+        }
+        await database.transactions.insert_one(doc)
+        doc["transaction_id"] = doc["_id"]
+        return doc
+    except Exception as e:
+        logger.error(f"mongo_add_transaction_error: {e}")
+        return fallback_doc
+
 
 
 async def mongo_get_transactions(user_id: str, limit: int = 50) -> list[dict[str, Any]]:

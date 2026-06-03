@@ -197,26 +197,28 @@ export interface BacktestResultsResponse {
 }
 
 export interface BacktestRunRequest {
-  strategy_name: "mean_reversion" | "momentum" | "volatility_breakout" | "ml_alpha" | "stat_arb";
-  symbols: string[];
-  start_date: string;
-  end_date: string;
-  benchmark: string;
-  initial_capital: number;
-  commission_pct: number;
-  slippage_pct: number;
+  strategy_name: string;
+  symbols?: string[];
+  symbol?: string;
+  start_date?: string;
+  end_date?: string;
+  benchmark?: string;
+  initial_capital?: number;
+  commission_pct?: number;
+  slippage_pct?: number;
+  parameters?: Record<string, unknown>;
 }
 
 export interface BacktestRunResponse {
   job_id: string;
-  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SUCCESS" | "DONE";
   estimated_seconds?: number;
   strategy_name: string;
 }
 
 export interface BacktestStatusResponse {
   job_id: string;
-  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
+  status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SUCCESS" | "DONE";
   progress_pct?: number;
   result_preview?: {
     sharpe?: number;
@@ -453,7 +455,21 @@ export const contractsApi = {
   },
 
   runBacktest(payload: BacktestRunRequest): Promise<BacktestRunResponse> {
-    return postJson<BacktestRunResponse, BacktestRunRequest>("/backtest/run", payload);
+    const symbols = payload.symbols || (payload.symbol ? [payload.symbol] : []);
+    const backendPayload = {
+      strategy_name: payload.strategy_name === "macd_crossover" ? "ma_crossover" : (payload.strategy_name === "rsi_mean_reversion" ? "rsi_mrv" : payload.strategy_name),
+      strategy_params: {
+        commission_pct: payload.commission_pct ?? 0.001,
+        slippage_pct: payload.slippage_pct ?? 0.0005,
+        benchmark: payload.benchmark ?? "^NSEI",
+        ...(payload.parameters || {}),
+      },
+      universe: symbols.length > 0 ? symbols : ["RELIANCE.NS"],
+      date_from: payload.start_date || new Date(Date.now() - 365*24*60*60*1000).toISOString().split('T')[0],
+      date_to: payload.end_date || new Date().toISOString().split('T')[0],
+      initial_capital: payload.initial_capital ?? 1000000,
+    };
+    return postJson<BacktestRunResponse, typeof backendPayload>("/backtest/run", backendPayload);
   },
 
   getBacktestStatus(jobId: string): Promise<BacktestStatusResponse> {

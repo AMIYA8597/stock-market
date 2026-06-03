@@ -19,7 +19,7 @@ export default function TopBar({
   signalStreamStatus,
 }: TopBarProps): JSX.Element {
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
-  const [clock, setClock] = useState<string>(new Date().toLocaleTimeString());
+  const [clock, setClock] = useState<string>("");
   const [query, setQuery] = useState<string>("");
   const searchRef = useRef<HTMLInputElement | null>(null);
   const themeMode = useUIStore((state) => state.themeMode);
@@ -48,6 +48,7 @@ export default function TopBar({
   }, []);
 
   useEffect(() => {
+    setClock(new Date().toLocaleTimeString());
     const timer = setInterval(() => {
       setClock(new Date().toLocaleTimeString());
     }, 1000);
