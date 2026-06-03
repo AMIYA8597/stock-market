@@ -7,7 +7,7 @@ Contains collections for users, refresh_sessions, portfolios, transactions, and 
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
@@ -23,15 +23,40 @@ client: AsyncIOMotorClient | None = None
 db: Any = None
 _client_loop: Any = None
 
+# Circuit Breaker state
+_mongo_online: bool = True
+_mongo_cooldown_until: datetime | None = None
+
+
+def trip_circuit(exc: Exception | None = None) -> None:
+    """Trip the MongoDB circuit breaker and initiate cooling-down period."""
+    global _mongo_online, _mongo_cooldown_until
+    if _mongo_online:
+        logger.warning(
+            f"🚨 Tripping MongoDB circuit breaker. Bypassing MongoDB operations. Reason: {exc}"
+        )
+        _mongo_online = False
+    _mongo_cooldown_until = datetime.now(UTC) + timedelta(minutes=5)
+
 
 def get_mongo_db() -> Any:
     """Return initialized MongoDB database instance if MONGODB_URL is configured."""
-    global client, db, _client_loop
+    global client, db, _client_loop, _mongo_online, _mongo_cooldown_until
     import asyncio
+
     try:
         current_loop = asyncio.get_running_loop()
     except RuntimeError:
         current_loop = None
+
+    # Check if circuit is open
+    if not _mongo_online:
+        if _mongo_cooldown_until and datetime.now(UTC) > _mongo_cooldown_until:
+            logger.info("♻️ Cooldown expired. Retrying MongoDB connection...")
+            _mongo_online = True
+            _mongo_cooldown_until = None
+        else:
+            return None
 
     if client is not None and _client_loop is not None and current_loop != _client_loop:
         logger.debug("🔄 Event loop changed/restarted. Re-initializing AsyncIOMotorClient.")
@@ -53,7 +78,9 @@ def get_mongo_db() -> Any:
                         encoded_user = urllib.parse.quote_plus(unquoted_user)
                         encoded_pass = urllib.parse.quote_plus(unquoted_pass)
                         url = f"{prefix}://{encoded_user}:{encoded_pass}@{host_part}"
-            client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=2000, connectTimeoutMS=2000)
+
+            # Limit server selection timeout to 1.5s for fast fallback
+            client = AsyncIOMotorClient(url, serverSelectionTimeoutMS=1500, connectTimeoutMS=1500)
             _client_loop = current_loop
             try:
                 db_name = client.get_default_database().name
@@ -67,8 +94,8 @@ def get_mongo_db() -> Any:
             logger.error(f"❌ Failed to connect to MongoDB: {e}", exc_info=True)
             db = None
             _client_loop = None
+            trip_circuit(e)
     return db
-
 
 
 # ─── User Collection CRUD Helpers ────────────────────────────────────────
@@ -82,6 +109,7 @@ async def mongo_get_user_by_email(email: str) -> dict[str, Any] | None:
         return user
     except Exception as e:
         logger.error(f"mongo_get_user_by_email_error: {e}")
+        trip_circuit(e)
         return None
 
 
@@ -94,6 +122,7 @@ async def mongo_get_user_by_id(user_id: str) -> dict[str, Any] | None:
         return user
     except Exception as e:
         logger.error(f"mongo_get_user_by_id_error: {e}")
+        trip_circuit(e)
         return None
 
 
@@ -114,8 +143,13 @@ async def mongo_create_user(user_data: dict[str, Any]) -> dict[str, Any]:
         "locked_until": None,
         "last_login_at": None,
     }
-    await database.users.insert_one(doc)
-    return doc
+    try:
+        await database.users.insert_one(doc)
+        return doc
+    except Exception as e:
+        logger.error(f"mongo_create_user_error: {e}")
+        trip_circuit(e)
+        raise RuntimeError("MongoDB create user failure") from e
 
 
 async def mongo_update_user(user_id: str, update_data: dict[str, Any]) -> bool:
@@ -127,6 +161,7 @@ async def mongo_update_user(user_id: str, update_data: dict[str, Any]) -> bool:
         return True
     except Exception as e:
         logger.error(f"mongo_update_user_error: {e}")
+        trip_circuit(e)
         return False
 
 
@@ -145,7 +180,11 @@ async def mongo_save_refresh_session(session_data: dict[str, Any]) -> None:
         "created_at": datetime.now(UTC),
         "revoked_at": None,
     }
-    await database.refresh_sessions.insert_one(doc)
+    try:
+        await database.refresh_sessions.insert_one(doc)
+    except Exception as e:
+        logger.error(f"mongo_save_refresh_session_error: {e}")
+        trip_circuit(e)
 
 
 async def mongo_get_refresh_session(token_hash: str) -> dict[str, Any] | None:
@@ -161,6 +200,7 @@ async def mongo_get_refresh_session(token_hash: str) -> dict[str, Any] | None:
         return session
     except Exception as e:
         logger.error(f"mongo_get_refresh_session_error: {e}")
+        trip_circuit(e)
         return None
 
 
@@ -175,6 +215,7 @@ async def mongo_revoke_refresh_session_family(family_id: str) -> None:
         )
     except Exception as e:
         logger.error(f"mongo_revoke_refresh_session_family_error: {e}")
+        trip_circuit(e)
 
 
 async def mongo_revoke_user_sessions(user_id: str) -> None:
@@ -188,6 +229,7 @@ async def mongo_revoke_user_sessions(user_id: str) -> None:
         )
     except Exception as e:
         logger.error(f"mongo_revoke_user_sessions_error: {e}")
+        trip_circuit(e)
 
 
 # ─── Portfolio & holdings Collection CRUD Helpers ─────────────────────────
@@ -195,7 +237,6 @@ async def mongo_revoke_user_sessions(user_id: str) -> None:
 async def mongo_get_portfolio(user_id: str) -> dict[str, Any]:
     database = get_mongo_db()
     if database is None:
-        # Fallback dictionary if Mongo is unavailable
         return {"user_id": user_id, "cash_balance": 1000000.0, "holdings": []}
 
     try:
@@ -213,6 +254,7 @@ async def mongo_get_portfolio(user_id: str) -> dict[str, Any]:
         return portfolio
     except Exception as e:
         logger.error(f"mongo_get_portfolio_error: {e}")
+        trip_circuit(e)
         return {"user_id": user_id, "cash_balance": 1000000.0, "holdings": []}
 
 
@@ -233,6 +275,7 @@ async def mongo_save_portfolio(user_id: str, cash_balance: float, holdings: list
         return True
     except Exception as e:
         logger.error(f"mongo_save_portfolio_error: {e}")
+        trip_circuit(e)
         return False
 
 
@@ -266,8 +309,8 @@ async def mongo_add_transaction(user_id: str, symbol: str, tx_type: str, quantit
         return doc
     except Exception as e:
         logger.error(f"mongo_add_transaction_error: {e}")
+        trip_circuit(e)
         return fallback_doc
-
 
 
 async def mongo_get_transactions(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -282,11 +325,13 @@ async def mongo_get_transactions(user_id: str, limit: int = 50) -> list[dict[str
         return results
     except Exception as e:
         logger.error(f"mongo_get_transactions_error: {e}")
+        trip_circuit(e)
         return []
 
 
 # Simple in-memory cache for stock prices
 _PRICE_CACHE: dict[str, tuple[float, datetime]] = {}
+
 
 async def get_live_price(symbol: str) -> float:
     # Use clean symbol
@@ -340,6 +385,7 @@ async def mongo_get_alerts(user_id: str) -> list[dict[str, Any]]:
         return results
     except Exception as e:
         logger.error(f"mongo_get_alerts_error: {e}")
+        trip_circuit(e)
         return []
 
 
@@ -360,8 +406,13 @@ async def mongo_create_alert(user_id: str, alert_data: dict[str, Any]) -> dict[s
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC)
     }
-    await database.alerts.insert_one(doc)
-    return doc
+    try:
+        await database.alerts.insert_one(doc)
+        return doc
+    except Exception as e:
+        logger.error(f"mongo_create_alert_error: {e}")
+        trip_circuit(e)
+        raise RuntimeError("MongoDB create alert failure") from e
 
 
 async def mongo_update_alert(user_id: str, alert_id: str, update_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -376,7 +427,7 @@ async def mongo_update_alert(user_id: str, alert_id: str, update_data: dict[str,
                 set_dict[k] = float(v)
             elif k in {"name", "enabled", "is_triggered"} and v is not None:
                 set_dict[k] = v
-        
+
         set_dict["updated_at"] = datetime.now(UTC)
         await database.alerts.update_one(
             {"_id": alert_id, "user_id": user_id},
@@ -386,6 +437,7 @@ async def mongo_update_alert(user_id: str, alert_id: str, update_data: dict[str,
         return updated
     except Exception as e:
         logger.error(f"mongo_update_alert_error: {e}")
+        trip_circuit(e)
         return None
 
 
@@ -398,6 +450,7 @@ async def mongo_delete_alert(user_id: str, alert_id: str) -> bool:
         return res.deleted_count > 0
     except Exception as e:
         logger.error(f"mongo_delete_alert_error: {e}")
+        trip_circuit(e)
         return False
 
 
@@ -413,6 +466,7 @@ async def mongo_get_notifications(user_id: str) -> list[dict[str, Any]]:
         return results
     except Exception as e:
         logger.error(f"mongo_get_notifications_error: {e}")
+        trip_circuit(e)
         return []
 
 
@@ -430,8 +484,13 @@ async def mongo_create_notification(notification_data: dict[str, Any]) -> dict[s
         "created_at": datetime.now(UTC),
         "read_at": None
     }
-    await database.notifications.insert_one(doc)
-    return doc
+    try:
+        await database.notifications.insert_one(doc)
+        return doc
+    except Exception as e:
+        logger.error(f"mongo_create_notification_error: {e}")
+        trip_circuit(e)
+        raise RuntimeError("MongoDB create notification failure") from e
 
 
 async def mongo_mark_notification_read(user_id: str, notification_id: str) -> bool:
@@ -446,6 +505,5 @@ async def mongo_mark_notification_read(user_id: str, notification_id: str) -> bo
         return res.modified_count > 0
     except Exception as e:
         logger.error(f"mongo_mark_notification_read_error: {e}")
+        trip_circuit(e)
         return False
-
-

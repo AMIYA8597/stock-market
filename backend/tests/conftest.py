@@ -2,8 +2,35 @@
 
 from __future__ import annotations
 
+import os
+os.environ["RATE_LIMIT_ENABLED"] = "true"
+
 import sys
+import socket
 from pathlib import Path
+
+# Set a fast default socket timeout so offline tests trigger fallbacks immediately
+socket.setdefaulttimeout(1.5)
+
+# Mock yfinance to raise exceptions immediately, preventing slow network hangs during tests
+from unittest.mock import MagicMock
+
+class MockTicker:
+    def __init__(self, *args, **kwargs):
+        pass
+    def history(self, *args, **kwargs):
+        raise RuntimeError("Network offline (mocked yfinance)")
+    @property
+    def info(self):
+        raise RuntimeError("Network offline (mocked yfinance)")
+
+mock_yf = MagicMock()
+mock_yf.Ticker = MockTicker
+def mock_download(*args, **kwargs):
+    raise RuntimeError("Network offline (mocked yfinance)")
+mock_yf.download = mock_download
+
+sys.modules['yfinance'] = mock_yf
 
 import pytest
 import pytest_asyncio

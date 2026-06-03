@@ -76,6 +76,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             if len(bucket) >= active_limit.max_requests:
                 retry_after = int(max(bucket[0] + active_limit.window_seconds - now, 1))
                 request_id = request.headers.get("X-Request-ID", f"req_{uuid4().hex[:12]}")
+                origin = request.headers.get("origin")
+                headers = {
+                    "Retry-After": str(retry_after),
+                    "X-Request-ID": request_id,
+                }
+                if origin and origin in settings.BACKEND_CORS_ORIGINS:
+                    headers["Access-Control-Allow-Origin"] = origin
+                    headers["Access-Control-Allow-Credentials"] = "true"
+
                 return JSONResponse(
                     status_code=429,
                     content={
@@ -94,7 +103,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         "request_id": request_id,
                         "retry_after_seconds": retry_after,
                     },
-                    headers={"Retry-After": str(retry_after), "X-Request-ID": request_id},
+                    headers=headers,
                 )
 
             bucket.append(now)

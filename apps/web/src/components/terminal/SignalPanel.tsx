@@ -28,6 +28,11 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [tradeSuccess, setTradeSuccess] = useState<string | null>(null);
   const { orders, addOrder, clearOrders } = useOrderHistory();
+  const [mounted, setMounted] = useState<boolean>(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const direction = signal?.ensemble.direction ?? "NEUTRAL";
   const confidence = signal ? safeFormat(Number(signal.ensemble.confidence) * 100, 1, "0.0") : "0.0";
@@ -83,22 +88,37 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     return { bids, asks, totalBidQty, totalAskQty, bidPercent, askPercent };
   }, [latestPrice, depthOffset]);
 
-  // Listen to select-order-side custom event from Watchlist
+  // Listen to select-order-side and prefill-order-ticket custom events
   useEffect(() => {
     const handleSetSide = (e: Event) => {
       const customEvent = e as CustomEvent;
       if (customEvent.detail) {
         setSide(customEvent.detail.side);
-        // Scroll order ticket form into view
         const element = document.getElementById("order-ticket");
         if (element) {
           element.scrollIntoView({ behavior: "smooth" });
         }
       }
     };
+
+    const handlePrefill = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        if (customEvent.detail.side) setSide(customEvent.detail.side);
+        if (customEvent.detail.price) setPrice(customEvent.detail.price.toString());
+        if (customEvent.detail.quantity) setQuantity(customEvent.detail.quantity.toString());
+        const element = document.getElementById("order-ticket");
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth" });
+        }
+      }
+    };
+
     window.addEventListener("select-order-side", handleSetSide);
+    window.addEventListener("prefill-order-ticket", handlePrefill);
     return () => {
       window.removeEventListener("select-order-side", handleSetSide);
+      window.removeEventListener("prefill-order-ticket", handlePrefill);
     };
   }, []);
 
@@ -127,15 +147,17 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     }));
   }, [signal?.model_weights]);
 
-  const newsFeed = useMemo(() => {
+  const [newsFeed, setNewsFeed] = useState<Array<{ headline: string; sentiment: string; time: string }>>([]);
+
+  useEffect(() => {
     const currentSymbol = signal?.symbol ?? "MARKET";
     const directionBias = signal?.ensemble.direction ?? "NEUTRAL";
     const now = new Date();
-    return [
+    setNewsFeed([
       { headline: `${currentSymbol} guidance updates market expectations`, sentiment: "POSITIVE", time: now.toLocaleTimeString() },
       { headline: `Regime shift monitor flags ${currentSymbol} as ${directionBias}`, sentiment: directionBias.includes("SELL") ? "NEGATIVE" : "NEUTRAL", time: new Date(now.getTime() - 12 * 60_000).toLocaleTimeString() },
       { headline: `Cross-asset flow indicates volatility clustering in ${currentSymbol}`, sentiment: "NEUTRAL", time: new Date(now.getTime() - 28 * 60_000).toLocaleTimeString() },
-    ];
+    ]);
   }, [signal?.ensemble.direction, signal?.symbol]);
 
   useEffect(() => {
@@ -454,7 +476,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
                 <span className={`font-bold ${order.type === "BUY" ? "text-[#00E676]" : "text-[#FF3B5C]"}`}>
                   {order.type}
                 </span>
-                <span className="text-[8px] opacity-75">{new Date(order.timestamp).toLocaleTimeString()}</span>
+                <span className="text-[8px] opacity-75">{mounted ? new Date(order.timestamp).toLocaleTimeString() : "--:--:--"}</span>
               </div>
               <div className="mt-1 flex items-center justify-between text-[var(--nq-text-primary)]">
                 <span className="font-bold">{order.symbol}</span>
@@ -480,7 +502,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
             <div key={`${item.headline}-${idx}`} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.005)] px-2.5 py-1.5 text-[10px] leading-relaxed">
               <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.03)] pb-1 mb-1">
                 <span className={`text-[8px] font-bold ${item.sentiment === "POSITIVE" ? "text-[var(--nq-accent-green)]" : item.sentiment === "NEGATIVE" ? "text-[var(--nq-accent-red)]" : "text-[var(--nq-accent-amber)]"}`}>{item.sentiment}</span>
-                <span className="text-[8px] text-[var(--nq-text-secondary)] opacity-75">{item.time}</span>
+                <span className="text-[8px] text-[var(--nq-text-secondary)] opacity-75">{mounted ? item.time : "--:--:--"}</span>
               </div>
               <p className="text-[var(--nq-text-secondary)]">{item.headline}</p>
             </div>

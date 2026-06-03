@@ -49,7 +49,7 @@ const typeIcons: Record<string, typeof TrendingUp> = {
 };
 
 const PAGE_SHORTCUTS: SearchItem[] = [
-  { symbol: "PAGE_TERMINAL", name: "Open Terminal", type: "page", route: "/terminal" },
+  { symbol: "PAGE_TERMINAL", name: "Open Terminal", type: "page", route: "/" },
   { symbol: "PAGE_MARKETS", name: "Open Markets", type: "page", route: "/markets" },
   { symbol: "PAGE_RESEARCH", name: "Open Research", type: "page", route: "/research" },
   { symbol: "PAGE_BACKTEST", name: "Open Backtest Lab", type: "page", route: "/backtest-lab" },

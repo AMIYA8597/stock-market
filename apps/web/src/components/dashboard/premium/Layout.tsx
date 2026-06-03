@@ -56,7 +56,10 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }): JSX.Element {
       <nav className="space-y-1.5">
         {dashboardNavItems.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const active =
+            item.href === "/"
+              ? pathname === "/"
+              : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (
             <Link

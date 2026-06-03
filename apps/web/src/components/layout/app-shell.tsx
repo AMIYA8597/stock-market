@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
@@ -42,6 +43,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const pathname = usePathname();
+  const isTerminal = pathname === "/";
+
   return (
     <div className="flex min-h-screen bg-[var(--nq-bg-base)]">
       <Sidebar />
@@ -55,15 +59,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ) : null}
       <div
         className={cn(
-          "flex flex-1 flex-col transition-all duration-300",
+          "flex flex-1 flex-col transition-all duration-300 min-h-screen overflow-hidden",
           sidebarCollapsed ? "lg:ml-16" : "lg:ml-56"
         )}
       >
-        <Topbar
-          connectionStatus={connectionStatus}
-          alertCount={alertCount}
-        />
-        <main className="flex-1 p-3 sm:p-4 lg:p-6">{children}</main>
+        {!isTerminal && (
+          <Topbar
+            connectionStatus={connectionStatus}
+            alertCount={alertCount}
+          />
+        )}
+        <main className={cn("flex-1 min-h-0", !isTerminal && "p-3 sm:p-4 lg:p-6")}>{children}</main>
       </div>
       <CommandPalette />
     </div>
