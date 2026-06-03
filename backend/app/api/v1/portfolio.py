@@ -137,7 +137,7 @@ async def get_holdings(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message=f"Failed to fetch holdings: {str(exc)}",
+                message=f"Failed to fetch holdings: {str(exc)}"[:500],
             ).dict(),
         ) from exc
 
@@ -283,7 +283,7 @@ async def post_transaction(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message=f"Transaction failed: {str(exc)}",
+                message=f"Transaction failed: {str(exc)}"[:500],
             ).dict(),
         ) from exc
 

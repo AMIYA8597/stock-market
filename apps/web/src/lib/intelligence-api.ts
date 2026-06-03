@@ -1,4 +1,4 @@
-import type { SignalResponse } from "@/types/intelligence";
+import type { SignalResponse, ForecastResponse } from "@/types/intelligence";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -25,5 +25,17 @@ export const intelligenceApi = {
       cache: "no-store",
     });
     return parseJson<{ signals: SignalResponse[] }>(response).then((data) => data.signals);
+  },
+
+  async getForecast(symbol: string, horizons: number[] = [1, 5, 10, 15, 20, 25, 30]): Promise<ForecastResponse> {
+    const response = await fetch(`${API_URL}/predictions/forecast`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ symbol, horizons }),
+      cache: "no-store",
+    });
+    return parseJson<ForecastResponse>(response);
   },
 };

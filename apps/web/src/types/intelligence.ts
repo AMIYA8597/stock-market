@@ -62,3 +62,25 @@ export interface SignalResponse {
   model_weights: Record<string, number>;
   regime: RegimeDetails;
 }
+
+export interface ForecastPoint {
+  target_date: string;
+  horizon_days: number;
+  predicted_price: number;
+  predicted_direction: string;
+  confidence: number;
+  prediction_low: number;
+  prediction_high: number;
+}
+
+export interface ModelForecast {
+  model_name: string;
+  forecasts: ForecastPoint[];
+}
+
+export interface ForecastResponse {
+  symbol: string;
+  current_price: number;
+  generated_at: string;
+  model_results: ModelForecast[];
+}

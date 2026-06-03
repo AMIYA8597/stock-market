@@ -131,6 +131,9 @@ async def _fetch_quote_from_yfinance(symbol: str) -> QuoteResponse:
         fifty_two_high = float(info.get("fiftyTwoWeekHigh") or price)
         fifty_two_low = float(info.get("fiftyTwoWeekLow") or price)
 
+        if pd.isna(price) or pd.isna(change) or pd.isna(change_pct) or pd.isna(fifty_two_high) or pd.isna(fifty_two_low):
+            raise ValueError("NaN values encountered in quote data")
+
         return {
             "ticker": symbol.upper(),
             "name": str(info.get("shortName") or symbol.upper()),
@@ -476,6 +479,10 @@ async def get_indices() -> list[IndexResponse]:
 
                 change = value - prev_close
                 change_pct = 0.0 if prev_close == 0 else (change / prev_close) * 100.0
+
+                if pd.isna(value) or pd.isna(change) or pd.isna(change_pct):
+                    raise ValueError("NaN values encountered in index history")
+
                 probs = _state_probs_from_signal(max(-1.0, min(1.0, change_pct / 3.0)))
                 regime_state = max(probs, key=probs.get).upper()
 

@@ -21,7 +21,7 @@ export default function TerminalPage(): JSX.Element {
         ) : undefined
       }
       watchlist={<Watchlist signals={watchlistSignals} selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} />}
-      chartSection={<ChartSection signal={selectedSignal} />}
+      chartSection={<ChartSection signal={selectedSignal} onSelectSymbol={setSelectedSymbol} />}
       signalPanel={<SignalPanel signal={selectedSignal} />}
       overlay={
         loading && watchlistSignals.length === 0 ? (

@@ -19,6 +19,7 @@ from app.api.v1 import (
     screener,
     signals,
     users,
+    predictions,
 )
 
 router = APIRouter()
@@ -41,6 +42,7 @@ router.include_router(portfolio.router, prefix="/portfolio")
 router.include_router(screener.router)
 router.include_router(alerts.router)
 router.include_router(models.router)
+router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])
 
 
 @router.get("/version", tags=["system"])

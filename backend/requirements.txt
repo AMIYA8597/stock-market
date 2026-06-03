@@ -11,6 +11,8 @@ psycopg2-binary>=2.9.9
 alembic>=1.13.1
 aiosqlite>=0.20.0
 dnspython>=2.6.1
+motor>=3.3.0
+
 
 
 # ─── Redis & Caching ───────────────────────────────────
