@@ -1,0 +1,350 @@
+2026-06-04 17:56:29 [warning  ] jwt_keys_missing_using_hs256_fallback_non_production
+2026-06-04 17:56:29 [debug    ] database_engine_created        database_url=*** mode=development pool_size=20
+2026-06-04 17:56:29 [debug    ] database_session_factory_created
+[32m[INFO][0m logging_configured environment='development' debug=True log_level='INFO' level='INFO'
+[32m[INFO][0m startup_begin level='INFO'
+[32m[INFO][0m startup_redis_init level='INFO'
+[31m[ERROR][0m redis_initialization_error: Error 22 connecting to localhost:6379. The remote computer refused the network connection. level='ERROR' exception='Traceback (most recent call last):
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 305, in connect_check_health
+    await self.retry.call_with_retry(
+        lambda: self._connect(), lambda error: self.disconnect()
+    )
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py", line 50, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 760, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **self._connection_arguments()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1176, in create_connection
+    raise exceptions[0]
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1146, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1045, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 728, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\work\stock-market\backend\app\database\redis_client.py", line 79, in _redis_pool_singleton
+    await _redis_client.ping()
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py", line 672, in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 1149, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 1182, in ensure_connection
+    await connection.connect()
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    await self.connect_check_health(check_health=True)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 315, in connect_check_health
+    raise ConnectionError(self._error_message(e))
+redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.'
+[31m[ERROR][0m startup_redis_failed error='Failed to initialize Redis: Error 22 connecting to localhost:6379. The remote computer refused the network connection.' level='ERROR' exception='Traceback (most recent call last):
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 305, in connect_check_health
+    await self.retry.call_with_retry(
+        lambda: self._connect(), lambda error: self.disconnect()
+    )
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py", line 50, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 760, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **self._connection_arguments()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1176, in create_connection
+    raise exceptions[0]
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1146, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1045, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 728, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\work\stock-market\backend\app\database\redis_client.py", line 79, in _redis_pool_singleton
+    await _redis_client.ping()
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py", line 672, in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 1149, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 1182, in ensure_connection
+    await connection.connect()
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    await self.connect_check_health(check_health=True)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 315, in connect_check_health
+    raise ConnectionError(self._error_message(e))
+redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "D:\work\stock-market\backend\app\core\events.py", line 64, in startup_events
+    redis_client = await _redis_pool_singleton()
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "D:\work\stock-market\backend\app\database\redis_client.py", line 92, in _redis_pool_singleton
+    raise ConnectionError(f"Failed to initialize Redis: {e}") from e
+ConnectionError: Failed to initialize Redis: Error 22 connecting to localhost:6379. The remote computer refused the network connection.'
+[32m[INFO][0m startup_database_init level='INFO'
+[33m[WARNING][0m database_timescaledb_init_error error='near "EXTENSION": syntax error' level='WARNING'
+[33m[WARNING][0m database_connection_configure_error error='near "SET": syntax error' level='WARNING'
+2026-06-04 17:56:37,287 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-04 17:56:37,289 INFO sqlalchemy.engine.Engine SELECT 1
+2026-06-04 17:56:37,290 INFO sqlalchemy.engine.Engine [generated in 0.00112s] ()
+2026-06-04 17:56:37,299 INFO sqlalchemy.engine.Engine COMMIT
+[32m[INFO][0m startup_database_success database_url='sqlite+aiosqlite:///./dev.db' level='INFO'
+[32m[INFO][0m startup_background_tasks_init level='INFO'
+[32m[INFO][0m startup_model_cache_init level='INFO'
+[32m[INFO][0m startup_health_check_init level='INFO'
+[32m[INFO][0m startup_health_check_success level='INFO'
+[32m[INFO][0m startup_complete services_initialized=[] level='INFO'
+127.0.0.1:2586 - "GET /api/v1/health HTTP/1.1" 200
+127.0.0.1:6306 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS,TCS.NS,INFY.NS HTTP/1.1" 200
+127.0.0.1:2586 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+[31m[ERROR][0m redis_initialization_error: Error 22 connecting to localhost:6379. The remote computer refused the network connection. level='ERROR' exception='Traceback (most recent call last):
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 305, in connect_check_health
+    await self.retry.call_with_retry(
+        lambda: self._connect(), lambda error: self.disconnect()
+    )
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\retry.py", line 50, in call_with_retry
+    return await do()
+           ^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 760, in _connect
+    reader, writer = await asyncio.open_connection(
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        **self._connection_arguments()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\streams.py", line 48, in open_connection
+    transport, _ = await loop.create_connection(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        lambda: protocol, host, port, **kwds)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1176, in create_connection
+    raise exceptions[0]
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1146, in create_connection
+    sock = await self._connect_sock(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        exceptions, addrinfo, laddr_infos)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 1045, in _connect_sock
+    await self.sock_connect(sock, address)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\proactor_events.py", line 728, in sock_connect
+    return await self._proactor.connect(sock, address)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 804, in _poll
+    value = callback(transferred, key, ov)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\asyncio\windows_events.py", line 600, in finish_connect
+    ov.getresult()
+    ~~~~~~~~~~~~^^
+ConnectionRefusedError: [WinError 1225] The remote computer refused the network connection
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "D:\work\stock-market\backend\app\database\redis_client.py", line 79, in _redis_pool_singleton
+    await _redis_client.ping()
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\client.py", line 672, in execute_command
+    conn = self.connection or await pool.get_connection()
+                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 1149, in get_connection
+    await self.ensure_connection(connection)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 1182, in ensure_connection
+    await connection.connect()
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 296, in connect
+    await self.connect_check_health(check_health=True)
+  File "C:\Users\USER\AppData\Local\Programs\Python\Python313\Lib\site-packages\redis\asyncio\connection.py", line 315, in connect_check_health
+    raise ConnectionError(self._error_message(e))
+redis.exceptions.ConnectionError: Error 22 connecting to localhost:6379. The remote computer refused the network connection.'
+[33m[WARNING][0m database_connection_configure_error error='near "SET": syntax error' level='WARNING'
+2026-06-04 17:57:02,881 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-04 17:57:02,882 INFO sqlalchemy.engine.Engine 
+                    SELECT s.ticker,
+                           s.name,
+                           latest.time,
+                           latest.open,
+                           latest.close,
+                           latest.volume,
+                           (
+                               SELECT o2.close
+                               FROM ohlcv o2
+                               WHERE o2.symbol_id = s.id
+                                 AND o2.time < latest.time
+                               ORDER BY o2.time DESC
+                               LIMIT 1
+                           ) AS prev_close
+                    FROM symbols s
+                    JOIN (
+                        SELECT o1.symbol_id, o1.time, o1.open, o1.close, o1.volume
+                        FROM ohlcv o1
+                        WHERE o1.symbol_id = (SELECT id FROM symbols WHERE UPPER(ticker) = ?)
+                        ORDER BY o1.time DESC
+                        LIMIT 1
+                    ) latest ON latest.symbol_id = s.id
+                    WHERE UPPER(s.ticker) = ?
+                    LIMIT 1
+                    
+2026-06-04 17:57:02,883 INFO sqlalchemy.engine.Engine [generated in 0.00081s] ('RELIANCE.NS', 'RELIANCE.NS')
+2026-06-04 17:57:02,894 INFO sqlalchemy.engine.Engine 
+                    SELECT signal, confidence, direction
+                    FROM ensemble_signals es
+                    JOIN symbols s ON s.id = es.symbol_id
+                    WHERE UPPER(s.ticker) = ?
+                    ORDER BY es.time DESC
+                    LIMIT 1
+                    
+2026-06-04 17:57:02,895 INFO sqlalchemy.engine.Engine [generated in 0.00075s] ('RELIANCE.NS',)
+127.0.0.1:6306 - "GET /api/v1/market/quote/RELIANCE.NS HTTP/1.1" 200
+2026-06-04 17:57:04,963 INFO sqlalchemy.engine.Engine COMMIT
+[33m[WARNING][0m database_connection_configure_error error='near "SET": syntax error' level='WARNING'
+2026-06-04 17:57:04,985 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-04 17:57:04,986 INFO sqlalchemy.engine.Engine 
+                    SELECT o.time, o.open, o.high, o.low, o.close, o.volume
+                    FROM ohlcv o
+                    JOIN symbols s ON s.id = o.symbol_id
+                    WHERE UPPER(s.ticker) = ?
+                      AND o.interval = ?
+                      AND o.time >= ?
+                    ORDER BY o.time ASC
+                    
+2026-06-04 17:57:04,987 INFO sqlalchemy.engine.Engine [generated in 0.00115s] ('RELIANCE.NS', '1d', datetime.datetime(2025, 6, 4, 12, 27, 4, 976804, tzinfo=datetime.timezone.utc))
+127.0.0.1:10748 - "GET /api/v1/market/history/RELIANCE.NS?interval=1d HTTP/1.1" 200
+2026-06-04 17:57:05,017 INFO sqlalchemy.engine.Engine COMMIT
+127.0.0.1:9263 - "OPTIONS /api/v1/alerts/history?limit=20 HTTP/1.1" 200
+127.0.0.1:14006 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:9263 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:7389 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:7389 - "OPTIONS /api/v1/market/history/RELIANCE.NS?interval=1d HTTP/1.1" 200
+[33m[WARNING][0m database_connection_configure_error error='near "SET": syntax error' level='WARNING'
+2026-06-04 18:00:28,185 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-04 18:00:28,186 INFO sqlalchemy.engine.Engine 
+                    SELECT o.time, o.open, o.high, o.low, o.close, o.volume
+                    FROM ohlcv o
+                    JOIN symbols s ON s.id = o.symbol_id
+                    WHERE UPPER(s.ticker) = ?
+                      AND o.interval = ?
+                      AND o.time >= ?
+                    ORDER BY o.time ASC
+                    
+2026-06-04 18:00:28,186 INFO sqlalchemy.engine.Engine [cached since 203.2s ago] ('RELIANCE.NS', '1d', datetime.datetime(2025, 6, 4, 12, 30, 28, 181196, tzinfo=datetime.timezone.utc))
+127.0.0.1:14006 - "GET /api/v1/market/history/RELIANCE.NS?interval=1d HTTP/1.1" 200
+2026-06-04 18:00:28,226 INFO sqlalchemy.engine.Engine COMMIT
+127.0.0.1:7389 - "OPTIONS /api/v1/predictions/forecast HTTP/1.1" 200
+[33m[WARNING][0m database_connection_configure_error error='near "SET": syntax error' level='WARNING'
+2026-06-04 18:00:28,252 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-06-04 18:00:28,252 INFO sqlalchemy.engine.Engine 
+                    SELECT o.close
+                    FROM ohlcv o
+                    JOIN symbols s ON s.id = o.symbol_id
+                    WHERE UPPER(s.ticker) = ?
+                    ORDER BY o.time DESC
+                    LIMIT 1
+                    
+2026-06-04 18:00:28,253 INFO sqlalchemy.engine.Engine [generated in 0.00056s] ('RELIANCE.NS',)
+127.0.0.1:7389 - "POST /api/v1/predictions/forecast HTTP/1.1" 200
+2026-06-04 18:00:28,257 INFO sqlalchemy.engine.Engine COMMIT
+127.0.0.1:5796 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:2095 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:3941 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:13406 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:1165 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:1165 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:2846 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:14336 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:5162 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:2946 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:3910 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:9508 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:13339 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:13339 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:7754 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:3803 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:12469 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:12469 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:11663 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:12161 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:3842 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:3842 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:5264 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:6966 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:8356 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:8356 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:4939 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:11525 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:11062 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:11062 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:8924 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:12986 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:4508 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:4508 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:10780 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:9521 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:10627 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:3289 - "OPTIONS /api/v1/alerts/history?limit=20 HTTP/1.1" 200
+127.0.0.1:1470 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:3289 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:3289 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:2828 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:4688 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:2240 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:9607 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:13120 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:13120 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:9817 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:9817 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:13387 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:11320 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:9885 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:6131 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:10576 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:5418 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:5418 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:6558 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:5944 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:5944 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200
+127.0.0.1:12577 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:5195 - "GET /api/v1/alerts/history?limit=20 HTTP/1.1" 405
+127.0.0.1:3382 - "GET /api/v1/signals/bulk?symbols=RELIANCE.NS%2CTCS.NS%2CINFY.NS%2CHDFCBANK.NS HTTP/1.1" 200
+127.0.0.1:3382 - "GET /api/v1/signals/RELIANCE.NS HTTP/1.1" 200

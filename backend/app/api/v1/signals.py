@@ -83,21 +83,6 @@ async def get_signals_bulk(
     )
 
 
-@router.get("/{symbol}", response_model=SignalResponse)
-async def get_signal(symbol: str, db: AsyncSession = Depends(get_db)) -> SignalResponse:
-    _ = db
-    if not symbol.strip():
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="symbol is required.",
-            ).dict(),
-        )
-    return _build_signal(symbol)
-
-
-
 @router.get("/history/{symbol}", response_model=SignalHistoryResponse)
 async def get_signal_history(
     symbol: str,
@@ -130,3 +115,17 @@ async def get_signal_history(
         data=rows,
         accuracy_metrics={"directional_accuracy": 0.61, "hit_rate": 0.58},
     )
+
+
+@router.get("/{symbol}", response_model=SignalResponse)
+async def get_signal(symbol: str, db: AsyncSession = Depends(get_db)) -> SignalResponse:
+    _ = db
+    if not symbol.strip():
+        raise HTTPException(
+            status_code=400,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message="symbol is required.",
+            ).dict(),
+        )
+    return _build_signal(symbol)

@@ -84,21 +84,10 @@ export function CryptoCoinLiveContent({ coin }: CryptoCoinLiveContentProps): JSX
 
       if (quoteRes.status === "fulfilled") {
         setQuote(quoteRes.value);
-        // Synthetic market cap and volume from quote metadata
-        const syntheticMarketCap = (quoteRes.value.price ?? 0) * 21_000_000 * (Math.random() * 0.5 + 0.8);
-        const syntheticVolume = syntheticMarketCap * (Math.random() * 0.15 + 0.03);
-        setMarketCap(syntheticMarketCap);
-        setVolume24h(syntheticVolume);
-        setDominance(Math.random() * 5 + 2);
-        // Synthetic related assets
-        setRelatedAssets([
-          { ticker: "ETH", name: "Ethereum", correlation: 0.78, signal: "BUY", confidence: 0.72 },
-          { ticker: "SOL", name: "Solana", correlation: 0.65, signal: "HOLD", confidence: 0.58 },
-          { ticker: "ADA", name: "Cardano", correlation: 0.52, signal: "SELL", confidence: 0.45 },
-          { ticker: "XRP", name: "Ripple", correlation: 0.48, signal: "BUY", confidence: 0.62 },
-          { ticker: "DOGE", name: "Dogecoin", correlation: 0.71, signal: "HOLD", confidence: 0.55 },
-          { ticker: "AVAX", name: "Avalanche", correlation: 0.68, signal: "BUY", confidence: 0.68 },
-        ]);
+        setMarketCap(null);
+        setVolume24h(null);
+        setDominance(null);
+        setRelatedAssets([]);
       } else {
         setError("Unable to load coin quote contract.");
       }

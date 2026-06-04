@@ -11,12 +11,12 @@ import {
   type BacktestRunResponse,
   type BacktestStatusResponse,
 } from "@/lib/contracts-api";
+import { getWsBaseUrl } from "@/lib/runtime-config";
 import { ChartCard, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
 import { safeFormat } from "@/lib/formatters";
 
 const DEFAULT_SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"];
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
-const cleanWsUrl = WS_URL.endsWith("/ws") ? WS_URL.slice(0, -3) : WS_URL;
+const cleanWsUrl = getWsBaseUrl();
 
 function toPercent(value: unknown): string {
   if (value === null || value === undefined) {

@@ -20,8 +20,9 @@ import type {
   CorrelationNode,
   CorrelationEdge,
 } from "@neuroquant/types";
+import { getApiBaseUrl } from "@/lib/runtime-config";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = getApiBaseUrl();
 const API_PREFIX = "/api/v1";
 const ACCESS_TOKEN_KEY = "nq_access_token";
 const REFRESH_TOKEN_KEY = "nq_refresh_token";

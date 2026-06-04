@@ -15,6 +15,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
+from app.database.mongodb import (
+    mongo_create_payment_intent,
+    mongo_credit_wallet,
+    mongo_get_payment_intent,
+    mongo_get_payment_history,
+    mongo_get_wallet_state,
+)
 from app.models.payment import PaymentTransaction
 from app.schemas.errors import ErrorCode, ErrorResponse
 
@@ -129,6 +136,12 @@ async def wallet_balance(current_user: dict | None = Depends(get_current_user_or
     user_id = _resolve_user_id(current_user)
     if _compat_test_mode():
         return {"currency": "INR", "wallet_balance": str(_TEST_BALANCE.get(user_id, Decimal("0.00")).quantize(Decimal("0.01")))}
+    if settings.MONGODB_URL:
+        wallet = await mongo_get_wallet_state(user_id)
+        return {
+            "currency": str(wallet.get("currency", "INR")),
+            "wallet_balance": str(wallet.get("wallet_balance", "0.00")),
+        }
 
     result = await db.execute(
         select(PaymentTransaction).where(
@@ -208,6 +221,25 @@ async def create_intent(
             "created_at": created_at,
         }
 
+    if settings.MONGODB_URL:
+        row = await mongo_create_payment_intent(
+            user_id=user_id,
+            amount=payload.amount,
+            currency=payload.currency.upper(),
+            method=method,
+            description=payload.description,
+            idempotency_key=idempotency,
+        )
+        return {
+            "intent_id": str(row["intent_id"]),
+            "provider_ref": str(row["provider_ref"]),
+            "amount": str(row["amount"]),
+            "currency": str(row["currency"]),
+            "method": str(row["method"]),
+            "status": str(row["status"]),
+            "created_at": row["created_at"].isoformat() if isinstance(row.get("created_at"), datetime) else str(row.get("created_at")),
+        }
+
     existing = await db.execute(select(PaymentTransaction).where(PaymentTransaction.idempotency_key == idempotency))
     row = existing.scalar_one_or_none()
     if row is not None:
@@ -277,6 +309,39 @@ async def confirm_intent(
             "credited_amount": str(credited_amount),
             "wallet_balance": str(next_balance),
             "completed_at": datetime.now(UTC).isoformat(),
+        }
+
+    if settings.MONGODB_URL:
+        if not payload.confirmation_code.strip():
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="confirmation_code is required.",
+                ).dict(),
+            )
+        intent = await mongo_get_payment_intent(user_id, payload.intent_id)
+        if intent is None:
+            raise HTTPException(
+                status_code=404,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.RESOURCE_NOT_FOUND,
+                    message="Payment intent not found.",
+                ).dict(),
+            )
+        credited = await mongo_credit_wallet(
+            user_id=user_id,
+            amount=Decimal(str(intent.get("amount", "0.00"))),
+            method=str(intent.get("method", "MANUAL")),
+            description=str(intent.get("description", "Paper wallet top-up")),
+            idempotency_key=f"paper-confirm:{payload.intent_id}",
+        )
+        return {
+            "intent_id": payload.intent_id,
+            "status": "succeeded",
+            "credited_amount": str(credited["amount"]),
+            "wallet_balance": str(credited["wallet_balance"]),
+            "completed_at": credited["completed_at"].isoformat() if isinstance(credited.get("completed_at"), datetime) else str(credited.get("completed_at")),
         }
 
     result = await db.execute(
@@ -353,6 +418,22 @@ async def payment_history(
             for row in list(_TEST_INTENTS.values())[::-1][:limit]
         ]
         return {"items": items, "total": len(_TEST_INTENTS)}
+    if settings.MONGODB_URL:
+        rows = await mongo_get_payment_history(user_id, limit=limit)
+        return {
+            "items": [
+                {
+                    "intent_id": str(row.get("intent_id", "")),
+                    "amount": str(row.get("amount", "0.00")),
+                    "currency": str(row.get("currency", "INR")),
+                    "method": str(row.get("method", "MANUAL")),
+                    "status": str(row.get("status", "succeeded")),
+                    "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
+                }
+                for row in rows
+            ],
+            "total": len(rows),
+        }
 
     result = await db.execute(
         select(PaymentTransaction)

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getWsBaseUrl } from "@/lib/runtime-config";
 
 export interface LiveSignalTick {
   symbol: string;
@@ -15,8 +16,7 @@ interface UseSignalFeedState {
   status: "connected" | "reconnecting" | "disconnected";
 }
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
-const cleanWsUrl = WS_URL.endsWith("/ws") ? WS_URL.slice(0, -3) : WS_URL;
+const cleanWsUrl = getWsBaseUrl();
 
 export function useSignalFeed(symbols: string[]): UseSignalFeedState {
   const wsRef = useRef<WebSocket | null>(null);

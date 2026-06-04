@@ -1,12 +1,14 @@
 """MongoDB async connection client and collection CRUD helpers.
 
 Integrates with motor to connect to a remote or local MongoDB database instance.
-Contains collections for users, refresh_sessions, portfolios, transactions, and alerts.
+Contains collections for users, refresh_sessions, portfolios, transactions, alerts,
+paper-trading wallet state, and cached market snapshots.
 """
 
 from __future__ import annotations
 
 import logging
+from decimal import Decimal
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -363,14 +365,232 @@ async def get_live_price(symbol: str) -> float:
         return price
     except Exception as e:
         logger.warning(f"Error fetching live price for {sym}: {e}")
-        # Default fallback values for major tickers
-        fallbacks = {
-            "RELIANCE.NS": 2521.30,
-            "TCS.NS": 4242.70,
-            "INFY.NS": 1610.0,
-            "HDFCBANK.NS": 1580.0,
+        raise RuntimeError(f"Unable to fetch live price for {sym}") from e
+
+
+async def mongo_get_wallet_state(user_id: str) -> dict[str, Any]:
+    database = get_mongo_db()
+    default_state = {
+        "user_id": user_id,
+        "currency": "INR",
+        "wallet_balance": "0.00",
+        "updated_at": datetime.now(UTC),
+    }
+    if database is None:
+        return default_state
+
+    try:
+        wallet = await database.paper_wallets.find_one({"user_id": user_id})
+        if wallet is None:
+            wallet = {
+                "_id": str(uuid4()),
+                **default_state,
+                "created_at": datetime.now(UTC),
+            }
+            await database.paper_wallets.insert_one(wallet)
+        wallet["wallet_balance"] = str(Decimal(str(wallet.get("wallet_balance", "0.00"))).quantize(Decimal("0.01")))
+        return wallet
+    except Exception as e:
+        logger.error(f"mongo_get_wallet_state_error: {e}")
+        trip_circuit(e)
+        return default_state
+
+
+async def mongo_credit_wallet(
+    user_id: str,
+    amount: Decimal,
+    method: str,
+    description: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    database = get_mongo_db()
+    credited_amount = amount.quantize(Decimal("0.01"))
+    now = datetime.now(UTC)
+    fallback = {
+        "intent_id": f"pi_{uuid4().hex}",
+        "payment_id": f"pay_{uuid4().hex}",
+        "provider_ref": f"paper_{uuid4().hex[:18]}",
+        "amount": str(credited_amount),
+        "currency": "INR",
+        "method": method,
+        "status": "succeeded",
+        "wallet_balance": str(credited_amount),
+        "description": description,
+        "created_at": now,
+        "completed_at": now,
+    }
+    if database is None:
+        return fallback
+
+    try:
+        existing = await database.paper_payments.find_one(
+            {"user_id": user_id, "idempotency_key": idempotency_key}
+        )
+        if existing is not None:
+            existing["wallet_balance"] = str(existing.get("wallet_balance", existing.get("amount", "0.00")))
+            return existing
+
+        wallet = await mongo_get_wallet_state(user_id)
+        current_balance = Decimal(str(wallet.get("wallet_balance", "0.00")))
+        next_balance = (current_balance + credited_amount).quantize(Decimal("0.01"))
+
+        payment_doc = {
+            "_id": f"pay_{uuid4().hex}",
+            "intent_id": f"pi_{uuid4().hex}",
+            "provider_ref": f"paper_{uuid4().hex[:18]}",
+            "user_id": user_id,
+            "idempotency_key": idempotency_key,
+            "amount": str(credited_amount),
+            "currency": "INR",
+            "method": method,
+            "status": "succeeded",
+            "wallet_balance": str(next_balance),
+            "description": description,
+            "created_at": now,
+            "completed_at": now,
         }
-        return fallbacks.get(sym, 100.0)
+        await database.paper_payments.insert_one(payment_doc)
+        await database.paper_wallets.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "currency": "INR",
+                    "wallet_balance": str(next_balance),
+                    "updated_at": now,
+                },
+                "$setOnInsert": {
+                    "_id": str(uuid4()),
+                    "created_at": now,
+                },
+            },
+            upsert=True,
+        )
+        return payment_doc
+    except Exception as e:
+        logger.error(f"mongo_credit_wallet_error: {e}")
+        trip_circuit(e)
+        return fallback
+
+
+async def mongo_create_payment_intent(
+    user_id: str,
+    amount: Decimal,
+    currency: str,
+    method: str,
+    description: str,
+    idempotency_key: str,
+) -> dict[str, Any]:
+    database = get_mongo_db()
+    now = datetime.now(UTC)
+    normalized_amount = amount.quantize(Decimal("0.01"))
+    fallback = {
+        "intent_id": f"pi_{uuid4().hex}",
+        "provider_ref": f"paper_{uuid4().hex[:18]}",
+        "user_id": user_id,
+        "idempotency_key": idempotency_key,
+        "amount": str(normalized_amount),
+        "currency": currency,
+        "method": method,
+        "description": description,
+        "status": "requires_confirmation",
+        "created_at": now,
+    }
+    if database is None:
+        return fallback
+
+    try:
+        existing = await database.paper_payment_intents.find_one(
+            {"user_id": user_id, "idempotency_key": idempotency_key}
+        )
+        if existing is not None:
+            return existing
+
+        doc = {
+            "_id": str(uuid4()),
+            **fallback,
+        }
+        await database.paper_payment_intents.insert_one(doc)
+        return doc
+    except Exception as e:
+        logger.error(f"mongo_create_payment_intent_error: {e}")
+        trip_circuit(e)
+        return fallback
+
+
+async def mongo_get_payment_intent(user_id: str, intent_id: str) -> dict[str, Any] | None:
+    database = get_mongo_db()
+    if database is None:
+        return None
+    try:
+        return await database.paper_payment_intents.find_one(
+            {"user_id": user_id, "intent_id": intent_id}
+        )
+    except Exception as e:
+        logger.error(f"mongo_get_payment_intent_error: {e}")
+        trip_circuit(e)
+        return None
+
+
+async def mongo_get_payment_history(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    database = get_mongo_db()
+    if database is None:
+        return []
+    try:
+        cursor = database.paper_payments.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
+        return await cursor.to_list(length=limit)
+    except Exception as e:
+        logger.error(f"mongo_get_payment_history_error: {e}")
+        trip_circuit(e)
+        return []
+
+
+async def mongo_cache_market_payload(
+    cache_type: str,
+    cache_key: str,
+    payload: dict[str, Any] | list[dict[str, Any]],
+    ttl_seconds: int = 300,
+) -> None:
+    database = get_mongo_db()
+    if database is None:
+        return
+    now = datetime.now(UTC)
+    try:
+        await database.market_cache.update_one(
+            {"cache_type": cache_type, "cache_key": cache_key},
+            {
+                "$set": {
+                    "payload": payload,
+                    "updated_at": now,
+                    "expires_at": now + timedelta(seconds=ttl_seconds),
+                },
+                "$setOnInsert": {"_id": str(uuid4())},
+            },
+            upsert=True,
+        )
+    except Exception as e:
+        logger.error(f"mongo_cache_market_payload_error: {e}")
+        trip_circuit(e)
+
+
+async def mongo_get_market_payload(cache_type: str, cache_key: str) -> dict[str, Any] | list[dict[str, Any]] | None:
+    database = get_mongo_db()
+    if database is None:
+        return None
+    try:
+        doc = await database.market_cache.find_one(
+            {
+                "cache_type": cache_type,
+                "cache_key": cache_key,
+                "expires_at": {"$gt": datetime.now(UTC)},
+            }
+        )
+        if doc is None:
+            return None
+        return doc.get("payload")
+    except Exception as e:
+        logger.error(f"mongo_get_market_payload_error: {e}")
+        trip_circuit(e)
+        return None
 
 
 # ─── Alert Collection CRUD Helpers ───────────────────────────────────────

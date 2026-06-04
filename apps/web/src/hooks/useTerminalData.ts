@@ -49,43 +49,6 @@ export const useTerminalData = (): TerminalDataState => {
     return FALLBACK_SYMBOLS;
   }, []);
 
-  const makeMockSignal = useCallback((symbol: string): SignalResponse => {
-    const isCrypto = symbol.includes("-USD");
-    const isUS = !isCrypto && !symbol.includes(".NS");
-    const basePrice = isCrypto ? 2500.0 : isUS ? 180.0 : 1500.0;
-    const rand = Math.random();
-    const direction = rand > 0.6 ? "STRONG_BUY" : rand > 0.3 ? "BUY" : rand > 0.15 ? "NEUTRAL" : rand > 0.05 ? "SELL" : "STRONG_SELL";
-    return {
-      symbol: symbol.toUpperCase(),
-      timestamp: new Date().toISOString(),
-      ensemble: {
-        direction,
-        confidence: 0.62 + Math.random() * 0.18,
-        kelly_fraction: 0.08 + Math.random() * 0.1,
-        signal: direction
-      },
-      regime: {
-        state: rand > 0.5 ? "BULL" : rand > 0.2 ? "SIDEWAYS" : "BEAR",
-        probs: { bull: 0.6, bear: 0.1, sideways: 0.2, crisis: 0.1 },
-        transition_probs: { bull: 0.8, bear: 0.1, sideways: 0.1, crisis: 0.0 }
-      },
-      models: {
-        tft: { p10: basePrice * 0.98, p50: basePrice, p90: basePrice * 1.02, raw_signal: 0.3, horizon_days: 5 },
-        hmm_garch: { regime_signal: "BULL", vol_forecast_1d: 0.015, vol_forecast_21d: 0.07 },
-        gnn: { spillover_risk: 0.05, embedding_norm: 1.0, top_correlated_assets: [] },
-        lstm_attn: { raw_signal: 0.4, attention_peaks: [] },
-        xgboost: { raw_signal: 0.35, top_features: [] }
-      },
-      model_weights: {
-        tft: 0.28,
-        hmm_garch: 0.19,
-        gnn: 0.16,
-        lstm_attn: 0.17,
-        xgboost: 0.20
-      }
-    };
-  }, []);
-
   const refreshAll = useCallback(
     async (background = false, sourceSymbols?: string[]): Promise<void> => {
       if (background && initializedRef.current) {
@@ -119,21 +82,18 @@ export const useTerminalData = (): TerminalDataState => {
         setSelectedSignal(single);
         initializedRef.current = true;
       } catch (err) {
-        console.warn("Failed to fetch live signal, using fallback mocks:", err);
-        const mockBulk = symbolsToLoad.map((sym) => makeMockSignal(sym));
-        const mockSingle = mockBulk.find((s) => s.symbol.toUpperCase() === targetSymbol.toUpperCase()) || makeMockSignal(targetSymbol);
-        
+        console.warn("Failed to fetch live signal feed:", err);
         setSymbols(symbolsToLoad);
-        setWatchlistSignals(mockBulk);
-        setSelectedSignal(mockSingle);
+        setWatchlistSignals([]);
+        setSelectedSignal(null);
         initializedRef.current = true;
-        setError("Using offline predictive engine (live backend feed disconnected)");
+        setError("Live signal feed is unavailable. Check the backend market and signal services.");
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [loadSymbols, selectedSymbol, symbols, makeMockSignal]
+    [loadSymbols, selectedSymbol, symbols]
   );
 
   const refreshSelected = useCallback(
@@ -152,16 +112,16 @@ export const useTerminalData = (): TerminalDataState => {
         setSelectedSignal(single);
         initializedRef.current = true;
       } catch (err) {
-        console.warn("Failed to fetch live selected signal, using fallback mock:", err);
-        setSelectedSignal(makeMockSignal(selectedSymbol));
+        console.warn("Failed to fetch live selected signal:", err);
+        setSelectedSignal(null);
         initializedRef.current = true;
-        setError("Using offline predictive engine (live backend feed disconnected)");
+        setError("Live signal feed is unavailable. Check the backend market and signal services.");
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [selectedSymbol, makeMockSignal]
+    [selectedSymbol]
   );
 
   const refresh = useCallback(async (): Promise<void> => {
