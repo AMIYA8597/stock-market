@@ -1,4 +1,9 @@
 /** @type {import('next').NextConfig} */
+function normalizeApiBase(url) {
+  const candidate = (url || "http://localhost:8000").replace(/\/+$/, "");
+  return candidate.replace(/\/api\/v1\/?$/i, "");
+}
+
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@neuroquant/ui", "@neuroquant/types"],
@@ -36,10 +41,11 @@ const nextConfig = {
     ];
   },
   async rewrites() {
+    const apiBase = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
     return [
       {
         source: "/api/v1/:path*",
-        destination: `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/v1/:path*`,
+        destination: `${apiBase}/api/v1/:path*`,
       },
     ];
   },

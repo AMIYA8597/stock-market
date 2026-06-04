@@ -196,20 +196,16 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
     }));
   }, [ensemble?.models]);
 
-  const syntheticFundamentals = useMemo(() => {
-    const eps = quote?.price && prediction?.predicted_price ? Math.max(quote.price - prediction.predicted_price, 1) : null;
-    const pe = quote?.price && eps ? quote.price / eps : null;
-    const pb = pe ? pe / 3.2 : null;
-    const evEbitda = pe ? pe * 0.72 : null;
+  const derivedFundamentals = useMemo(() => {
     return {
       marketCap: quote ? quote.price * quote.volume : null,
-      pe,
-      pb,
-      eps,
-      evEbitda,
-      netMargin: signal ? Math.max(-0.4, Math.min(0.4, signal.models.tft.raw_signal)) : null,
+      pe: null as number | null,
+      pb: null as number | null,
+      eps: null as number | null,
+      evEbitda: null as number | null,
+      netMargin: null as number | null,
     };
-  }, [prediction?.predicted_price, quote, signal]);
+  }, [quote]);
 
   const shapBars = useMemo<SimpleBarPoint[]>(() => {
     return (shap?.feature_contributions ?? []).slice(0, 8).map((item) => ({
@@ -243,12 +239,18 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
       <section className="relative z-10 mt-6 grid gap-4 xl:grid-cols-[1fr_320px]">
         <ChartCard title={`Price History (${history?.interval ?? "1D"})`} subtitle="Live tick overlay on recent close trend">
           <div className="h-[280px] rounded bg-[rgba(255,255,255,0.03)] p-2 sm:h-[340px] lg:h-[360px]">
-            <SimpleLineAreaChart
-              data={isLoading ? Array.from({ length: 40 }, (_, idx) => ({ label: String(idx + 1), value: 0 })) : priceSeries}
-              mode="line"
-              stroke="var(--nq-accent-cyan)"
-              yTickFormatter={(value) => `₹${value.toFixed(0)}`}
-            />
+            {priceSeries.length > 0 ? (
+              <SimpleLineAreaChart
+                data={isLoading ? Array.from({ length: 40 }, (_, idx) => ({ label: String(idx + 1), value: 0 })) : priceSeries}
+                mode="line"
+                stroke="var(--nq-accent-cyan)"
+                yTickFormatter={(value) => `₹${value.toFixed(0)}`}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center rounded border border-dashed border-[var(--nq-border)] px-4 text-center text-sm text-[var(--nq-text-secondary)]">
+                Historical candles are unavailable for this symbol right now.
+              </div>
+            )}
           </div>
         </ChartCard>
 
@@ -336,12 +338,12 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
         {activeTab === "fundamentals" ? (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {[
-              ["Market Cap", syntheticFundamentals.marketCap ? `₹${formatInr(syntheticFundamentals.marketCap)}` : "--"],
-              ["P/E", syntheticFundamentals.pe?.toFixed(2) ?? "--"],
-              ["P/B", syntheticFundamentals.pb?.toFixed(2) ?? "--"],
-              ["EPS", syntheticFundamentals.eps ? `₹${formatInr(syntheticFundamentals.eps)}` : "--"],
-              ["EV/EBITDA", syntheticFundamentals.evEbitda?.toFixed(2) ?? "--"],
-              ["Net Margin", syntheticFundamentals.netMargin !== null ? formatPercent(syntheticFundamentals.netMargin) : "--"],
+              ["Market Cap", derivedFundamentals.marketCap ? `₹${formatInr(derivedFundamentals.marketCap)}` : "--"],
+              ["P/E", derivedFundamentals.pe?.toFixed(2) ?? "Provider required"],
+              ["P/B", derivedFundamentals.pb?.toFixed(2) ?? "Provider required"],
+              ["EPS", derivedFundamentals.eps ? `₹${formatInr(derivedFundamentals.eps)}` : "Provider required"],
+              ["EV/EBITDA", derivedFundamentals.evEbitda?.toFixed(2) ?? "Provider required"],
+              ["Net Margin", derivedFundamentals.netMargin !== null ? formatPercent(derivedFundamentals.netMargin) : "Provider required"],
             ].map(([label, value]) => (
               <div key={String(label)} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-3 py-2 text-xs">
                 <p className="text-[var(--nq-text-secondary)]">{label}</p>

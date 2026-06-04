@@ -96,40 +96,14 @@ async def get_holdings(
                 timestamp=datetime.now(UTC),
             )
 
-        # Fallback static mock holdings
-        holdings = [
-            HoldingData(
-                symbol="RELIANCE.NS",
-                quantity=Decimal("42.00000000"),
-                avg_price=Decimal("2487.50000000"),
-                current_price=Decimal("2521.30000000"),
-                unrealized_pnl=Decimal("1419.60"),
-                unrealized_pnl_pct=Decimal("0.0136"),
-                in_position_days=57,
-            ),
-            HoldingData(
-                symbol="TCS.NS",
-                quantity=Decimal("15.00000000"),
-                avg_price=Decimal("4180.00000000"),
-                current_price=Decimal("4242.70000000"),
-                unrealized_pnl=Decimal("940.50"),
-                unrealized_pnl_pct=Decimal("0.0150"),
-                in_position_days=34,
-            ),
-        ]
-
-        total_invested = Decimal("167475.00")
-        total_current_value = Decimal("169835.10")
-        total_unrealized_pnl = total_current_value - total_invested
-
         return HoldingsResponse(
-            holdings=holdings,
-            total_invested=total_invested,
-            total_current_value=total_current_value,
-            total_unrealized_pnl=total_unrealized_pnl,
-            total_unrealized_pnl_pct=Decimal("0.0141"),
-            cash_balance=Decimal("832524.90"),
-            portfolio_value=Decimal("1002360.00"),
+            holdings=[],
+            total_invested=Decimal("0.00"),
+            total_current_value=Decimal("0.00"),
+            total_unrealized_pnl=Decimal("0.00"),
+            total_unrealized_pnl_pct=Decimal("0.0000"),
+            cash_balance=Decimal("0.00"),
+            portfolio_value=Decimal("0.00"),
             timestamp=datetime.now(UTC),
         )
     except Exception as exc:
@@ -265,16 +239,12 @@ async def post_transaction(
                 portfolio_updated=True,
             )
 
-        # Mock fallback response
-        return TransactionResponse(
-            transaction_id=str(uuid4()),
-            symbol=request.symbol.upper(),
-            type=tx_type,
-            quantity=request.quantity,
-            price=request.price,
-            net_amount=net_amount.quantize(Decimal("0.01")),
-            timestamp=datetime.now(UTC),
-            portfolio_updated=True,
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code=ErrorCode.SERVICE_UNAVAILABLE,
+                message="Portfolio trading requires MongoDB local storage to be configured.",
+            ).dict(),
         )
     except HTTPException:
         raise

@@ -7,7 +7,15 @@ import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { blogApi } from '@/lib/api-client';
 
-const seedPosts = [
+interface BlogCardPost {
+  slug: string;
+  title: string;
+  excerpt: string;
+  date: string;
+  tags: string[];
+}
+
+const seedPosts: BlogCardPost[] = [
   {
     slug: 'ai-macro-regime-playbook',
     title: 'Building an AI Macro Regime Playbook',
@@ -31,25 +39,53 @@ const seedPosts = [
   },
 ];
 
+function toBlogDateLabel(value: string | null | undefined): string {
+  if (!value) {
+    return 'Draft';
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return 'Draft';
+  }
+
+  return parsed.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 export function BlogIndexPage(): JSX.Element {
-  const [posts, setPosts] = useState(seedPosts);
+  const [posts, setPosts] = useState<BlogCardPost[]>(seedPosts);
 
   useEffect(() => {
     let mounted = true;
-    blogApi.listPosts(20).then((response) => {
-      if (!mounted) return;
-      setPosts(
-        response.items.map((item) => ({
-          slug: item.slug,
-          title: item.title,
-          excerpt: item.excerpt,
-          date: item.published_at ? new Date(item.published_at).toLocaleDateString() : 'Draft',
-          tags: ['Research'],
-        }))
-      );
-    }).catch(() => {
-      if (!mounted) return;
-    });
+
+    blogApi
+      .listPosts(20)
+      .then((response) => {
+        if (!mounted) {
+          return;
+        }
+
+        setPosts(
+          response.items.map((item) => ({
+            slug: item.slug || 'untitled-post',
+            title: item.title || 'Untitled post',
+            excerpt: item.excerpt || 'No summary available yet.',
+            date: toBlogDateLabel(item.published_at),
+            tags: ['Research'],
+          }))
+        );
+      })
+      .catch(() => {
+        if (!mounted) {
+          return;
+        }
+      });
+
     return () => {
       mounted = false;
     };
@@ -62,11 +98,19 @@ export function BlogIndexPage(): JSX.Element {
         {posts.map((post) => (
           <Card key={post.slug} className="bg-[var(--ds-surface-1)]/90">
             <CardContent className="p-5">
-              <Link href={`/blog/${post.slug}`} className="text-lg font-semibold leading-tight transition hover:text-[var(--ds-color-primary-300)]">{post.title}</Link>
+              <Link href={`/blog/${post.slug}`} className="text-lg font-semibold leading-tight transition hover:text-[var(--ds-color-primary-300)]">
+                {post.title}
+              </Link>
               <p className="mt-2 text-sm text-[var(--ds-text-secondary)]">{post.excerpt}</p>
               <div className="mt-3 flex items-center gap-3 text-xs text-[var(--ds-text-muted)]">
-                <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" />{post.date}</span>
-                <span className="inline-flex items-center gap-1"><Tag className="h-3.5 w-3.5" />{post.tags.join(' · ')}</span>
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3.5 w-3.5" />
+                  {post.date}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Tag className="h-3.5 w-3.5" />
+                  {post.tags.join(' | ')}
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -78,7 +122,9 @@ export function BlogIndexPage(): JSX.Element {
             <p className="text-xs uppercase tracking-[0.1em] text-[var(--ds-text-muted)]">Categories</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {['AI Models', 'Risk', 'Signals', 'Portfolio', 'MLOps'].map((tag) => (
-                <Badge key={tag} variant="outline">{tag}</Badge>
+                <Badge key={tag} variant="outline">
+                  {tag}
+                </Badge>
               ))}
             </div>
           </CardContent>
@@ -94,13 +140,23 @@ export function BlogArticlePage({ slug }: { slug: string }): JSX.Element {
 
   useEffect(() => {
     let mounted = true;
-    blogApi.getPost(slug).then((post) => {
-      if (!mounted) return;
-      setTitle(post.title);
-      setContent(post.content);
-    }).catch(() => {
-      if (!mounted) return;
-    });
+
+    blogApi
+      .getPost(slug)
+      .then((post) => {
+        if (!mounted) {
+          return;
+        }
+
+        setTitle(post.title);
+        setContent(post.content);
+      })
+      .catch(() => {
+        if (!mounted) {
+          return;
+        }
+      });
+
     return () => {
       mounted = false;
     };
@@ -109,9 +165,7 @@ export function BlogArticlePage({ slug }: { slug: string }): JSX.Element {
   return (
     <article className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="text-[var(--ds-heading-2)] font-semibold">{title}</h1>
-      <p className="mt-4 text-base leading-7 text-[var(--ds-text-secondary)]">
-        {content}
-      </p>
+      <p className="mt-4 text-base leading-7 text-[var(--ds-text-secondary)]">{content}</p>
       <p className="mt-4 text-base leading-7 text-[var(--ds-text-secondary)]">
         At scale, consistency beats novelty. A durable process links data quality, feature reliability, model governance, and execution discipline. This stack is where modern SaaS UX directly compounds research outcomes.
       </p>

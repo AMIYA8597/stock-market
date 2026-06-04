@@ -23,97 +23,6 @@ import AIAssistantTab from "./panes/AIAssistantTab";
 import CalendarTab from "./panes/CalendarTab";
 import PortfolioTab from "./panes/PortfolioTab";
 
-function generateMockBars(symbol: string, timeframe: string): OHLCVBar[] {
-  const barsCount = 180;
-  const mockBars: OHLCVBar[] = [];
-  const cleanSym = symbol.toUpperCase();
-  let currentPrice = cleanSym.includes("BTC")
-    ? 68000
-    : cleanSym.includes("AAPL")
-    ? 180
-    : cleanSym.includes("TCS")
-    ? 3800
-    : 1500;
-
-  const date = new Date();
-  const tf = timeframe.toLowerCase();
-  const timeStep =
-    tf === "1m"
-      ? 60000
-      : tf === "3m"
-      ? 180000
-      : tf === "5m"
-      ? 300000
-      : tf === "10m"
-      ? 600000
-      : tf === "15m"
-      ? 900000
-      : tf === "30m"
-      ? 1800000
-      : tf === "45m"
-      ? 2700000
-      : tf === "1h"
-      ? 3600000
-      : tf === "2h"
-      ? 7200000
-      : tf === "4h"
-      ? 14400000
-      : tf === "1w"
-      ? 604800000
-      : tf === "1mo"
-      ? 2592000000
-      : 86400000;
-
-  date.setTime(date.getTime() - barsCount * timeStep);
-
-  for (let i = 0; i < barsCount; i++) {
-    const change = currentPrice * 0.015 * (Math.random() - 0.48);
-    const open = currentPrice;
-    const close = currentPrice + change;
-    const high = Math.max(open, close) + currentPrice * 0.008 * Math.random();
-    const low = Math.min(open, close) - currentPrice * 0.008 * Math.random();
-    const volume = Math.round(10000 + Math.random() * 90000);
-
-    mockBars.push({
-      timestamp: date.toISOString(),
-      open,
-      high,
-      low,
-      close,
-      volume,
-    });
-
-    currentPrice = close;
-    date.setTime(date.getTime() + timeStep);
-  }
-  return mockBars;
-}
-
-function generateMockForecast(symbol: string, lastPrice: number): ForecastPoint[] {
-  const horizons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-  const forecasts: ForecastPoint[] = [];
-  const cleanSym = symbol.toUpperCase();
-  const isBear = cleanSym.includes("BEAR") || cleanSym.includes("SELL") || Math.random() < 0.35;
-  const trendCoeff = isBear ? -0.0015 : 0.002;
-
-  const now = new Date();
-  for (const h of horizons) {
-    const targetDate = new Date(now.getTime() + h * 86400000);
-    const predictedPrice = lastPrice * (1 + trendCoeff * h) + (Math.random() - 0.5) * lastPrice * 0.01;
-    const stdDev = lastPrice * 0.008 * Math.sqrt(h);
-    forecasts.push({
-      target_date: targetDate.toISOString(),
-      horizon_days: h,
-      predicted_price: Number(predictedPrice.toFixed(2)),
-      predicted_direction: isBear ? "SELL" : "BUY",
-      confidence: 0.72,
-      prediction_low: Number((predictedPrice - 1.96 * stdDev).toFixed(2)),
-      prediction_high: Number((predictedPrice + 1.96 * stdDev).toFixed(2)),
-    });
-  }
-  return forecasts;
-}
-
 interface ChartSectionProps {
   signal: SignalResponse | null;
   onSelectSymbol?: (symbol: string) => void;
@@ -149,6 +58,8 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
   >("signals");
 
   const [predictions, setPredictions] = useState<ForecastPoint[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [forecastError, setForecastError] = useState<string | null>(null);
 
   const [chartStyle, setChartStyle] = useState<
     | "line"
@@ -213,11 +124,16 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
         const history = await marketApi.getHistory(signal.symbol, timeframe);
         if (history.bars && history.bars.length > 0) {
           loadedBars = history.bars.slice(-180);
-        } else {
-          loadedBars = generateMockBars(signal.symbol, timeframe);
+          if (mounted) {
+            setHistoryError(null);
+          }
+        } else if (mounted) {
+          setHistoryError(`No ${timeframe} history returned by the market data API.`);
         }
-      } catch {
-        loadedBars = generateMockBars(signal.symbol, timeframe);
+      } catch (error) {
+        if (mounted) {
+          setHistoryError(error instanceof Error ? error.message : "Unable to load market history.");
+        }
       }
 
       if (mounted) {
@@ -232,15 +148,13 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
         if (tftResults && tftResults.forecasts && tftResults.forecasts.length > 0) {
           if (mounted) {
             setPredictions(tftResults.forecasts);
-          }
-        } else {
-          if (mounted) {
-            setPredictions(generateMockForecast(signal.symbol, lastPrice));
+            setForecastError(null);
           }
         }
-      } catch {
+      } catch (error) {
         if (mounted) {
-          setPredictions(generateMockForecast(signal.symbol, lastPrice));
+          setPredictions([]);
+          setForecastError(error instanceof Error ? error.message : "Unable to load forecast data.");
         }
       }
     }
@@ -504,9 +418,23 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
               </div>
             ) : null}
             <div className="absolute left-3 top-3 rounded border border-[var(--nq-border)] bg-[rgba(5,12,22,0.9)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] sm:text-xs">
-              Live overlay active: price, signal, regime bands
+              {historyError ? "Market history unavailable" : "Live overlay active: price, signal, regime bands"}
             </div>
           </div>
+          {historyError || forecastError ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[var(--nq-text-secondary)]">
+              {historyError ? (
+                <span className="rounded border border-[rgba(255,59,92,0.35)] bg-[rgba(255,59,92,0.08)] px-2 py-1 text-[var(--nq-accent-red)]">
+                  {historyError}
+                </span>
+              ) : null}
+              {forecastError ? (
+                <span className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-2 py-1 text-[#F7C948]">
+                  Forecast unavailable: {forecastError}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <div className="mb-2 flex items-center gap-1 overflow-x-auto pb-1 ds-scrollable">

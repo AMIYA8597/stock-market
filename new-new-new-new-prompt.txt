@@ -1,0 +1,344 @@
+# CRITICAL RECOVERY & TRANSFORMATION MISSION
+
+Take full ownership of this repository.
+
+Do NOT assume the application is working.
+
+Treat the current project as partially broken until verified.
+
+Your primary goal is to transform it into a fully functional, locally runnable, professional stock trading platform similar to Zerodha Kite and TradingView using FREE technologies and FREE market-data providers wherever possible.
+
+
+read this image............. there is just nothing... Why??????? Do all APIs fix in all over UI and backend..........I need a proper stock market setup code without any errors and make it proper graphs values like similar existing stock markets like zerodha, Nifty, BSE,NSE and others with graph charts and tell me all like free APIs and others and currently skip dockers and others high level setup...... Currently do it all for locally set and like setup that way that i can also make trade.... What ever free API needed tell me steps fully without any errors..... DO all backend and UI all fully setup without any errors........ DO all with exactly strong setup and tell me all APIs setup code........ And also Currently setup for mongo db setup instead of SQL and others DB........... I have free Mongodb Url links, How many you needed for data storing????? (Because every free DB only provide 400 Mb)....... So do all changes exactly needed and make it really Live stock market. SO I can make trade...... Tell me all setup and make it fully DO it fully................. Start Now
+
+
+
+
+---
+
+# HIGHEST PRIORITY — FIND OUT WHY THINGS ARE BROKEN
+
+Currently:
+
+* Charts are not moving.
+* Candles are not rendering correctly.
+* Graphs appear static or demo-based.
+* Stocks are not loading.
+* Live prices are missing.
+* APIs may be failing.
+* Backend services may be disconnected.
+* UI contains many errors.
+* Responsiveness is poor.
+* Routes may be broken.
+* Existing modules appear incomplete.
+
+DO NOT add new features until these problems are diagnosed and fixed.
+
+---
+
+# MANDATORY EXECUTION ORDER
+
+PHASE 1:
+
+* Analyze entire repository.
+* Build architecture map.
+* Build route map.
+* Build API map.
+* Build database map.
+* Build charting/data-flow map.
+
+PHASE 2:
+
+* Run frontend.
+* Run backend.
+* Check terminal logs.
+* Check browser console.
+* Check network requests.
+* Check API responses.
+* Check database connections.
+* Check WebSocket connections.
+
+PHASE 3:
+
+Create issue report containing:
+
+* Root Cause
+* Severity
+* Affected Files
+* Recommended Fix
+* Validation Steps
+
+PHASE 4:
+
+Fix issues one-by-one.
+
+PHASE 5:
+
+Retest entire application.
+
+PHASE 6:
+
+Only after existing issues are fixed, continue with enhancements.
+
+---
+
+# ROUTING REQUIREMENTS
+
+* Remove unnecessary "/terminal" dependency.
+* Home page becomes primary entry point.
+* Fix all routing issues.
+* Verify all navigation manually.
+* Remove broken or unused routes.
+
+---
+
+# DATABASE REQUIREMENTS
+
+Use MongoDB.
+
+Optimize schema design.
+
+Collections:
+
+* Users
+* Watchlists
+* Portfolios
+* Orders
+* Positions
+* Alerts
+* Historical Data
+* Signals
+* Backtests
+* Analytics
+
+Avoid unnecessary collections.
+
+Implement indexing.
+
+Optimize storage usage.
+
+---
+
+# FREE MARKET DATA REQUIREMENTS
+
+Research and integrate the best available FREE providers.
+
+Support:
+
+* NSE Stocks
+* BSE Stocks
+* NIFTY
+* BANKNIFTY
+* Equity Listings
+* Historical Data
+* Live Data (where available)
+* Candle Data
+* Market Analytics
+
+Implement:
+
+* API Fallback System
+* Caching Layer
+* Rate Limit Protection
+* Error Recovery
+* Retry Logic
+
+Create complete .env.example configuration.
+
+Document all required API keys.
+
+Never leave placeholder APIs.
+
+---
+
+# ADVANCED CHARTING ENGINE
+
+ALL charts must use REAL DATA.
+
+ALL charts must render correctly.
+
+ALL charts must update correctly.
+
+Support:
+
+* Candlestick
+* OHLC
+* Line
+* Area
+* Baseline
+* Volume
+* Mountain
+* Heikin Ashi
+* Hollow Candlestick
+* Renko
+* Point & Figure
+* Kagi
+* Range Bars
+* Three Line Break
+* Equivolume
+* Tick
+* Volume Profile
+* Market Profile
+* Relative Strength
+* Spread
+
+Support timeframes:
+
+* 1m
+* 3m
+* 5m
+* 10m
+* 15m
+* 30m
+* 45m
+* 1h
+* 2h
+* 4h
+* Daily
+* Weekly
+* Monthly
+
+---
+
+# CANDLE PATTERN SYSTEM
+
+Implement and visualize:
+
+* Doji
+* Hammer
+* Inverted Hammer
+* Hanging Man
+* Shooting Star
+* Bullish Engulfing
+* Bearish Engulfing
+* Morning Star
+* Evening Star
+* Harami
+* Dragonfly Doji
+* Gravestone Doji
+* Tweezer Top
+* Tweezer Bottom
+* Marubozu
+* Three White Soldiers
+* Three Black Crows
+
+Display directly on charts.
+
+---
+
+# INDICATORS
+
+Implement:
+
+* RSI
+* MACD
+* EMA
+* SMA
+* VWAP
+* ATR
+* Bollinger Bands
+* SuperTrend
+* Ichimoku
+* Volume Profile
+* Smart Money Concepts
+* Liquidity Zones
+* Market Structure
+* Order Blocks
+* Fair Value Gaps
+
+---
+
+# AI & ANALYTICS
+
+Implement:
+
+* Trend Analysis
+* Pattern Recognition
+* Buy Signals
+* Sell Signals
+* Portfolio Analytics
+* Risk Analytics
+* Statistical Forecasting
+* Candle Forecasting
+
+Display:
+
+* Confidence Scores
+* Historical Validation
+* Backtesting Results
+* Risk Metrics
+
+Never display fake accuracy.
+
+Never display guaranteed profits.
+
+---
+
+# UI/UX TRANSFORMATION
+
+Redesign entire platform.
+
+Inspired by:
+
+* Zerodha Kite
+* TradingView
+
+Requirements:
+
+* Premium UI
+* Fully Responsive
+* Fast Loading
+* Dark Theme
+* Modular Components
+* Professional Dashboard
+* Watchlists
+* Portfolio
+* Orders
+* Positions
+* Scanner
+* Screener
+* Alerts
+* News
+* Heatmaps
+* Risk Dashboard
+* Analytics Dashboard
+
+---
+
+# CODEBASE CLEANUP
+
+Remove:
+
+* Unused files
+* Unused folders
+* Dead code
+* Duplicate code
+* Unused dependencies
+* Placeholder data
+* Demo implementations
+
+Update .gitignore.
+
+Create maintainable feature-based architecture.
+
+Use small modules instead of large files.
+
+---
+
+# FINAL SUCCESS CRITERIA
+
+The application must:
+
+* Run locally without critical errors.
+* Load real market data.
+* Display working charts and candles.
+* Display working indicators.
+* Display working analytics.
+* Have clean routes.
+* Have responsive UI.
+* Have modular architecture.
+* Have stable backend services.
+* Have no critical console errors.
+* Have no critical runtime errors.
+
+Do not stop after analysis. Continue auditing, fixing, validating, testing, and improving until the platform is stable, maintainable, and professional.

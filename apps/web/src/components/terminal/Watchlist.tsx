@@ -47,40 +47,10 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
     return wlLists[activeTab] || [];
   }, [signals, activeTab, wlLists]);
 
-  const makeMockSignal = (symbol: string): SignalResponse => {
-    const isCrypto = symbol.includes("-USD");
-    const isUS = !isCrypto && !symbol.includes(".NS");
-    const basePrice = isCrypto ? 2500.0 : isUS ? 180.0 : 1500.0;
-    return {
-      symbol: symbol.toUpperCase(),
-      timestamp: new Date().toISOString(),
-      ensemble: {
-        direction: "BUY",
-        confidence: 0.62,
-        kelly_fraction: 0.12,
-        signal: "BUY"
-      },
-      regime: {
-        state: "BULL",
-        probs: { bull: 0.6, bear: 0.1, sideways: 0.2, crisis: 0.1 },
-        transition_probs: { bull: 0.8, bear: 0.1, sideways: 0.1, crisis: 0.0 }
-      },
-      models: {
-        tft: { p10: basePrice * 0.98, p50: basePrice, p90: basePrice * 1.02, raw_signal: 0.3, horizon_days: 5 },
-        hmm_garch: { regime_signal: "BULL", vol_forecast_1d: 0.015, vol_forecast_21d: 0.07 },
-        gnn: { spillover_risk: 0.05, embedding_norm: 1.0, top_correlated_assets: [] },
-        lstm_attn: { raw_signal: 0.4, attention_peaks: [] },
-        xgboost: { raw_signal: 0.35, top_features: [] }
-      },
-      model_weights: {}
-    };
-  };
-
   const visibleSignals = useMemo(() => {
-    return activeSymbols.map((sym) => {
-      const found = signals.find((s) => s.symbol.toUpperCase() === sym.toUpperCase());
-      return found || makeMockSignal(sym);
-    });
+    return activeSymbols
+      .map((sym) => signals.find((s) => s.symbol.toUpperCase() === sym.toUpperCase()))
+      .filter((item): item is SignalResponse => item !== undefined);
   }, [activeSymbols, signals]);
 
   const searchResults = useMemo(() => {

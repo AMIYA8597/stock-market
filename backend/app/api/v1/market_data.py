@@ -5,8 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import UTC, date, datetime, timedelta
-from hashlib import sha256
-from random import Random
 from typing import Literal
 
 import pandas as pd
@@ -18,6 +16,10 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.database.mongodb import (
+    mongo_cache_market_payload,
+    mongo_get_market_payload,
+)
 from app.database.redis_client import get_redis
 from app.schemas.errors import ErrorCode, ErrorResponse
 
@@ -101,10 +103,6 @@ class EconomicEvent(BaseModel):
     impact: Literal["LOW", "MEDIUM", "HIGH"]
 
 
-def _seed(key: str) -> int:
-    return int(sha256(key.encode("utf-8")).hexdigest()[:8], 16)
-
-
 def _exchange_predicate(exchange: str) -> tuple[str, dict[str, object]]:
     exch = exchange.upper()
     if exch == "CRYPTO":
@@ -148,16 +146,10 @@ async def _fetch_quote_from_yfinance(symbol: str) -> QuoteResponse:
         }
 
     result = await asyncio.to_thread(_pull)
-    rng = Random(_seed(symbol.upper()))
-    probs = {
-        "bull": round(0.15 + rng.random() * 0.55, 3),
-        "bear": round(0.1 + rng.random() * 0.4, 3),
-        "sideways": round(0.1 + rng.random() * 0.35, 3),
-        "crisis": round(0.02 + rng.random() * 0.08, 3),
-    }
+    signal_score = max(-1.0, min(1.0, float(result["change_pct"]) / 5.0))
+    probs = _state_probs_from_signal(signal_score)
     state = max(probs, key=probs.get).upper()
-    signal_score = rng.uniform(-1, 1)
-    direction = "STRONG_BUY" if signal_score > 0.6 else "BUY" if signal_score > 0.2 else "STRONG_SELL" if signal_score < -0.6 else "SELL" if signal_score < -0.2 else "NEUTRAL"
+    direction = _direction_from_signal(signal_score)
 
     return QuoteResponse(
         ticker=str(result["ticker"]),
@@ -171,7 +163,7 @@ async def _fetch_quote_from_yfinance(symbol: str) -> QuoteResponse:
         high_52w=float(result["high_52w"]),
         low_52w=float(result["low_52w"]),
         regime={"state": state, "probs": probs},
-        signal={"direction": direction, "confidence": round(0.55 + rng.random() * 0.4, 3)},
+        signal={"direction": direction, "confidence": round(min(0.95, 0.55 + abs(signal_score) * 0.35), 3)},
         timestamp=datetime.now(UTC),
     )
 
@@ -309,37 +301,18 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
         try:
             quote = await _fetch_quote_from_yfinance(symbol)
         except Exception as exc:
-            logger.warning(f"yfinance quote failed for {symbol}: {exc}. Using offline mock generator.")
-            rng = Random(_seed(symbol.upper()))
-            price = round(100.0 + rng.random() * 2400.0, 2)
-            change = round(-10.0 + rng.random() * 20.0, 2)
-            change_pct = round((change / (price - change)) * 100.0, 3) if price != change else 0.0
-            
-            probs = {
-                "bull": round(0.15 + rng.random() * 0.55, 3),
-                "bear": round(0.1 + rng.random() * 0.4, 3),
-                "sideways": round(0.1 + rng.random() * 0.35, 3),
-                "crisis": round(0.02 + rng.random() * 0.08, 3),
-            }
-            state = max(probs, key=probs.get).upper()
-            signal_score = rng.uniform(-1, 1)
-            direction = "STRONG_BUY" if signal_score > 0.6 else "BUY" if signal_score > 0.2 else "STRONG_SELL" if signal_score < -0.6 else "SELL" if signal_score < -0.2 else "NEUTRAL"
-
-            quote = QuoteResponse(
-                ticker=symbol.upper(),
-                name=f"Mock {symbol.upper()}",
-                price=price,
-                change=change,
-                change_pct=change_pct,
-                volume=int(100_000 + rng.random() * 4_500_000),
-                market_cap=round(1_000_000_000.0 * (1 + rng.random() * 100), 2),
-                pe_ratio=round(10.0 + rng.random() * 30.0, 2),
-                high_52w=round(price * 1.2, 2),
-                low_52w=round(price * 0.8, 2),
-                regime={"state": state, "probs": probs},
-                signal={"direction": direction, "confidence": round(0.55 + rng.random() * 0.4, 3)},
-                timestamp=datetime.now(UTC),
-            )
+            logger.warning(f"yfinance quote failed for {symbol}: {exc}. Trying cached market payload.")
+            cached_quote = await mongo_get_market_payload("quote", symbol.upper())
+            if isinstance(cached_quote, dict):
+                cached_quote["timestamp"] = datetime.fromisoformat(str(cached_quote["timestamp"]))
+                return QuoteResponse(**cached_quote)
+            raise HTTPException(
+                status_code=503,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.SERVICE_UNAVAILABLE,
+                    message=f"Live quote is unavailable for {symbol.upper()}. Configure a market data provider or retry later.",
+                ).dict(),
+            ) from exc
 
     if redis is not None:
         try:
@@ -348,6 +321,16 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
             await redis.set(key, json.dumps(cache_payload), ex=1)
         except Exception:
             pass
+
+    await mongo_cache_market_payload(
+        "quote",
+        symbol.upper(),
+        {
+            **quote.model_dump(),
+            "timestamp": quote.timestamp.isoformat(),
+        },
+        ttl_seconds=120,
+    )
 
     return quote
 
@@ -461,27 +444,32 @@ async def get_history(
             rows = []
 
     if not rows:
-        rng = Random(_seed(f"{symbol}:{interval}:{period}"))
-        start = datetime.now(UTC) - timedelta(days=29)
-        price = 1000.0 + rng.random() * 1200.0
-        rows = []
-        for i in range(30):
-            drift = rng.uniform(-12.0, 12.0)
-            open_price = max(1.0, price)
-            close_price = max(1.0, open_price + drift)
-            high_price = max(open_price, close_price) + rng.uniform(0.5, 6.0)
-            low_price = min(open_price, close_price) - rng.uniform(0.5, 6.0)
-            rows.append(
-                {
-                    "time": start + timedelta(days=i),
-                    "open": open_price,
-                    "high": high_price,
-                    "low": max(0.1, low_price),
-                    "close": close_price,
-                    "volume": int(100_000 + rng.random() * 2_000_000),
-                }
-            )
-            price = close_price
+        cached_history = await mongo_get_market_payload("history", f"{symbol.upper()}:{interval}:{period}")
+        if isinstance(cached_history, dict):
+            cached_rows = cached_history.get("data")
+            if isinstance(cached_rows, list):
+                return HistoryResponse(
+                    symbol=str(cached_history.get("symbol", symbol.upper())),
+                    interval=str(cached_history.get("interval", interval)),
+                    data=[
+                        OhlcvPoint(
+                            time=datetime.fromisoformat(str(row["time"])),
+                            open=float(row["open"]),
+                            high=float(row["high"]),
+                            low=float(row["low"]),
+                            close=float(row["close"]),
+                            volume=int(float(row["volume"])),
+                        )
+                        for row in cached_rows
+                    ],
+                )
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code=ErrorCode.SERVICE_UNAVAILABLE,
+                message=f"Historical candles are unavailable for {symbol.upper()} {interval}.",
+            ).dict(),
+        )
 
     points = [
         OhlcvPoint(
@@ -494,6 +482,26 @@ async def get_history(
         )
         for row in rows
     ]
+    await mongo_cache_market_payload(
+        "history",
+        f"{symbol.upper()}:{interval}:{period}",
+        {
+            "symbol": symbol.upper(),
+            "interval": interval,
+            "data": [
+                {
+                    "time": point.time.isoformat(),
+                    "open": point.open,
+                    "high": point.high,
+                    "low": point.low,
+                    "close": point.close,
+                    "volume": point.volume,
+                }
+                for point in points
+            ],
+        },
+        ttl_seconds=900,
+    )
     return HistoryResponse(symbol=symbol.upper(), interval=interval, data=points)
 
 
@@ -555,44 +563,26 @@ async def get_indices() -> list[IndexResponse]:
                 )
             except Exception as e:
                 logger.warning(f"Error fetching ticker {ticker}: {e}")
-                # Fallback to random generator if single ticker fetch fails
-                rng = Random(_seed(ticker))
-                value = round(1000.0 + rng.random() * 22000.0, 2)
-                change_pct = round(-2.0 + rng.random() * 4.0, 3)
-                change = round(value * change_pct / 100.0, 2)
-                regime_state = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"][int(rng.random() * 4) % 4]
-                rows.append(
-                    IndexResponse(
-                        name=name,
-                        ticker=ticker,
-                        value=value,
-                        change=change,
-                        change_pct=change_pct,
-                        regime_state=regime_state,
-                    )
-                )
-        return rows
+        if rows:
+            await mongo_cache_market_payload(
+                "indices",
+                "global",
+                [row.model_dump() for row in rows],
+                ttl_seconds=180,
+            )
+            return rows
     except Exception as e:
         logger.error(f"Error fetching batch indices: {e}")
-        # Fallback to random generator if the entire download fails
-        rows = []
-        for name, ticker in index_universe:
-            rng = Random(_seed(ticker))
-            value = round(1000.0 + rng.random() * 22000.0, 2)
-            change_pct = round(-2.0 + rng.random() * 4.0, 3)
-            change = round(value * change_pct / 100.0, 2)
-            regime_state = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"][int(rng.random() * 4) % 4]
-            rows.append(
-                IndexResponse(
-                    name=name,
-                    ticker=ticker,
-                    value=value,
-                    change=change,
-                    change_pct=change_pct,
-                    regime_state=regime_state,
-                )
-            )
-        return rows
+    cached = await mongo_get_market_payload("indices", "global")
+    if isinstance(cached, list):
+        return [IndexResponse(**row) for row in cached]
+    raise HTTPException(
+        status_code=503,
+        detail=ErrorResponse.create(
+            code=ErrorCode.SERVICE_UNAVAILABLE,
+            message="Benchmark index data is currently unavailable.",
+        ).dict(),
+    )
 
 @router.get("/movers", response_model=list[MoverResponse])
 async def get_movers(
@@ -736,24 +726,6 @@ async def get_movers(
                 except Exception as e:
                     logger.warning(f"Error parsing movers symbol {sym}: {e}")
 
-            if len(generated) < 20:
-                rng = Random(_seed(f"movers-pad:{exchange}:{type}"))
-                needed = 20 - len(generated)
-                for i in range(needed):
-                    change_pct = rng.uniform(-3.2, 3.6)
-                    generated.append(
-                        {
-                            "ticker": f"STOCK{len(generated)+1:02d}.{ 'NS' if exchange == 'NSE' else 'US' }",
-                            "name": f"Stock {len(generated)+1:02d}",
-                            "exchange": exchange,
-                            "latest_close": 100.0 + rng.random() * 4000.0,
-                            "latest_volume": int(100_000 + rng.random() * 4_500_000),
-                            "change_pct": change_pct,
-                            "direction": "STRONG_BUY" if change_pct > 2.0 else "BUY" if change_pct > 0.5 else "STRONG_SELL" if change_pct < -2.0 else "SELL" if change_pct < -0.5 else "NEUTRAL",
-                            "confidence": round(0.55 + rng.random() * 0.4, 3),
-                        }
-                    )
-
             # Sort based on requested type
             if type == "gainers":
                 generated.sort(key=lambda x: x["change_pct"], reverse=True)
@@ -770,25 +742,18 @@ async def get_movers(
             result = []
 
     if not result:
-        rng = Random(_seed(f"movers:{exchange}:{type}"))
-        generated = []
-        for i in range(20):
-            change_pct = rng.uniform(-3.2, 3.6)
-            generated.append(
-                {
-                    "ticker": f"STOCK{i+1:02d}.{ 'NS' if exchange == 'NSE' else 'US' }",
-                    "name": f"Stock {i+1:02d}",
-                    "exchange": exchange,
-                    "latest_close": 100 + rng.random() * 4000,
-                    "latest_volume": int(100_000 + rng.random() * 4_500_000),
-                    "change_pct": change_pct,
-                    "direction": _direction_from_signal(change_pct / 4),
-                    "confidence": 0.55 + rng.random() * 0.4,
-                }
-            )
-        result = generated
+        cached_movers = await mongo_get_market_payload("movers", f"{exchange}:{type}")
+        if isinstance(cached_movers, list):
+            return [MoverResponse(**row) for row in cached_movers]
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code=ErrorCode.SERVICE_UNAVAILABLE,
+                message=f"Market movers are unavailable for {exchange}.",
+            ).dict(),
+        )
 
-    return [
+    response = [
         MoverResponse(
             ticker=str(row["ticker"]),
             name=str(row["name"]),
@@ -801,6 +766,13 @@ async def get_movers(
         )
         for row in result
     ]
+    await mongo_cache_market_payload(
+        "movers",
+        f"{exchange}:{type}",
+        [item.model_dump() for item in response],
+        ttl_seconds=180,
+    )
+    return response
 
 
 @router.get("/heatmap", response_model=list[HeatmapSector])
@@ -870,18 +842,16 @@ async def get_heatmap(
         result = []
 
     if not result:
-        rng = Random(_seed(f"heatmap:{exchange}:{metric}"))
-        sectors = ["Energy", "IT", "Banks", "Pharma"]
-        for sector in sectors:
-            for i in range(3):
-                result.append(
-                    {
-                        "ticker": f"{sector[:3].upper()}{i+1}.{ 'NS' if exchange == 'NSE' else 'US' }",
-                        "name": f"{sector} Co {i+1}",
-                        "sector": sector,
-                        "metric_value": rng.uniform(-4.0, 4.0),
-                    }
-                )
+        cached_heatmap = await mongo_get_market_payload("heatmap", f"{exchange}:{metric}")
+        if isinstance(cached_heatmap, list):
+            return [HeatmapSector(**row) for row in cached_heatmap]
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code=ErrorCode.SERVICE_UNAVAILABLE,
+                message=f"Heatmap data is unavailable for {exchange}.",
+            ).dict(),
+        )
 
     grouped: dict[str, list[HeatmapStock]] = {}
     for row in result:
@@ -895,7 +865,14 @@ async def get_heatmap(
             )
         )
 
-    return [HeatmapSector(sector=sector, stocks=stocks) for sector, stocks in grouped.items()]
+    response = [HeatmapSector(sector=sector, stocks=stocks) for sector, stocks in grouped.items()]
+    await mongo_cache_market_payload(
+        "heatmap",
+        f"{exchange}:{metric}",
+        [item.model_dump() for item in response],
+        ttl_seconds=600,
+    )
+    return response
 
 
 @router.get("/search", response_model=list[SearchResponse])

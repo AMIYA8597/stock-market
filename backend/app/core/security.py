@@ -26,12 +26,19 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import pyotp
-from cryptography.fernet import Fernet, InvalidToken
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
+
+try:
+    from cryptography.fernet import Fernet, InvalidToken
+except ImportError:  # pragma: no cover - optional local-dev fallback
+    Fernet = None  # type: ignore[assignment]
+
+    class InvalidToken(Exception):
+        pass
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -121,6 +128,10 @@ def _get_fernet_cipher() -> Fernet:
         if not settings.FIELD_ENCRYPTION_KEY:
             if settings.ENCRYPTION_ENABLED:
                 raise RuntimeError("FIELD_ENCRYPTION_KEY required when ENCRYPTION_ENABLED=true")
+            return None
+        if Fernet is None:
+            if settings.ENCRYPTION_ENABLED:
+                raise RuntimeError("cryptography is required when ENCRYPTION_ENABLED=true")
             return None
 
         try:

@@ -347,7 +347,53 @@ export interface JournalEntry {
   created_at: string;
 }
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+import { getApiV1Url } from "@/lib/runtime-config";
+
+const API_URL = getApiV1Url();
+type UnknownRecord = Record<string, unknown>;
+
+function toNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+function toState(value: unknown): "BULL" | "BEAR" | "SIDEWAYS" | "CRISIS" {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  if (
+    normalized === "BULL" ||
+    normalized === "BEAR" ||
+    normalized === "SIDEWAYS" ||
+    normalized === "CRISIS"
+  ) {
+    return normalized;
+  }
+  return "SIDEWAYS";
+}
+
+function normalizeRegimeProbabilities(value: unknown): Record<string, number> {
+  if (Array.isArray(value)) {
+    return {
+      BULL: toNumber(value[0]),
+      BEAR: toNumber(value[1]),
+      SIDEWAYS: toNumber(value[2]),
+      CRISIS: toNumber(value[3]),
+    };
+  }
+
+  const source = value && typeof value === "object" ? (value as UnknownRecord) : {};
+  return {
+    BULL: toNumber(source.BULL ?? source.bull),
+    BEAR: toNumber(source.BEAR ?? source.bear),
+    SIDEWAYS: toNumber(source.SIDEWAYS ?? source.sideways),
+    CRISIS: toNumber(source.CRISIS ?? source.crisis),
+  };
+}
 
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
@@ -366,6 +412,26 @@ async function postJson<TResponse, TBody>(path: string, body: TBody): Promise<TR
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(`Request failed (${response.status}) for ${path}`);
+  }
+  return (await response.json()) as TResponse;
+}
+
+async function postJsonWithHeaders<TResponse, TBody>(
+  path: string,
+  body: TBody,
+  headers: Record<string, string>,
+): Promise<TResponse> {
+  const response = await fetch(`${API_URL}${path}`, {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...headers,
     },
     body: JSON.stringify(body),
   });
@@ -439,7 +505,10 @@ export const contractsApi = {
   },
 
   createPaymentIntent(payload: PaymentIntentRequest): Promise<PaymentIntentResponse> {
-    return postJson<PaymentIntentResponse, PaymentIntentRequest>("/payments/intents", payload);
+    const idempotencyKey = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `idem-${Date.now()}`;
+    return postJsonWithHeaders<PaymentIntentResponse, PaymentIntentRequest>("/payments/intents", payload, {
+      "Idempotency-Key": idempotencyKey,
+    });
   },
 
   confirmPaymentIntent(payload: PaymentConfirmRequest): Promise<PaymentConfirmResponse> {
@@ -451,15 +520,72 @@ export const contractsApi = {
   },
 
   getModelAccuracy(): Promise<ModelAccuracyItem[]> {
-    return getJson<ModelAccuracyItem[]>("/monitor/model-accuracy");
+    return getJson<UnknownRecord>("/monitor/model-accuracy").then((raw) => {
+      const models = Array.isArray(raw.models) ? (raw.models as UnknownRecord[]) : [];
+      const items = models.map((item) => ({
+        model: String(item.model_name ?? "tft") as ModelAccuracyItem["model"],
+        precision: toNumber(item.precision),
+        recall: toNumber(item.recall),
+        directional_accuracy: toNumber(item.directional_accuracy),
+        p50_rmse: toNumber(item.p50_rmse),
+        winkler_coverage_score: toNumber(item.winkler_coverage ?? item.winkler_coverage_score),
+      }));
+
+      const benchmarkAccuracy = toNumber(raw.benchmark_ensemble_accuracy, NaN);
+      if (Number.isFinite(benchmarkAccuracy)) {
+        items.push({
+          model: "ensemble",
+          precision: benchmarkAccuracy,
+          recall: benchmarkAccuracy,
+          directional_accuracy: benchmarkAccuracy,
+          p50_rmse: items[0]?.p50_rmse ?? 0,
+          winkler_coverage_score: items[0]?.winkler_coverage_score ?? 0,
+        });
+      }
+
+      return items;
+    });
   },
 
   getDrift(): Promise<DriftItem[]> {
-    return getJson<DriftItem[]>("/monitor/drift");
+    return getJson<UnknownRecord>("/monitor/drift").then((raw) => {
+      const models = Array.isArray(raw.models) ? (raw.models as UnknownRecord[]) : [];
+      return models.map((item) => {
+        const residuals =
+          item.residual_distribution_now && typeof item.residual_distribution_now === "object"
+            ? (item.residual_distribution_now as UnknownRecord)
+            : {};
+
+        return {
+          model: String(item.model_name ?? "tft") as DriftItem["model"],
+          adwin_p_value: toNumber(item.adwin_p_value),
+          drift_detected: Boolean(item.drift_detected),
+          residual_distribution: [
+            toNumber(residuals.min),
+            toNumber(residuals.p25),
+            toNumber(residuals.mean),
+            toNumber(residuals.p50),
+            toNumber(residuals.p75),
+            toNumber(residuals.max),
+          ],
+          ks_stat: toNumber(item.ks_statistic ?? item.ks_stat),
+        };
+      });
+    });
   },
 
   getEnsembleWeightHistory(days: number = 252): Promise<EnsembleWeightPoint[]> {
-    return getJson<EnsembleWeightPoint[]>(`/monitor/ensemble-weights-history?days=${days}`);
+    return getJson<UnknownRecord>(`/monitor/ensemble-weights-history?days=${days}`).then((raw) => {
+      const data = Array.isArray(raw.data) ? (raw.data as UnknownRecord[]) : [];
+      return data.map((item) => ({
+        date: String(item.date ?? new Date().toISOString()),
+        tft: toNumber(item.tft),
+        hmm_garch: toNumber(item.hmm_garch),
+        gnn: toNumber(item.gnn),
+        lstm_attn: toNumber(item.lstm_attn),
+        xgboost: toNumber(item.xgboost),
+      }));
+    });
   },
 
   optimizePortfolio(payload: PortfolioOptimizeRequest): Promise<PortfolioOptimizeResponse> {
@@ -493,15 +619,45 @@ export const contractsApi = {
   },
 
   getRegimeCurrent(): Promise<RegimeCurrentResponse> {
-    return getJson<RegimeCurrentResponse>("/regime/current");
+    return getJson<UnknownRecord>("/regime/current").then((raw) => ({
+      state: toState(raw.state),
+      probs: normalizeRegimeProbabilities(raw.probs),
+      transition_matrix: Array.isArray(raw.transition_matrix)
+        ? raw.transition_matrix.map((row) =>
+            Array.isArray(row) ? row.map((value) => toNumber(value)) : []
+          )
+        : [],
+      cond_vol_1d: toNumber(raw.cond_vol_1d),
+      cond_vol_5d: toNumber(raw.cond_vol_5d),
+      cond_vol_21d: toNumber(raw.cond_vol_21d),
+      days_in_state: toNumber(raw.days_in_state),
+      last_transition_date: String(raw.last_transition_date ?? ""),
+    }));
   },
 
   getRegimeHistory(days: number = 252): Promise<RegimeHistoryPoint[]> {
-    return getJson<{ data: RegimeHistoryPoint[] }>(`/regime/history?days=${days}`).then((data) => data.data);
+    return getJson<UnknownRecord>(`/regime/history?days=${days}`).then((raw) => {
+      const data = Array.isArray(raw.data) ? (raw.data as UnknownRecord[]) : [];
+      return data.map((item) => ({
+        time: String(item.time ?? new Date().toISOString()),
+        state: toState(item.state),
+        probs: normalizeRegimeProbabilities(item.probs),
+        cond_vol: toNumber(item.cond_vol),
+      }));
+    });
   },
 
   getRegimeStatistics(): Promise<RegimeStatisticsItem[]> {
-    return getJson<RegimeStatisticsItem[]>("/regime/statistics");
+    return getJson<UnknownRecord>("/regime/statistics").then((raw) => {
+      const rows = Array.isArray(raw.statistics) ? (raw.statistics as UnknownRecord[]) : [];
+      return rows.map((item) => ({
+        state: toState(item.state),
+        avg_duration: toNumber(item.avg_duration_days ?? item.avg_duration),
+        avg_return: toNumber(item.avg_daily_return ?? item.avg_return),
+        avg_vol: toNumber(item.avg_volatility ?? item.avg_vol),
+        freq: toNumber(item.frequency_pct ?? item.freq) / 100,
+      }));
+    });
   },
 
   getExplainShap(symbol: string): Promise<ExplainShapResponse> {
