@@ -10,6 +10,7 @@ from app.api.v1 import (
     blog,
     explain,
     health,
+    market,
     market_data,
     models,
     notifications,
@@ -21,6 +22,8 @@ from app.api.v1 import (
     users,
     predictions,
     journal,
+    paper_trading,
+    trading,
 )
 
 router = APIRouter()
@@ -34,12 +37,15 @@ router.include_router(blog.router)
 router.include_router(notifications.router)
 router.include_router(payments.router)
 
-router.include_router(market_data.router, prefix="/market", tags=["market"])
+router.include_router(market_data.router, prefix="/global", tags=["market-data"])
+router.include_router(market.router)
 router.include_router(signals.router)
 router.include_router(regime.router)
 router.include_router(explain.router)
 router.include_router(backtest.router)
 router.include_router(portfolio.router, prefix="/portfolio")
+router.include_router(paper_trading.router)
+router.include_router(trading.router)
 router.include_router(screener.router)
 router.include_router(alerts.router)
 router.include_router(models.router)
@@ -53,6 +59,20 @@ async def get_version() -> dict[str, str]:
         "version": "2.0.0",
         "name": "NeuroQuant API",
     }
+
+
+@router.post("/debug/trigger-alert-check", tags=["debug"])
+async def trigger_alert_check():
+    from app.services.alert_engine import check_and_fire_alerts
+    WATCHLIST_SYMBOLS = [
+        "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "HINDUNILVR.NS",
+        "ICICIBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "WIPRO.NS", "BAJFINANCE.NS",
+        "NIFTY50.NS", "^NSEI"
+    ]
+    from app.websocket.connection_manager import get_connection_manager
+    manager = get_connection_manager()
+    alerts = await check_and_fire_alerts(WATCHLIST_SYMBOLS, manager)
+    return {"status": "ok", "alerts_fired_count": len(alerts), "alerts": alerts}
 
 
 __all__ = ["router", "api_router"]

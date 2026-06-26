@@ -18,6 +18,16 @@ async def health_check():
     }
 
 
+@router.get("/debug/trigger-alert-check")
+async def debug_trigger_alert_check():
+    """Debug endpoint to manually trigger an alert engine cycle.
+    Returns the list of alerts that were broadcast.
+    """
+    from app.services.alert_engine import trigger_one_cycle
+    alerts = await trigger_one_cycle()
+    return {"alerts_sent": alerts}
+
+
 @router.get("/ready")
 async def readiness_check() -> dict[str, object]:
     """Readiness probe with dependency checks for DB and Redis."""

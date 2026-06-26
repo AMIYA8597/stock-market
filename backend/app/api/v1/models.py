@@ -6,9 +6,6 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.dependencies import get_db
 from app.schemas.monitor import (
     DriftDistribution,
     DriftResponse,
@@ -23,8 +20,7 @@ router = APIRouter(prefix="/monitor", tags=["monitoring"])
 
 
 @router.get("/model-accuracy", response_model=ModelAccuracyResponse)
-async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccuracyResponse:
-    _ = db
+async def get_model_accuracy() -> ModelAccuracyResponse:
     now = datetime.now(UTC)
     rows = [
         ModelAccuracyMetrics(model_name="tft", precision=Decimal("0.6200"), recall=Decimal("0.6100"), f1_score=Decimal("0.6150"), directional_accuracy=Decimal("0.6400"), p50_rmse=Decimal("0.012300"), winkler_coverage=Decimal("0.8100"), as_of_date=now),
@@ -35,8 +31,7 @@ async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccurac
 
 
 @router.get("/drift", response_model=DriftResponse)
-async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftResponse:
-    _ = db
+async def get_drift_detection() -> DriftResponse:
     now = datetime.now(UTC)
     base = DriftDistribution(mean=Decimal("0.000100"), std=Decimal("0.012300"), p25=Decimal("-0.006000"), p50=Decimal("0.000200"), p75=Decimal("0.006100"), min=Decimal("-0.042000"), max=Decimal("0.038000"))
     cur = DriftDistribution(mean=Decimal("0.000400"), std=Decimal("0.013200"), p25=Decimal("-0.006500"), p50=Decimal("0.000300"), p75=Decimal("0.006800"), min=Decimal("-0.045000"), max=Decimal("0.040000"))
@@ -58,8 +53,7 @@ async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftRespon
 
 
 @router.get("/ensemble-weights-history", response_model=WeightsHistoryResponse)
-async def get_weights_history(db: AsyncSession = Depends(get_db)) -> WeightsHistoryResponse:
-    _ = db
+async def get_weights_history() -> WeightsHistoryResponse:
     end = datetime.now(UTC)
     start = end - timedelta(days=30)
     data = []

@@ -66,6 +66,14 @@ class SignalResponse(BaseModel):
     )
     model_weights: dict[str, Decimal] = Field(..., description="per-model weight")
     regime: dict = Field(..., description="state, probs, transition_matrix")
+    is_computed: bool = False
+    message: str = ""
+    target_price_5d: float = 0.0
+    stop_loss: float = 0.0
+    take_profit: float = 0.0
+    prob_buy: float = 0.5
+    prob_sell: float = 0.5
+    max_loss_pct: float = 0.0
 
 
 class BulkSignalResponse(BaseModel):

@@ -4,8 +4,9 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { SimpleDonutChart, type DonutSlice } from "@/components/charts";
 import { useOrderHistory } from "@/hooks/use-order-history";
-import { marketApi } from "@/lib/api-client";
+import { marketApi, tradingApi } from "@/lib/api-client";
 import { contractsApi, type PortfolioTransactionRequest } from "@/lib/contracts-api";
+import { useTradingStore } from "@/stores/tradingStore";
 import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
 import type { Quote } from "@neuroquant/types";
@@ -23,7 +24,7 @@ const badgeStyles: Record<string, string> = {
 };
 
 export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
-  const [expandedModel, setExpandedModel] = useState<"tft" | "hmm_garch" | "gnn" | "lstm_attn" | "xgboost">("tft");
+  const [expandedModel, setExpandedModel] = useState<"technical" | "pattern" | "momentum" | "regime" | "xgboost">("technical");
   const [side, setSide] = useState<"BUY" | "SELL">("BUY");
   const [quantity, setQuantity] = useState<string>("10");
   const [price, setPrice] = useState<string>("0");
@@ -35,6 +36,9 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   const [quoteLoading, setQuoteLoading] = useState<boolean>(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const { orders, addOrder, clearOrders } = useOrderHistory();
+  const { tradingMode, setTradingMode, auditLogs, fetchAuditLogs } = useTradingStore();
+  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
+  const [typedPhrase, setTypedPhrase] = useState<string>("");
 
   useEffect(() => {
     setMounted(true);
@@ -89,6 +93,14 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       setPrice(safeFormat(latestPrice, 2, "0"));
     }
   }, [latestPrice]);
+
+  useEffect(() => {
+    void fetchAuditLogs();
+    const interval = setInterval(() => {
+      void fetchAuditLogs();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchAuditLogs]);
 
   useEffect(() => {
     const handleSetSide = (event: Event) => {
@@ -197,6 +209,42 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     [confidence, direction, quote, quoteError, quoteLoading, signal]
   );
 
+  const expectedPhrase = `${side} ${signal?.symbol ? signal.symbol.split(".")[0]?.toUpperCase() : "STOCK"} ${quantity}`;
+
+  const executePlaceOrder = async (): Promise<void> => {
+    setShowConfirmModal(false);
+    setSubmitting(true);
+    try {
+      const payload = {
+        symbol: signal?.symbol ?? "",
+        side,
+        quantity: Number(quantity),
+        order_type: "LIMIT",
+        limit_price: Number(price),
+        product: "I",
+      };
+
+      const response = await tradingApi.placeOrder(payload);
+      addOrder({
+        transaction_id: response.order_id || `txn-${Date.now()}`,
+        symbol: payload.symbol,
+        type: payload.side as "BUY" | "SELL",
+        quantity: payload.quantity,
+        price: payload.limit_price,
+        net_amount: payload.quantity * payload.limit_price,
+        timestamp: new Date().toISOString(),
+        portfolio_updated: true,
+      }, "api");
+      setTradeSuccess(`${payload.side} ${payload.symbol} placed successfully.`);
+      void fetchAuditLogs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to place order.";
+      setTradeError(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const submitOrder = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
     setTradeError(null);
@@ -218,23 +266,18 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       return;
     }
 
-    const payload: PortfolioTransactionRequest = {
-      symbol: signal.symbol,
-      type: side,
-      quantity: parsedQty,
-      price: parsedPrice,
-    };
+    // Client-side enforcement of ₹10,000 risk cap
+    const notionalValue = parsedQty * parsedPrice;
+    if (notionalValue > 10000) {
+      setTradeError(`Order rejected: Notional value (INR ${notionalValue.toLocaleString()}) exceeds maximum session limit of INR 10,000.`);
+      return;
+    }
 
-    setSubmitting(true);
-    try {
-      const response = await contractsApi.postPortfolioTransaction(payload);
-      addOrder(response, "api");
-      setTradeSuccess(`${response.type} ${response.symbol} confirmed.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to place order.";
-      setTradeError(message);
-    } finally {
-      setSubmitting(false);
+    if (tradingMode === "LIVE") {
+      setTypedPhrase("");
+      setShowConfirmModal(true);
+    } else {
+      void executePlaceOrder();
     }
   };
 
@@ -254,9 +297,18 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         <span className={`inline-flex rounded border px-2 py-1 text-xs font-semibold ${badgeStyles[direction]}`}>
           {direction}
         </span>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-          <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)]">Confidence {confidence}%</p>
+        <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+          <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)]">Conf {confidence}%</p>
           <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)]">Regime {signal?.regime.state ?? "-"}</p>
+          <p className={`rounded px-2 py-1 font-bold text-center uppercase ${
+            signal?.model_status === "trained"
+              ? "bg-[rgba(0,230,118,0.1)] text-[#00E676]"
+              : signal?.model_status === "heuristic"
+                ? "bg-[rgba(255,184,0,0.1)] text-[#FFB800]"
+                : "bg-[rgba(150,150,150,0.1)] text-[#9E9E9E]"
+          }`}>
+            {signal?.model_status ?? "fallback"}
+          </p>
         </div>
         <div className="mt-2 grid grid-cols-[80px_1fr] items-center gap-3">
           <svg viewBox="0 0 80 80" className="h-16 w-16" aria-label="Confidence gauge">
@@ -288,11 +340,11 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Model breakdown</p>
         <div className="space-y-1.5 text-xs text-[var(--nq-text-secondary)]">
           {([
-            ["tft", `TFT P10 ${safeFormat(signal?.models?.tft?.p10, 2)} | P50 ${safeFormat(signal?.models?.tft?.p50, 2)} | P90 ${safeFormat(signal?.models?.tft?.p90, 2)}`],
-            ["hmm_garch", `HMM ${signal?.models?.hmm_garch?.regime_signal ?? "-"} | Vol 1d ${safeFormat(signal?.models?.hmm_garch?.vol_forecast_1d, 4, "0.0000")}`],
-            ["gnn", `GNN spillover ${safeFormat(signal?.models?.gnn?.spillover_risk, 3, "0.000")} | Correlated: ${(signal?.models?.gnn?.top_correlated_assets ?? []).slice(0, 2).join(", ") || "--"}`],
-            ["lstm_attn", `LSTM signal ${safeFormat(signal?.models?.lstm_attn?.raw_signal, 3, "0.000")}`],
-            ["xgboost", `XGBoost raw ${safeFormat(signal?.models?.xgboost?.raw_signal, 3, "0.000")} | SHAP: ${(signal?.models?.xgboost?.top_features ?? []).slice(0, 2).map((feature) => String(feature.name)).join(", ") || "--"}`],
+            ["technical", `RSI: ${safeFormat(signal?.models?.technical?.rsi, 1)} | VWAP: ${signal?.models?.technical?.above_vwap ? "Above" : "Below"} | EMA: ${Number(signal?.models?.technical?.ema9) > Number(signal?.models?.technical?.ema200) ? "Bull Stack" : "Bear Stack"} | Score: ${safeFormat(signal?.models?.technical?.score, 2)}`],
+            ["pattern", `Patterns: ${(signal?.models?.pattern?.patterns_detected ?? []).join(", ") || "None"} | Bullish: ${signal?.models?.pattern?.bullish_count ?? 0} | Bearish: ${signal?.models?.pattern?.bearish_count ?? 0}`],
+            ["momentum", `5d Return: ${safeFormat(Number(signal?.models?.momentum?.ret_5d ?? 0) * 100, 2)}% | Dist 52w High: ${safeFormat(Number(signal?.models?.momentum?.dist_52w_high ?? 0) * 100, 2)}%`],
+            ["regime", `Regime: ${signal?.models?.regime?.regime ?? "SIDEWAYS"} | Bull Prob: ${safeFormat(Number(signal?.models?.regime?.bull_prob ?? 0) * 100, 1)}% | HMM: ${signal?.models?.regime?.hmm_used ? "Yes" : "No"}`],
+            ["xgboost", `P-up: ${safeFormat(Number(signal?.models?.xgboost?.xgb_confidence ?? 0.5) * 100, 1)}% | Train: ${signal?.models?.xgboost?.train_samples ?? 0} | Top Feature: ${signal?.models?.xgboost?.top_features?.[0]?.name ?? "None"}`],
           ] as const).map(([key, summary]) => (
             <div key={key} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.005)]">
               <button
@@ -300,7 +352,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
                 onClick={() => setExpandedModel(key)}
                 className="flex w-full items-center justify-between px-2.5 py-1.5 text-left font-mono font-semibold"
               >
-                <span className="uppercase text-[var(--nq-text-primary)]">{key}</span>
+                <span className="uppercase text-[var(--nq-text-primary)]">{key.replace("_", " ")}</span>
                 <span>{expandedModel === key ? "-" : "+"}</span>
               </button>
               {expandedModel === key ? (
@@ -310,6 +362,42 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
               ) : null}
             </div>
           ))}
+        </div>
+      </div>
+
+      <div className="mb-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3">
+        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Risk & Position Sizing</p>
+        <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+          <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] px-2 py-1.5">
+            <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-secondary)]">5d Target Price</p>
+            <p className="mt-1 text-[var(--nq-text-primary)] font-bold">
+              ₹{Number(signal?.target_price_5d ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] px-2 py-1.5">
+            <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-secondary)]">Kelly Fraction</p>
+            <p className="mt-1 text-[var(--nq-text-primary)] font-bold">
+              {safeFormat(Number(signal?.ensemble?.kelly_fraction ?? 0) * 100, 2)}%
+            </p>
+          </div>
+          <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] px-2 py-1.5 border-l-2 border-l-[var(--nq-accent-green)]">
+            <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-secondary)]">Stop Loss</p>
+            <p className="mt-1 text-[var(--nq-accent-green)] font-bold">
+              ₹{Number(signal?.stop_loss ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] px-2 py-1.5 border-l-2 border-l-[var(--nq-accent-cyan)]">
+            <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-secondary)]">Take Profit</p>
+            <p className="mt-1 text-[var(--nq-accent-cyan)] font-bold">
+              ₹{Number(signal?.take_profit ?? 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          </div>
+          <div className="col-span-2 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] px-2 py-1.5">
+            <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-secondary)]">Max Loss Risk</p>
+            <p className="mt-1 text-[var(--nq-accent-red)] font-bold">
+              {safeFormat(signal?.max_loss_pct, 2)}%
+            </p>
+          </div>
         </div>
       </div>
 
@@ -362,6 +450,47 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
 
       <div id="order-ticket" className="mt-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 shadow-md">
         <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Order ticket</p>
+        
+        <div className="mb-2.5 flex items-center justify-between rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--nq-text-secondary)]">Trading Session</span>
+          <div className="flex gap-1.5">
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await setTradingMode("PAPER");
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Failed to toggle to PAPER mode.");
+                }
+              }}
+              className={`rounded px-2.5 py-1 text-[9px] font-bold uppercase transition ${
+                tradingMode === "PAPER"
+                  ? "bg-[rgba(0,212,245,0.18)] text-[var(--accent-cyan)] border border-[var(--accent-cyan)]"
+                  : "border border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+              }`}
+            >
+              Paper
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await setTradingMode("LIVE");
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : "Failed to toggle to LIVE mode.");
+                }
+              }}
+              className={`rounded px-2.5 py-1 text-[9px] font-bold uppercase transition ${
+                tradingMode === "LIVE"
+                  ? "bg-[rgba(255,59,92,0.18)] text-[#FF3B5C] border border-[#FF3B5C] animate-pulse"
+                  : "border border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+              }`}
+            >
+              Live
+            </button>
+          </div>
+        </div>
+
         <form className="space-y-2.5" onSubmit={submitOrder}>
           <div className="grid grid-cols-2 gap-2 text-xs">
             <button
@@ -506,6 +635,68 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           ))}
         </div>
       </div>
+      <div className="mt-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3">
+        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Live Audit Log Console</p>
+        <div className="h-28 overflow-y-auto rounded bg-black/40 p-2 font-mono text-[9px] leading-relaxed text-[var(--nq-text-secondary)] ds-scrollable border border-[var(--nq-border)]">
+          {auditLogs.map((log, index) => (
+            <div key={index} className="border-b border-[rgba(255,255,255,0.02)] pb-0.5 mb-0.5 last:border-0 last:pb-0">
+              {log}
+            </div>
+          ))}
+          {auditLogs.length === 0 && (
+            <div className="text-center opacity-60 py-4 font-mono text-[9px]">No trading activity logged in this session.</div>
+          )}
+        </div>
+      </div>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded border border-[#FF3B5C] bg-[var(--nq-bg-card)] p-4 shadow-[0_0_24px_rgba(255,59,92,0.2)]">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-[#FF3B5C] flex items-center gap-1.5">
+              ⚠️ Warning: Live Order Confirmation
+            </h3>
+            <p className="mt-2 text-xs text-[var(--nq-text-secondary)] leading-relaxed">
+              You are about to place a <strong>LIVE</strong> order with real capital. Please review the ticket details below carefully:
+            </p>
+            <div className="my-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] p-2.5 font-mono text-[11px] space-y-1 text-[var(--nq-text-secondary)]">
+              <div>Side: <span className={side === "BUY" ? "text-[#00E676]" : "text-[#FF3B5C]"}>{side}</span></div>
+              <div>Symbol: <span className="text-[var(--nq-text-primary)]">{signal?.symbol}</span></div>
+              <div>Quantity: <span className="text-[var(--nq-text-primary)]">{quantity}</span></div>
+              <div>Price: <span className="text-[var(--nq-text-primary)]">INR {price}</span></div>
+              <div className="border-t border-[rgba(255,255,255,0.05)] pt-1 mt-1 font-bold text-[var(--nq-text-primary)]">
+                Notional: INR {notional.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <label className="block text-[10px] font-bold uppercase text-[var(--nq-text-secondary)]">
+              Type the confirmation phrase <span className="text-[var(--nq-text-primary)] font-mono">"{expectedPhrase}"</span>:
+              <input
+                type="text"
+                value={typedPhrase}
+                onChange={(e) => setTypedPhrase(e.target.value)}
+                placeholder={expectedPhrase}
+                className="mt-1 w-full rounded border border-[#FF3B5C]/50 bg-black/20 px-2.5 py-1.5 font-mono text-xs text-[var(--nq-text-primary)] outline-none focus:border-[#FF3B5C]"
+              />
+            </label>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="rounded border border-[var(--nq-border)] px-3 py-2 text-xs font-semibold text-[var(--nq-text-secondary)] hover:bg-[rgba(255,255,255,0.05)]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={typedPhrase !== expectedPhrase}
+                onClick={executePlaceOrder}
+                className="rounded bg-[#FF3B5C] px-3 py-2 text-xs font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#d50000]"
+              >
+                Confirm Live Order
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

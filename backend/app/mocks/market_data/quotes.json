@@ -1,0 +1,50 @@
+{
+  "AAPL": {
+    "symbol": "AAPL",
+    "price": 175.32,
+    "change": 1.45,
+    "change_pct": 0.83,
+    "volume": 74230000,
+    "high": 176.50,
+    "low": 174.20,
+    "open": 174.80,
+    "previous_close": 173.87,
+    "market_cap": 2745000000000
+  },
+  "MSFT": {
+    "symbol": "MSFT",
+    "price": 310.15,
+    "change": -0.85,
+    "change_pct": -0.27,
+    "volume": 23100000,
+    "high": 312.00,
+    "low": 308.50,
+    "open": 311.00,
+    "previous_close": 311.00,
+    "market_cap": 2328000000000
+  },
+  "GOOGL": {
+    "symbol": "GOOGL",
+    "price": 123.45,
+    "change": 2.10,
+    "change_pct": 1.73,
+    "volume": 15200000,
+    "high": 124.80,
+    "low": 121.30,
+    "open": 122.00,
+    "previous_close": 121.35,
+    "market_cap": 1580000000000
+  },
+  "AMZN": {
+    "symbol": "AMZN",
+    "price": 135.67,
+    "change": -0.45,
+    "change_pct": -0.33,
+    "volume": 4230000,
+    "high": 136.90,
+    "low": 134.20,
+    "open": 135.00,
+    "previous_close": 136.12,
+    "market_cap": 1375000000000
+  }
+}

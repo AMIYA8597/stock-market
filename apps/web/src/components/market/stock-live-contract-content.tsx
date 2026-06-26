@@ -15,14 +15,15 @@ import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { AmbientLucideBackground } from "@/components/common/ambient-lucide-background";
 import {
   ChartCard,
-  SimpleLineAreaChart,
-  type LineAreaPoint,
   SimpleDonutChart,
   type DonutSlice,
   SimpleBarChart,
   type SimpleBarPoint,
+  LightweightCandlestickChart,
 } from "@/components/charts";
-import type { HistoryResponse, ModelEnsemble, Prediction, Quote } from "@neuroquant/types";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { type PriceBar } from "@/utils/chartFormatters";
+import type { ModelEnsemble, Prediction, Quote } from "@neuroquant/types";
 import type { SignalResponse } from "@/types/intelligence";
 
 interface StockLiveContractContentProps {
@@ -56,7 +57,6 @@ function formatPercent(value: number | null | undefined): string {
 export function StockLiveContractContent({ symbol }: StockLiveContractContentProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<"fundamentals" | "analysis" | "similar">("fundamentals");
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [ensemble, setEnsemble] = useState<ModelEnsemble | null>(null);
   const [signal, setSignal] = useState<SignalResponse | null>(null);
@@ -64,22 +64,119 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
   const [attention, setAttention] = useState<ExplainAttentionResponse | null>(null);
   const [counterfactuals, setCounterfactuals] = useState<CounterfactualResponse[]>([]);
   const [similarAssets, setSimilarAssets] = useState<MarketMover[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Candlestick Chart States
+  const [chartInterval, setChartInterval] = useState<
+    | "1m"
+    | "3m"
+    | "5m"
+    | "10m"
+    | "15m"
+    | "30m"
+    | "45m"
+    | "1h"
+    | "2h"
+    | "4h"
+    | "1d"
+    | "1w"
+    | "1mo"
+  >("1d");
+  const [chartBars, setChartBars] = useState<PriceBar[]>([]);
+  const [chartLoading, setChartLoading] = useState<boolean>(false);
+  const [chartStyle, setChartStyle] = useState<"candlestick" | "heikin-ashi" | "line">("candlestick");
+  const [chartHeight, setChartHeight] = useState<number>(360);
 
   const { ticks, status } = usePriceFeed([symbol]);
   const liveTick = ticks.get(symbol.toUpperCase());
 
+  // Handle chart height based on breakpoints
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 640) {
+        setChartHeight(280);
+      } else if (window.innerWidth < 1024) {
+        setChartHeight(360);
+      } else {
+        setChartHeight(420);
+      }
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Fetch chart history when symbol or interval changes
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadChartHistory() {
+      if (!symbol) return;
+      setChartLoading(true);
+
+      let period = "1y";
+      if (chartInterval === "1m" || chartInterval === "3m") {
+        period = "5d";
+      } else if (
+        chartInterval === "5m" ||
+        chartInterval === "10m" ||
+        chartInterval === "15m" ||
+        chartInterval === "30m" ||
+        chartInterval === "45m"
+      ) {
+        period = "1mo";
+      } else if (chartInterval === "1h" || chartInterval === "2h" || chartInterval === "4h") {
+        period = "3mo";
+      } else if (chartInterval === "1d") {
+        period = "1y";
+      } else if (chartInterval === "1w" || chartInterval === "1mo") {
+        period = "5y";
+      }
+
+      try {
+        const historyRes = await marketApi.getHistory(symbol, chartInterval, undefined, undefined, period);
+        if (isMounted) {
+          if (historyRes?.bars) {
+            const mapped: PriceBar[] = historyRes.bars.map((bar) => ({
+              timestamp: bar.timestamp,
+              open: Number(bar.open),
+              high: Number(bar.high),
+              low: Number(bar.low),
+              close: Number(bar.close),
+              volume: Number(bar.volume),
+            }));
+            setChartBars(mapped);
+          } else {
+            setChartBars([]);
+          }
+        }
+      } catch (err) {
+        if (isMounted) {
+          setChartBars([]);
+        }
+      } finally {
+        if (isMounted) {
+          setChartLoading(false);
+        }
+      }
+    }
+
+    void loadChartHistory();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [symbol, chartInterval]);
+
+  // Fetch all other data on symbol change
   useEffect(() => {
     let isMounted = true;
 
     async function load(): Promise<void> {
-      setIsLoading(true);
       setError(null);
 
       const results = await Promise.allSettled([
         marketApi.getQuote(symbol),
-        marketApi.getHistory(symbol, "1D"),
         predictionsApi.getLatest(symbol),
         predictionsApi.getEnsemble(symbol),
         intelligenceApi.getSignal(symbol),
@@ -90,10 +187,9 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
       ]);
 
       const quoteResult = results[0];
-      const historyResult = results[1];
-      const predictionResult = results[2];
-      const ensembleResult = results[3];
-      const signalResult = results[4];
+      const predictionResult = results[1];
+      const ensembleResult = results[2];
+      const signalResult = results[3];
 
       if (!isMounted) {
         return;
@@ -105,9 +201,6 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
         setError("Unable to load market quote contract.");
       }
 
-      if (historyResult.status === "fulfilled") {
-        setHistory(historyResult.value);
-      }
       if (predictionResult.status === "fulfilled") {
         setPrediction(predictionResult.value);
       }
@@ -118,14 +211,14 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
         setSignal(signalResult.value);
       }
 
-      if (quoteResult.status === "rejected" || historyResult.status === "rejected") {
+      if (quoteResult.status === "rejected") {
         setError("Unable to load market quote contract.");
       }
 
-      const shapResult = results[5];
-      const attentionResult = results[6];
-      const counterfactualResult = results[7];
-      const similarAssetsResult = results[8];
+      const shapResult = results[4];
+      const attentionResult = results[5];
+      const counterfactualResult = results[6];
+      const similarAssetsResult = results[7];
 
       if (shapResult.status === "fulfilled") {
         setShap(shapResult.value);
@@ -142,8 +235,6 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
       if (similarAssetsResult.status === "fulfilled") {
         setSimilarAssets(similarAssetsResult.value.filter((item) => item.ticker.toUpperCase() !== symbol.toUpperCase()).slice(0, 6));
       }
-
-      setIsLoading(false);
     }
 
     void load();
@@ -155,14 +246,6 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
 
   const latestPrice = liveTick?.price ?? quote?.price;
   const latestChangePct = liveTick?.change_pct ?? quote?.change_percent;
-
-  const priceSeries = useMemo<LineAreaPoint[]>(() => {
-    const closes = history?.bars.map((bar) => bar.close) ?? [];
-    if (closes.length === 0) {
-      return [];
-    }
-    return closes.slice(-120).map((close, index) => ({ label: String(index + 1), value: close }));
-  }, [history]);
 
   const modelWeightSlices = useMemo<DonutSlice[]>(() => {
     if (!signal?.model_weights) {
@@ -219,6 +302,28 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
     return (attention?.weights ?? []).slice(0, 8).flatMap((row, headIndex) => row.slice(0, 24).map((value, stepIndex) => ({ headIndex, stepIndex, value })));
   }, [attention?.weights]);
 
+  // Signal Badge and Color Variables based on Direction from extended response
+  const signalDirection = signal?.ensemble.direction ?? "NEUTRAL";
+  
+  const badgeClass =
+    signalDirection === "STRONG_BUY"
+      ? "text-[#00E676] border-[rgba(0,230,118,0.3)] bg-[rgba(0,230,118,0.08)]"
+      : signalDirection === "BUY"
+        ? "text-[#00E676] border-[rgba(0,230,118,0.2)] bg-[rgba(0,230,118,0.05)]"
+        : signalDirection === "STRONG_SELL"
+          ? "text-[#FF3B5C] border-[rgba(255,59,92,0.3)] bg-[rgba(255,59,92,0.08)]"
+          : signalDirection === "SELL"
+            ? "text-[#FF3B5C] border-[rgba(255,59,92,0.2)] bg-[rgba(255,59,92,0.05)]"
+            : "text-[#FFB800] border-[rgba(255,184,0,0.2)] bg-[rgba(255,184,0,0.05)]";
+
+  const isPulsing = signalDirection === "STRONG_BUY" || signalDirection === "STRONG_SELL";
+  const dotColor =
+    signalDirection === "STRONG_BUY" || signalDirection === "BUY"
+      ? "bg-[#00E676]"
+      : signalDirection === "STRONG_SELL" || signalDirection === "SELL"
+        ? "bg-[#FF3B5C]"
+        : "bg-[#FFB800]";
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[var(--nq-bg-base)] px-4 py-6 text-[var(--nq-text-primary)] sm:px-6 lg:px-8">
       <AmbientLucideBackground className="opacity-70" />
@@ -237,18 +342,73 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
       {error ? <p className="mt-2 text-sm text-[var(--nq-accent-red)]">{error}</p> : null}
 
       <section className="relative z-10 mt-6 grid gap-4 xl:grid-cols-[1fr_320px]">
-        <ChartCard title={`Price History (${history?.interval ?? "1D"})`} subtitle="Live tick overlay on recent close trend">
-          <div className="h-[280px] rounded bg-[rgba(255,255,255,0.03)] p-2 sm:h-[340px] lg:h-[360px]">
-            {priceSeries.length > 0 ? (
-              <SimpleLineAreaChart
-                data={isLoading ? Array.from({ length: 40 }, (_, idx) => ({ label: String(idx + 1), value: 0 })) : priceSeries}
-                mode="line"
-                stroke="var(--nq-accent-cyan)"
-                yTickFormatter={(value) => `₹${value.toFixed(0)}`}
+        <ChartCard title={`Price History (${chartInterval.toUpperCase()})`} subtitle="Live interactive candlestick overlays">
+          {/* Timeframe Selector and Chart Style controls */}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--nq-border)] pb-3 mb-3">
+            <div className="flex items-center gap-1 overflow-x-auto ds-scrollable py-1">
+              {(["1m", "5m", "15m", "1h", "1d", "1w", "1mo"] as const).map((interval) => (
+                <button
+                  key={interval}
+                  type="button"
+                  onClick={() => setChartInterval(interval)}
+                  className={`rounded border px-2.5 py-1 text-xs font-semibold font-mono transition-colors uppercase ${
+                    chartInterval === interval
+                      ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]"
+                      : "border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] hover:border-[var(--nq-border-hover)]"
+                  }`}
+                >
+                  {interval}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1">
+              {(["candlestick", "heikin-ashi", "line"] as const).map((style) => (
+                <button
+                  key={style}
+                  type="button"
+                  onClick={() => setChartStyle(style)}
+                  className={`rounded border px-2.5 py-1 text-xs font-semibold transition-colors capitalize ${
+                    chartStyle === style
+                      ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]"
+                      : "border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] hover:border-[var(--nq-border-hover)]"
+                  }`}
+                >
+                  {style.replace("-", " ")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{ minHeight: `${chartHeight}px` }}
+            className="relative rounded bg-[rgba(255,255,255,0.03)] p-2 w-full flex items-center justify-center"
+          >
+            {chartLoading ? (
+              <div className="w-full flex flex-col gap-2 p-1" style={{ height: `${chartHeight}px` }}>
+                <Skeleton className="h-full w-full rounded" />
+              </div>
+            ) : chartBars.length > 0 ? (
+              <LightweightCandlestickChart
+                bars={chartBars}
+                chartStyle={chartStyle}
+                height={chartHeight}
+                symbol={symbol}
+                indicators={{
+                  ema21: true,
+                  ema50: true,
+                  vwap: true,
+                  rsi: true,
+                  macd: true,
+                  superTrend: true,
+                  patterns: true,
+                  smc: true,
+                  bollingerBands: true,
+                  atr: true,
+                }}
               />
             ) : (
-              <div className="flex h-full items-center justify-center rounded border border-dashed border-[var(--nq-border)] px-4 text-center text-sm text-[var(--nq-text-secondary)]">
-                Historical candles are unavailable for this symbol right now.
+              <div className="flex h-full items-center justify-center p-4 text-center text-sm text-[var(--nq-text-secondary)]">
+                No candlestick history available for {symbol}.
               </div>
             )}
           </div>
@@ -256,8 +416,38 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
 
         <article className="space-y-3">
           <ChartCard title="Signal Summary">
-            <div className="rounded border border-[rgba(0,230,118,0.4)] bg-[rgba(0,230,118,0.08)] px-3 py-2 text-sm font-semibold text-[var(--nq-accent-green)]">
-              {signal?.ensemble.signal ?? "--"} | Confidence {signal ? signal.ensemble.confidence.toFixed(2) : "--"}
+            <div className="space-y-3">
+              <div className={`flex items-center gap-2 rounded border px-3 py-2 text-sm font-semibold uppercase tracking-wider ${badgeClass}`}>
+                <span className={`h-2 w-2 rounded-full ${dotColor} ${isPulsing ? "animate-pulse" : ""}`} />
+                <span>{signalDirection.replace("_", " ")}</span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-[var(--nq-border)] p-2">
+                  <p className="text-[var(--nq-text-secondary)]">Buy Prob</p>
+                  <p className="font-semibold font-mono mt-0.5">{(Number(signal?.prob_buy ?? 0.5) * 100).toFixed(1)}%</p>
+                </div>
+                <div className="rounded border border-[var(--nq-border)] p-2">
+                  <p className="text-[var(--nq-text-secondary)]">Sell Prob</p>
+                  <p className="font-semibold font-mono mt-0.5">{(Number(signal?.prob_sell ?? 0.5) * 100).toFixed(1)}%</p>
+                </div>
+                <div className="rounded border border-[var(--nq-border)] p-2">
+                  <p className="text-[var(--nq-text-secondary)]">5D Target</p>
+                  <p className="font-semibold font-mono mt-0.5">₹{formatInr(signal?.target_price_5d)}</p>
+                </div>
+                <div className="rounded border border-[var(--nq-border)] p-2">
+                  <p className="text-[var(--nq-text-secondary)]">Stop Loss</p>
+                  <p className="font-semibold font-mono mt-0.5">₹{formatInr(signal?.stop_loss)}</p>
+                </div>
+                <div className="rounded border border-[var(--nq-border)] p-2">
+                  <p className="text-[var(--nq-text-secondary)]">Kelly Size</p>
+                  <p className="font-semibold font-mono mt-0.5">{(Number(signal?.ensemble.kelly_fraction ?? 0) * 100).toFixed(1)}%</p>
+                </div>
+                <div className="rounded border border-[var(--nq-border)] p-2">
+                  <p className="text-[var(--nq-text-secondary)]">Regime</p>
+                  <p className="font-semibold mt-0.5">{signal?.regime.state ?? "--"}</p>
+                </div>
+              </div>
             </div>
           </ChartCard>
 

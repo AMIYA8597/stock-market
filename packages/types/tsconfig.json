@@ -2,7 +2,12 @@
   "extends": "@neuroquant/config/tsconfig.base.json",
   "compilerOptions": {
     "baseUrl": ".",
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "module": "CommonJS",
+    "moduleResolution": "node"
   },
   "include": ["src"]
 }

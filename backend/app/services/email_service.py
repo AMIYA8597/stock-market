@@ -6,7 +6,15 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.email_job import EmailJob
-from tasks.email_tasks import send_email_task
+# Optional email background task – use a no‑op placeholder if Celery/RQ is not installed
+try:
+    from tasks.email_tasks import send_email_task  # type: ignore
+except ModuleNotFoundError:
+    def send_email_task(*_args, **_kwargs):
+        """Fallback stub – logs that email sending is disabled in this environment."""
+        import logging
+        logging.getLogger(__name__).warning("send_email_task called but tasks module is missing; email not sent.")
+
 
 TEMPLATES: dict[str, str] = {
     "welcome": "Hello {full_name}, welcome to NeuroQuant.",

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { marketApi } from "@/lib/api-client";
-import { intelligenceApi } from "@/lib/intelligence-api";
 import { safeFormat } from "@/lib/formatters";
 import type { OHLCVBar } from "@neuroquant/types";
 import type { SignalResponse, ForecastPoint } from "@/types/intelligence";
@@ -14,6 +13,7 @@ import {
   SimpleBarChart,
   type SimpleBarPoint,
 } from "@/components/charts";
+import { usePriceFeed } from "@/hooks/usePriceFeed";
 
 import SignalsTab from "./panes/SignalsTab";
 import OptionChainTab from "./panes/OptionChainTab";
@@ -60,6 +60,68 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
   const [predictions, setPredictions] = useState<ForecastPoint[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
+
+  // Live Price Feed Integration for real-time chart updates
+  const { ticks } = usePriceFeed(signal?.symbol ? [signal.symbol] : []);
+  const liveTick = signal?.symbol ? ticks.get(signal.symbol.toUpperCase()) : null;
+
+  useEffect(() => {
+    if (!liveTick || bars.length === 0) return;
+
+    setBars((prevBars) => {
+      if (prevBars.length === 0) return prevBars;
+      const lastBar = prevBars[prevBars.length - 1];
+      if (!lastBar) return prevBars;
+
+      const tickTime = new Date(liveTick.timestamp).getTime();
+      const lastBarTime = new Date(lastBar.timestamp).getTime();
+
+      // Determine timeframe length in milliseconds
+      let intervalMs = 24 * 60 * 60 * 1000; // default 1d
+      if (timeframe === "1m") intervalMs = 60 * 1000;
+      else if (timeframe === "3m") intervalMs = 3 * 60 * 1000;
+      else if (timeframe === "5m") intervalMs = 5 * 60 * 1000;
+      else if (timeframe === "10m") intervalMs = 10 * 60 * 1000;
+      else if (timeframe === "15m") intervalMs = 15 * 60 * 1000;
+      else if (timeframe === "30m") intervalMs = 30 * 60 * 1000;
+      else if (timeframe === "45m") intervalMs = 45 * 60 * 1000;
+      else if (timeframe === "1h") intervalMs = 60 * 60 * 1000;
+      else if (timeframe === "2h") intervalMs = 2 * 60 * 60 * 1000;
+      else if (timeframe === "4h") intervalMs = 4 * 60 * 60 * 1000;
+      else if (timeframe === "1w") intervalMs = 7 * 24 * 60 * 60 * 1000;
+      else if (timeframe === "1mo") intervalMs = 30 * 24 * 60 * 60 * 1000;
+
+      const tickBucketTime = Math.floor(tickTime / intervalMs) * intervalMs;
+      const lastBarBucketTime = Math.floor(lastBarTime / intervalMs) * intervalMs;
+
+      const updatedBars = [...prevBars];
+
+      if (tickBucketTime === lastBarBucketTime) {
+        // Update the last candle
+        const updatedBar = { ...lastBar };
+        updatedBar.close = liveTick.price;
+        updatedBar.high = Math.max(updatedBar.high, liveTick.price);
+        updatedBar.low = Math.min(updatedBar.low, liveTick.price);
+        updatedBars[updatedBars.length - 1] = updatedBar;
+      } else if (tickBucketTime > lastBarBucketTime) {
+        // Append a new candle
+        const newBar: OHLCVBar = {
+          timestamp: new Date(tickBucketTime).toISOString(),
+          open: liveTick.price,
+          high: liveTick.price,
+          low: liveTick.price,
+          close: liveTick.price,
+          volume: 0,
+        };
+        updatedBars.push(newBar);
+        if (updatedBars.length > 180) {
+          updatedBars.shift();
+        }
+      }
+
+      return updatedBars;
+    });
+  }, [liveTick, timeframe, bars.length]);
 
   const [chartStyle, setChartStyle] = useState<
     | "line"
@@ -141,15 +203,43 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
       }
 
       // 2. Fetch Forecast
-      const lastPrice = loadedBars.length > 0 ? (loadedBars[loadedBars.length - 1]?.close ?? 100) : 100;
       try {
-        const res = await intelligenceApi.getForecast(signal.symbol);
-        const tftResults = res.model_results.find((m) => m.model_name === "tft");
-        if (tftResults && tftResults.forecasts && tftResults.forecasts.length > 0) {
+        const fetchUrl = "/api/v1/predictions/forecast";
+        const response = await fetch(fetchUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            symbol: signal.symbol,
+            horizons: [1, 3, 5, 10, 21],
+          }),
+        });
+        if (response.ok) {
+          const data = await response.json();
+          const forecastData: ForecastPoint[] = (data.forecast || []).map((pt: {
+            target_date: string;
+            horizon_days: number;
+            predicted_price: number;
+            prediction_low: number;
+            prediction_high: number;
+            change_pct: number;
+          }) => ({
+            target_date: pt.target_date,
+            horizon_days: pt.horizon_days,
+            predicted_price: pt.predicted_price,
+            predicted_direction: pt.change_pct >= 0 ? "BUY" : "SELL",
+            confidence: data.confidence ?? 0.5,
+            prediction_low: pt.prediction_low,
+            prediction_high: pt.prediction_high,
+            change_pct: pt.change_pct,
+          }));
           if (mounted) {
-            setPredictions(tftResults.forecasts);
+            setPredictions(forecastData);
             setForecastError(null);
           }
+        } else {
+          throw new Error(`Failed with status ${response.status}`);
         }
       } catch (error) {
         if (mounted) {
@@ -408,6 +498,7 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
                 chartStyle={chartStyle}
                 indicators={activeIndicators}
                 predictions={predictions}
+                symbol={signal?.symbol}
               />
             ) : null}
             {bars.length === 0 ? (
@@ -466,7 +557,7 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
             ))}
           </div>
           <div className="h-[200px] lg:h-[240px] overflow-y-auto ds-scrollable rounded bg-[rgba(255,255,255,0.02)] p-2">
-            {subTab === "signals" && <SignalsTab signal={signal} />}
+            {subTab === "signals" && <SignalsTab signal={signal} forecast={predictions} />}
 
             {subTab === "indicators" && (
               <SimpleLineAreaChart

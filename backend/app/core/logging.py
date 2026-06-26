@@ -322,6 +322,12 @@ def setup_logging() -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(settings.LOG_LEVEL)
 
+    # Suppress verbose MongoDB, yfinance, and urllib3 logs
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
+    logging.getLogger("motor").setLevel(logging.WARNING)
+    logging.getLogger("yfinance").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+
     logger.info(
         "logging_configured",
         environment=settings.ENVIRONMENT,

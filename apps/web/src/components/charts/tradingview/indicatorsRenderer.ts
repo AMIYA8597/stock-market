@@ -21,7 +21,9 @@ export function drawIndicators(
   indicators: IndicatorsOptions,
   closes: number[],
   times: UTCTimestamp[],
-  indResults: IndicatorResult
+  indResults: IndicatorResult,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addedSeries: any[]
 ) {
   const {
     ema9,
@@ -47,6 +49,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   if (ema21) {
@@ -58,6 +61,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   if (ema50) {
@@ -69,6 +73,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   if (ema200) {
@@ -80,6 +85,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   if (sma20) {
@@ -91,6 +97,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   if (sma50) {
@@ -102,6 +109,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   if (sma100) {
@@ -113,6 +121,7 @@ export function drawIndicators(
       crosshairMarkerVisible: false,
     });
     series.setData(times.map((time, idx) => ({ time, value: data[idx] ?? closes[idx] ?? 0 })));
+    addedSeries.push(series);
   }
 
   // 2. Bollinger Bands
@@ -140,6 +149,10 @@ export function drawIndicators(
     bbUpperSeries.setData(times.map((time, idx) => ({ time, value: bb.upper[idx] ?? closes[idx] ?? 0 })));
     bbBasisSeries.setData(times.map((time, idx) => ({ time, value: bb.middle[idx] ?? closes[idx] ?? 0 })));
     bbLowerSeries.setData(times.map((time, idx) => ({ time, value: bb.lower[idx] ?? closes[idx] ?? 0 })));
+
+    addedSeries.push(bbUpperSeries);
+    addedSeries.push(bbBasisSeries);
+    addedSeries.push(bbLowerSeries);
   }
 
   // 3. VWAP
@@ -151,6 +164,7 @@ export function drawIndicators(
       title: "VWAP",
     });
     vwapSeries.setData(indResults.vwap.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.value })));
+    addedSeries.push(vwapSeries);
   }
 
   // 4. SuperTrend
@@ -162,6 +176,7 @@ export function drawIndicators(
       title: "SuperTrend",
     });
     stSeries.setData(indResults.superTrend.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.value })));
+    addedSeries.push(stSeries);
   }
 
   // 5. Ichimoku Cloud
@@ -175,5 +190,12 @@ export function drawIndicators(
     kijunSeries.setData(indResults.ichimoku.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.kijun })));
     senkouASeries.setData(indResults.ichimoku.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.senkouA })));
     senkouBSeries.setData(indResults.ichimoku.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.senkouB })));
+
+    addedSeries.push(tenkanSeries);
+    addedSeries.push(kijunSeries);
+    addedSeries.push(senkouASeries);
+    addedSeries.push(senkouBSeries);
   }
 }
+
+

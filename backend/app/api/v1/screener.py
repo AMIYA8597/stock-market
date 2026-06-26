@@ -17,6 +17,7 @@ from app.schemas.screener import (
     ScreenerRunRequest,
     ScreenerRunResponse,
 )
+from app.services.market_data_service import MarketDataService
 
 router = APIRouter(prefix="/screener", tags=["screener"])
 
@@ -24,12 +25,12 @@ router = APIRouter(prefix="/screener", tags=["screener"])
 @router.post("/run", response_model=ScreenerRunResponse)
 async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depends(get_db)) -> ScreenerRunResponse:
     try:
-        import random
         import numpy as np
         from sqlalchemy import select
         from app.models.asset import Symbol
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
+
 
         # Helper to round float values safely, handling NaNs and Inf
         def safe_round(val: float, places: int) -> float:
@@ -59,15 +60,12 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
             records.reverse()
 
             if len(records) < 2:
-                # Generate deterministic synthetic price history
-                rng_seed = sum(ord(c) for c in s.ticker)
-                rng = random.Random(rng_seed)
-                base_price = 100.0 if s.exchange != "CRYPTO" else 3000.0
-                closes = [base_price * (1.0 + rng.normalvariate(0, 0.02)) for _ in range(30)]
-                volumes = [rng.uniform(1000, 50000) for _ in range(30)]
+                # Insufficient data — skip this symbol, never generate fake prices
+                continue
             else:
                 closes = [float(r.close) for r in records]
                 volumes = [float(r.volume) for r in records]
+
 
             latest_price = closes[-1]
             prev_price = closes[-2] if len(closes) > 1 else latest_price
@@ -114,21 +112,20 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
                 sig_conf = 0.5
                 regime_state = "sideways"
 
-            # Assign deterministic P/E and market cap based on ticker name
-            ticker_hash = sum(ord(c) for c in s.ticker)
-            rng_s = random.Random(ticker_hash)
-            
-            if s.asset_type == "CRYPTO":
-                pe_ratio = None
-            else:
-                pe_ratio = 10.0 + rng_s.random() * 40.0
-
-            if s.market_cap_bucket == "LARGE":
-                mcap = 50000.0 + rng_s.random() * 450000.0
-            elif s.market_cap_bucket == "MID":
-                mcap = 5000.0 + rng_s.random() * 15000.0
-            else:
-                mcap = 100.0 + rng_s.random() * 4900.0
+            # Fetch PE ratio and market cap from MarketDataService (no random fallback)
+            pe_ratio = None
+            mcap = None
+            try:
+                sym_ns = s.ticker if "." in s.ticker else f"{s.ticker}.NS"
+                info = await MarketDataService.get_ticker_info(sym_ns)
+                pe_raw = info.get("trailingPE") or info.get("forwardPE")
+                mc_raw = info.get("marketCap")
+                if pe_raw is not None:
+                    pe_ratio = float(pe_raw)
+                if mc_raw is not None:
+                    mcap = float(mc_raw) / 1e7  # convert to crores for display
+            except Exception:
+                pass  # Leave pe_ratio and mcap as None — never fabricate values
 
             results.append({
                 "ticker": s.ticker,
@@ -255,8 +252,7 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
 
 
 @router.get("/presets", response_model=ScreenerPresetsResponse)
-async def get_screener_presets(db: AsyncSession = Depends(get_db)) -> ScreenerPresetsResponse:
-    _ = db
+async def get_screener_presets() -> ScreenerPresetsResponse:
     now = datetime.now(UTC)
     presets = [
         ScreenerPreset(name="value_stocks", description="Low PE and stable trend", filters_json={"pe_ratio_max": 20, "rsi_min": 35}, created_at=now),

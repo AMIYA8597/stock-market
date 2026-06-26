@@ -28,7 +28,10 @@ const SectorHeatmap = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
 
-  const symbols = useMemo(() => movers.map((item) => item.ticker.toUpperCase()), [movers]);
+  const symbols = useMemo(() => {
+    if (!Array.isArray(movers)) return [];
+    return movers.map((item) => item.ticker.toUpperCase());
+  }, [movers]);
   const { ticks } = usePriceFeed(symbols);
 
   useEffect(() => {
@@ -80,6 +83,7 @@ const SectorHeatmap = (): JSX.Element => {
 
   // Convert movers + live ticks to heatmap data with sector mapping.
   const heatmapData = useMemo(() => {
+    if (!Array.isArray(movers)) return [];
     return movers.map((item) => {
       const symbol = item.ticker.toUpperCase();
       const live = ticks.get(symbol);

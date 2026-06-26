@@ -36,7 +36,9 @@ export const useTerminalData = (): TerminalDataState => {
   const loadSymbols = useCallback(async (): Promise<string[]> => {
     try {
       const movers = await contractsApi.getMovers("NSE", "momentum");
-      const dynamicSymbols = movers.map((item) => item.ticker.trim().toUpperCase()).filter((item) => item.length > 0).slice(0, 12);
+      const dynamicSymbols = Array.isArray(movers)
+        ? movers.map((item) => item.ticker.trim().toUpperCase()).filter((item) => item.length > 0).slice(0, 12)
+        : [];
       if (dynamicSymbols.length > 0) {
         setSymbols(dynamicSymbols);
         return dynamicSymbols;

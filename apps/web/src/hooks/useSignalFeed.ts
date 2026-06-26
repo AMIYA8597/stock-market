@@ -45,7 +45,10 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
     }
 
     setStatus("reconnecting");
-    const ws = new WebSocket(`${cleanWsUrl}/ws/signals`);
+    const base = cleanWsUrl.replace(/\/+$/, "");
+    const cleanBase = base.replace(/\/ws$/i, "");
+    const wsUrl = `${cleanBase}/ws/signals`; // Resolved WebSocket URL: ws://host:port/ws/signals (no double slash)
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

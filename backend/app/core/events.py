@@ -77,7 +77,7 @@ async def startup_events() -> dict[str, Any]:
         # ─── Initialize Database ──────────────────────────────────────────
         logger.info("startup_database_init")
         try:
-            from app.core.database import engine
+            from app.core.database import engine, init_db
 
             # Test database connection
             async with engine.begin() as conn:
@@ -87,6 +87,10 @@ async def startup_events() -> dict[str, Any]:
                     else "SELECT 1"
                 )
             logger.info("startup_database_success", database_url=settings.DATABASE_URL)
+            
+            # Automatically create tables if not exists
+            logger.info("startup_database_schema_sync")
+            await init_db()
         except Exception as e:
             logger.error("startup_database_failed", error=str(e), exc_info=True)
             if not settings.is_development:
@@ -111,6 +115,20 @@ async def startup_events() -> dict[str, Any]:
             except (ImportError, AttributeError):
                 logger.debug("price_broadcaster_module_not_found")
 
+            # Price ticker task
+            try:
+                from app.websocket.price_ticker import run_price_ticker
+
+                if redis_client:
+                    ticker_task = asyncio.create_task(
+                        run_price_ticker(redis_client),
+                        name="price_ticker",
+                    )
+                    background_tasks.append(ticker_task)
+                    logger.info("startup_price_ticker_created")
+            except Exception as e:
+                logger.error(f"Failed to start price ticker task: {e}")
+
             # Example: Signal broadcaster (if websocket module exists)
             try:
                 from app.websocket.signal_broadcaster import run_signal_broadcaster
@@ -124,6 +142,41 @@ async def startup_events() -> dict[str, Any]:
                     logger.info("startup_signal_broadcaster_created")
             except (ImportError, AttributeError):
                 logger.debug("signal_broadcaster_module_not_found")
+
+            # Alert polling loop task
+            try:
+                WATCHLIST_SYMBOLS = [
+                    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "HINDUNILVR.NS",
+                    "ICICIBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "WIPRO.NS", "BAJFINANCE.NS",
+                    "NIFTY50.NS", "^NSEI"
+                ]
+                
+                async def alert_polling_loop():
+                    # Sleep slightly on startup to let server initialize
+                    await asyncio.sleep(5)
+                    while True:
+                        try:
+                            from app.services.alert_engine import check_and_fire_alerts
+                            from app.websocket.connection_manager import get_connection_manager
+                            manager = get_connection_manager()
+                            await check_and_fire_alerts(WATCHLIST_SYMBOLS, manager)
+                        except Exception as loop_err:
+                            logger.warning(f"Alert polling error: {loop_err}")
+                        await asyncio.sleep(300)
+
+                alert_task = asyncio.create_task(alert_polling_loop(), name="alert_polling_loop")
+                background_tasks.append(alert_task)
+                logger.info("startup_alert_polling_loop_created")
+            except Exception as e:
+                logger.error(f"Failed to start alert polling loop background task: {e}")
+
+            # Initialize Upstox Integration
+            try:
+                from app.services.upstox_service import UpstoxService
+                await UpstoxService.init_service()
+                logger.info("startup_upstox_service_initialized")
+            except Exception as up_err:
+                logger.error(f"Failed to initialize Upstox service: {up_err}")
 
             if background_tasks:
                 services["background_tasks"] = background_tasks

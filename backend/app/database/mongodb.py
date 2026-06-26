@@ -13,10 +13,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
 
-import yfinance as yf
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from app.core.config import get_settings
+
+# Set pymongo and motor log levels to WARNING
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("motor").setLevel(logging.WARNING)
 
 logger = logging.getLogger("app.database.mongodb")
 settings = get_settings()
@@ -28,17 +31,36 @@ _client_loop: Any = None
 # Circuit Breaker state
 _mongo_online: bool = True
 _mongo_cooldown_until: datetime | None = None
+_mongo_trips_history: list[datetime] = []
 
 
 def trip_circuit(exc: Exception | None = None) -> None:
-    """Trip the MongoDB circuit breaker and initiate cooling-down period."""
-    global _mongo_online, _mongo_cooldown_until
+    """Trip the MongoDB circuit breaker and initiate cooling-down period.
+    If there have been 3 or more trips in the past hour, set a 60-minute cooldown.
+    Otherwise, use a short 30-second cooldown.
+    """
+    global _mongo_online, _mongo_cooldown_until, _mongo_trips_history
+    now = datetime.now(UTC)
+
+    # Track trips history
+    _mongo_trips_history.append(now)
+    # Filter out trips older than 1 hour
+    one_hour_ago = now - timedelta(hours=1)
+    _mongo_trips_history = [t for t in _mongo_trips_history if t > one_hour_ago]
+
+    # Determine cooldown duration
+    if len(_mongo_trips_history) >= 3:
+        cooldown_seconds = 60 * 60  # 60 minutes
+    else:
+        cooldown_seconds = 30  # default short cooldown
+    cooldown_display = f"{cooldown_seconds // 60} minutes" if cooldown_seconds >= 60 else f"{cooldown_seconds} seconds"
+
     if _mongo_online:
         logger.warning(
-            f"🚨 Tripping MongoDB circuit breaker. Bypassing MongoDB operations. Reason: {exc}"
+            f"🚨 Tripping MongoDB circuit breaker. Bypassing MongoDB operations. Reason: {exc}. Cooldown: {cooldown_display}."
         )
         _mongo_online = False
-    _mongo_cooldown_until = datetime.now(UTC) + timedelta(minutes=5)
+    _mongo_cooldown_until = now + timedelta(seconds=cooldown_seconds)
 
 
 def get_mongo_db() -> Any:
@@ -59,6 +81,7 @@ def get_mongo_db() -> Any:
             _mongo_cooldown_until = None
         else:
             return None
+
 
     if client is not None and _client_loop is not None and current_loop != _client_loop:
         logger.debug("🔄 Event loop changed/restarted. Re-initializing AsyncIOMotorClient.")
@@ -128,10 +151,10 @@ async def mongo_get_user_by_id(user_id: str) -> dict[str, Any] | None:
         return None
 
 
-async def mongo_create_user(user_data: dict[str, Any]) -> dict[str, Any]:
+async def mongo_create_user(user_data: dict[str, Any]) -> dict[str, Any] | None:
     database = get_mongo_db()
     if database is None:
-        raise RuntimeError("MongoDB not initialized")
+        return None
 
     doc = {
         "_id": user_data.get("id") or str(uuid4()),
@@ -151,7 +174,7 @@ async def mongo_create_user(user_data: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"mongo_create_user_error: {e}")
         trip_circuit(e)
-        raise RuntimeError("MongoDB create user failure") from e
+        return None
 
 
 async def mongo_update_user(user_id: str, update_data: dict[str, Any]) -> bool:
@@ -236,10 +259,10 @@ async def mongo_revoke_user_sessions(user_id: str) -> None:
 
 # ─── Portfolio & holdings Collection CRUD Helpers ─────────────────────────
 
-async def mongo_get_portfolio(user_id: str) -> dict[str, Any]:
+async def mongo_get_portfolio(user_id: str) -> dict[str, Any] | None:
     database = get_mongo_db()
     if database is None:
-        return {"user_id": user_id, "cash_balance": 1000000.0, "holdings": []}
+        return None
 
     try:
         portfolio = await database.portfolios.find_one({"user_id": user_id})
@@ -257,13 +280,13 @@ async def mongo_get_portfolio(user_id: str) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"mongo_get_portfolio_error: {e}")
         trip_circuit(e)
-        return {"user_id": user_id, "cash_balance": 1000000.0, "holdings": []}
+        return None
 
 
-async def mongo_save_portfolio(user_id: str, cash_balance: float, holdings: list[dict[str, Any]]) -> bool:
+async def mongo_save_portfolio(user_id: str, cash_balance: float, holdings: list[dict[str, Any]]) -> bool | None:
     database = get_mongo_db()
     if database is None:
-        return False
+        return None
     try:
         await database.portfolios.update_one(
             {"user_id": user_id},
@@ -278,10 +301,10 @@ async def mongo_save_portfolio(user_id: str, cash_balance: float, holdings: list
     except Exception as e:
         logger.error(f"mongo_save_portfolio_error: {e}")
         trip_circuit(e)
-        return False
+        return None
 
 
-async def mongo_add_transaction(user_id: str, symbol: str, tx_type: str, quantity: float, price: float, net_amount: float) -> dict[str, Any]:
+async def mongo_add_transaction(user_id: str, symbol: str, tx_type: str, quantity: float, price: float, net_amount: float) -> dict[str, Any] | None:
     database = get_mongo_db()
     fallback_doc = {
         "transaction_id": str(uuid4()),
@@ -293,7 +316,7 @@ async def mongo_add_transaction(user_id: str, symbol: str, tx_type: str, quantit
         "timestamp": datetime.now(UTC)
     }
     if database is None:
-        return fallback_doc
+        return None
 
     try:
         doc = {
@@ -312,13 +335,13 @@ async def mongo_add_transaction(user_id: str, symbol: str, tx_type: str, quantit
     except Exception as e:
         logger.error(f"mongo_add_transaction_error: {e}")
         trip_circuit(e)
-        return fallback_doc
+        return None
 
 
-async def mongo_get_transactions(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+async def mongo_get_transactions(user_id: str, limit: int = 50) -> list[dict[str, Any]] | None:
     database = get_mongo_db()
     if database is None:
-        return []
+        return None
     try:
         cursor = database.transactions.find({"user_id": user_id}).sort("timestamp", -1).limit(limit)
         results = await cursor.to_list(length=limit)
@@ -328,14 +351,14 @@ async def mongo_get_transactions(user_id: str, limit: int = 50) -> list[dict[str
     except Exception as e:
         logger.error(f"mongo_get_transactions_error: {e}")
         trip_circuit(e)
-        return []
+        return None
 
 
 # Simple in-memory cache for stock prices
 _PRICE_CACHE: dict[str, tuple[float, datetime]] = {}
 
 
-async def get_live_price(symbol: str) -> float:
+async def get_live_price(symbol: str) -> float | None:
     # Use clean symbol
     sym = symbol.upper().strip()
     now = datetime.now(UTC)
@@ -346,29 +369,19 @@ async def get_live_price(symbol: str) -> float:
         if (now - ts).total_seconds() < 30:
             return val
 
-    # Try fetching via yfinance
+    # Try fetching via MarketDataService
     try:
-        def _fetch():
-            ticker = yf.Ticker(sym)
-            fast = ticker.fast_info
-            if fast and hasattr(fast, "last_price") and fast.last_price is not None:
-                return float(fast.last_price)
-            # Fallback to history
-            hist = ticker.history(period="1d")
-            if not hist.empty:
-                return float(hist.iloc[-1]["Close"])
-            return 100.0
-
-        import asyncio
-        price = await asyncio.to_thread(_fetch)
+        from app.services.market_data_service import MarketDataService
+        quote = await MarketDataService.get_quote(sym)
+        price = float(quote["price"])
         _PRICE_CACHE[sym] = (price, now)
         return price
     except Exception as e:
         logger.warning(f"Error fetching live price for {sym}: {e}")
-        raise RuntimeError(f"Unable to fetch live price for {sym}") from e
+        return None
 
 
-async def mongo_get_wallet_state(user_id: str) -> dict[str, Any]:
+async def mongo_get_wallet_state(user_id: str) -> dict[str, Any] | None:
     database = get_mongo_db()
     default_state = {
         "user_id": user_id,
@@ -377,7 +390,7 @@ async def mongo_get_wallet_state(user_id: str) -> dict[str, Any]:
         "updated_at": datetime.now(UTC),
     }
     if database is None:
-        return default_state
+        return None
 
     try:
         wallet = await database.paper_wallets.find_one({"user_id": user_id})
@@ -393,7 +406,7 @@ async def mongo_get_wallet_state(user_id: str) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"mongo_get_wallet_state_error: {e}")
         trip_circuit(e)
-        return default_state
+        return None
 
 
 async def mongo_credit_wallet(
@@ -402,26 +415,13 @@ async def mongo_credit_wallet(
     method: str,
     description: str,
     idempotency_key: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     database = get_mongo_db()
+    if database is None:
+        return None
+
     credited_amount = amount.quantize(Decimal("0.01"))
     now = datetime.now(UTC)
-    fallback = {
-        "intent_id": f"pi_{uuid4().hex}",
-        "payment_id": f"pay_{uuid4().hex}",
-        "provider_ref": f"paper_{uuid4().hex[:18]}",
-        "amount": str(credited_amount),
-        "currency": "INR",
-        "method": method,
-        "status": "succeeded",
-        "wallet_balance": str(credited_amount),
-        "description": description,
-        "created_at": now,
-        "completed_at": now,
-    }
-    if database is None:
-        return fallback
-
     try:
         existing = await database.paper_payments.find_one(
             {"user_id": user_id, "idempotency_key": idempotency_key}
@@ -431,6 +431,8 @@ async def mongo_credit_wallet(
             return existing
 
         wallet = await mongo_get_wallet_state(user_id)
+        if wallet is None:
+            return None
         current_balance = Decimal(str(wallet.get("wallet_balance", "0.00")))
         next_balance = (current_balance + credited_amount).quantize(Decimal("0.01"))
 
@@ -469,7 +471,7 @@ async def mongo_credit_wallet(
     except Exception as e:
         logger.error(f"mongo_credit_wallet_error: {e}")
         trip_circuit(e)
-        return fallback
+        return None
 
 
 async def mongo_create_payment_intent(
@@ -479,8 +481,11 @@ async def mongo_create_payment_intent(
     method: str,
     description: str,
     idempotency_key: str,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     database = get_mongo_db()
+    if database is None:
+        return None
+
     now = datetime.now(UTC)
     normalized_amount = amount.quantize(Decimal("0.01"))
     fallback = {
@@ -495,9 +500,6 @@ async def mongo_create_payment_intent(
         "status": "requires_confirmation",
         "created_at": now,
     }
-    if database is None:
-        return fallback
-
     try:
         existing = await database.paper_payment_intents.find_one(
             {"user_id": user_id, "idempotency_key": idempotency_key}
@@ -514,7 +516,7 @@ async def mongo_create_payment_intent(
     except Exception as e:
         logger.error(f"mongo_create_payment_intent_error: {e}")
         trip_circuit(e)
-        return fallback
+        return None
 
 
 async def mongo_get_payment_intent(user_id: str, intent_id: str) -> dict[str, Any] | None:
@@ -531,17 +533,17 @@ async def mongo_get_payment_intent(user_id: str, intent_id: str) -> dict[str, An
         return None
 
 
-async def mongo_get_payment_history(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+async def mongo_get_payment_history(user_id: str, limit: int = 20) -> list[dict[str, Any]] | None:
     database = get_mongo_db()
     if database is None:
-        return []
+        return None
     try:
         cursor = database.paper_payments.find({"user_id": user_id}).sort("created_at", -1).limit(limit)
         return await cursor.to_list(length=limit)
     except Exception as e:
         logger.error(f"mongo_get_payment_history_error: {e}")
         trip_circuit(e)
-        return []
+        return None
 
 
 async def mongo_cache_market_payload(
@@ -595,10 +597,10 @@ async def mongo_get_market_payload(cache_type: str, cache_key: str) -> dict[str,
 
 # ─── Alert Collection CRUD Helpers ───────────────────────────────────────
 
-async def mongo_get_alerts(user_id: str) -> list[dict[str, Any]]:
+async def mongo_get_alerts(user_id: str) -> list[dict[str, Any]] | None:
     database = get_mongo_db()
     if database is None:
-        return []
+        return None
     try:
         cursor = database.alerts.find({"user_id": user_id})
         results = await cursor.to_list(length=100)
@@ -606,13 +608,13 @@ async def mongo_get_alerts(user_id: str) -> list[dict[str, Any]]:
     except Exception as e:
         logger.error(f"mongo_get_alerts_error: {e}")
         trip_circuit(e)
-        return []
+        return None
 
 
-async def mongo_create_alert(user_id: str, alert_data: dict[str, Any]) -> dict[str, Any]:
+async def mongo_create_alert(user_id: str, alert_data: dict[str, Any]) -> dict[str, Any] | None:
     database = get_mongo_db()
     if database is None:
-        raise RuntimeError("MongoDB not initialized")
+        return None
     doc = {
         "_id": str(uuid4()),
         "user_id": user_id,
@@ -632,7 +634,7 @@ async def mongo_create_alert(user_id: str, alert_data: dict[str, Any]) -> dict[s
     except Exception as e:
         logger.error(f"mongo_create_alert_error: {e}")
         trip_circuit(e)
-        raise RuntimeError("MongoDB create alert failure") from e
+        return None
 
 
 async def mongo_update_alert(user_id: str, alert_id: str, update_data: dict[str, Any]) -> dict[str, Any] | None:
@@ -661,25 +663,25 @@ async def mongo_update_alert(user_id: str, alert_id: str, update_data: dict[str,
         return None
 
 
-async def mongo_delete_alert(user_id: str, alert_id: str) -> bool:
+async def mongo_delete_alert(user_id: str, alert_id: str) -> bool | None:
     database = get_mongo_db()
     if database is None:
-        return False
+        return None
     try:
         res = await database.alerts.delete_one({"_id": alert_id, "user_id": user_id})
         return res.deleted_count > 0
     except Exception as e:
         logger.error(f"mongo_delete_alert_error: {e}")
         trip_circuit(e)
-        return False
+        return None
 
 
 # ─── Notification Collection CRUD Helpers ────────────────────────────────
 
-async def mongo_get_notifications(user_id: str) -> list[dict[str, Any]]:
+async def mongo_get_notifications(user_id: str) -> list[dict[str, Any]] | None:
     database = get_mongo_db()
     if database is None:
-        return []
+        return None
     try:
         cursor = database.notifications.find({"user_id": user_id}).sort("created_at", -1)
         results = await cursor.to_list(length=100)
@@ -687,13 +689,13 @@ async def mongo_get_notifications(user_id: str) -> list[dict[str, Any]]:
     except Exception as e:
         logger.error(f"mongo_get_notifications_error: {e}")
         trip_circuit(e)
-        return []
+        return None
 
 
-async def mongo_create_notification(notification_data: dict[str, Any]) -> dict[str, Any]:
+async def mongo_create_notification(notification_data: dict[str, Any]) -> dict[str, Any] | None:
     database = get_mongo_db()
     if database is None:
-        raise RuntimeError("MongoDB not initialized")
+        return None
     doc = {
         "_id": str(uuid4()),
         "user_id": notification_data["user_id"],
@@ -710,13 +712,13 @@ async def mongo_create_notification(notification_data: dict[str, Any]) -> dict[s
     except Exception as e:
         logger.error(f"mongo_create_notification_error: {e}")
         trip_circuit(e)
-        raise RuntimeError("MongoDB create notification failure") from e
+        return None
 
 
-async def mongo_mark_notification_read(user_id: str, notification_id: str) -> bool:
+async def mongo_mark_notification_read(user_id: str, notification_id: str) -> bool | None:
     database = get_mongo_db()
     if database is None:
-        return False
+        return None
     try:
         res = await database.notifications.update_one(
             {"_id": notification_id, "user_id": user_id},
@@ -726,4 +728,4 @@ async def mongo_mark_notification_read(user_id: str, notification_id: str) -> bo
     except Exception as e:
         logger.error(f"mongo_mark_notification_read_error: {e}")
         trip_circuit(e)
-        return False
+        return None

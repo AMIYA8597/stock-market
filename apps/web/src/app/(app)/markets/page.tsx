@@ -66,7 +66,10 @@ export default function MarketsPage(): JSX.Element {
     };
   }, []);
 
-  const liveSymbols = useMemo(() => movers.map((item) => item.ticker), [movers]);
+  const liveSymbols = useMemo(() => {
+    if (!Array.isArray(movers)) return [];
+    return movers.map((item) => item.ticker);
+  }, [movers]);
   const { ticks, status } = usePriceFeed(liveSymbols);
 
   return (
@@ -84,7 +87,7 @@ export default function MarketsPage(): JSX.Element {
       {error ? <p className="mt-3 text-sm text-[var(--nq-accent-red)]">{error}</p> : null}
 
       <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {(loading ? [] : indices.slice(0, 4)).map((indexItem) => (
+        {(loading || !Array.isArray(indices) ? [] : indices.slice(0, 4)).map((indexItem) => (
           <div key={indexItem.ticker} className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-4 py-3">
             <div className="text-xs text-[var(--nq-text-secondary)]">{indexItem.name}</div>
             <div className="mt-1 text-sm font-semibold">{Number(indexItem.value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</div>
@@ -105,7 +108,7 @@ export default function MarketsPage(): JSX.Element {
       <section className="mt-5 rounded-lg border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
         <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Momentum Movers (NSE)</h2>
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {movers.slice(0, 6).map((item) => {
+          {(!Array.isArray(movers) ? [] : movers.slice(0, 6)).map((item) => {
             const live = ticks.get(item.ticker.toUpperCase());
             const livePrice = live?.price ?? item.price;
             const liveChange = live?.change_pct ?? item.change_pct;

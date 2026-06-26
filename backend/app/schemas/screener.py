@@ -2,8 +2,9 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ─────────────────────────────────────────────────────────────━━
 # Screener
@@ -12,7 +13,7 @@ from pydantic import BaseModel, Field
 class ScreenerFilterConfig(BaseModel):
     """Screener filter configuration."""
     asset_class: str | None = None
-    exchange: list[str] | None = None
+    exchange: list[str] | str | None = None
     market_cap_min: Decimal | None = None
     market_cap_max: Decimal | None = None
     pe_ratio_max: Decimal | None = None
@@ -20,8 +21,36 @@ class ScreenerFilterConfig(BaseModel):
     rsi_max: Decimal | None = None
     momentum_21d_min: Decimal | None = None
     volume_ratio_min: Decimal | None = None
-    signal_direction: list[str] | None = None
+    signal_direction: list[str] | str | None = None
     regime_compatible: bool = False
+    
+    # Extra fields sent by frontend
+    min_market_cap: Decimal | None = None
+    max_market_cap: Decimal | None = None
+    above_sma_200: bool | None = None
+    volume_surge: bool | None = None
+    ml_confidence_min: Decimal | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_aliases_and_types(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # map min_market_cap -> market_cap_min
+            if "min_market_cap" in data and data["min_market_cap"] is not None:
+                data["market_cap_min"] = data["min_market_cap"]
+            if "max_market_cap" in data and data["max_market_cap"] is not None:
+                data["market_cap_max"] = data["max_market_cap"]
+            # convert exchange from str to list
+            if "exchange" in data:
+                ex = data["exchange"]
+                if isinstance(ex, str):
+                    data["exchange"] = [ex]
+            # convert signal_direction from str to list
+            if "signal_direction" in data:
+                sd = data["signal_direction"]
+                if isinstance(sd, str):
+                    data["signal_direction"] = [sd]
+        return data
 
 
 class ScreenerRunRequest(BaseModel):

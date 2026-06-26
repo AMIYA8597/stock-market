@@ -81,6 +81,10 @@ function normalizeSignalResponse(raw: UnknownRecord): SignalResponse {
   const gnnRaw = modelsRaw.gnn && typeof modelsRaw.gnn === "object" ? (modelsRaw.gnn as UnknownRecord) : {};
   const lstmRaw = modelsRaw.lstm_attn && typeof modelsRaw.lstm_attn === "object" ? (modelsRaw.lstm_attn as UnknownRecord) : {};
   const xgboostRaw = modelsRaw.xgboost && typeof modelsRaw.xgboost === "object" ? (modelsRaw.xgboost as UnknownRecord) : {};
+  const techRaw = modelsRaw.technical && typeof modelsRaw.technical === "object" ? (modelsRaw.technical as UnknownRecord) : {};
+  const patRaw = modelsRaw.pattern && typeof modelsRaw.pattern === "object" ? (modelsRaw.pattern as UnknownRecord) : {};
+  const momRaw = modelsRaw.momentum && typeof modelsRaw.momentum === "object" ? (modelsRaw.momentum as UnknownRecord) : {};
+  const regRaw = modelsRaw.regime && typeof modelsRaw.regime === "object" ? (modelsRaw.regime as UnknownRecord) : {};
   const weightsRaw = raw.model_weights && typeof raw.model_weights === "object" ? (raw.model_weights as UnknownRecord) : {};
 
   return {
@@ -128,11 +132,53 @@ function normalizeSignalResponse(raw: UnknownRecord): SignalResponse {
             )
           : [],
       },
+      technical: {
+        score: asNumber(techRaw.score),
+        rsi: asNumber(techRaw.rsi),
+        macd_histogram: asNumber(techRaw.macd_histogram),
+        bb_position: asNumber(techRaw.bb_position),
+        adx: asNumber(techRaw.adx),
+        supertrend_direction: asNumber(techRaw.supertrend_direction),
+        above_vwap: Boolean(techRaw.above_vwap),
+        indicators_computed: asNumber(techRaw.indicators_computed),
+      },
+      pattern: {
+        pattern_score: asNumber(patRaw.pattern_score),
+        patterns_detected: Array.isArray(patRaw.patterns_detected) ? patRaw.patterns_detected : [],
+        bullish_count: asNumber(patRaw.bullish_count),
+        bearish_count: asNumber(patRaw.bearish_count),
+      },
+      momentum: {
+        momentum_score: asNumber(momRaw.momentum_score),
+        ret_1d: asNumber(momRaw.ret_1d),
+        ret_5d: asNumber(momRaw.ret_5d),
+        ret_21d: asNumber(momRaw.ret_21d),
+        jt_momentum: asNumber(momRaw.jt_momentum),
+        vol_21d: asNumber(momRaw.vol_21d),
+        yang_zhang_vol: asNumber(momRaw.yang_zhang_vol),
+        dist_52w_high: asNumber(momRaw.dist_52w_high),
+        dist_52w_low: asNumber(momRaw.dist_52w_low),
+      },
+      regime: {
+        regime: String(regRaw.regime ?? ""),
+        bull_prob: asNumber(regRaw.bull_prob),
+        bear_prob: asNumber(regRaw.bear_prob),
+        regime_confidence: asNumber(regRaw.regime_confidence),
+        hmm_used: Boolean(regRaw.hmm_used),
+      },
     },
     model_weights: Object.fromEntries(
       Object.entries(weightsRaw).map(([key, value]) => [key, asNumber(value)])
     ),
     regime: normalizeRegime(raw.regime),
+    target_price_5d: asNumber(raw.target_price_5d),
+    stop_loss: asNumber(raw.stop_loss),
+    take_profit: asNumber(raw.take_profit),
+    prob_buy: asNumber(raw.prob_buy),
+    prob_sell: asNumber(raw.prob_sell),
+    max_loss_pct: asNumber(raw.max_loss_pct),
+    is_computed: Boolean(raw.is_computed),
+    message: String(raw.message ?? ""),
   };
 }
 

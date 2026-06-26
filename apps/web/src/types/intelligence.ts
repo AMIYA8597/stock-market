@@ -46,6 +46,52 @@ export interface LSTMAttnSignal {
 export interface XGBoostSignal {
   raw_signal: number;
   top_features: Array<Record<string, string | number>>;
+  xgb_confidence?: number;
+  xgb_direction?: string;
+  train_samples?: number;
+}
+
+export interface TechnicalModelSignal {
+  score?: number;
+  rsi?: number;
+  macd_histogram?: number;
+  bb_position?: number;
+  adx?: number;
+  supertrend_direction?: number;
+  above_vwap?: boolean;
+  indicators_computed?: number;
+  atr?: number;
+  ema9?: number;
+  ema21?: number;
+  ema50?: number;
+  ema200?: number;
+}
+
+export interface PatternModelSignal {
+  pattern_score?: number;
+  patterns_detected?: string[];
+  bullish_count?: number;
+  bearish_count?: number;
+}
+
+export interface MomentumModelSignal {
+  momentum_score?: number;
+  ret_1d?: number;
+  ret_5d?: number;
+  ret_21d?: number;
+  jt_momentum?: number;
+  vol_21d?: number;
+  yang_zhang_vol?: number;
+  dist_52w_high?: number;
+  dist_52w_low?: number;
+}
+
+export interface RegimeModelSignal {
+  regime?: string;
+  bull_prob?: number;
+  bear_prob?: number;
+  regime_confidence?: number;
+  hmm_used?: boolean;
 }
 
 export interface SignalResponse {
@@ -58,9 +104,22 @@ export interface SignalResponse {
     gnn: GNNSignal;
     lstm_attn: LSTMAttnSignal;
     xgboost: XGBoostSignal;
+    technical?: TechnicalModelSignal;
+    pattern?: PatternModelSignal;
+    momentum?: MomentumModelSignal;
+    regime?: RegimeModelSignal;
   };
   model_weights: Record<string, number>;
   regime: RegimeDetails;
+  target_price_5d?: number;
+  stop_loss?: number;
+  take_profit?: number;
+  prob_buy?: number;
+  prob_sell?: number;
+  max_loss_pct?: number;
+  is_computed?: boolean;
+  message?: string;
+  model_status?: "trained" | "heuristic" | "fallback";
 }
 
 export interface ForecastPoint {
@@ -71,6 +130,7 @@ export interface ForecastPoint {
   confidence: number;
   prediction_low: number;
   prediction_high: number;
+  change_pct?: number;
 }
 
 export interface ModelForecast {
@@ -83,4 +143,5 @@ export interface ForecastResponse {
   current_price: number;
   generated_at: string;
   model_results: ModelForecast[];
+  forecast?: ForecastPoint[];
 }

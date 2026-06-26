@@ -27,6 +27,7 @@ from app.models.payment import PaymentTransaction  # noqa: F401
 # User Portfolio & Transactions
 from app.models.portfolio import PortfolioHolding  # noqa: F401
 from app.models.journal import TradeJournal  # noqa: F401
+from app.models.paper_trading import PaperWallet, PaperPosition, PaperOrder  # noqa: F401
 
 # Model Predictions & Signals
 from app.models.prediction import MLPrediction  # noqa: F401
@@ -39,3 +40,4 @@ from app.models.sentiment import NewsSentiment  # noqa: F401
 from app.models.signal import EnsembleSignal  # noqa: F401
 from app.models.transactions import Transaction  # noqa: F401
 from app.models.user import User  # noqa: F401
+

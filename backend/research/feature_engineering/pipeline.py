@@ -13,6 +13,7 @@ from research.feature_engineering.microstructure import MicrostructureBuilder
 from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.sentiment_factors import SentimentFactorsBuilder
 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+from research.feature_engineering.chart_patterns import ChartPatternsBuilder
 
 
 class FeaturePipeline:
@@ -22,6 +23,7 @@ class FeaturePipeline:
         self.builders = builders or [
             PriceFactorsBuilder(),
             VolatilityFactorsBuilder(),
+            ChartPatternsBuilder(),
             MicrostructureBuilder(),
             CalendarEffectsBuilder(),
             SentimentFactorsBuilder(),
