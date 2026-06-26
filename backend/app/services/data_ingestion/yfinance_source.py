@@ -6,7 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 
 import pandas as pd
-import yfinance as yf
+from app.services.market_data_service import MarketDataService
 
 from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
 
@@ -33,18 +33,15 @@ class YFinanceSource(MarketDataSource):
     ) -> list[OHLCVBar]:
         y_interval = _YF_INTERVAL_MAP[interval]
 
-        def _download() -> pd.DataFrame:
-            return yf.download(
-                tickers=symbol,
-                start=start,
-                end=end,
-                interval=y_interval,
-                auto_adjust=False,
-                progress=False,
-                threads=False,
-            )
-
-        frame = await asyncio.to_thread(_download)
+        frame = await MarketDataService.download_raw(
+            tickers=symbol,
+            start=start,
+            end=end,
+            interval=y_interval,
+            auto_adjust=False,
+            progress=False,
+            threads=False,
+        )
         if frame.empty:
             return []
 

@@ -6,6 +6,7 @@ import { Moon, Search, Settings2, Sun } from "lucide-react";
 import { contractsApi, type PortfolioHoldingsResponse } from "@/lib/contracts-api";
 import { useUIStore } from "@/stores/ui-store";
 import type { SignalResponse } from "@/types/intelligence";
+import { useTradingStore } from "@/stores/tradingStore";
 
 interface TopBarProps {
   selectedSignal: SignalResponse | null;
@@ -18,7 +19,16 @@ export default function TopBar({
   refreshing,
   signalStreamStatus,
 }: TopBarProps): JSX.Element {
+  const { tradingMode, connectionStatus, triggerKillSwitch, fetchStatus } = useTradingStore();
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
+
+  useEffect(() => {
+    void fetchStatus();
+    const interval = setInterval(() => {
+      void fetchStatus();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [fetchStatus]);
   const [clock, setClock] = useState<string>("");
   const [query, setQuery] = useState<string>("");
   const [mounted, setMounted] = useState<boolean>(false);
@@ -93,11 +103,19 @@ export default function TopBar({
         ? "bg-[var(--accent-amber)] animate-pulse"
         : "bg-[var(--accent-red)]";
 
-  const pnlColorClassName = direction.includes("BUY")
-    ? "text-[var(--accent-green)]"
-    : direction.includes("SELL")
-      ? "text-[var(--accent-red)]"
-      : "text-[var(--accent-amber)]";
+  const confidence = selectedSignal ? Number(selectedSignal.ensemble.confidence) * 100 : null;
+  const directionText = confidence !== null ? `${direction.replace("_", " ")} ${Math.round(confidence)}%` : direction.replace("_", " ");
+
+  const badgeStyle = 
+    direction === "STRONG_BUY"
+      ? "bg-[rgba(0,230,118,0.18)] text-[#00E676] border-[#00E676]"
+      : direction === "BUY"
+        ? "bg-[rgba(0,230,118,0.10)] text-[#00E676] border-[#00E676]"
+        : direction === "STRONG_SELL"
+          ? "bg-[rgba(255,59,92,0.18)] text-[#FF3B5C] border-[#FF3B5C]"
+          : direction === "SELL"
+            ? "bg-[rgba(255,59,92,0.10)] text-[#FF3B5C] border-[#FF3B5C]"
+            : "bg-[rgba(150,150,150,0.10)] text-[#9E9E9E] border-[#9E9E9E]";
 
   const { equityValue, unrealizedPnl } = useMemo(() => {
     const holdings = portfolio?.holdings ?? [];
@@ -153,9 +171,51 @@ export default function TopBar({
           {refreshing ? "Syncing" : signalStreamStatus}
         </span>
 
-        <span className={`hidden rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 font-mono text-[10px] terminal:inline-flex ${pnlColorClassName}`}>
-          {direction}
+        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex" title="Upstox WebSocket Connection State">
+          <span className={`h-1.5 w-1.5 rounded-full ${
+            connectionStatus === "connected"
+              ? "bg-[var(--accent-green)]"
+              : connectionStatus === "reconnecting" || connectionStatus === "connecting"
+                ? "bg-[var(--accent-amber)] animate-pulse"
+                : "bg-[var(--accent-red)]"
+          }`} />
+          Upstox: {connectionStatus}
         </span>
+
+        <span className={`hidden rounded border px-2 py-1 font-mono text-[10px] terminal:inline-flex items-center gap-1.5 font-bold uppercase tracking-wider ${badgeStyle}`}>
+          {direction === "STRONG_BUY" && (
+            <span className="h-1.5 w-1.5 rounded-full bg-[#00E676] animate-pulse" />
+          )}
+          {direction === "STRONG_SELL" && (
+            <span className="h-1.5 w-1.5 rounded-full bg-[#FF3B5C] animate-pulse" />
+          )}
+          {direction === "BUY" && (
+            <span className="h-1.5 w-1.5 rounded-full bg-[#00E676]" />
+          )}
+          {direction === "SELL" && (
+            <span className="h-1.5 w-1.5 rounded-full bg-[#FF3B5C]" />
+          )}
+          {direction === "NEUTRAL" && (
+            <span className="h-1.5 w-1.5 rounded-full bg-[#9E9E9E]" />
+          )}
+          {directionText}
+        </span>
+
+        <button
+          type="button"
+          onClick={async () => {
+            await triggerKillSwitch();
+            alert("EMERGENCY KILL SWITCH: Trading mode forced to PAPER. All pending simulation orders cancelled.");
+          }}
+          className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition ${
+            tradingMode === "LIVE"
+              ? "border-[#FF3B5C] bg-[rgba(255,59,92,0.18)] text-[#FF3B5C] animate-pulse"
+              : "border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-muted)]"
+          }`}
+          title="Emergency Kill Switch: immediately reverts to PAPER and cancels simulation orders"
+        >
+          🚨 Kill Switch ({tradingMode})
+        </button>
 
         <button
           type="button"

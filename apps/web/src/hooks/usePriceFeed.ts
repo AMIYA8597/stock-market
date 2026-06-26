@@ -43,7 +43,9 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
     }
 
     setStatus("reconnecting");
-    const ws = new WebSocket(`${cleanWsUrl}/ws/prices`);
+    const base = cleanWsUrl.replace(/\/+$/, "");
+    const wsUrl = base.endsWith("/ws") ? `${base}/prices` : `${base}/ws/prices`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

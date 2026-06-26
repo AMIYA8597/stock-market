@@ -6,6 +6,12 @@ Configures CORS, mounts API v1 router, and registers WebSocket endpoints.
 
 from __future__ import annotations
 
+import sys
+import asyncio
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
@@ -21,6 +27,11 @@ try:
 except ImportError:  # pragma: no cover
     sentry_sdk = None
     FastApiIntegration = None
+
+import logging as _logging
+# Suppress noisy third-party library logs
+for _noisy_lib in ("pymongo", "motor", "yfinance", "urllib3", "urllib3.connectionpool", "peewee"):
+    _logging.getLogger(_noisy_lib).setLevel(_logging.WARNING)
 
 
 from app.api.v1.router import api_router

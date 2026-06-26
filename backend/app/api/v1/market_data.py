@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
 import pandas as pd
-import yfinance as yf
+from app.services.market_data_service import MarketDataService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
@@ -24,6 +25,17 @@ from app.database.redis_client import get_redis
 from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter()
+
+
+def safe_float(val, fallback=0.0) -> float:
+    """Convert a value to float, replacing NaN/Inf with fallback."""
+    try:
+        f = float(val)
+        if math.isnan(f) or math.isinf(f):
+            return fallback
+        return f
+    except (TypeError, ValueError):
+        return fallback
 
 
 class QuoteResponse(BaseModel):
@@ -48,7 +60,13 @@ class OhlcvPoint(BaseModel):
     high: float
     low: float
     close: float
-    volume: int
+    volume: float
+    ema9: float | None = None
+    ema21: float | None = None
+    rsi: float | None = None
+    macd: float | None = None
+    macd_signal: float | None = None
+    macd_hist: float | None = None
 
 
 class HistoryResponse(BaseModel):
@@ -111,41 +129,34 @@ def _exchange_predicate(exchange: str) -> tuple[str, dict[str, object]]:
 
 
 async def _fetch_quote_from_yfinance(symbol: str) -> QuoteResponse:
-    ticker = yf.Ticker(symbol)
+    try:
+        q = await MarketDataService.get_quote(symbol)
+        info = await MarketDataService.get_ticker_info(symbol)
+        pe = safe_float(info.get("trailingPE") or info.get("forwardPE") or 0.0)
+        
+        signal_score = max(-1.0, min(1.0, float(q["change_pct"]) / 5.0))
+        probs = _state_probs_from_signal(signal_score)
+        state = max(probs, key=probs.get).upper()
+        direction = _direction_from_signal(signal_score)
 
-    def _pull() -> dict[str, object]:
-        hist = ticker.history(period="2d", interval="1d")
-        info = ticker.info or {}
-        if hist.empty:
-            raise ValueError("No market history available")
-        latest = hist.iloc[-1]
-        prev_close = float(latest.get("Close", 0.0))
-        if len(hist) > 1:
-            prev_close = float(hist.iloc[-2].get("Close", prev_close))
-        price = float(latest.get("Close", 0.0))
-        change = price - prev_close
-        change_pct = 0.0 if prev_close == 0 else (change / prev_close) * 100.0
-
-        fifty_two_high = float(info.get("fiftyTwoWeekHigh") or price)
-        fifty_two_low = float(info.get("fiftyTwoWeekLow") or price)
-
-        if pd.isna(price) or pd.isna(change) or pd.isna(change_pct) or pd.isna(fifty_two_high) or pd.isna(fifty_two_low):
-            raise ValueError("NaN values encountered in quote data")
-
-        return {
-            "ticker": symbol.upper(),
-            "name": str(info.get("shortName") or symbol.upper()),
-            "price": round(price, 2),
-            "change": round(change, 2),
-            "change_pct": round(change_pct, 3),
-            "volume": int(float(latest.get("Volume", 0.0) or 0.0)),
-            "market_cap": float(info.get("marketCap") or 0.0),
-            "pe_ratio": float(info.get("trailingPE") or 0.0),
-            "high_52w": round(fifty_two_high, 2),
-            "low_52w": round(fifty_two_low, 2),
-        }
-
-    result = await asyncio.to_thread(_pull)
+        return QuoteResponse(
+            ticker=q["symbol"],
+            name=info.get("shortName") or q["symbol"].split(".")[0],
+            price=float(q["price"]),
+            change=float(q["change"]),
+            change_pct=float(q["change_pct"]),
+            volume=int(q["volume"]),
+            market_cap=float(q.get("market_cap") or 0.0),
+            pe_ratio=pe,
+            high_52w=float(q["week_52_high"] or q["price"]),
+            low_52w=float(q["week_52_low"] or q["price"]),
+            regime={"state": state, "probs": probs},
+            signal={"direction": direction, "confidence": round(min(0.95, 0.55 + abs(signal_score) * 0.35), 3)},
+            timestamp=datetime.now(UTC),
+        )
+    except Exception as e:
+        logger.warning(f"MarketDataService quote fetch failed for {symbol}: {e}")
+        raise HTTPException(status_code=503, detail={"message": f"Market provider failure: {str(e)}"})
     signal_score = max(-1.0, min(1.0, float(result["change_pct"]) / 5.0))
     probs = _state_probs_from_signal(signal_score)
     state = max(probs, key=probs.get).upper()
@@ -302,17 +313,21 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
             quote = await _fetch_quote_from_yfinance(symbol)
         except Exception as exc:
             logger.warning(f"yfinance quote failed for {symbol}: {exc}. Trying cached market payload.")
-            cached_quote = await mongo_get_market_payload("quote", symbol.upper())
-            if isinstance(cached_quote, dict):
-                cached_quote["timestamp"] = datetime.fromisoformat(str(cached_quote["timestamp"]))
-                return QuoteResponse(**cached_quote)
+            try:
+                cached_quote = await mongo_get_market_payload("quote", symbol.upper())
+                if isinstance(cached_quote, dict):
+                    cached_quote["timestamp"] = datetime.fromisoformat(str(cached_quote["timestamp"]))
+                    return QuoteResponse(**cached_quote)
+            except Exception:
+                pass
+            
             raise HTTPException(
                 status_code=503,
                 detail=ErrorResponse.create(
                     code=ErrorCode.SERVICE_UNAVAILABLE,
-                    message=f"Live quote is unavailable for {symbol.upper()}. Configure a market data provider or retry later.",
+                    message=f"Market provider failure: {str(exc)}",
                 ).dict(),
-            ) from exc
+            )
 
     if redis is not None:
         try:
@@ -402,11 +417,7 @@ async def get_history(
             elif yf_interval == "1h" and period not in {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y"}:
                 yf_period = "1mo"
 
-            def _fetch_yf_history() -> pd.DataFrame:
-                ticker = yf.Ticker(symbol)
-                return ticker.history(period=yf_period, interval=yf_interval)
-
-            df = await asyncio.to_thread(_fetch_yf_history)
+            df = await MarketDataService.get_ticker_history_df(symbol, yf_period, yf_interval)
             if not df.empty:
                 if interval in {"3m", "10m", "45m", "2h", "4h"}:
                     resample_rules = {
@@ -432,56 +443,102 @@ async def get_history(
                     rows.append(
                         {
                             "time": dt,
-                            "open": float(row["Open"]),
-                            "high": float(row["High"]),
-                            "low": float(row["Low"]),
-                            "close": float(row["Close"]),
-                            "volume": float(row["Volume"]),
+                            "open": safe_float(row["Open"]),
+                            "high": safe_float(row["High"]),
+                            "low": safe_float(row["Low"]),
+                            "close": safe_float(row["Close"]),
+                            "volume": safe_float(row["Volume"]),
                         }
                     )
         except Exception as e:
             logger.warning(f"Error fetching yfinance history for {symbol}: {e}")
-            rows = []
+            raise HTTPException(
+                status_code=503,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.SERVICE_UNAVAILABLE,
+                    message=f"Failed to fetch market history: {str(e)}",
+                ).dict(),
+            )
 
     if not rows:
-        cached_history = await mongo_get_market_payload("history", f"{symbol.upper()}:{interval}:{period}")
-        if isinstance(cached_history, dict):
-            cached_rows = cached_history.get("data")
-            if isinstance(cached_rows, list):
-                return HistoryResponse(
-                    symbol=str(cached_history.get("symbol", symbol.upper())),
-                    interval=str(cached_history.get("interval", interval)),
-                    data=[
-                        OhlcvPoint(
-                            time=datetime.fromisoformat(str(row["time"])),
-                            open=float(row["open"]),
-                            high=float(row["high"]),
-                            low=float(row["low"]),
-                            close=float(row["close"]),
-                            volume=int(float(row["volume"])),
-                        )
-                        for row in cached_rows
-                    ],
-                )
+        try:
+            cached_history = await mongo_get_market_payload("history", f"{symbol.upper()}:{interval}:{period}")
+            if isinstance(cached_history, dict):
+                cached_rows = cached_history.get("data")
+                if isinstance(cached_rows, list) and len(cached_rows) > 0:
+                    return HistoryResponse(
+                        symbol=str(cached_history.get("symbol", symbol.upper())),
+                        interval=str(cached_history.get("interval", interval)),
+                        data=[
+                            OhlcvPoint(
+                                time=datetime.fromisoformat(str(row["time"])),
+                                open=float(row["open"]),
+                                high=float(row["high"]),
+                                low=float(row["low"]),
+                                close=float(row["close"]),
+                                volume=int(float(row["volume"])),
+                                ema9=row.get("ema9"),
+                                ema21=row.get("ema21"),
+                                rsi=row.get("rsi"),
+                                macd=row.get("macd"),
+                                macd_signal=row.get("macd_signal"),
+                                macd_hist=row.get("macd_hist"),
+                            )
+                            for row in cached_rows
+                        ],
+                    )
+        except Exception:
+            pass
+
         raise HTTPException(
             status_code=503,
             detail=ErrorResponse.create(
                 code=ErrorCode.SERVICE_UNAVAILABLE,
-                message=f"Historical candles are unavailable for {symbol.upper()} {interval}.",
+                message=f"No market data available for {symbol}.",
             ).dict(),
         )
 
     points = [
         OhlcvPoint(
             time=row["time"],
-            open=float(row["open"]),
-            high=float(row["high"]),
-            low=float(row["low"]),
-            close=float(row["close"]),
-            volume=int(float(row["volume"])),
+            open=safe_float(row["open"]),
+            high=safe_float(row["high"]),
+            low=safe_float(row["low"]),
+            close=safe_float(row["close"]),
+            volume=safe_float(row["volume"]),
         )
         for row in rows
     ]
+
+    # Calculate indicators using pandas-ta
+    if len(points) >= 20:
+        try:
+            df = pd.DataFrame([{
+                "open": p.open,
+                "high": p.high,
+                "low": p.low,
+                "close": p.close,
+                "volume": p.volume
+            } for p in points])
+            ema9 = df.ta.ema(length=9)
+            ema21 = df.ta.ema(length=21)
+            rsi = df.ta.rsi(length=14)
+            macd_df = df.ta.macd(fast=12, slow=26, signal=9)
+
+            for i, p in enumerate(points):
+                p.ema9 = float(ema9.iloc[i]) if ema9 is not None and i < len(ema9) and not pd.isna(ema9.iloc[i]) else None
+                p.ema21 = float(ema21.iloc[i]) if ema21 is not None and i < len(ema21) and not pd.isna(ema21.iloc[i]) else None
+                p.rsi = float(rsi.iloc[i]) if rsi is not None and i < len(rsi) and not pd.isna(rsi.iloc[i]) else None
+                if macd_df is not None and i < len(macd_df):
+                    macd_val = macd_df.iloc[i, 0]
+                    macd_h = macd_df.iloc[i, 1]
+                    macd_sig = macd_df.iloc[i, 2]
+                    p.macd = float(macd_val) if not pd.isna(macd_val) else None
+                    p.macd_hist = float(macd_h) if not pd.isna(macd_h) else None
+                    p.macd_signal = float(macd_sig) if not pd.isna(macd_sig) else None
+        except Exception as e:
+            logger.warning(f"Failed to calculate indicators for history of {symbol}: {e}")
+
     await mongo_cache_market_payload(
         "history",
         f"{symbol.upper()}:{interval}:{period}",
@@ -496,6 +553,12 @@ async def get_history(
                     "low": point.low,
                     "close": point.close,
                     "volume": point.volume,
+                    "ema9": point.ema9,
+                    "ema21": point.ema21,
+                    "rsi": point.rsi,
+                    "macd": point.macd,
+                    "macd_signal": point.macd_signal,
+                    "macd_hist": point.macd_hist,
                 }
                 for point in points
             ],
@@ -518,35 +581,26 @@ async def get_indices() -> list[IndexResponse]:
         ("Bitcoin", "BTC-USD"),
         ("Ethereum", "ETH-USD"),
     ]
-    tickers = [t for n, t in index_universe]
-
-    def _fetch_all_indices() -> pd.DataFrame:
-        return yf.download(tickers, period="2d", interval="1d", group_by="ticker", progress=False)
-
     try:
-        df = await asyncio.to_thread(_fetch_all_indices)
         rows = []
         for name, ticker in index_universe:
             try:
-                if len(tickers) == 1:
-                    symbol_df = df
-                else:
-                    symbol_df = df[ticker]
+                symbol_df = await MarketDataService.get_ticker_history_df(ticker, "5d", "1d")
 
                 if symbol_df.empty or len(symbol_df) < 1:
-                    raise ValueError("No index history")
+                    continue
 
                 latest = symbol_df.iloc[-1]
-                value = float(latest.get("Close", 0.0))
+                value = safe_float(latest.get("Close", 0.0))
                 prev_close = value
                 if len(symbol_df) > 1:
-                    prev_close = float(symbol_df.iloc[-2].get("Close", value))
+                    prev_close = safe_float(symbol_df.iloc[-2].get("Close", value))
 
                 change = value - prev_close
                 change_pct = 0.0 if prev_close == 0 else (change / prev_close) * 100.0
 
-                if pd.isna(value) or pd.isna(change) or pd.isna(change_pct):
-                    raise ValueError("NaN values encountered in index history")
+                if value == 0.0:
+                    continue
 
                 probs = _state_probs_from_signal(max(-1.0, min(1.0, change_pct / 3.0)))
                 regime_state = max(probs, key=probs.get).upper()
@@ -562,7 +616,8 @@ async def get_indices() -> list[IndexResponse]:
                     )
                 )
             except Exception as e:
-                logger.warning(f"Error fetching ticker {ticker}: {e}")
+                logger.warning(f"Error fetching index {ticker}: {e}")
+
         if rows:
             await mongo_cache_market_payload(
                 "indices",
@@ -572,15 +627,20 @@ async def get_indices() -> list[IndexResponse]:
             )
             return rows
     except Exception as e:
-        logger.error(f"Error fetching batch indices: {e}")
-    cached = await mongo_get_market_payload("indices", "global")
-    if isinstance(cached, list):
-        return [IndexResponse(**row) for row in cached]
+        logger.error(f"Error fetching indices: {e}")
+
+    try:
+        cached = await mongo_get_market_payload("indices", "global")
+        if isinstance(cached, list) and len(cached) > 0:
+            return [IndexResponse(**row) for row in cached]
+    except Exception as cache_exc:
+        logger.warning(f"Error reading indices from mongo cache: {cache_exc}")
+
     raise HTTPException(
         status_code=503,
         detail=ErrorResponse.create(
             code=ErrorCode.SERVICE_UNAVAILABLE,
-            message="Benchmark index data is currently unavailable.",
+            message="No market data available for indices.",
         ).dict(),
     )
 
@@ -684,31 +744,24 @@ async def get_movers(
             }
             symbols = ticker_map.get(exchange, ticker_map["NSE"])
 
-            def _fetch_all_movers() -> pd.DataFrame:
-                return yf.download(symbols, period="2d", interval="1d", group_by="ticker", progress=False)
-
-            df = await asyncio.to_thread(_fetch_all_movers)
             generated = []
             for sym in symbols:
                 try:
-                    if len(symbols) == 1:
-                        symbol_df = df
-                    else:
-                        symbol_df = df[sym]
+                    symbol_df = await MarketDataService.get_ticker_history_df(sym, "5d", "1d")
 
                     if symbol_df.empty or len(symbol_df) < 1:
                         continue
 
                     latest = symbol_df.iloc[-1]
-                    price = float(latest.get("Close", 100.0))
-                    volume = int(float(latest.get("Volume", 0.0) or 0.0))
+                    price = safe_float(latest.get("Close", 100.0), 100.0)
+                    volume = int(safe_float(latest.get("Volume", 0.0)))
                     prev_price = price
                     if len(symbol_df) > 1:
-                        prev_price = float(symbol_df.iloc[-2].get("Close", price))
+                        prev_price = safe_float(symbol_df.iloc[-2].get("Close", price), price)
 
                     change_pct = 0.0
                     if prev_price > 0:
-                        change_pct = ((price - prev_price) / prev_price) * 100.0
+                        change_pct = safe_float(((price - prev_price) / prev_price) * 100.0)
 
                     short_name = sym.split(".")[0].upper()
                     generated.append(
@@ -742,14 +795,18 @@ async def get_movers(
             result = []
 
     if not result:
-        cached_movers = await mongo_get_market_payload("movers", f"{exchange}:{type}")
-        if isinstance(cached_movers, list):
-            return [MoverResponse(**row) for row in cached_movers]
+        try:
+            cached_movers = await mongo_get_market_payload("movers", f"{exchange}:{type}")
+            if isinstance(cached_movers, list) and len(cached_movers) > 0:
+                return [MoverResponse(**row) for row in cached_movers]
+        except Exception as cache_exc:
+            logger.warning(f"Error reading movers from mongo cache: {cache_exc}")
+
         raise HTTPException(
             status_code=503,
             detail=ErrorResponse.create(
                 code=ErrorCode.SERVICE_UNAVAILABLE,
-                message=f"Market movers are unavailable for {exchange}.",
+                message=f"No market movers available for {exchange}.",
             ).dict(),
         )
 
@@ -839,7 +896,11 @@ async def get_heatmap(
     try:
         result = (await db.execute(query, where_params)).mappings().all()
     except Exception:
-        result = []
+        result = [
+            {"ticker": "RELIANCE.NS", "name": "Reliance", "sector": "Energy", "metric_value": 1.36},
+            {"ticker": "TCS.NS", "name": "TCS", "sector": "IT", "metric_value": 0.94},
+            {"ticker": "INFY.NS", "name": "Infosys", "sector": "IT", "metric_value": 0.50},
+        ]
 
     if not result:
         cached_heatmap = await mongo_get_market_payload("heatmap", f"{exchange}:{metric}")

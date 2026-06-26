@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { createChart, ColorType, type IChartApi } from "lightweight-charts";
+import { createChart, ColorType, LineStyle, type IChartApi } from "lightweight-charts";
 
 export interface LiveChartApi extends IChartApi {
   isAlive?: boolean;
@@ -39,12 +39,12 @@ export function useChartInstance({
         borderColor: "rgba(255,255,255,0.12)",
       },
       grid: {
-        vertLines: { color: "rgba(255,255,255,0.04)" },
-        horzLines: { color: "rgba(255,255,255,0.04)" },
+        vertLines: { color: "rgba(255,255,255,0.04)", style: LineStyle.Dotted },
+        horzLines: { color: "rgba(255,255,255,0.04)", style: LineStyle.Dotted },
       },
       crosshair: {
-        vertLine: { color: "rgba(0,212,245,0.45)", width: 1 },
-        horzLine: { color: "rgba(0,212,245,0.45)", width: 1 },
+        vertLine: { color: "rgba(255,255,255,0.25)", width: 1, style: LineStyle.Dashed },
+        horzLine: { color: "rgba(255,255,255,0.25)", width: 1, style: LineStyle.Dashed },
       },
     }) as LiveChartApi;
 

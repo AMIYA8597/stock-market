@@ -5,10 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.core.dependencies import get_db
+from fastapi import APIRouter, Query
 from app.schemas.regime import (
     RegimeCurrentResponse,
     RegimeHistoryPoint,
@@ -21,8 +18,7 @@ router = APIRouter(prefix="/regime", tags=["regime"])
 
 
 @router.get("/current", response_model=RegimeCurrentResponse)
-async def get_regime_current(db: AsyncSession = Depends(get_db)) -> RegimeCurrentResponse:
-    _ = db
+async def get_regime_current() -> RegimeCurrentResponse:
     now = datetime.now(UTC)
     return RegimeCurrentResponse(
         state="bull",
@@ -46,9 +42,7 @@ async def get_regime_current(db: AsyncSession = Depends(get_db)) -> RegimeCurren
 @router.get("/history", response_model=RegimeHistoryResponse)
 async def get_regime_history(
     days: int = Query(252, ge=1, le=1000),
-    db: AsyncSession = Depends(get_db),
 ) -> RegimeHistoryResponse:
-    _ = db
     now = datetime.now(UTC)
     points: list[RegimeHistoryPoint] = []
     transitions = 0
@@ -81,8 +75,7 @@ async def get_regime_history(
 
 
 @router.get("/statistics", response_model=RegimeStatisticsResponse)
-async def get_regime_statistics(db: AsyncSession = Depends(get_db)) -> RegimeStatisticsResponse:
-    _ = db
+async def get_regime_statistics() -> RegimeStatisticsResponse:
     stats = [
         RegimeStatistics(
             state="bull",

@@ -102,58 +102,64 @@ class Base(DeclarativeBase):
 
 
 # ─── Connection Pool Event Handlers ────────────────────────────────────
-@event.listens_for(engine.sync_engine, "connect")
-def receive_connect(dbapi_conn: any, connection_record: any) -> None:
-    """Configure PostgreSQL connection on creation.
+# Only register PostgreSQL-specific listeners if we're using PostgreSQL.
+# SQLite does not support SET, CREATE EXTENSION, etc.
+_is_postgres = settings.DATABASE_URL.startswith("postgresql")
 
-    Called when a new database connection is created.
-    Sets up TimescaleDB-specific settings for hypertables.
+if _is_postgres:
+    @event.listens_for(engine.sync_engine, "connect")
+    def receive_connect(dbapi_conn: any, connection_record: any) -> None:
+        """Configure PostgreSQL connection on creation.
 
-    Args:
-        dbapi_conn: Raw database connection (psycopg2).
-        connection_record: SQLAlchemy connection record.
+        Called when a new database connection is created.
+        Sets up TimescaleDB-specific settings for hypertables.
 
-    Returns:
-        None
+        Args:
+            dbapi_conn: Raw database connection (psycopg2).
+            connection_record: SQLAlchemy connection record.
 
-    Raises:
-        None: Exceptions are logged but don't interrupt connection.
-    """
-    try:
-        # Enable TimescaleDB continuous aggregates for hypertables
-        cursor = dbapi_conn.cursor()
-        cursor.execute("SET jit = on;")  # Enable JIT compilation for complex queries
-        cursor.execute("SET random_page_cost = 1.1;")  # Optimize for SSD
-        cursor.close()
-        logger.debug("database_connection_configured")
-    except Exception as e:
-        logger.warning("database_connection_configure_error", error=str(e))
+        Returns:
+            None
+
+        Raises:
+            None: Exceptions are logged but don't interrupt connection.
+        """
+        try:
+            cursor = dbapi_conn.cursor()
+            cursor.execute("SET jit = on;")
+            cursor.execute("SET random_page_cost = 1.1;")
+            cursor.close()
+            logger.debug("database_connection_configured")
+        except Exception as e:
+            logger.warning("database_connection_configure_error", error=str(e))
 
 
-@event.listens_for(engine.sync_engine, "first_connect")
-def receive_first_connect(dbapi_conn: any, connection_record: any) -> None:
-    """Initialize database on first connection.
+    @event.listens_for(engine.sync_engine, "first_connect")
+    def receive_first_connect(dbapi_conn: any, connection_record: any) -> None:
+        """Initialize database on first connection.
 
-    Called exactly once when the first connection is created.
-    Initializes TimescaleDB extension if not already present.
+        Called exactly once when the first connection is created.
+        Initializes TimescaleDB extension if not already present.
 
-    Args:
-        dbapi_conn: Raw database connection.
-        connection_record: SQLAlchemy connection record.
+        Args:
+            dbapi_conn: Raw database connection.
+            connection_record: SQLAlchemy connection record.
 
-    Returns:
-        None
+        Returns:
+            None
 
-    Raises:
-        None: Exceptions are logged but don't interrupt startup.
-    """
-    try:
-        cursor = dbapi_conn.cursor()
-        cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;")
-        cursor.close()
-        logger.info("database_timescaledb_initialized")
-    except Exception as e:
-        logger.warning("database_timescaledb_init_error", error=str(e))
+        Raises:
+            None: Exceptions are logged but don't interrupt startup.
+        """
+        try:
+            cursor = dbapi_conn.cursor()
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;")
+            cursor.close()
+            logger.info("database_timescaledb_initialized")
+        except Exception as e:
+            logger.warning("database_timescaledb_init_error", error=str(e))
+else:
+    logger.debug("database_skipping_postgres_listeners (using %s)", settings.DATABASE_URL.split(":")[0])
 
 
 # ─── Session Dependency ────────────────────────────────────────────────
@@ -207,6 +213,7 @@ async def init_db() -> None:
         if settings.INIT_DB_ON_STARTUP:
             await init_db()
     """
+    import app.models  # Ensure all models are registered in Base.metadata
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("database_schema_initialized")

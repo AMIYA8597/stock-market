@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { useToastStore } from '@/stores/toast-store';
+import { getWsBaseUrl } from '@/lib/runtime-config';
 
 const toneIcon = {
   success: CheckCircle2,
@@ -16,8 +18,66 @@ const toneClass = {
   info: 'text-[var(--ds-color-primary-300)]',
 };
 
+const cleanWsUrl = getWsBaseUrl();
+
 export function ToastViewport(): JSX.Element {
-  const { toasts, removeToast } = useToastStore();
+  const { toasts, removeToast, addToast } = useToastStore();
+
+  useEffect(() => {
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let isMounted = true;
+
+    function connect() {
+      if (!isMounted) return;
+
+      const base = cleanWsUrl.replace(/\/+$/, "");
+      const cleanBase = base.replace(/\/ws$/i, "");
+      const wsUrl = `${cleanBase}/ws/alerts`; // Resolved WebSocket URL: ws://host:port/ws/alerts (no double slash)
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data && data.type === 'signal_alert') {
+            const isBuy = data.direction.includes('BUY');
+            const isSell = data.direction.includes('SELL');
+            const variant = isBuy ? 'success' : isSell ? 'destructive' : 'info';
+
+            addToast({
+              id: `${data.symbol}-${data.timestamp}`,
+              title: data.direction,
+              description: data.message,
+              variant,
+              duration: 8000,
+            });
+          }
+        } catch {
+          // Ignore parsing errors
+        }
+      };
+
+      ws.onclose = () => {
+        if (isMounted) {
+          reconnectTimer = setTimeout(() => {
+            connect();
+          }, 5000);
+        }
+      };
+
+      ws.onerror = () => {
+        ws?.close();
+      };
+    }
+
+    connect();
+
+    return () => {
+      isMounted = false;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (ws) ws.close();
+    };
+  }, [addToast]);
 
   return (
     <div className="pointer-events-none fixed bottom-4 right-4 z-[60] w-[min(92vw,360px)] space-y-2">

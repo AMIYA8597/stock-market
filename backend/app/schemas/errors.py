@@ -204,6 +204,8 @@ class ErrorResponse(BaseModel):
             )
         """
         code_value = code.value if isinstance(code, ErrorCode) else code
+        if len(message) > 512:
+            message = message[:509] + "..."
 
         return cls(
             success=False,

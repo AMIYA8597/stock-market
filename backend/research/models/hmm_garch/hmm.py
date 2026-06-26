@@ -31,7 +31,7 @@ def _student_t_logpdf(x: np.ndarray, mu: float, sigma2: float, nu: float) -> np.
     return c0 + c1 + c2
 
 
-@dataclass(slots=True)
+@dataclass
 class StudentTHMM:
     """HMM with Student-t emissions, Baum-Welch EM and Viterbi decoding."""
 

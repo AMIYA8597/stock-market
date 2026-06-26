@@ -443,11 +443,28 @@ async function postJsonWithHeaders<TResponse, TBody>(
 
 export const contractsApi = {
   getIndices(): Promise<MarketIndex[]> {
-    return getJson<MarketIndex[]>("/market/indices");
+    return getJson<{ indices?: MarketIndex[] } | MarketIndex[]>("/market/indices").then((raw) => {
+      if (Array.isArray(raw)) {
+        return raw;
+      }
+      return raw?.indices || [];
+    });
   },
 
   getMovers(exchange: "NSE" | "NYSE" | "CRYPTO" = "NSE", type: "gainers" | "losers" | "volume" | "momentum" = "momentum"): Promise<MarketMover[]> {
-    return getJson<MarketMover[]>(`/market/movers?exchange=${exchange}&type=${type}`);
+    return getJson<Record<string, unknown>>(`/market/movers?exchange=${exchange}&type=${type}`).then((raw) => {
+      const assets = raw && Array.isArray(raw.assets) ? (raw.assets as Record<string, unknown>[]) : [];
+      return assets.map((item) => ({
+        ticker: String(item.ticker ?? ""),
+        name: String(item.name ?? ""),
+        exchange: String(item.exchange ?? ""),
+        price: Number(item.price ?? 0),
+        change_pct: Number(item.change_pct ?? item.change_percent ?? 0),
+        volume: Number(item.volume ?? 0),
+        signal_direction: (item.signal_direction ?? "NEUTRAL") as MarketMover["signal_direction"],
+        confidence: Number(item.signal_confidence ?? item.confidence ?? 0.5),
+      }));
+    });
   },
 
   getPortfolioHoldings(): Promise<PortfolioHoldingsResponse> {

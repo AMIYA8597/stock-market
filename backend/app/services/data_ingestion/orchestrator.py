@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -16,6 +18,9 @@ from app.services.data_ingestion.coingecko_source import CoinGeckoSource
 from app.services.data_ingestion.fred_source import FREDSource
 from app.services.data_ingestion.nse_source import NSESource
 from app.services.data_ingestion.yfinance_source import YFinanceSource
+from app.services.data_ingestion.stooq_source import StooqSource
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -38,6 +43,7 @@ class DataIngestionOrchestrator:
             "fred": FREDSource(),
             "alpha_vantage": AlphaVantageSource(),
             "nse": NSESource(),
+            "stooq": StooqSource(),
         }
 
     def _select_sources(self, task: IngestionTask) -> list[MarketDataSource]:
@@ -46,8 +52,8 @@ class DataIngestionOrchestrator:
         if task.asset_type == "MACRO":
             return [self._sources["fred"]]
         if task.symbol.endswith(".NS"):
-            return [self._sources["nse"], self._sources["yfinance"], self._sources["alpha_vantage"]]
-        return [self._sources["yfinance"], self._sources["alpha_vantage"]]
+            return [self._sources["yfinance"], self._sources["nse"], self._sources["stooq"]]
+        return [self._sources["yfinance"], self._sources["stooq"]]
 
     async def _fetch_with_retry(self, source: MarketDataSource, task: IngestionTask, max_attempts: int = 3) -> list[OHLCVBar]:
         last_error: Exception | None = None
@@ -62,11 +68,60 @@ class DataIngestionOrchestrator:
         raise DataSourceError(f"{source.name} failed for {task.symbol}: {last_error}")
 
     async def fetch_task(self, task: IngestionTask) -> tuple[str, list[OHLCVBar]]:
+        # Check cache first
+        cache_key = f"ingest:bars:{task.symbol.upper()}:{task.interval}:{task.start.strftime('%Y%m%d')}:{task.end.strftime('%Y%m%d')}"
+        redis = None
+        try:
+            from app.database.redis_client import get_redis_client
+            redis = await get_redis_client()
+            cached = await redis.get(cache_key)
+            if cached:
+                cached_data = json.loads(cached)
+                source_name = cached_data["source"]
+                bars = [
+                    OHLCVBar(
+                        time=datetime.fromisoformat(b["time"]),
+                        open=b["open"],
+                        high=b["high"],
+                        low=b["low"],
+                        close=b["close"],
+                        volume=b["volume"],
+                        adjusted_close=b["adjusted_close"],
+                        interval=b["interval"]
+                    )
+                    for b in cached_data["bars"]
+                ]
+                return source_name, bars
+        except Exception as e:
+            logger.warning(f"Redis cache check failed in Ingestion Orchestrator: {e}")
+
         errors: list[str] = []
         for source in self._select_sources(task):
             try:
                 bars = await self._fetch_with_retry(source, task)
                 if bars:
+                    # Store in cache
+                    if redis:
+                        try:
+                            serialized = {
+                                "source": source.name,
+                                "bars": [
+                                    {
+                                        "time": b.time.isoformat(),
+                                        "open": b.open,
+                                        "high": b.high,
+                                        "low": b.low,
+                                        "close": b.close,
+                                        "volume": b.volume,
+                                        "adjusted_close": b.adjusted_close,
+                                        "interval": b.interval
+                                    }
+                                    for b in bars
+                                ]
+                            }
+                            await redis.setex(cache_key, 3600, json.dumps(serialized))
+                        except Exception as e:
+                            logger.warning(f"Failed to write to Redis in Ingestion Orchestrator: {e}")
                     return source.name, bars
                 errors.append(f"{source.name}: empty")
             except Exception as exc:

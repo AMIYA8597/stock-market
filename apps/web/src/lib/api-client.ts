@@ -29,6 +29,18 @@ const REFRESH_TOKEN_KEY = "nq_refresh_token";
 
 type UnknownRecord = Record<string, unknown>;
 
+function parseNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -297,14 +309,11 @@ const normalizeInterval = (interval: string): string => {
 };
 
 const mapQuote = (raw: UnknownRecord): Quote => {
-  const price = typeof raw.price === "number" ? raw.price : 0;
-  const change = typeof raw.change === "number" ? raw.change : 0;
-  const changePct =
-    typeof raw.change_percent === "number"
-      ? raw.change_percent
-      : typeof raw.change_pct === "number"
-        ? raw.change_pct
-        : 0;
+  const price = parseNumber(raw.price);
+  const change = parseNumber(raw.change);
+  const changePct = parseNumber(
+    raw.change_percent !== undefined ? raw.change_percent : raw.change_pct
+  );
   const symbol = typeof raw.symbol === "string" ? raw.symbol : typeof raw.ticker === "string" ? raw.ticker : "UNKNOWN";
 
   return {
@@ -312,11 +321,11 @@ const mapQuote = (raw: UnknownRecord): Quote => {
     price,
     change,
     change_percent: changePct,
-    volume: typeof raw.volume === "number" ? raw.volume : 0,
-    high: typeof raw.high === "number" ? raw.high : typeof raw.high_52w === "number" ? raw.high_52w : price,
-    low: typeof raw.low === "number" ? raw.low : typeof raw.low_52w === "number" ? raw.low_52w : price,
-    open: typeof raw.open === "number" ? raw.open : price - change,
-    previous_close: typeof raw.previous_close === "number" ? raw.previous_close : price - change,
+    volume: parseNumber(raw.volume),
+    high: parseNumber(raw.high !== undefined ? raw.high : raw.high_52w, price),
+    low: parseNumber(raw.low !== undefined ? raw.low : raw.low_52w, price),
+    open: parseNumber(raw.open, price - change),
+    previous_close: parseNumber(raw.previous_close, price - change),
     timestamp: typeof raw.timestamp === "string" ? raw.timestamp : new Date().toISOString(),
   };
 };
@@ -335,14 +344,14 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
         : typeof bar.time === "string"
           ? bar.time
           : new Date().toISOString(),
-    open: typeof bar.open === "number" ? bar.open : 0,
-    high: typeof bar.high === "number" ? bar.high : 0,
-    low: typeof bar.low === "number" ? bar.low : 0,
-    close: typeof bar.close === "number" ? bar.close : 0,
-    volume: typeof bar.volume === "number" ? bar.volume : 0,
+    open: parseNumber(bar.open),
+    high: parseNumber(bar.high),
+    low: parseNumber(bar.low),
+    close: parseNumber(bar.close),
+    volume: parseNumber(bar.volume),
     adjusted_close:
-      typeof bar.adjusted_close === "number"
-        ? bar.adjusted_close
+      bar.adjusted_close !== undefined && bar.adjusted_close !== null
+        ? parseNumber(bar.adjusted_close)
         : undefined,
   }));
 
@@ -350,7 +359,7 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
     symbol: typeof raw.symbol === "string" ? raw.symbol : "UNKNOWN",
     interval: typeof raw.interval === "string" ? raw.interval : "1d",
     bars,
-    count: typeof raw.count === "number" ? raw.count : bars.length,
+    count: parseNumber(raw.count, bars.length),
   };
 };
 
@@ -365,12 +374,14 @@ export const marketApi = {
     symbol: string,
     interval: string = "1D",
     start?: string,
-    end?: string
+    end?: string,
+    period?: string
   ): Promise<HistoryResponse> {
     const normalizedInterval = normalizeInterval(interval);
     const params = new URLSearchParams({ interval: normalizedInterval });
     if (start) params.set("start", start);
     if (end) params.set("end", end);
+    if (period) params.set("period", period);
     return fetchApi<UnknownRecord>(
       `/market/history/${encodeURIComponent(symbol)}?${params.toString()}`
     ).then(mapHistory);
@@ -390,9 +401,20 @@ export const marketApi = {
 
 export const screenerApi = {
   search(filters: Partial<ScreenerFilter>): Promise<ScreenerResponse> {
+    const cleanFilters: Record<string, unknown> = {};
+    if (filters.asset_class !== undefined) cleanFilters.asset_class = filters.asset_class;
+    if (filters.exchange !== undefined) cleanFilters.exchange = filters.exchange;
+    if (filters.min_market_cap !== undefined) cleanFilters.min_market_cap = filters.min_market_cap;
+    if (filters.max_market_cap !== undefined) cleanFilters.max_market_cap = filters.max_market_cap;
+    if (filters.rsi_min !== undefined) cleanFilters.rsi_min = filters.rsi_min;
+    if (filters.rsi_max !== undefined) cleanFilters.rsi_max = filters.rsi_max;
+    if (filters.above_sma_200 !== undefined) cleanFilters.above_sma_200 = filters.above_sma_200;
+    if (filters.volume_surge !== undefined) cleanFilters.volume_surge = filters.volume_surge;
+    if (filters.ml_confidence_min !== undefined) cleanFilters.ml_confidence_min = filters.ml_confidence_min;
+
     const payload = {
       exchange: [filters.exchange ?? "NSE"],
-      filters,
+      filters: cleanFilters,
       sort_by: filters.sort_by ?? "sharpe_21d",
       limit: filters.limit ?? 50,
     };
@@ -413,21 +435,27 @@ export const screenerApi = {
               ? item.symbol
               : "UNKNOWN";
 
-        const price = typeof item.price === "number" ? item.price : 0;
+        const price = parseNumber(item.price);
+        const changePercent = parseNumber(item.change_pct ?? item.change_percent ?? item.sharpe_21d);
+        const volume = parseNumber(item.volume ?? item.volume_ratio);
+        const marketCap = item.market_cap !== undefined && item.market_cap !== null ? parseNumber(item.market_cap) : null;
+        const rsi = item.rsi !== undefined && item.rsi !== null ? parseNumber(item.rsi) : null;
+        const mlSignal = typeof item.signal_direction === "string" ? item.signal_direction : typeof item.signal === "string" ? item.signal : null;
+        const mlConfidence = item.signal_confidence !== undefined && item.signal_confidence !== null ? parseNumber(item.signal_confidence) : item.ml_confidence !== undefined && item.ml_confidence !== null ? parseNumber(item.ml_confidence) : null;
 
         return {
           symbol,
           name: typeof item.name === "string" ? item.name : symbol,
-          asset_class: "equity",
-          exchange: "NSE",
-          sector: null,
+          asset_class: typeof item.asset_type === "string" ? item.asset_type : "equity",
+          exchange: typeof item.exchange === "string" ? item.exchange : "NSE",
+          sector: typeof item.sector === "string" ? item.sector : null,
           price,
-          change_percent: typeof item.sharpe_21d === "number" ? item.sharpe_21d : 0,
-          volume: 0,
-          market_cap: null,
-          rsi: typeof item.rsi === "number" ? item.rsi : null,
-          ml_signal: typeof item.signal === "string" ? item.signal : null,
-          ml_confidence: null,
+          change_percent: changePercent,
+          volume,
+          market_cap: marketCap,
+          rsi,
+          ml_signal: mlSignal,
+          ml_confidence: mlConfidence,
         };
       });
 
@@ -655,6 +683,51 @@ export const researchApi = {
     edges: CorrelationEdge[];
   }> {
     return fetchApi("/predictions/correlation-graph");
+  },
+};
+
+export const tradingApi = {
+  getMode(): Promise<{ trading_mode: string; connection_status: string; authenticated: boolean; profile: any }> {
+    return fetchApi("/trading/mode");
+  },
+
+  setMode(mode: string): Promise<{ status: string; trading_mode: string; message: string }> {
+    return fetchApi("/trading/mode", {
+      method: "POST",
+      body: JSON.stringify({ mode }),
+    });
+  },
+
+  placeOrder(order: {
+    symbol: string;
+    side: string;
+    quantity: number;
+    order_type: string;
+    limit_price?: number;
+    product?: string;
+  }): Promise<any> {
+    return fetchApi("/trading/order", {
+      method: "POST",
+      body: JSON.stringify(order),
+    });
+  },
+
+  triggerKillSwitch(): Promise<any> {
+    return fetchApi("/trading/kill-switch", {
+      method: "POST",
+    });
+  },
+
+  getAuditLog(limit = 50): Promise<{ logs: string[] }> {
+    return fetchApi(`/trading/audit-log?limit=${limit}`);
+  },
+
+  getUpstoxLoginUrl(): Promise<{ login_url: string }> {
+    return fetchApi("/auth/upstox/login-url");
+  },
+
+  getUpstoxAuthStatus(): Promise<{ authenticated: boolean; profile: any; connection_status: string }> {
+    return fetchApi("/auth/upstox/status");
   },
 };
 

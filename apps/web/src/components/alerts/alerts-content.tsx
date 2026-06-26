@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Bell, Pause, Trash2, Edit, AlertTriangle, Brain, TrendingUp, Newspaper } from "lucide-react";
 import { Card, CardHeader, CardTitle, Button, Badge } from "@neuroquant/ui";
@@ -145,7 +146,21 @@ export function AlertsContent() {
           New Alert
         </Button>
       </div>
-      {error ? <p className="text-xs text-nq-bear">{error}</p> : null}
+      {error ? (
+        <div className="rounded-lg border border-[var(--nq-border)] bg-[rgba(239,68,68,0.05)] p-4 text-sm text-[var(--nq-text-primary)]">
+          <p className="font-semibold text-[var(--nq-bear)]">{error}</p>
+          {error.includes("401") || error.toLowerCase().includes("unauthorized") ? (
+            <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center justify-between">
+              <span className="text-xs text-[var(--nq-text-secondary)]">Please sign in to configure and monitor real-time smart alerts.</span>
+              <Link href="/login">
+                <Button size="sm">Sign In</Button>
+              </Link>
+            </div>
+          ) : (
+            <span className="text-xs text-[var(--nq-text-secondary)]">There was a problem communicating with the alert service.</span>
+          )}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-12 gap-4">
         {/* Active alerts */}

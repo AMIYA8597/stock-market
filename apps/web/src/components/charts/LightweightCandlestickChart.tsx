@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   type IChartApi,
   type HistogramData,
@@ -77,6 +77,7 @@ interface LightweightCandlestickChartProps {
     prediction_low?: number;
     prediction_high?: number;
   }[];
+  symbol?: string;
 }
 
 function sanitizeSeriesData<T extends { time: unknown }>(data: T[]): T[] {
@@ -123,8 +124,25 @@ export function LightweightCandlestickChart({
   chartStyle = "candlestick",
   indicators = {},
   predictions = [],
+  symbol = "",
 }: LightweightCandlestickChartProps): JSX.Element {
   const mainContainerRef = useRef<HTMLDivElement | null>(null);
+  const [legend, setLegend] = useState<{
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    timestamp: string;
+  } | null>(null);
+
+  const cleanSymbol = symbol
+    ? symbol
+        .replace(".NS", "")
+        .replace("^NSEI", "NIFTY 50")
+        .replace("^NSEBANK", "BANK NIFTY")
+        .replace("^BSESN", "SENSEX")
+    : "";
   const rsiContainerRef = useRef<HTMLDivElement | null>(null);
   const macdContainerRef = useRef<HTMLDivElement | null>(null);
   const atrContainerRef = useRef<HTMLDivElement | null>(null);
@@ -133,6 +151,10 @@ export function LightweightCandlestickChart({
   const rsiChartRef = useRef<IChartApi | null>(null);
   const macdChartRef = useRef<IChartApi | null>(null);
   const atrChartRef = useRef<IChartApi | null>(null);
+  const lastSymbolRef = useRef<string>("");
+  const lastFirstBarTimeRef = useRef<string>("");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const latestLogicalRangeRef = useRef<any>(null);
 
   const {
     ema9 = false,
@@ -163,8 +185,19 @@ export function LightweightCandlestickChart({
   useEffect(() => {
     if (!mainChart || !(mainChart as LiveChartApi).isAlive || bars.length === 0 || !mainContainerRef.current) return;
 
+    const firstBarTime = bars[0]?.timestamp || "";
+    const configChanged = symbol !== lastSymbolRef.current || firstBarTime !== lastFirstBarTimeRef.current;
+    lastSymbolRef.current = symbol;
+    lastFirstBarTimeRef.current = firstBarTime;
+
+    if (configChanged) {
+      latestLogicalRangeRef.current = null;
+    }
+
     mainChartRef.current = mainChart;
     const subCharts: IChartApi[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const addedSeries: any[] = [];
 
     // Closes and times arrays
     const closes = bars.map((bar) => bar.close);
@@ -364,8 +397,11 @@ export function LightweightCandlestickChart({
       }))));
     }
 
-    if (mainSeries && finalMarkers.length > 0) {
-      mainSeries.setMarkers(finalMarkers);
+    if (mainSeries) {
+      addedSeries.push(mainSeries);
+      if (finalMarkers.length > 0) {
+        mainSeries.setMarkers(finalMarkers);
+      }
     }
 
     // Standard volume histogram overlay
@@ -374,6 +410,7 @@ export function LightweightCandlestickChart({
       priceFormat: { type: "volume" },
       color: "rgba(0,212,245,0.45)",
     });
+    addedSeries.push(volumeSeries);
 
     volumeSeries.priceScale().applyOptions({
       scaleMargins: { top: 0.82, bottom: 0 },
@@ -389,9 +426,9 @@ export function LightweightCandlestickChart({
     // Draw Advanced Indicators & SMC overlays
     drawIndicators(mainChart, {
       ema9, ema21, ema50, ema200, sma20, sma50, sma100, bollingerBands, superTrend, ichimoku, vwap
-    }, closes, times, indResults);
+    }, closes, times, indResults, addedSeries);
 
-    drawSMC(mainChart, indResults, bars);
+    drawSMC(mainChart, indResults, bars, addedSeries);
 
     // Draw stacked synchronized oscillator panes
     const subPaneHeight = 110;
@@ -423,6 +460,7 @@ export function LightweightCandlestickChart({
           lineStyle: 1,
           title: "AI Forecast",
         });
+        addedSeries.push(predLineSeries);
 
         const sortedPredictions = [...predictions].sort(
           (a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
@@ -460,6 +498,8 @@ export function LightweightCandlestickChart({
             lineStyle: 2,
             title: "Forecast Lower",
           });
+          addedSeries.push(upperSeries);
+          addedSeries.push(lowerSeries);
 
           const upperData = [
             { time: lastTime, value: lastClose },
@@ -512,6 +552,9 @@ export function LightweightCandlestickChart({
     let isSyncing = false;
     allCharts.forEach((ch) => {
       ch.timeScale().subscribeVisibleLogicalRangeChange((range) => {
+        if (range) {
+          latestLogicalRangeRef.current = range;
+        }
         if (isSyncing || !range) return;
         isSyncing = true;
         allCharts.forEach((targetCh) => {
@@ -523,7 +566,75 @@ export function LightweightCandlestickChart({
       });
     });
 
-    mainChart.timeScale().fitContent();
+    if (configChanged || !latestLogicalRangeRef.current) {
+      mainChart.timeScale().fitContent();
+    } else {
+      mainChart.timeScale().setVisibleLogicalRange(latestLogicalRangeRef.current);
+    }
+
+    // Set up watermark (TradingView/Zerodha style)
+    mainChart.applyOptions({
+      watermark: {
+        visible: true,
+        fontSize: Math.min(48, Math.floor(mainContainerRef.current?.clientWidth ? mainContainerRef.current.clientWidth / 12 : 48)),
+        fontFamily: "var(--font-jetbrains), monospace",
+        color: "rgba(255, 255, 255, 0.025)",
+        text: cleanSymbol,
+        horzAlign: "center",
+        vertAlign: "center",
+      }
+    });
+
+    // Initialize legend with latest bar
+    if (bars.length > 0) {
+      const lastBar = bars[bars.length - 1];
+      if (lastBar) {
+        setLegend({
+          open: lastBar.open,
+          high: lastBar.high,
+          low: lastBar.low,
+          close: lastBar.close,
+          volume: lastBar.volume,
+          timestamp: lastBar.timestamp,
+        });
+      }
+    }
+
+    // Legend crosshair sync
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handleCrosshairMove = (param: any) => {
+      if (!param || !param.time || !param.point) {
+        if (bars.length > 0) {
+          const lastBar = bars[bars.length - 1];
+          if (lastBar) {
+            setLegend({
+              open: lastBar.open,
+              high: lastBar.high,
+              low: lastBar.low,
+              close: lastBar.close,
+              volume: lastBar.volume,
+              timestamp: lastBar.timestamp,
+            });
+          }
+        }
+        return;
+      }
+
+      const time = param.time;
+      const matchingBar = bars.find(b => toUtcTimestamp(b.timestamp) === time);
+      if (matchingBar) {
+        setLegend({
+          open: matchingBar.open,
+          high: matchingBar.high,
+          low: matchingBar.low,
+          close: matchingBar.close,
+          volume: matchingBar.volume,
+          timestamp: matchingBar.timestamp,
+        });
+      }
+    };
+
+    mainChart.subscribeCrosshairMove(handleCrosshairMove);
 
     // Resize observer handling
     const observer = new ResizeObserver(() => {
@@ -537,8 +648,16 @@ export function LightweightCandlestickChart({
     observer.observe(mainContainerRef.current);
 
     return () => {
+      mainChart.unsubscribeCrosshairMove(handleCrosshairMove);
       observer.disconnect();
       subCharts.forEach((ch) => ch.remove());
+      addedSeries.forEach((ser) => {
+        try {
+          mainChart.removeSeries(ser);
+        } catch (e) {
+          // ignore
+        }
+      });
       mainChartRef.current = null;
       rsiChartRef.current = null;
       macdChartRef.current = null;
@@ -564,11 +683,29 @@ export function LightweightCandlestickChart({
     rsi,
     macd,
     atr,
-    smc
+    smc,
+    cleanSymbol,
+    symbol
   ]);
 
+  const formatVolume = (val: number): string => {
+    if (val >= 1e6) return (val / 1e6).toFixed(2) + "M";
+    if (val >= 1e3) return (val / 1e3).toFixed(1) + "K";
+    return String(val);
+  };
+
   return (
-    <div className="flex flex-col gap-1.5 h-full w-full">
+    <div className="flex flex-col gap-1.5 h-full w-full relative">
+      {legend && (
+        <div className="absolute top-2 left-2 z-[99] pointer-events-none flex flex-wrap gap-x-2 gap-y-0.5 rounded bg-[rgba(10,14,24,0.72)] backdrop-blur-sm border border-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[10px] font-mono text-[var(--nq-text-secondary)] shadow-md select-none">
+          <span className="font-semibold text-[var(--nq-text-primary)] mr-1.5">{cleanSymbol}</span>
+          <span>O:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.open.toFixed(2)}</span></span>
+          <span className="ml-1.5">H:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.high.toFixed(2)}</span></span>
+          <span className="ml-1.5">L:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.low.toFixed(2)}</span></span>
+          <span className="ml-1.5">C:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.close.toFixed(2)}</span></span>
+          <span className="ml-1.5">V:<span className="text-[var(--nq-accent-cyan)] ml-0.5">{formatVolume(legend.volume)}</span></span>
+        </div>
+      )}
       <div ref={mainContainerRef} className="w-full flex-1 min-h-[240px] relative" />
       {rsi && <div ref={rsiContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}
       {macd && <div ref={macdContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}

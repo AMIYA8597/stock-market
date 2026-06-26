@@ -9,6 +9,7 @@ from research.feature_engineering.pipeline import FeaturePipeline
 from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.sentiment_factors import SentimentFactorsBuilder
 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+from research.feature_engineering.chart_patterns import ChartPatternsBuilder
 
 __all__ = [
     "FeatureBuilder",
@@ -20,4 +21,5 @@ __all__ = [
     "CrossSectionalBuilder",
     "SentimentFactorsBuilder",
     "FF5BetasBuilder",
+    "ChartPatternsBuilder",
 ]

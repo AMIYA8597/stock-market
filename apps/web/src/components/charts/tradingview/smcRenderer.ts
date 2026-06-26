@@ -5,7 +5,9 @@ import { type PriceBar, toUtcTimestamp } from "@/utils/chartFormatters";
 export function drawSMC(
   mainChart: IChartApi,
   indResults: IndicatorResult,
-  bars: PriceBar[]
+  bars: PriceBar[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  addedSeries: any[]
 ) {
   if (!indResults.smc) return;
 
@@ -27,6 +29,9 @@ export function drawSMC(
         { time: toUtcTimestamp(lastBar.timestamp), value: ob.bottom }
       ]);
     }
+
+    addedSeries.push(topSeries);
+    addedSeries.push(bottomSeries);
   });
 
   // 2. Fair Value Gaps
@@ -47,6 +52,9 @@ export function drawSMC(
         { time: toUtcTimestamp(lastBar.timestamp), value: fvg.bottom }
       ]);
     }
+
+    addedSeries.push(topSeries);
+    addedSeries.push(bottomSeries);
   });
 
   // 3. Liquidity Zones
@@ -70,5 +78,7 @@ export function drawSMC(
         { time: toUtcTimestamp(lastBar.timestamp), value: liq.level }
       ]);
     }
+
+    addedSeries.push(lineSeries);
   });
 }

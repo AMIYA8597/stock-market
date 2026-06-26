@@ -32,6 +32,82 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 # ─── Singleton Pool ───────────────────────────────────────────────────────
+
+class InMemoryPubSub:
+    """Mock pubsub subscription implementation for offline/fallback mode."""
+    def __init__(self, cache: InMemoryCache):
+        self.cache = cache
+        self.subscribed_channels: set[str] = set()
+        self.queue: asyncio.Queue = asyncio.Queue()
+
+    async def subscribe(self, *channels: str) -> None:
+        for ch in channels:
+            self.subscribed_channels.add(ch)
+        self.cache.active_pubsubs.add(self)
+
+    async def unsubscribe(self, *channels: str) -> None:
+        for ch in channels:
+            self.subscribed_channels.discard(ch)
+        if not self.subscribed_channels:
+            self.cache.active_pubsubs.discard(self)
+
+    async def close(self) -> None:
+        self.cache.active_pubsubs.discard(self)
+
+    async def listen(self):
+        while True:
+            try:
+                msg = await self.queue.get()
+                yield msg
+            except asyncio.CancelledError:
+                break
+
+
+class InMemoryCache:
+    """Simple in‑memory mock implementing a subset of Redis methods used in the app.
+    Stores values in a dict; methods are async for compatibility.
+    """
+    def __init__(self):
+        self.store: dict[str, any] = {}
+        self.active_pubsubs: set[InMemoryPubSub] = set()
+
+    async def get(self, key: str):
+        return self.store.get(key)
+
+    async def set(self, key: str, value: any, ex: int | None = None) -> bool:
+        self.store[key] = value
+        return True
+
+    async def setex(self, key: str, ttl: int, value: any) -> bool:
+        self.store[key] = value
+        return True
+
+    async def delete(self, key: str) -> int:
+        return int(self.store.pop(key, None) is not None)
+
+    async def publish(self, channel: str, message: str) -> int:
+        count = 0
+        for ps in list(self.active_pubsubs):
+            if channel in ps.subscribed_channels:
+                await ps.queue.put({
+                    "type": "message",
+                    "channel": channel,
+                    "data": message
+                })
+                count += 1
+        return count
+
+    def pubsub(self) -> InMemoryPubSub:
+        return InMemoryPubSub(self)
+
+    async def ping(self) -> bool:
+        return True
+
+    async def close(self) -> None:
+        self.store.clear()
+        self.active_pubsubs.clear()
+
+
 _redis_pool: ConnectionPool | None = None
 _redis_client: Redis | None = None
 _redis_lock = asyncio.Lock()
@@ -88,8 +164,9 @@ async def _redis_pool_singleton() -> Redis:
             return _redis_client
 
         except Exception as e:
-            logger.error("redis_initialization_error: %s", str(e), exc_info=True)
-            raise ConnectionError(f"Failed to initialize Redis: {e}") from e
+            logger.warning("Redis connection failed, falling back to in-memory cache: %s", str(e))
+            _redis_client = InMemoryCache()
+            return _redis_client
 
 
 async def get_redis_client() -> Redis:

@@ -160,7 +160,7 @@ class Settings(BaseSettings):
 
     # ─── CORS ─────────────────────────────────────────────────────────────
     BACKEND_CORS_ORIGINS: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:3001"],
+        default=["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "http://127.0.0.1:5173"],
         description="List of allowed CORS origins (comma-separated or JSON array)"
     )
     CORS_ALLOW_METHODS: list[str] = Field(
@@ -172,7 +172,7 @@ class Settings(BaseSettings):
         description="Allowed CORS headers"
     )
     ALLOWED_HOSTS: list[str] = Field(
-        default=["localhost", "127.0.0.1"],
+        default=[],
         description="Trusted hosts for Host header validation"
     )
     SECURITY_CSP_POLICY: str = Field(
@@ -244,6 +244,24 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: str = Field(
         default="",
         description="Finnhub API key for intraday and company data"
+    )
+
+    # ─── Upstox Integration ───────────────────────────────────────────────
+    UPSTOX_API_KEY: str = Field(
+        default="",
+        description="Upstox API Client ID (API Key)"
+    )
+    UPSTOX_API_SECRET: str = Field(
+        default="",
+        description="Upstox API Client Secret"
+    )
+    UPSTOX_REDIRECT_URI: str = Field(
+        default="http://localhost:8000/api/v1/auth/upstox/callback",
+        description="Upstox Redirect URI for OAuth login"
+    )
+    UPSTOX_MAX_ORDER_VALUE: float = Field(
+        default=10000.0,
+        description="Hard server-side risk cap limit on per-order value in INR (e.g. ₹10,000)"
     )
 
     # ─── Email / Notifications ────────────────────────────────────────────
@@ -478,4 +496,20 @@ def get_settings() -> Settings:
     Returns:
         Settings: The global settings instance.
     """
+    import os
+    cwd = os.getcwd()
+    env_file = os.path.join(cwd, ".env")
+    if not os.path.exists(env_file):
+        # Check parent folders
+        parent_env = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env"))
+        if os.path.exists(parent_env):
+            env_file = parent_env
+        else:
+            parent_env_2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
+            if os.path.exists(parent_env_2):
+                env_file = parent_env_2
+                
+    if os.path.exists(env_file):
+        return Settings(_env_file=env_file)
     return Settings()
+

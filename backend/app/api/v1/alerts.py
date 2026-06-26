@@ -7,9 +7,8 @@ from decimal import Decimal
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.screener import (
     AlertCreateRequest,
@@ -25,10 +24,8 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 @router.get("", response_model=AlertListResponse)
 async def get_alerts(
-    db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ) -> AlertListResponse:
-    _ = db
     user_id = current_user.get("sub")
 
     from app.core.config import get_settings
@@ -75,10 +72,8 @@ async def get_alerts(
 @router.post("", response_model=AlertData, status_code=201)
 async def post_alert(
     request: AlertCreateRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ) -> AlertData:
-    _ = db
     user_id = current_user.get("sub")
 
     if request.alert_type not in {"PRICE_ABOVE", "PRICE_BELOW", "RSI_OB", "MACD_CROSS", "SIGNAL_CHANGE", "REGIME_CHANGE"}:
@@ -134,10 +129,8 @@ async def post_alert(
 async def patch_alert(
     alert_id: str,
     request: AlertUpdateRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ) -> AlertUpdateResponse:
-    _ = db
     user_id = current_user.get("sub")
 
     from app.core.config import get_settings
@@ -195,10 +188,8 @@ async def patch_alert(
 @router.delete("/{alert_id}", response_model=AlertDeleteResponse)
 async def delete_alert(
     alert_id: str,
-    db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ) -> AlertDeleteResponse:
-    _ = db
     user_id = current_user.get("sub")
 
     from app.core.config import get_settings

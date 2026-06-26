@@ -33,7 +33,6 @@ router = APIRouter(tags=["portfolio"])
     summary="Live portfolio holdings with P&L",
 )
 async def get_holdings(
-    db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> HoldingsResponse:
     """Return a holdings snapshot for the authenticated user (backed by MongoDB if configured)."""
@@ -45,9 +44,19 @@ async def get_holdings(
         user_id = current_user.get("sub") if current_user else "test-user-id"
 
         if settings.MONGODB_URL:
-            from app.database.mongodb import get_live_price, mongo_get_portfolio
+            from app.database.mongodb import get_mongo_db, get_live_price, mongo_get_portfolio
+            if get_mongo_db() is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
+                )
 
             portfolio = await mongo_get_portfolio(user_id)
+            if portfolio is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
+                )
             cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
             mongo_holdings = portfolio.get("holdings", [])
 
@@ -62,7 +71,10 @@ async def get_holdings(
 
                 # Fetch live price
                 curr_p_val = await get_live_price(symbol)
-                curr_p = Decimal(str(curr_p_val))
+                if curr_p_val is None:
+                    curr_p = avg_p if avg_p > 0 else Decimal("0.0")
+                else:
+                    curr_p = Decimal(str(curr_p_val))
 
                 unrealized_pnl = (curr_p - avg_p) * qty
                 unrealized_pnl_pct = (curr_p - avg_p) / avg_p if avg_p > 0 else Decimal("0.0")
@@ -106,6 +118,8 @@ async def get_holdings(
             portfolio_value=Decimal("0.00"),
             timestamp=datetime.now(UTC),
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -123,7 +137,6 @@ async def get_holdings(
 )
 async def post_transaction(
     request: TransactionRequest,
-    db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> TransactionResponse:
     """Record a transaction and update cash/holdings inside MongoDB if configured."""
@@ -154,13 +167,24 @@ async def post_transaction(
 
         if settings.MONGODB_URL:
             from app.database.mongodb import (
+                get_mongo_db,
                 mongo_add_transaction,
                 mongo_get_portfolio,
                 mongo_save_portfolio,
             )
+            if get_mongo_db() is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
+                )
 
             # Fetch and lock/update portfolio in Mongo
             portfolio = await mongo_get_portfolio(user_id)
+            if portfolio is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
+                )
             cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
             holdings = portfolio.get("holdings", [])
 
@@ -225,8 +249,18 @@ async def post_transaction(
                     found_h["quantity"] = float(new_qty)
 
             # Save transaction & portfolio in Mongo
-            await mongo_save_portfolio(user_id, float(new_cash), holdings)
+            res_save = await mongo_save_portfolio(user_id, float(new_cash), holdings)
+            if res_save is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"message": "Failed to update portfolio holdings. Database connection failed."},
+                )
             tx = await mongo_add_transaction(user_id, symbol, tx_type, float(qty), float(price), float(net_amount))
+            if tx is None:
+                raise HTTPException(
+                    status_code=503,
+                    detail={"message": "Failed to record transaction. Database connection failed."},
+                )
 
             return TransactionResponse(
                 transaction_id=str(tx["transaction_id"]),
@@ -264,12 +298,10 @@ async def post_transaction(
     summary="Time-series portfolio P&L vs benchmark",
 )
 async def get_performance(
-    db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> PerformanceResponse:
     """Return deterministic portfolio performance series and summary metrics."""
     try:
-        _ = db
         _ = current_user
 
         now = datetime.now(UTC)
@@ -318,12 +350,10 @@ async def get_performance(
     summary="Portfolio risk metrics",
 )
 async def get_risk_metrics(
-    db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> RiskMetricsResponse:
     """Return portfolio risk metrics for dashboard and monitoring."""
     try:
-        _ = db
         _ = current_user
         return RiskMetricsResponse(
             sharpe_ratio=Decimal("1.4200"),
