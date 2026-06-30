@@ -126,18 +126,29 @@ async def get_history(
                 detail=f"No market data available for {symbol}"
             )
         
-        bars = [
-            OHLCVBar(
-                time=datetime.fromisoformat(b["time"]),
-                open=round(Decimal(str(b["open"])), 8),
-                high=round(Decimal(str(b["high"])), 8),
-                low=round(Decimal(str(b["low"])), 8),
-                close=round(Decimal(str(b["close"])), 8),
-                volume=round(Decimal(str(b["volume"])), 4),
+        bars = []
+        for b in bars_data:
+            time_str = b["time"]
+            try:
+                if "T" in time_str:
+                    time_val = int(datetime.fromisoformat(time_str.replace("Z", "+00:00")).timestamp())
+                else:
+                    time_val = int(datetime.strptime(time_str, "%Y-%m-%d").replace(tzinfo=UTC).timestamp())
+            except Exception:
+                time_val = int(datetime.now(UTC).timestamp())
+
+            bars.append(
+                OHLCVBar(
+                    time=time_val,
+                    open=round(Decimal(str(b["open"])), 8),
+                    high=round(Decimal(str(b["high"])), 8),
+                    low=round(Decimal(str(b["low"])), 8),
+                    close=round(Decimal(str(b["close"])), 8),
+                    volume=round(Decimal(str(b["volume"])), 4),
+                )
             )
-            for b in bars_data
-        ]
-        return HistoryResponse(symbol=symbol.upper(), interval=interval, data=bars)
+        source_val = getattr(bars_data, "source", "yfinance")
+        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source=source_val)
     except HTTPException:
         raise
     except Exception as e:
@@ -301,3 +312,20 @@ async def get_economic_calendar() -> EconomicCalendarResponse:
         EconomicEvent(date=start + timedelta(days=9), event_name="US CPI YoY", country="US", importance="high", forecast="3.1%", previous="3.2%"),
     ]
     return EconomicCalendarResponse(events=events, period_start=start, period_end=end)
+
+
+@router.get("/ohlcv/{symbol}")
+async def get_ohlcv(
+    symbol: str,
+    period: str = Query(default="1y", description="1d,5d,1mo,3mo,6mo,1y,2y,5y"),
+    interval: str = Query(default="1d", description="1m,5m,15m,30m,60m,1d,1wk,1mo")
+):
+    """
+    Returns OHLCV bars for lightweight-charts.
+    Symbol format: RELIANCE.NS, ^NSEI, BTC-USD
+    """
+    try:
+        bars = await MarketDataService.get_ohlcv(symbol, period, interval)
+        return bars
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

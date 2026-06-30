@@ -122,6 +122,12 @@ export function ScreenerContent() {
         </div>
       </div>
 
+      {/* QuantEdge Academic Disclaimer Banner */}
+      <div className="rounded-lg border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-center text-xs text-[#FF5A60] font-mono">
+        <span className="font-bold uppercase mr-2">Academic Research Output:</span>
+        Research output only, not investment advice. Data may be delayed. All signals are paper-trading suggestions.
+      </div>
+
       <div className="grid grid-cols-12 gap-4">
         {/* Filter panel */}
         <div className="col-span-12 lg:col-span-3 space-y-4">

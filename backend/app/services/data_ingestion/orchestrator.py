@@ -51,8 +51,8 @@ class DataIngestionOrchestrator:
             return [self._sources["coingecko"], self._sources["yfinance"]]
         if task.asset_type == "MACRO":
             return [self._sources["fred"]]
-        if task.symbol.endswith(".NS"):
-            return [self._sources["yfinance"], self._sources["nse"], self._sources["stooq"]]
+        if task.symbol.endswith(".NS") or task.symbol in {"^NSEI", "^BSESN"}:
+            return [self._sources["nse"], self._sources["yfinance"], self._sources["stooq"]]
         return [self._sources["yfinance"], self._sources["stooq"]]
 
     async def _fetch_with_retry(self, source: MarketDataSource, task: IngestionTask, max_attempts: int = 3) -> list[OHLCVBar]:

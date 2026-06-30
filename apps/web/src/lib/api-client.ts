@@ -337,23 +337,31 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
       ? (raw.data as UnknownRecord[])
       : [];
 
-  const bars = rawBars.map((bar) => ({
-    timestamp:
-      typeof bar.timestamp === "string"
-        ? bar.timestamp
-        : typeof bar.time === "string"
-          ? bar.time
-          : new Date().toISOString(),
-    open: parseNumber(bar.open),
-    high: parseNumber(bar.high),
-    low: parseNumber(bar.low),
-    close: parseNumber(bar.close),
-    volume: parseNumber(bar.volume),
-    adjusted_close:
-      bar.adjusted_close !== undefined && bar.adjusted_close !== null
-        ? parseNumber(bar.adjusted_close)
-        : undefined,
-  }));
+  const bars = rawBars.map((bar) => {
+    let timestamp = new Date().toISOString();
+    if (typeof bar.timestamp === "string") {
+      timestamp = bar.timestamp;
+    } else if (typeof bar.time === "string") {
+      timestamp = bar.time;
+    } else if (typeof bar.time === "number") {
+      timestamp = new Date(bar.time * 1000).toISOString();
+    } else if (typeof bar.timestamp === "number") {
+      timestamp = new Date(bar.timestamp * 1000).toISOString();
+    }
+
+    return {
+      timestamp,
+      open: parseNumber(bar.open),
+      high: parseNumber(bar.high),
+      low: parseNumber(bar.low),
+      close: parseNumber(bar.close),
+      volume: parseNumber(bar.volume),
+      adjusted_close:
+        bar.adjusted_close !== undefined && bar.adjusted_close !== null
+          ? parseNumber(bar.adjusted_close)
+          : undefined,
+    };
+  });
 
   return {
     symbol: typeof raw.symbol === "string" ? raw.symbol : "UNKNOWN",
@@ -687,7 +695,7 @@ export const researchApi = {
 };
 
 export const tradingApi = {
-  getMode(): Promise<{ trading_mode: string; connection_status: string; authenticated: boolean; profile: any }> {
+  getMode(): Promise<{ trading_mode: string; connection_status: string; authenticated: boolean; profile: unknown }> {
     return fetchApi("/trading/mode");
   },
 
@@ -705,14 +713,14 @@ export const tradingApi = {
     order_type: string;
     limit_price?: number;
     product?: string;
-  }): Promise<any> {
+  }): Promise<unknown> {
     return fetchApi("/trading/order", {
       method: "POST",
       body: JSON.stringify(order),
     });
   },
 
-  triggerKillSwitch(): Promise<any> {
+  triggerKillSwitch(): Promise<unknown> {
     return fetchApi("/trading/kill-switch", {
       method: "POST",
     });
@@ -726,8 +734,32 @@ export const tradingApi = {
     return fetchApi("/auth/upstox/login-url");
   },
 
-  getUpstoxAuthStatus(): Promise<{ authenticated: boolean; profile: any; connection_status: string }> {
+  getUpstoxAuthStatus(): Promise<{ authenticated: boolean; profile: unknown; connection_status: string }> {
     return fetchApi("/auth/upstox/status");
+  },
+};
+
+export const systemApi = {
+  getLiveDataHealth(): Promise<Record<string, "up" | "down">> {
+    return fetchApi<Record<string, "up" | "down">>("/health/live-data");
+  },
+};
+
+export const paperTradingApi = {
+  getPositions(): Promise<unknown[]> {
+    return fetchApi<unknown[]>("/paper-trade/positions");
+  },
+  getHistory(): Promise<unknown[]> {
+    return fetchApi<unknown[]>("/paper-trade/history");
+  },
+  getPnl(): Promise<unknown> {
+    return fetchApi<unknown>("/paper-trade/pnl");
+  },
+  resetWallet(): Promise<unknown> {
+    return fetchApi<unknown>("/paper-trade/reset", { method: "POST" });
+  },
+  cancelOrder(orderId: string, symbol: string): Promise<unknown> {
+    return fetchApi<unknown>(`/paper-trade/cancel/${encodeURIComponent(orderId)}?symbol=${encodeURIComponent(symbol)}`, { method: "POST" });
   },
 };
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -146,9 +146,33 @@ async def reset_wallet(
         }
     except Exception as exc:
         raise HTTPException(
-            status_code=500,
+            status_code=503,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to reset wallet: {str(exc)}",
             ).dict()
         )
+
+
+@router.post("/cancel/{order_id}", summary="Cancel a pending limit order")
+async def cancel_order(
+    order_id: str,
+    symbol: str = Query(..., description="Ticker symbol (e.g. RELIANCE.NS)"),
+):
+    try:
+        from app.services.broker_adapter import BrokerAdapter
+        res = await BrokerAdapter.cancel_order(order_id, symbol)
+        return {
+            "success": True,
+            "message": "Order cancelled successfully.",
+            "result": res
+        }
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message=f"Failed to cancel order: {str(exc)}",
+            ).dict()
+        )
+

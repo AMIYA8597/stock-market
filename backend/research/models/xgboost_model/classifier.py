@@ -14,6 +14,13 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
+class FeatureMismatchError(ValueError):
+    """Raised when features needed for the model prediction are missing in input."""
+    def __init__(self, missing_features: list[str]):
+        self.missing_features = missing_features
+        super().__init__(f"model unavailable: missing features {missing_features}")
+
+
 class XGBoostDirectionalClassifier:
     """XGBoost classifier for predicting directional price movement."""
 
@@ -54,8 +61,13 @@ class XGBoostDirectionalClassifier:
 
     def predict_proba(self, X: pd.DataFrame) -> float:
         """Predict probability of upward movement (class 1)."""
+        missing_features = [f for f in self.features if f not in X.columns]
+        if missing_features:
+            raise FeatureMismatchError(missing_features)
+
         if self.model is None:
             return 0.5
+
         X_clean = X[self.features]
         X_scaled = self.scaler.transform(X_clean)
         return float(self.model.predict_proba(X_scaled)[0][1])
@@ -71,8 +83,13 @@ class XGBoostDirectionalClassifier:
     def save(self, path: Path | str) -> None:
         """Save model and scaler to a file."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
+        state = {
+            "scaler": self.scaler,
+            "features": self.features,
+            "model": self.model
+        }
         with open(path, "wb") as f:
-            pickle.dump(self, f)
+            pickle.dump(state, f)
 
     @classmethod
     def load(cls, path: Path | str) -> XGBoostDirectionalClassifier | None:
@@ -81,7 +98,18 @@ class XGBoostDirectionalClassifier:
             return None
         try:
             with open(path, "rb") as f:
-                return pickle.load(f)
+                state = pickle.load(f)
+            
+            inst = cls()
+            if isinstance(state, dict) and "model" in state:
+                inst.scaler = state.get("scaler")
+                inst.features = state.get("features", inst.features)
+                inst.model = state.get("model")
+            else:
+                # If state is a raw XGBoostDirectionalClassifier instance
+                inst = state
+            return inst
         except Exception as e:
             logger.error(f"Failed to load XGBoost model from {path}: {e}")
             return None
+

@@ -3,15 +3,69 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, Search, Settings2, Sun } from "lucide-react";
 
-import { contractsApi, type PortfolioHoldingsResponse } from "@/lib/contracts-api";
+import { contractsApi, type PortfolioHoldingsResponse, type MarketIndex } from "@/lib/contracts-api";
+import { systemApi } from "@/lib/api-client";
 import { useUIStore } from "@/stores/ui-store";
 import type { SignalResponse } from "@/types/intelligence";
 import { useTradingStore } from "@/stores/tradingStore";
+
+import { usePriceFeed } from "@/hooks/usePriceFeed";
 
 interface TopBarProps {
   selectedSignal: SignalResponse | null;
   refreshing: boolean;
   signalStreamStatus: "connected" | "reconnecting" | "disconnected";
+}
+
+function getNSEMarketStatus(): { status: "OPEN" | "CLOSED"; countdown: string } {
+  const options = { timeZone: "Asia/Kolkata" };
+  let istString: string;
+  try {
+    istString = new Date().toLocaleString("en-US", options);
+  } catch (e) {
+    istString = new Date().toLocaleString();
+  }
+  const istDate = new Date(istString);
+  const day = istDate.getDay(); // 0 = Sunday, 6 = Saturday
+  const hours = istDate.getHours();
+  const minutes = istDate.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+
+  const isOpenDay = day >= 1 && day <= 5; // Monday to Friday
+  const isOpenTime = totalMinutes >= 555 && totalMinutes < 930;
+  const isMarketOpen = isOpenDay && isOpenTime;
+
+  if (isMarketOpen) {
+    return { status: "OPEN", countdown: "" };
+  }
+
+  const nextOpen = new Date(istDate);
+  if (!isOpenDay) {
+    const daysToAdd = day === 6 ? 2 : 1;
+    nextOpen.setDate(istDate.getDate() + daysToAdd);
+    nextOpen.setHours(9, 15, 0, 0);
+  } else if (totalMinutes >= 930) {
+    const daysToAdd = day === 5 ? 3 : 1;
+    nextOpen.setDate(istDate.getDate() + daysToAdd);
+    nextOpen.setHours(9, 15, 0, 0);
+  } else if (totalMinutes < 555) {
+    nextOpen.setHours(9, 15, 0, 0);
+  }
+
+  const diffMs = nextOpen.getTime() - istDate.getTime();
+  if (diffMs <= 0) {
+    return { status: "OPEN", countdown: "" };
+  }
+
+  const diffHrs = Math.floor(diffMs / (3600 * 1000));
+  const diffMins = Math.floor((diffMs % (3600 * 1000)) / (60 * 1000));
+  const diffSecs = Math.floor((diffMs % (60 * 1000)) / 1000);
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    status: "CLOSED",
+    countdown: `${pad(diffHrs)}h ${pad(diffMins)}m ${pad(diffSecs)}s`,
+  };
 }
 
 export default function TopBar({
@@ -20,7 +74,19 @@ export default function TopBar({
   signalStreamStatus,
 }: TopBarProps): JSX.Element {
   const { tradingMode, connectionStatus, triggerKillSwitch, fetchStatus } = useTradingStore();
+  const { status: priceFeedStatus } = usePriceFeed(["^NSEI"]);
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
+  const [indices, setIndices] = useState<MarketIndex[]>([]);
+  const [healthStatus, setHealthStatus] = useState<Record<string, "up" | "down">>({
+    yfinance: "down",
+    nse: "down",
+    coingecko: "down",
+    fred: "down",
+  });
+  const [marketStatus, setMarketStatus] = useState<{ status: "OPEN" | "CLOSED"; countdown: string }>({
+    status: "CLOSED",
+    countdown: "",
+  });
 
   useEffect(() => {
     void fetchStatus();
@@ -29,6 +95,49 @@ export default function TopBar({
     }, 10000);
     return () => clearInterval(interval);
   }, [fetchStatus]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function checkHealth() {
+      try {
+        const res = await systemApi.getLiveDataHealth();
+        if (active) setHealthStatus(res);
+      } catch (err) {
+        console.error("Health check failed", err);
+      }
+    }
+
+    async function loadIndices() {
+      try {
+        const res = await contractsApi.getIndices();
+        if (active) setIndices(res);
+      } catch (err) {
+        console.error("Failed to load indices", err);
+      }
+    }
+
+    void checkHealth();
+    void loadIndices();
+
+    const healthInterval = setInterval(checkHealth, 30000);
+    const indicesInterval = setInterval(loadIndices, 10000);
+
+    return () => {
+      active = false;
+      clearInterval(healthInterval);
+      clearInterval(indicesInterval);
+    };
+  }, []);
+
+  useEffect(() => {
+    setMarketStatus(getNSEMarketStatus());
+    const timer = setInterval(() => {
+      setMarketStatus(getNSEMarketStatus());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [clock, setClock] = useState<string>("");
   const [query, setQuery] = useState<string>("");
   const [mounted, setMounted] = useState<boolean>(false);
@@ -128,34 +237,72 @@ export default function TopBar({
 
   return (
     <header className="flex h-[var(--terminal-topbar-height)] items-center gap-2 px-3 text-xs terminal:px-4">
-      <div className="flex min-w-[220px] items-center gap-2 terminal:min-w-[260px]">
-        <span className="rounded bg-[rgba(0,212,245,0.16)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-cyan)]">
+      <div className="flex min-w-[220px] items-center gap-2 terminal:min-w-[280px]">
+        <span className="rounded bg-[rgba(0,212,245,0.16)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-cyan)] shrink-0">
           NQ
         </span>
-        <span className="font-display text-sm font-semibold tracking-[0.01em] text-[var(--text-primary)]">
-          {/* NeuroQuant Terminal */}
+        <span className="font-display text-sm font-semibold tracking-[0.01em] text-[var(--text-primary)] shrink-0">
           NeuroQuant
         </span>
-        <span className={`hidden rounded-full px-2 py-0.5 text-[10px] font-medium terminal:inline-flex ${regimeClassName}`}>
+        <span className={`hidden rounded-full px-2 py-0.5 text-[10px] font-medium terminal:inline-flex ${regimeClassName} shrink-0`}>
           {regime}
         </span>
+
+        {/* NSE Market Status */}
+        <div className="flex flex-col ml-1.5 border-l border-[var(--border-subtle)] pl-2 shrink-0">
+          <div className="flex items-center gap-1.5">
+            <span className={`h-1.5 w-1.5 rounded-full ${marketStatus.status === "OPEN" ? "bg-[var(--accent-green)]" : "bg-[var(--accent-red)]"}`} />
+            <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--text-secondary)]">NSE {marketStatus.status}</span>
+          </div>
+          {marketStatus.status === "CLOSED" && marketStatus.countdown && (
+            <span className="text-[8px] font-mono text-[var(--text-secondary)] opacity-85" title="Countdown to next open">
+              {marketStatus.countdown}
+            </span>
+          )}
+        </div>
       </div>
 
-      <div className="hidden min-w-0 flex-1 items-center gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2.5 py-1 terminal:flex">
-        <Search className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-        <input
-          ref={searchRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search symbols, research, macro events"
-          className="w-full bg-transparent text-xs text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
-        />
-        <span className="rounded border border-[var(--border-subtle)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--text-secondary)]">
-          Ctrl+K
-        </span>
+      {/* Center Section: Indices Ticker + Search */}
+      <div className="hidden min-w-0 flex-1 items-center justify-between gap-4 px-2 terminal:flex">
+        {/* Index Ticker Strip */}
+        <div className="flex items-center gap-3 overflow-x-auto ds-scrollable pr-2 max-w-[60%] lg:max-w-[70%]">
+          {indices.map((idx) => {
+            const isUp = idx.change >= 0;
+            return (
+              <div
+                key={idx.ticker}
+                className="flex items-center gap-1.5 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 font-mono text-[10px] shrink-0"
+              >
+                <span className="font-bold text-[var(--text-secondary)]">{idx.name}</span>
+                <span className="text-[var(--text-primary)]">{idx.value.toLocaleString("en-IN", { minimumFractionDigits: 1 })}</span>
+                <span className={isUp ? "text-[var(--accent-green)]" : "text-[var(--accent-red)]"}>
+                  {isUp ? "+" : ""}{Number(idx.change_pct ?? 0).toFixed(2)}%
+                </span>
+              </div>
+            );
+          })}
+          {indices.length === 0 && (
+            <div className="text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading index feed...</div>
+          )}
+        </div>
+
+        {/* Search Input */}
+        <div className="flex flex-1 max-w-[200px] items-center gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 shrink-0">
+          <Search className="h-3 w-3 text-[var(--text-secondary)]" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search..."
+            className="w-full bg-transparent text-[10px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-secondary)]"
+          />
+          <span className="rounded border border-[var(--border-subtle)] px-1 py-0.5 font-mono text-[8px] text-[var(--text-secondary)]">
+            Ctrl+K
+          </span>
+        </div>
       </div>
 
-      <div className="ml-auto flex min-w-[220px] items-center justify-end gap-2 terminal:min-w-[300px]">
+      <div className="ml-auto flex min-w-[220px] items-center justify-end gap-2 terminal:min-w-[300px] shrink-0">
         <div className="hidden text-right terminal:block">
           <div className="font-mono text-[11px] text-[var(--text-primary)]">
             ₹{equityValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
@@ -166,9 +313,35 @@ export default function TopBar({
           </div>
         </div>
 
+        {/* Feeds Health Indicators */}
+        <div className="hidden items-center gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[9px] text-[var(--text-secondary)] xl:inline-flex">
+          <span className="text-[7px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mr-1">Feeds:</span>
+          {Object.entries(healthStatus).map(([source, status]) => (
+            <div
+              key={source}
+              className="flex items-center gap-1 cursor-default"
+              title={`${source.toUpperCase()}: ${status === "up" ? "Connected" : "Disconnected"}`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${status === "up" ? "bg-[var(--accent-green)]" : "bg-[var(--accent-red)]"}`} />
+              <span className="text-[8px] uppercase tracking-wider opacity-85">{source}</span>
+            </div>
+          ))}
+        </div>
+
         <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex">
           <span className={`h-1.5 w-1.5 rounded-full ${streamClassName}`} />
           {refreshing ? "Syncing" : signalStreamStatus}
+        </span>
+
+        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex" title="Live Price Feed WebSocket Connection State">
+          <span className={`h-1.5 w-1.5 rounded-full ${
+            priceFeedStatus === "connected"
+              ? "bg-[var(--accent-green)]"
+              : priceFeedStatus === "reconnecting"
+                ? "bg-[var(--accent-amber)] animate-pulse"
+                : "bg-[var(--accent-red)]"
+          }`} />
+          Price Feed: {priceFeedStatus}
         </span>
 
         <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex" title="Upstox WebSocket Connection State">

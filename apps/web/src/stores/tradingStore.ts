@@ -8,7 +8,7 @@ interface TradingState {
   tradingMode: 'PAPER' | 'LIVE';
   connectionStatus: string;
   authenticated: boolean;
-  profile: any;
+  profile: unknown;
   auditLogs: string[];
   loading: boolean;
   error: string | null;

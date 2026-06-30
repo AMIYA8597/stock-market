@@ -62,7 +62,7 @@ async def startup_events() -> dict[str, Any]:
         logger.info("startup_redis_init")
         try:
             redis_client = await _redis_pool_singleton()
-            ping_result = await redis_client.ping()
+            ping_result = await asyncio.wait_for(redis_client.ping(), timeout=2.0)
             logger.info(
                 "startup_redis_success",
                 ping_result=ping_result,
@@ -71,8 +71,7 @@ async def startup_events() -> dict[str, Any]:
             services["redis"] = redis_client
         except Exception as e:
             logger.error("startup_redis_failed", error=str(e), exc_info=True)
-            if not settings.is_development:
-                raise RuntimeError("Failed to initialize Redis") from e
+            logger.warning("Redis is offline. Live WebSocket features will be degraded.")
 
         # ─── Initialize Database ──────────────────────────────────────────
         logger.info("startup_database_init")
@@ -93,27 +92,14 @@ async def startup_events() -> dict[str, Any]:
             await init_db()
         except Exception as e:
             logger.error("startup_database_failed", error=str(e), exc_info=True)
-            if not settings.is_development:
-                raise RuntimeError("Failed to initialize database") from e
+            logger.warning("Database is offline. REST services accessing DB will fail.")
 
         # ─── Initialize Background Tasks ──────────────────────────────────
         background_tasks = []
 
         logger.info("startup_background_tasks_init")
         try:
-            # Example: Price broadcaster (if websocket module exists)
-            try:
-                from app.websocket.price_broadcaster import run_price_broadcaster
 
-                if redis_client:
-                    price_task = asyncio.create_task(
-                        run_price_broadcaster(redis_client),
-                        name="price_broadcaster",
-                    )
-                    background_tasks.append(price_task)
-                    logger.info("startup_price_broadcaster_created")
-            except (ImportError, AttributeError):
-                logger.debug("price_broadcaster_module_not_found")
 
             # Price ticker task
             try:
@@ -148,7 +134,7 @@ async def startup_events() -> dict[str, Any]:
                 WATCHLIST_SYMBOLS = [
                     "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "HINDUNILVR.NS",
                     "ICICIBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "WIPRO.NS", "BAJFINANCE.NS",
-                    "NIFTY50.NS", "^NSEI"
+                    "^NSEI"
                 ]
                 
                 async def alert_polling_loop():
@@ -177,6 +163,14 @@ async def startup_events() -> dict[str, Any]:
                 logger.info("startup_upstox_service_initialized")
             except Exception as up_err:
                 logger.error(f"Failed to initialize Upstox service: {up_err}")
+
+            # Initialize Background Market Scheduler
+            try:
+                from app.services.data_ingestion.scheduler import market_scheduler
+                market_scheduler.start()
+                logger.info("startup_market_scheduler_started")
+            except Exception as sched_err:
+                logger.error(f"Failed to start market scheduler: {sched_err}")
 
             if background_tasks:
                 services["background_tasks"] = background_tasks
@@ -280,6 +274,14 @@ async def shutdown_events(services: dict[str, Any]) -> None:
                 logger.warning("shutdown_redis_error", error=str(e))
 
         # ─── Close Database Connections ───────────────────────────────────
+        # Close Background Scheduler
+        try:
+            from app.services.data_ingestion.scheduler import market_scheduler
+            market_scheduler.shutdown()
+            logger.info("shutdown_market_scheduler_complete")
+        except Exception as e:
+            logger.warning("shutdown_market_scheduler_error", error=str(e))
+
         logger.info("shutdown_database")
         try:
             from app.core.database import engine

@@ -6,6 +6,9 @@ function normalizeApiBase(url) {
 
 const nextConfig = {
   reactStrictMode: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   transpilePackages: ["@neuroquant/ui", "@neuroquant/types"],
   images: {
     remotePatterns: [

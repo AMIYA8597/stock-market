@@ -40,11 +40,13 @@ class QuoteResponse(BaseModel):
     regime: RegimeData
     signal: SignalData
     timestamp: datetime
+    data_freshness_seconds: int | None = None
+    source: str = "realtime"
 
 
 class OHLCVBar(BaseModel):
     """Single OHLCV candle."""
-    time: datetime
+    time: int
     open: Decimal = Field(..., decimal_places=8)
     high: Decimal = Field(..., decimal_places=8)
     low: Decimal = Field(..., decimal_places=8)
@@ -56,7 +58,9 @@ class HistoryResponse(BaseModel):
     """GET /market/history/{symbol} response."""
     symbol: str
     interval: str = Field(..., description="1m|5m|15m|1h|1d")
-    data: list[OHLCVBar]
+    bars: list[OHLCVBar]
+    data_freshness_seconds: int | None = None
+    source: str = "realtime"
 
 
 class IndexData(BaseModel):

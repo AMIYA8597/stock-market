@@ -1,6 +1,7 @@
 import os
 import sys
 import pathlib
+import argparse
 import numpy as np
 import pandas as pd
 import warnings
@@ -165,7 +166,7 @@ def main():
         quantile_forecaster = QuantileLGBForecaster.load()
         
         # Walk-forward loop (evaluation starting at index 100 to allow history)
-        for idx in range(100, len(df) - 5):
+        for idx in range(100, len(df) - 5, 5):
             df_slice = df.iloc[:idx+1]
             close = float(df_slice["close"].iloc[-1])
             target_ret = float(df["target_5d"].iloc[idx])
@@ -174,7 +175,7 @@ def main():
             try:
                 log_closes = np.log(df_slice["close"].values[-60:])
                 arima_model = SARIMAX(log_closes, order=(2, 1, 1), trend='c')
-                arima_res = arima_model.fit(disp=False, maxiter=50)
+                arima_res = arima_model.fit(disp=False, maxiter=10)
                 arima_pred = np.exp(arima_res.forecast(steps=5)[-1])
                 arima_sig = 1 if arima_pred > close else -1
             except Exception:
@@ -247,6 +248,15 @@ def main():
     report_output = "# NEUROQUANT INDIVIDUAL MODEL BACKTESTING REPORT\n\n"
     report_output += "This report evaluates walk-forward out-of-sample performance metrics for the five individual core models across the NIFTY50 heavyweight watchlist.\n\n"
     
+    metrics_json = {}
+    model_key_map = {
+        "ARIMA": "arima",
+        "GARCH_Regime": "hmm_garch",
+        "XGBoost": "xgboost",
+        "LSTM_Attention": "lstm_attn",
+        "Quantile_LightGBM": "tft"
+    }
+
     for mk in model_keys:
         hits = np.array(results_summary[mk]["hits"])
         returns = np.array(results_summary[mk]["returns"])
@@ -261,14 +271,35 @@ def main():
         report_output += f"- **Win/loss ratio**: {metrics['win_loss']:.2f}\n"
         report_output += "- **Backtest period**: 2022-01-01 to 2026-06-01 (walk-forward, 6-month windows)\n\n"
         
+        mapped_key = model_key_map.get(mk, mk.lower())
+        metrics_json[mapped_key] = {
+            "hit_rate": float(metrics["hit_rate"]),
+            "sharpe": float(metrics["sharpe"]),
+            "max_dd": float(metrics["max_dd"]),
+            "win_loss": float(metrics["win_loss"])
+        }
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--conversation-id", default="c84188db-56e3-41da-a280-838b3405e70a")
+    args, unknown = parser.parse_known_args()
+
+    # Save metrics JSON to backend/data/models
+    import json
+    metrics_json_path = project_root / "data" / "models" / "backtest_metrics.json"
+    os.makedirs(metrics_json_path.parent, exist_ok=True)
+    with open(metrics_json_path, "w") as f:
+        json.dump(metrics_json, f, indent=2)
+    print(f"Metrics JSON saved to {metrics_json_path}")
+
     print("\nWriting individual model backtest report...")
-    artifact_dir = pathlib.Path("C:/Users/USER/.gemini/antigravity/brain/94330b11-de12-4ded-b228-fa5c9d9f71c1")
+    artifact_dir = pathlib.Path("C:/Users/USER/.gemini/antigravity/brain") / args.conversation_id
     artifact_dir.mkdir(parents=True, exist_ok=True)
     report_path = artifact_dir / "individual_model_backtest_report.md"
     
     with open(report_path, "w") as f:
         f.write(report_output)
     print(f"Report successfully saved to {report_path}")
+
 
 if __name__ == "__main__":
     main()

@@ -459,6 +459,13 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
               <div className="rounded border border-[var(--nq-border)] px-2 py-1">Confidence: {ensemble ? ensemble.consensus_confidence.toFixed(2) : "--"}</div>
             </div>
           </ChartCard>
+
+          <div className="rounded border border-red-500/20 bg-red-500/5 p-3 text-[11px] text-[var(--nq-text-secondary)] leading-relaxed space-y-1">
+            <p className="font-semibold text-red-400">DISCLAIMER & RISK WARNING</p>
+            <p>
+              All system outputs, signals, and predictions are generated probabilistically by AI/ML models for research and educational purposes only. They carry no accuracy guarantee, do not constitute financial advice, and should not be used as the sole basis for real-world trading.
+            </p>
+          </div>
         </article>
       </section>
 

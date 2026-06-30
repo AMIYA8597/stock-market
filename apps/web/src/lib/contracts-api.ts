@@ -444,10 +444,15 @@ async function postJsonWithHeaders<TResponse, TBody>(
 export const contractsApi = {
   getIndices(): Promise<MarketIndex[]> {
     return getJson<{ indices?: MarketIndex[] } | MarketIndex[]>("/market/indices").then((raw) => {
-      if (Array.isArray(raw)) {
-        return raw;
-      }
-      return raw?.indices || [];
+      const arr = Array.isArray(raw) ? raw : (raw?.indices || []);
+      return arr.map((item) => ({
+        name: String(item.name ?? ""),
+        ticker: String(item.ticker ?? ""),
+        value: toNumber(item.value),
+        change: toNumber(item.change),
+        change_pct: toNumber(item.change_pct),
+        regime_state: toState(item.regime_state) as MarketIndex["regime_state"],
+      }));
     });
   },
 

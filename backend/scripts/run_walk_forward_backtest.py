@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import pathlib
+import argparse
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -151,8 +152,12 @@ The Brier score measures calibration quality (how close predicted probabilities 
     print(f"Old Hit:   {metrics_old['hit_rate'] * 100:.2f}% | New Hit:   {metrics_new['hit_rate'] * 100:.2f}%")
     print(f"DM Stat:   {dm_stat:.4f} | P-value:   {p_val:.6f}")
     
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--conversation-id", default="c84188db-56e3-41da-a280-838b3405e70a")
+    args, unknown = parser.parse_known_args()
+
     # Save report to artifacts directory
-    artifact_dir = Path("C:/Users/USER/.gemini/antigravity/brain/94330b11-de12-4ded-b228-fa5c9d9f71c1")
+    artifact_dir = Path("C:/Users/USER/.gemini/antigravity/brain") / args.conversation_id
     artifact_dir.mkdir(parents=True, exist_ok=True)
     report_path = artifact_dir / "walk_forward_report.md"
     

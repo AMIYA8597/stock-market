@@ -24,7 +24,7 @@ def test_history_contract() -> None:
     payload = response.json()
     assert payload["symbol"] == "RELIANCE.NS"
     assert payload["interval"] == "1d"
-    assert len(payload["data"]) > 10
+    assert len(payload["bars"]) > 10
 
 
 def test_indices_and_movers() -> None:

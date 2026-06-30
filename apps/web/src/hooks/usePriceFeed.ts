@@ -24,10 +24,15 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
   const [ticks, setTicks] = useState<Map<string, LivePriceTick>>(new Map());
   const [status, setStatus] = useState<"connected" | "reconnecting" | "disconnected">("disconnected");
 
+  const serializedSymbols = JSON.stringify(symbols.map((s) => s.toUpperCase()).sort());
   const normalizedSymbols = useMemo(
-    () => symbols.map((s) => s.toUpperCase()).sort(),
-    [symbols],
+    () => JSON.parse(serializedSymbols) as string[],
+    [serializedSymbols],
   );
+  const symbolsRef = useRef(normalizedSymbols);
+  useEffect(() => {
+    symbolsRef.current = normalizedSymbols;
+  }, [normalizedSymbols]);
 
   const clearReconnect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -38,7 +43,7 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
 
   const connect = useCallback(() => {
     clearReconnect();
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
       return;
     }
 
@@ -51,8 +56,8 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
     ws.onopen = () => {
       setStatus("connected");
       reconnectDelayRef.current = 1000;
-      if (normalizedSymbols.length > 0) {
-        ws.send(JSON.stringify({ action: "subscribe", symbols: normalizedSymbols }));
+      if (symbolsRef.current.length > 0) {
+        ws.send(JSON.stringify({ action: "subscribe", symbols: symbolsRef.current }));
       }
     };
 
@@ -96,7 +101,7 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
     ws.onerror = () => {
       ws.close();
     };
-  }, [clearReconnect, normalizedSymbols]);
+  }, [clearReconnect]);
 
   useEffect(() => {
     connect();
@@ -105,7 +110,10 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
       clearReconnect();
       setStatus("disconnected");
       if (wsRef.current) {
-        wsRef.current.close();
+        const ws = wsRef.current;
+        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+          ws.close();
+        }
         wsRef.current = null;
       }
     };
@@ -117,7 +125,7 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
       return;
     }
     ws.send(JSON.stringify({ action: "subscribe", symbols: normalizedSymbols }));
-  }, [normalizedSymbols]);
+  }, [serializedSymbols, normalizedSymbols]);
 
   return { ticks, status };
 }

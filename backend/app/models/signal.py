@@ -87,6 +87,16 @@ class EnsembleSignal(Base):
         nullable=True,
         doc="Kelly criterion position sizing fraction",
     )
+    inputs_used: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        doc="Input features used for signal generation",
+    )
+    outcome: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True,
+        doc="Realized trade outcome (e.g. WIN, LOSS, PENDING)",
+    )
 
     def __repr__(self) -> str:
         return f"<EnsembleSignal(symbol_id={self.symbol_id}, time='{self.time}', direction='{self.direction}', confidence={self.confidence})>"
