@@ -143,74 +143,140 @@ async def get_shap_explanation(symbol: str) -> SHAPResponse:
 
 
 @router.get("/attention/{symbol}", response_model=AttentionResponse)
-async def get_attention_explanation(symbol: str) -> AttentionResponse:
+async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> AttentionResponse:
     try:
-        # 1. Fetch 60 daily bars to compute historical attention maps
-        bars = await MarketDataService.get_history(symbol, "1d", "90d")
-        if not bars:
+        if model == "tft":
             raise HTTPException(
-                status_code=530,
-                detail="Failed to fetch history for attention mapping.",
+                status_code=400,
+                detail={"explainability": "unavailable", "message": "TFT model attention weights are unavailable."}
+            )
+            
+        from app.services.prediction_engine import MODEL_DIR
+        from research.models.lstm_attention.classifier import LSTMAttentionClassifier
+        
+        lstm_path = MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
+        if not lstm_path.exists():
+            raise HTTPException(
+                status_code=400,
+                detail={"explainability": "unavailable", "message": f"LSTM Attention model for {symbol} is untrained."}
+            )
+            
+        clf = LSTMAttentionClassifier.load(lstm_path)
+        if clf is None or clf.model is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"explainability": "unavailable", "message": f"Failed to load LSTM Attention model for {symbol}."}
             )
 
-        closes = [float(b["close"]) for b in bars]
-        times = [str(b["time"]) for b in bars]
+        # Fetch 90 daily bars to compute real attention weights
+        bars = await MarketDataService.get_history(symbol, "1d", "90d")
+        if not bars or len(bars) < 60:
+            raise HTTPException(
+                status_code=530,
+                detail="Failed to fetch sufficient history for attention mapping.",
+            )
 
-        # Calculate absolute log returns
-        log_returns = []
-        for i in range(1, len(closes)):
-            prev = closes[i - 1]
-            if prev > 0:
-                log_returns.append(abs(math.log(closes[i] / prev)))
-            else:
-                log_returns.append(0.0)
+        # Convert to DataFrame
+        import pandas as pd
+        import numpy as np
+        df = pd.DataFrame(bars)
+        df.columns = [c.lower() for c in df.columns]
+        df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
+        df = df[["open", "high", "low", "close", "volume"]].dropna()
+        if "time" not in df.columns and df.index.name in ("Date", "Datetime"):
+            df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
+        df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
+        df.index = pd.DatetimeIndex(df["time"])
+        df.index.name = None
 
-        # Pad or slice to exactly 60 steps
-        while len(log_returns) < 60:
-            log_returns.append(0.0)
-        log_returns = log_returns[-60:]
-        times = times[-60:]
+        # Build features
+        from research.feature_engineering.price_factors import PriceFactorsBuilder
+        from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+        df = PriceFactorsBuilder().transform(df)
+        df = VolatilityFactorsBuilder().transform(df)
+        
+        # Calculate pandas-ta indicators to match training
+        df.ta.rsi(length=14, append=True)
+        df.ta.macd(fast=12, slow=26, signal=9, append=True)
+        df.ta.ema(length=9, append=True)
+        df.ta.ema(length=21, append=True)
+        df.ta.ema(length=50, append=True)
+        df.ta.ema(length=200, append=True)
+        df.ta.bbands(length=20, std=2, append=True)
+        df.ta.atr(length=14, append=True)
+        df.ta.vwap(append=True)
+        df.ta.adx(length=14, append=True)
+        df.ta.stoch(k=14, d=3, append=True)
+        df.ta.obv(append=True)
+        df.ta.supertrend(length=10, multiplier=3.0, append=True)
+        df.ta.cdl_pattern(name="all", append=True)
+        
+        df = df.loc[:, ~df.columns.duplicated()]
+        cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
+        df = df.drop(columns=cols_to_drop, errors="ignore")
+        
+        # Standardize columns
+        rename_map = {}
+        RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
+        MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
+        BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
+        ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
+        ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+        
+        if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
+        if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
+        if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
+        if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
+        if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+        if rename_map:
+            df = df.rename(columns=rename_map)
 
-        sum_ret = sum(log_returns) + 1e-9
-        mean_weights = [r / sum_ret for r in log_returns]
+        df = df.replace([np.inf, -np.inf], np.nan).dropna()
+        
+        if len(df) < clf.seq_len:
+            raise HTTPException(
+                status_code=400,
+                detail={"explainability": "unavailable", "message": "Insufficient bars after feature cleaning."}
+            )
 
-        # Generate deterministic multi-head attention weights (8 heads)
-        weights = []
-        for h in range(8):
-            # Each head shifts the attention slightly to represent different features
-            shifted = mean_weights[h:] + mean_weights[:h]
-            weights.append([Decimal(str(safe_round(w, 6))) for w in shifted])
-
-        mean_weights_dec = [Decimal(str(safe_round(m, 6))) for m in mean_weights]
-
-        # Find top 5 timesteps with highest average attention
-        top_indices = sorted(
-            range(len(mean_weights)),
-            key=lambda idx: mean_weights[idx],
-            reverse=True,
-        )[:5]
-
+        # Run predict_proba which returns attn_dict (mapping t-i -> weight)
+        prob_val, attn_dict = clf.predict_proba(df)
+        
+        # Get actual dates corresponding to the sequence window
+        # The sequence uses the last seq_len rows of df
+        seq_df = df.iloc[-clf.seq_len:]
+        dates = seq_df["time"].tolist()
+        
+        # Format weights
+        weights_list = [float(attn_dict.get(f"t-{clf.seq_len - 1 - i}", 0.0)) for i in range(clf.seq_len)]
+        
+        # Normalize weights so they sum to 1.0
+        sum_w = sum(weights_list) + 1e-9
+        weights_list = [w / sum_w for w in weights_list]
+        
+        # Build AttentionResponse
+        mean_weights_dec = [Decimal(str(safe_round(w, 6))) for w in weights_list]
+        weights = [[Decimal(str(safe_round(w, 6))) for w in weights_list]]
+        
         top_timesteps = []
+        # Sort indices by weight desc
+        top_indices = sorted(range(len(weights_list)), key=lambda idx: weights_list[idx], reverse=True)[:5]
         for idx in top_indices:
-            try:
-                dt = datetime.fromisoformat(times[idx])
-            except ValueError:
-                dt = datetime.now(UTC) - timedelta(days=(60 - idx))
             top_timesteps.append(
                 AttentionTimestep(
-                    date=dt,
-                    weight=Decimal(str(safe_round(mean_weights[idx], 6))),
+                    date=dates[idx],
+                    weight=Decimal(str(safe_round(weights_list[idx], 6)))
                 )
             )
 
         return AttentionResponse(
             symbol=symbol.upper(),
-            model="tft",
+            model="lstm_attn",
             weights=weights,
             mean_weights=mean_weights_dec,
             top_timesteps=top_timesteps,
-            num_heads=8,
-            num_timesteps=len(mean_weights_dec),
+            num_heads=1,
+            num_timesteps=clf.seq_len,
             timestamp=datetime.now(UTC),
         )
 

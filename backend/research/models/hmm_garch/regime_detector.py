@@ -25,7 +25,9 @@ def detect_regime(returns: np.ndarray, hmm: StudentTHMM | None = None) -> Regime
     """Run HMM + per-state GARCH fit and produce regime diagnostics."""
     r = np.asarray(returns, dtype=float).reshape(-1)
     model = hmm or StudentTHMM(n_states=4)
-    model.fit(r)
+    if not hasattr(model, "fitted") or not model.fitted:
+        model.fit(r)
+        model.fitted = True
 
     states = model.viterbi(r)
     probs = model.posterior(r)

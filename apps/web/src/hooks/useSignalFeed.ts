@@ -25,7 +25,11 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
   const [signals, setSignals] = useState<Map<string, LiveSignalTick>>(new Map());
   const [status, setStatus] = useState<"connected" | "reconnecting" | "disconnected">("disconnected");
 
-  const normalizedSymbols = useMemo(() => symbols.map((s) => s.toUpperCase()).sort(), [symbols]);
+  const serializedSymbols = JSON.stringify(symbols.map((s) => s.toUpperCase()).sort());
+  const normalizedSymbols = useMemo(
+    () => JSON.parse(serializedSymbols) as string[],
+    [serializedSymbols],
+  );
   const symbolsRef = useRef(normalizedSymbols);
   useEffect(() => {
     symbolsRef.current = normalizedSymbols;
@@ -135,7 +139,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
       return;
     }
     ws.send(JSON.stringify({ action: "subscribe", symbols: normalizedSymbols }));
-  }, [normalizedSymbols]);
+  }, [serializedSymbols, normalizedSymbols]);
 
   return { signals, status };
 }

@@ -118,6 +118,12 @@ export function DashboardOverview(): JSX.Element {
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="space-y-6 pb-8">
+      {/* QuantEdge Academic Disclaimer Banner */}
+      <div className="rounded-lg border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-center text-xs text-[#FF5A60] font-mono">
+        <span className="font-bold uppercase mr-2">Academic Research Output:</span>
+        Research output only, not investment advice. Data may be delayed. All signals are paper-trading suggestions.
+      </div>
+
       <section className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
           <Card interactive glow className="relative overflow-hidden px-6 py-6 sm:px-8">

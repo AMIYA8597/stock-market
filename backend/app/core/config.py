@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -441,6 +441,20 @@ class Settings(BaseSettings):
         default="1000/minute",
         description="Rate limit for premium tier users"
     )
+
+    @model_validator(mode="after")
+    def validate_production_keys(self) -> Settings:
+        if self.ENVIRONMENT == "production":
+            required_keys = {
+                "DATABASE_URL": self.DATABASE_URL,
+                "REDIS_URL": self.REDIS_URL,
+                "UPSTOX_API_KEY": self.UPSTOX_API_KEY,
+                "UPSTOX_API_SECRET": self.UPSTOX_API_SECRET,
+            }
+            for key, val in required_keys.items():
+                if not val or "changeme" in str(val) or "your_" in str(val) or "REPLACE_ME" in str(val):
+                    raise ValueError(f"Missing or insecure value for required production key: {key}")
+        return self
 
     @property
     def is_production(self) -> bool:

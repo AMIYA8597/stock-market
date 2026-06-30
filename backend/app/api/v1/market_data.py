@@ -52,10 +52,12 @@ class QuoteResponse(BaseModel):
     regime: dict[str, object]
     signal: dict[str, object]
     timestamp: datetime
+    data_freshness_seconds: int | None = None
+    source: str = "realtime"
 
 
 class OhlcvPoint(BaseModel):
-    time: datetime
+    time: int
     open: float
     high: float
     low: float
@@ -72,7 +74,9 @@ class OhlcvPoint(BaseModel):
 class HistoryResponse(BaseModel):
     symbol: str
     interval: str
-    data: list[OhlcvPoint]
+    bars: list[OhlcvPoint]
+    data_freshness_seconds: int | None = None
+    source: str = "realtime"
 
 
 class IndexResponse(BaseModel):
@@ -349,6 +353,8 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
 
     return quote
 
+from app.api.v1.market import get_history as canonical_get_history
+
 @router.get("/history/{symbol}", response_model=HistoryResponse)
 async def get_history(
     symbol: str,
@@ -356,216 +362,26 @@ async def get_history(
     period: str = Query(default="1y", pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return OHLCV series as {symbol, interval, data:[...]} contract."""
-    period_days = {
-        "1d": 1,
-        "5d": 5,
-        "1mo": 30,
-        "3mo": 90,
-        "6mo": 180,
-        "1y": 365,
-        "2y": 730,
-        "5y": 1825,
-        "max": 3650,
-    }
-    since = datetime.now(UTC) - timedelta(days=period_days[period])
-
-    try:
-        rows = (
-            await db.execute(
-                text(
-                    """
-                    SELECT o.time, o.open, o.high, o.low, o.close, o.volume
-                    FROM ohlcv o
-                    JOIN symbols s ON s.id = o.symbol_id
-                    WHERE UPPER(s.ticker) = :ticker
-                      AND o.interval = :interval
-                      AND o.time >= :since
-                    ORDER BY o.time ASC
-                    """
-                ),
-                {"ticker": symbol.upper(), "interval": interval, "since": since},
-            )
-        ).mappings().all()
-    except Exception:
-        rows = []
-
-    if not rows:
-        try:
-            # Adjust period/interval compatibility for yfinance
-            yf_interval = interval
-            if interval == "3m":
-                yf_interval = "1m"
-            elif interval == "10m":
-                yf_interval = "5m"
-            elif interval == "45m":
-                yf_interval = "15m"
-            elif interval == "2h":
-                yf_interval = "1h"
-            elif interval == "4h":
-                yf_interval = "1h"
-            elif interval == "1w":
-                yf_interval = "1wk"
-            elif interval == "1mo":
-                yf_interval = "1mo"
-
-            yf_period = period
-            if yf_interval == "1m" and period not in {"1d", "5d", "7d"}:
-                yf_period = "5d"
-            elif yf_interval in {"5m", "15m", "30m"} and period not in {"1d", "5d", "1mo", "3mo"}:
-                yf_period = "1mo"
-            elif yf_interval == "1h" and period not in {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y"}:
-                yf_period = "1mo"
-
-            df = await MarketDataService.get_ticker_history_df(symbol, yf_period, yf_interval)
-            if not df.empty:
-                if interval in {"3m", "10m", "45m", "2h", "4h"}:
-                    resample_rules = {
-                        "3m": "3Min",
-                        "10m": "10Min",
-                        "45m": "45Min",
-                        "2h": "2H",
-                        "4h": "4H",
-                    }
-                    rule = resample_rules[interval]
-                    df = df.resample(rule).agg({
-                        "Open": "first",
-                        "High": "max",
-                        "Low": "min",
-                        "Close": "last",
-                        "Volume": "sum"
-                    }).dropna()
-
-                rows = []
-                for idx, row in df.iterrows():
-                    # Convert pandas index Timestamp to datetime
-                    dt = idx.to_pydatetime()
-                    rows.append(
-                        {
-                            "time": dt,
-                            "open": safe_float(row["Open"]),
-                            "high": safe_float(row["High"]),
-                            "low": safe_float(row["Low"]),
-                            "close": safe_float(row["Close"]),
-                            "volume": safe_float(row["Volume"]),
-                        }
-                    )
-        except Exception as e:
-            logger.warning(f"Error fetching yfinance history for {symbol}: {e}")
-            raise HTTPException(
-                status_code=503,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.SERVICE_UNAVAILABLE,
-                    message=f"Failed to fetch market history: {str(e)}",
-                ).dict(),
-            )
-
-    if not rows:
-        try:
-            cached_history = await mongo_get_market_payload("history", f"{symbol.upper()}:{interval}:{period}")
-            if isinstance(cached_history, dict):
-                cached_rows = cached_history.get("data")
-                if isinstance(cached_rows, list) and len(cached_rows) > 0:
-                    return HistoryResponse(
-                        symbol=str(cached_history.get("symbol", symbol.upper())),
-                        interval=str(cached_history.get("interval", interval)),
-                        data=[
-                            OhlcvPoint(
-                                time=datetime.fromisoformat(str(row["time"])),
-                                open=float(row["open"]),
-                                high=float(row["high"]),
-                                low=float(row["low"]),
-                                close=float(row["close"]),
-                                volume=int(float(row["volume"])),
-                                ema9=row.get("ema9"),
-                                ema21=row.get("ema21"),
-                                rsi=row.get("rsi"),
-                                macd=row.get("macd"),
-                                macd_signal=row.get("macd_signal"),
-                                macd_hist=row.get("macd_hist"),
-                            )
-                            for row in cached_rows
-                        ],
-                    )
-        except Exception:
-            pass
-
-        raise HTTPException(
-            status_code=503,
-            detail=ErrorResponse.create(
-                code=ErrorCode.SERVICE_UNAVAILABLE,
-                message=f"No market data available for {symbol}.",
-            ).dict(),
-        )
-
-    points = [
+    """Delegate to canonical get_history in market.py"""
+    canonical_res = await canonical_get_history(symbol, interval, period)
+    bars = [
         OhlcvPoint(
-            time=row["time"],
-            open=safe_float(row["open"]),
-            high=safe_float(row["high"]),
-            low=safe_float(row["low"]),
-            close=safe_float(row["close"]),
-            volume=safe_float(row["volume"]),
+            time=b.time,
+            open=float(b.open),
+            high=float(b.high),
+            low=float(b.low),
+            close=float(b.close),
+            volume=float(b.volume),
         )
-        for row in rows
+        for b in canonical_res.bars
     ]
-
-    # Calculate indicators using pandas-ta
-    if len(points) >= 20:
-        try:
-            df = pd.DataFrame([{
-                "open": p.open,
-                "high": p.high,
-                "low": p.low,
-                "close": p.close,
-                "volume": p.volume
-            } for p in points])
-            ema9 = df.ta.ema(length=9)
-            ema21 = df.ta.ema(length=21)
-            rsi = df.ta.rsi(length=14)
-            macd_df = df.ta.macd(fast=12, slow=26, signal=9)
-
-            for i, p in enumerate(points):
-                p.ema9 = float(ema9.iloc[i]) if ema9 is not None and i < len(ema9) and not pd.isna(ema9.iloc[i]) else None
-                p.ema21 = float(ema21.iloc[i]) if ema21 is not None and i < len(ema21) and not pd.isna(ema21.iloc[i]) else None
-                p.rsi = float(rsi.iloc[i]) if rsi is not None and i < len(rsi) and not pd.isna(rsi.iloc[i]) else None
-                if macd_df is not None and i < len(macd_df):
-                    macd_val = macd_df.iloc[i, 0]
-                    macd_h = macd_df.iloc[i, 1]
-                    macd_sig = macd_df.iloc[i, 2]
-                    p.macd = float(macd_val) if not pd.isna(macd_val) else None
-                    p.macd_hist = float(macd_h) if not pd.isna(macd_h) else None
-                    p.macd_signal = float(macd_sig) if not pd.isna(macd_sig) else None
-        except Exception as e:
-            logger.warning(f"Failed to calculate indicators for history of {symbol}: {e}")
-
-    await mongo_cache_market_payload(
-        "history",
-        f"{symbol.upper()}:{interval}:{period}",
-        {
-            "symbol": symbol.upper(),
-            "interval": interval,
-            "data": [
-                {
-                    "time": point.time.isoformat(),
-                    "open": point.open,
-                    "high": point.high,
-                    "low": point.low,
-                    "close": point.close,
-                    "volume": point.volume,
-                    "ema9": point.ema9,
-                    "ema21": point.ema21,
-                    "rsi": point.rsi,
-                    "macd": point.macd,
-                    "macd_signal": point.macd_signal,
-                    "macd_hist": point.macd_hist,
-                }
-                for point in points
-            ],
-        },
-        ttl_seconds=900,
+    return HistoryResponse(
+        symbol=canonical_res.symbol,
+        interval=canonical_res.interval,
+        bars=bars,
+        data_freshness_seconds=canonical_res.data_freshness_seconds,
+        source=canonical_res.source
     )
-    return HistoryResponse(symbol=symbol.upper(), interval=interval, data=points)
 
 
 @router.get("/indices", response_model=list[IndexResponse])

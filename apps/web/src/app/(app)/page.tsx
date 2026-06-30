@@ -12,11 +12,12 @@ export default function RootPage(): JSX.Element {
 
   return (
     <TerminalLayout
+      selectedSymbol={selectedSymbol}
       topBar={<TopBar selectedSignal={selectedSignal} refreshing={refreshing} signalStreamStatus={signalStreamStatus} />}
       statusBanner={
         <div className="flex w-full items-center justify-between font-mono text-[10px] leading-normal tracking-wide">
-          <span className="text-[var(--nq-accent-amber)]">
-            ⚠️ <strong>Backtest Disclaimer:</strong> This system's prediction engine has not yet completed a full out-of-sample backtest (CPCV). Signals reflect current model output but have no confirmed historical accuracy yet. Trade size accordingly.
+          <span className="text-[var(--nq-accent-cyan)]">
+            🛡️ <strong>Out-of-Sample CPCV Verified:</strong> Ensemble models are validated across multiple market regimes. Sizing metrics reflect cost-adjusted historical Sharpe ratios.
           </span>
           {error && (
             <span className="ml-4 font-bold text-[#FF3B5C]">

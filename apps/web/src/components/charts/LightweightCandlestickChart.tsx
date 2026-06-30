@@ -6,6 +6,7 @@ import {
   type HistogramData,
   type UTCTimestamp,
 } from "lightweight-charts";
+import { MousePointer, MoveRight, Minus, Layers, Trash2 } from "lucide-react";
 import { detectPatterns } from "@/lib/patternDetector";
 import { computeIndicators, type Candle } from "@/utils/indicators";
 import {
@@ -118,6 +119,12 @@ function sanitizeSeriesData<T extends { time: unknown }>(data: T[]): T[] {
   return sanitized;
 }
 
+interface Drawing {
+  id: string;
+  type: "trendline" | "horizontal" | "fibonacci";
+  points: { time: number; price: number }[];
+}
+
 export function LightweightCandlestickChart({
   bars,
   height = 340,
@@ -135,6 +142,15 @@ export function LightweightCandlestickChart({
     volume: number;
     timestamp: string;
   } | null>(null);
+
+  const [activeTool, setActiveTool] = useState<"cursor" | "trendline" | "horizontal" | "fibonacci">("cursor");
+  const [drawings, setDrawings] = useState<Drawing[]>([]);
+  const [tempStartPoint, setTempStartPoint] = useState<{ time: number; price: number } | null>(null);
+  const [tempEndPoint, setTempEndPoint] = useState<{ time: number; price: number } | null>(null);
+  const [renderTrigger, setRenderTrigger] = useState(0);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mainSeriesRef = useRef<any>(null);
 
   const cleanSymbol = symbol
     ? symbol
@@ -155,6 +171,35 @@ export function LightweightCandlestickChart({
   const lastFirstBarTimeRef = useRef<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const latestLogicalRangeRef = useRef<any>(null);
+
+  // Support & Resistance Zones State and Fetcher
+  const [zones, setZones] = useState<{ type: string; min: number; max: number; avg: number; mode: string }[]>([]);
+
+  useEffect(() => {
+    if (!symbol) return;
+    let active = true;
+    async function fetchZones() {
+      try {
+        const res = await fetch(`/api/zones/${encodeURIComponent(symbol)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            const allZones = [
+              ...(data.classical_zones || []).map((z: any) => ({ ...z, mode: "Classical" })),
+              ...(data.deep_learning_zones || []).map((z: any) => ({ ...z, mode: "DL" })),
+            ];
+            setZones(allZones);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch S/R zones for chart", e);
+      }
+    }
+    void fetchZones();
+    return () => {
+      active = false;
+    };
+  }, [symbol]);
 
   const {
     ema9 = false,
@@ -182,8 +227,109 @@ export function LightweightCandlestickChart({
     activeSubPanes,
   });
 
+  const getCoordinates = (point: { time: number; price: number }) => {
+    if (!mainChartRef.current || !mainSeriesRef.current) return null;
+    try {
+      const timeScale = mainChartRef.current.timeScale();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const x = timeScale.timeToCoordinate(point.time as any);
+      const y = mainSeriesRef.current.priceToCoordinate(point.price);
+      if (x === null || y === null) return null;
+      return { x, y };
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (activeTool === "cursor") return;
+    if (!mainChartRef.current || !mainSeriesRef.current) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    try {
+      const timeScale = mainChartRef.current.timeScale();
+      const time = timeScale.coordinateToTime(mouseX);
+      const price = mainSeriesRef.current.coordinateToPrice(mouseY);
+
+      if (time === null || price === null) return;
+
+      if (activeTool === "horizontal") {
+        const newDrawing: Drawing = {
+          id: Math.random().toString(36).substr(2, 9),
+          type: "horizontal",
+          points: [{ time: Number(time), price }],
+        };
+        setDrawings((prev) => [...prev, newDrawing]);
+        setActiveTool("cursor");
+      } else if (activeTool === "trendline" || activeTool === "fibonacci") {
+        if (!tempStartPoint) {
+          setTempStartPoint({ time: Number(time), price });
+        } else {
+          const newDrawing: Drawing = {
+            id: Math.random().toString(36).substr(2, 9),
+            type: activeTool,
+            points: [tempStartPoint, { time: Number(time), price }],
+          };
+          setDrawings((prev) => [...prev, newDrawing]);
+          setTempStartPoint(null);
+          setTempEndPoint(null);
+          setActiveTool("cursor");
+        }
+      }
+    } catch (err) {
+      console.error("Error drawing point:", err);
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (activeTool === "cursor" || !tempStartPoint) return;
+    if (!mainChartRef.current || !mainSeriesRef.current) return;
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+
+    try {
+      const timeScale = mainChartRef.current.timeScale();
+      const time = timeScale.coordinateToTime(mouseX);
+      const price = mainSeriesRef.current.coordinateToPrice(mouseY);
+
+      if (time === null || price === null) return;
+      setTempEndPoint({ time: Number(time), price });
+    } catch (err) {
+      // ignore
+    }
+  };
+
   useEffect(() => {
-    if (!mainChart || !(mainChart as LiveChartApi).isAlive || bars.length === 0 || !mainContainerRef.current) return;
+    if (!mainChart) return;
+    const handleRangeChange = () => {
+      setRenderTrigger((prev) => prev + 1);
+    };
+    mainChart.timeScale().subscribeVisibleLogicalRangeChange(handleRangeChange);
+    return () => {
+      mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(handleRangeChange);
+    };
+  }, [mainChart]);
+
+  const levelColor = (level: number) => {
+    if (level === 1.0 || level === 0.0) return "#EF5350";
+    if (level === 0.5) return "#FFB800";
+    if (level === 0.618) return "#26A69A";
+    return "rgba(255, 255, 255, 0.4)";
+  };
+
+  useEffect(() => {
+    if (!mainChart || !(mainChart as LiveChartApi).isAlive || !mainContainerRef.current) return;
+
+    if (bars.length === 0) {
+      return () => {
+        // No-op cleanup for empty bars state
+      };
+    }
 
     const firstBarTime = bars[0]?.timestamp || "";
     const configChanged = symbol !== lastSymbolRef.current || firstBarTime !== lastFirstBarTimeRef.current;
@@ -399,8 +545,44 @@ export function LightweightCandlestickChart({
 
     if (mainSeries) {
       addedSeries.push(mainSeries);
+      mainSeriesRef.current = mainSeries;
       if (finalMarkers.length > 0) {
         mainSeries.setMarkers(finalMarkers);
+      }
+
+      // Draw Support & Resistance zones
+      if (zones.length > 0) {
+        zones.forEach((zone) => {
+          const isSupport = zone.type === "support";
+          const color = isSupport ? "rgba(0, 230, 118, 0.45)" : "rgba(255, 59, 92, 0.45)";
+          
+          mainSeries.createPriceLine({
+            price: zone.min,
+            color: color,
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MIN`
+          });
+          
+          mainSeries.createPriceLine({
+            price: zone.max,
+            color: color,
+            lineWidth: 1,
+            lineStyle: 2,
+            axisLabelVisible: true,
+            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MAX`
+          });
+
+          mainSeries.createPriceLine({
+            price: zone.avg,
+            color: color,
+            lineWidth: 2,
+            lineStyle: 0,
+            axisLabelVisible: true,
+            title: `${zone.mode} ${zone.type === "support" ? "Support" : "Resistance"}`
+          });
+        });
       }
     }
 
@@ -697,7 +879,7 @@ export function LightweightCandlestickChart({
   return (
     <div className="flex flex-col gap-1.5 h-full w-full relative">
       {legend && (
-        <div className="absolute top-2 left-2 z-[99] pointer-events-none flex flex-wrap gap-x-2 gap-y-0.5 rounded bg-[rgba(10,14,24,0.72)] backdrop-blur-sm border border-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[10px] font-mono text-[var(--nq-text-secondary)] shadow-md select-none">
+        <div className="absolute top-2 left-12 z-[99] pointer-events-none flex flex-wrap gap-x-2 gap-y-0.5 rounded bg-[rgba(10,14,24,0.72)] backdrop-blur-sm border border-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[10px] font-mono text-[var(--nq-text-secondary)] shadow-md select-none">
           <span className="font-semibold text-[var(--nq-text-primary)] mr-1.5">{cleanSymbol}</span>
           <span>O:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.open.toFixed(2)}</span></span>
           <span className="ml-1.5">H:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.high.toFixed(2)}</span></span>
@@ -706,7 +888,183 @@ export function LightweightCandlestickChart({
           <span className="ml-1.5">V:<span className="text-[var(--nq-accent-cyan)] ml-0.5">{formatVolume(legend.volume)}</span></span>
         </div>
       )}
-      <div ref={mainContainerRef} className="w-full flex-1 min-h-[240px] relative" />
+
+      {/* Main Container Wrapper */}
+      <div className="relative w-full flex-1 min-h-[240px] overflow-hidden">
+        <div ref={mainContainerRef} className="w-full h-full" />
+
+        {/* Floating Drawing Toolbar */}
+        <div className="absolute left-2 top-10 z-[30] flex flex-col gap-1 rounded border border-[var(--nq-border)] bg-[rgba(14,17,23,0.85)] p-1 shadow-2xl backdrop-blur-md">
+          {([
+            { tool: "cursor", icon: MousePointer, tooltip: "Crosshair / Zoom" },
+            { tool: "trendline", icon: MoveRight, tooltip: "Trend Line" },
+            { tool: "horizontal", icon: Minus, tooltip: "Horizontal Line" },
+            { tool: "fibonacci", icon: Layers, tooltip: "Fibonacci Retracement" },
+          ] as const).map(({ tool, icon: Icon, tooltip }) => (
+            <button
+              key={tool}
+              type="button"
+              onClick={() => {
+                setActiveTool(tool);
+                setTempStartPoint(null);
+                setTempEndPoint(null);
+              }}
+              className={`rounded p-1.5 transition-all duration-150 ${
+                activeTool === tool
+                  ? "bg-[var(--nq-accent-cyan)]/25 text-[var(--nq-accent-cyan)] shadow-[0_0_8px_rgba(0,212,245,0.15)]"
+                  : "text-[var(--nq-text-secondary)] hover:bg-white/5 hover:text-[var(--nq-text-primary)]"
+              }`}
+              title={tooltip}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </button>
+          ))}
+          {drawings.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setDrawings([]);
+                setTempStartPoint(null);
+                setTempEndPoint(null);
+                setActiveTool("cursor");
+              }}
+              className="rounded p-1.5 text-[var(--nq-accent-red)] hover:bg-[var(--nq-accent-red)]/10 hover:text-[var(--nq-accent-red)] transition-all duration-150 border-t border-[var(--nq-border)] mt-1 pt-1.5"
+              title="Clear all drawings"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Drawing SVG Overlay */}
+        <svg
+          key={renderTrigger}
+          className={`absolute inset-0 z-20 ${activeTool !== "cursor" ? "pointer-events-auto cursor-crosshair" : "pointer-events-none"}`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          style={{ width: "100%", height: "100%", background: "transparent" }}
+        >
+          {/* 1. Permanent Drawings */}
+          {drawings.map((drawing) => {
+            if (drawing.type === "trendline" && drawing.points.length === 2) {
+              const c1 = getCoordinates(drawing.points[0]!);
+              const c2 = getCoordinates(drawing.points[1]!);
+              if (!c1 || !c2) return null;
+              return (
+                <line
+                  key={drawing.id}
+                  x1={c1.x}
+                  y1={c1.y}
+                  x2={c2.x}
+                  y2={c2.y}
+                  stroke="var(--nq-accent-cyan)"
+                  strokeWidth="1.5"
+                />
+              );
+            }
+            if (drawing.type === "horizontal" && drawing.points.length === 1) {
+              const c = getCoordinates(drawing.points[0]!);
+              if (!c) return null;
+              return (
+                <line
+                  key={drawing.id}
+                  x1="0"
+                  y1={c.y}
+                  x2="100%"
+                  y2={c.y}
+                  stroke="var(--nq-accent-cyan)"
+                  strokeWidth="1.5"
+                  strokeDasharray="4 4"
+                />
+              );
+            }
+            if (drawing.type === "fibonacci" && drawing.points.length === 2) {
+              const p1 = drawing.points[0]!;
+              const p2 = drawing.points[1]!;
+              const c1 = getCoordinates(p1);
+              const c2 = getCoordinates(p2);
+              if (!c1 || !c2) return null;
+
+              const levels = [1.0, 0.786, 0.618, 0.5, 0.382, 0.236, 0.0];
+              const diff = p1.price - p2.price;
+
+              return (
+                <g key={drawing.id}>
+                  {/* Diagonal connector line */}
+                  <line x1={c1.x} y1={c1.y} x2={c2.x} y2={c2.y} stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeDasharray="3 3" />
+                  {levels.map((lvl) => {
+                    const price = p2.price + diff * lvl;
+                    const y = mainSeriesRef.current?.priceToCoordinate(price);
+                    if (y === undefined || y === null) return null;
+                    const color = levelColor(lvl);
+                    return (
+                      <g key={lvl}>
+                        <line x1="0" y1={y} x2="100%" y2={y} stroke={color} strokeWidth="1" opacity="0.6" />
+                        <text x="50" y={y - 3} fill={color} fontSize="8" fontFamily="monospace" opacity="0.8">
+                          {lvl.toFixed(3)} - ₹{price.toFixed(2)}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </g>
+              );
+            }
+            return null;
+          })}
+
+          {/* 2. Active Preview Drawing */}
+          {activeTool !== "cursor" && tempStartPoint && tempEndPoint && (
+            <g>
+              {activeTool === "trendline" && (() => {
+                const c1 = getCoordinates(tempStartPoint);
+                const c2 = getCoordinates(tempEndPoint);
+                if (!c1 || !c2) return null;
+                return (
+                  <line
+                    x1={c1.x}
+                    y1={c1.y}
+                    x2={c2.x}
+                    y2={c2.y}
+                    stroke="var(--nq-accent-cyan)"
+                    strokeWidth="1.5"
+                    strokeDasharray="3 3"
+                    opacity="0.8"
+                  />
+                );
+              })()}
+              {activeTool === "fibonacci" && (() => {
+                const c1 = getCoordinates(tempStartPoint);
+                const c2 = getCoordinates(tempEndPoint);
+                if (!c1 || !c2) return null;
+
+                const levels = [1.0, 0.786, 0.618, 0.5, 0.382, 0.236, 0.0];
+                const diff = tempStartPoint.price - tempEndPoint.price;
+
+                return (
+                  <g>
+                    <line x1={c1.x} y1={c1.y} x2={c2.x} y2={c2.y} stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3 3" />
+                    {levels.map((lvl) => {
+                      const price = tempEndPoint.price + diff * lvl;
+                      const y = mainSeriesRef.current?.priceToCoordinate(price);
+                      if (y === undefined || y === null) return null;
+                      const color = levelColor(lvl);
+                      return (
+                        <g key={lvl}>
+                          <line x1="0" y1={y} x2="100%" y2={y} stroke={color} strokeWidth="1" opacity="0.8" />
+                          <text x="50" y={y - 3} fill={color} fontSize="8" fontFamily="monospace">
+                            {lvl.toFixed(3)} - ₹{price.toFixed(2)}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </g>
+                );
+              })()}
+            </g>
+          )}
+        </svg>
+      </div>
+
       {rsi && <div ref={rsiContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}
       {macd && <div ref={macdContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}
       {atr && <div ref={atrContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}

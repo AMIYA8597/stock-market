@@ -26,16 +26,7 @@ _signal_cache: dict[str, tuple[dict, float]] = {}
 _SIGNAL_CACHE_TTL = 60.0  # seconds
 
 
-@router.websocket("/market/{symbol}")
-async def ws_market_feed(websocket: WebSocket, symbol: str):
-    manager = get_connection_manager()
-    channel = f"market:{symbol.upper()}"
-    await manager.connect(websocket, channel)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        await manager.disconnect(websocket, channel)
+
 
 
 @router.websocket("/portfolio")
@@ -301,3 +292,61 @@ async def ws_backtest_progress(websocket: WebSocket):
                 await asyncio.sleep(2.0)
     except WebSocketDisconnect:
         await manager.disconnect(websocket, channel)
+
+
+@router.websocket("/live/{symbol}")
+async def ws_live_feed(websocket: WebSocket, symbol: str):
+    """Real-time live feed for a single symbol.
+    Pushes price updates every 30 seconds (or on change) and signal updates every 5 minutes.
+    """
+    await websocket.accept()
+    logger.info(f"ws_live: Client connected for symbol={symbol}")
+    
+    last_price = None
+    tick_count = 0
+    
+    try:
+        while True:
+            # 1. Fetch live quote
+            try:
+                quote = await MarketDataService.get_live_quote(symbol)
+                price = float(quote["price"])
+                change_pct = float(quote.get("change_pct", 0.0))
+                volume = int(quote.get("volume", 0))
+                
+                # Push tick if price changed or every 30s
+                await websocket.send_json({
+                    "type": "price_update",
+                    "symbol": quote["symbol"],
+                    "price": price,
+                    "change_pct": change_pct,
+                    "volume": volume,
+                    "timestamp": datetime.now(UTC).isoformat()
+                })
+                last_price = price
+            except Exception as e:
+                logger.warning(f"ws_live: Quote fetch failed for {symbol}: {e}")
+            
+            # 2. Fetch and push signal every 5 minutes (every 10 ticks of 30s)
+            if tick_count % 10 == 0:
+                try:
+                    pred = await get_full_prediction(symbol)
+                    if pred and pred.get("is_computed", False):
+                        ens = pred.get("ensemble", {})
+                        await websocket.send_json({
+                            "type": "signal_update",
+                            "symbol": symbol.upper(),
+                            "direction": ens.get("direction", "NEUTRAL"),
+                            "confidence": float(ens.get("confidence", 0.5)),
+                            "kelly": float(ens.get("kelly", 0.0))
+                        })
+                except Exception as e:
+                    logger.warning(f"ws_live: Prediction fetch failed for {symbol}: {e}")
+            
+            tick_count += 1
+            await asyncio.sleep(30)
+            
+    except WebSocketDisconnect:
+        logger.info(f"ws_live: Client disconnected for symbol={symbol}")
+    except Exception as e:
+        logger.error(f"ws_live: Connection error for symbol={symbol}: {e}")

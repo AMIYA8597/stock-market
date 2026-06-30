@@ -101,6 +101,15 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
             </span>
           </div>
         </div>
+        <div className="mt-3 text-center font-mono text-[10px] border-t border-[var(--nq-border)] pt-2 w-full">
+          <span className="text-[var(--nq-text-secondary)]">Kelly Sizing: </span>
+          <strong className="text-[var(--nq-accent-cyan)]">
+            {safeFormat(Number(signal.ensemble.kelly_fraction ?? 0) * 100, 1)}%
+          </strong>
+          <span className="block text-[8px] text-[var(--nq-text-muted)] mt-0.5">
+            Based on active signal edge & historical win-rate
+          </span>
+        </div>
       </div>
 
       {/* Section 2: Five-Model Score Bars */}

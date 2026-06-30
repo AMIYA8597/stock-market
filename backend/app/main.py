@@ -144,3 +144,8 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 # ─── Mount API v1 ─────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 app.include_router(websocket_router)
+
+# ─── Mount QuantEdge specific router ──────────────────────
+from app.api.quantedge_router import router as quantedge_router
+app.include_router(quantedge_router)
+

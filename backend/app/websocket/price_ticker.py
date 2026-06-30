@@ -106,7 +106,7 @@ async def run_price_ticker(redis: Redis) -> None:
 
                 # 4. Generate live ML signals on tick
                 try:
-                    pred = await get_full_prediction(normalized_symbol, bypass_cache=True)
+                    pred = await get_full_prediction(normalized_symbol, bypass_cache=False)
                     if pred and pred.get("is_computed", False):
                         ens = pred.get("ensemble", {})
                         
@@ -134,4 +134,10 @@ async def run_price_ticker(redis: Redis) -> None:
         except Exception as e:
             logger.warning(f"Error in run_price_ticker loop: {e}", exc_info=True)
             
-        await asyncio.sleep(10)
+        try:
+            from app.services.data_ingestion.scheduler import is_market_hours
+            sleep_time = 3 if is_market_hours() else 10
+        except Exception:
+            sleep_time = 10
+            
+        await asyncio.sleep(sleep_time)

@@ -28,7 +28,35 @@ interface ChartSectionProps {
   onSelectSymbol?: (symbol: string) => void;
 }
 
+function getIsMarketClosed(): boolean {
+  const options = { timeZone: "Asia/Kolkata" };
+  let istString: string;
+  try {
+    istString = new Date().toLocaleString("en-US", options);
+  } catch (e) {
+    istString = new Date().toLocaleString();
+  }
+  const istDate = new Date(istString);
+  const day = istDate.getDay(); // 0 = Sunday, 6 = Saturday
+  const hours = istDate.getHours();
+  const minutes = istDate.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+
+  const isOpenDay = day >= 1 && day <= 5; // Monday to Friday
+  const isOpenTime = totalMinutes >= 555 && totalMinutes < 930; // 9:15 to 15:30
+  return !(isOpenDay && isOpenTime);
+}
+
 export default function ChartSection({ signal, onSelectSymbol }: ChartSectionProps): JSX.Element {
+  const [isClosed, setIsClosed] = useState<boolean>(getIsMarketClosed());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIsClosed(getIsMarketClosed());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
   const [bars, setBars] = useState<OHLCVBar[]>([]);
   const [timeframe, setTimeframe] = useState<
     | "1m"
@@ -284,7 +312,14 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
     <section className="flex h-full min-h-0 flex-col bg-[var(--nq-bg-primary)] p-3">
       <div className="mb-3 flex items-center justify-between rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">
         <div>
-          <h2 className="font-mono text-sm text-[var(--nq-text-primary)]">{signal?.symbol ?? "Select symbol"}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="font-mono text-sm text-[var(--nq-text-primary)]">{signal?.symbol ?? "Select symbol"}</h2>
+            {isClosed && signal?.timestamp && (
+              <span className="rounded bg-[rgba(255,59,92,0.12)] border border-[rgba(255,59,92,0.3)] px-2 py-0.5 text-[10px] font-medium text-[#FF3B5C]">
+                Market Closed (Last Close: {new Date(signal.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })})
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[var(--nq-text-secondary)]">
             Regime {signal?.regime.state ?? "-"} | Confidence {confidence}%
           </p>
@@ -526,6 +561,9 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
               ) : null}
             </div>
           ) : null}
+          <div className="mt-2 text-[10px] text-[var(--nq-text-secondary)] opacity-80 border-t border-[var(--nq-border)] pt-2">
+            * Disclaimer: Outputs are model-generated probabilistic estimates for educational/research purposes. No accuracy guarantee.
+          </div>
         </div>
         <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <div className="mb-2 flex items-center gap-1 overflow-x-auto pb-1 ds-scrollable">

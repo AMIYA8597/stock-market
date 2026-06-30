@@ -28,6 +28,7 @@ class EnsembleMetaLearner:
         self.lgb_model: CalibratedClassifierCV | None = None
         self.feature_names = ["technical", "pattern", "momentum", "regime", "xgboost", "sentiment"]
         self.best_model_name = "logistic"
+        self.coefficients: dict[str, float] | None = None
 
     def save(self, path: Path | str | None = None) -> None:
         """Serialize meta-learner instance to disk."""
@@ -273,6 +274,7 @@ class EnsembleMetaLearner:
 
         # Log coefficients and feature importances
         coefs = self.lr_model.calibrated_classifiers_[0].estimator.coef_[0]
+        self.coefficients = dict(zip(self.feature_names, [float(c) for c in coefs]))
         logger.info("Logistic Regression Meta-learner coefficients:")
         for name, coef in zip(self.feature_names, coefs):
             logger.info(f"  {name}: {coef:.4f}")

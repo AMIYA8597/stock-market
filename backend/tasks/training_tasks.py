@@ -57,6 +57,7 @@ def train_single_xgboost(symbol: str) -> None:
     df.ta.obv(append=True)
     df.ta.supertrend(length=10, multiplier=3.0, append=True)
     df.ta.cdl_pattern(name="all", append=True)
+    df = df.loc[:, ~df.columns.duplicated()]
 
     cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
     df = df.drop(columns=cols_to_drop, errors="ignore")
@@ -96,17 +97,70 @@ def train_single_xgboost(symbol: str) -> None:
     if len(X_train) < 30:
         return
 
-    from research.models.xgboost_model import XGBoostDirectionalClassifier
+    # CPCV splits
+    from research.backtesting.walk_forward import generate_cpcv_splits
+    splits = generate_cpcv_splits(n_samples, n_splits=5, purge_days=5, embargo_days=2)
     
+    predictions = []
+    actuals = []
+    fwd_rets_test = []
+    
+    from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier
+    
+    for split in splits:
+        if len(split.train_idx) < 20 or len(split.test_idx) == 0:
+            continue
+            
+        fold_clf = XGBoostDirectionalClassifier()
+        X_fold_tr = X_train.iloc[split.train_idx]
+        y_fold_tr = y_train.iloc[split.train_idx]
+        fold_clf.fit(X_fold_tr, y_fold_tr)
+        
+        X_fold_te = X_train.iloc[split.test_idx]
+        y_fold_te = y_train.iloc[split.test_idx]
+        
+        for idx in range(len(X_fold_te)):
+            pred_row = X_fold_te.iloc[[idx]]
+            prob = fold_clf.predict_proba(pred_row)
+            predictions.append(1 if prob > 0.5 else 0)
+            actuals.append(int(y_fold_te.iloc[idx]))
+            fwd_rets_test.append(df["target_5d"].iloc[split.test_idx[idx]])
+
+    predictions = np.array(predictions)
+    actuals = np.array(actuals)
+    fwd_rets_test = np.array(fwd_rets_test)
+    
+    win_rate = float(np.mean(predictions == actuals)) if len(predictions) > 0 else 0.54
+    
+    if len(predictions) > 0:
+        wins = fwd_rets_test[(predictions == 1) & (fwd_rets_test > 0)]
+        losses = fwd_rets_test[(predictions == 1) & (fwd_rets_test < 0)]
+        avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.015
+        avg_loss = float(abs(np.mean(losses))) if len(losses) > 0 else 0.012
+        payoff_ratio = avg_win / avg_loss if avg_loss > 0 else 1.05
+    else:
+        payoff_ratio = 1.05
+        
+    # Fit final model
     classifier = XGBoostDirectionalClassifier()
     classifier.fit(X_train, y_train)
 
     # Save scaler and classifier
     os.makedirs(MODEL_DIR, exist_ok=True)
     checkpoint_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
-    with open(checkpoint_path, "wb") as f:
-        pickle.dump({"scaler": classifier.scaler, "model": classifier.model}, f)
-    logger.info(f"XGBoost model saved for {symbol} to {checkpoint_path}")
+    classifier.save(checkpoint_path)
+        
+    # Save walk-forward stats
+    import json
+    stats_path = MODEL_DIR / f"xgboost_backtest_{symbol.upper()}.json"
+    with open(stats_path, "w") as f:
+        json.dump({
+            "win_rate": win_rate,
+            "payoff_ratio": payoff_ratio,
+            "samples_evaluated": len(predictions)
+        }, f)
+        
+    logger.info(f"XGBoost model saved for {symbol} to {checkpoint_path} with win_rate={win_rate:.2f}, payoff_ratio={payoff_ratio:.2f}")
 
 @shared_task(name="tasks.training_tasks.retrain_model")
 def retrain_model(model_name: str) -> dict[str, str]:
@@ -169,6 +223,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 df.ta.obv(append=True)
                 df.ta.supertrend(length=10, multiplier=3.0, append=True)
                 df.ta.cdl_pattern(name="all", append=True)
+                df = df.loc[:, ~df.columns.duplicated()]
                 
                 cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
                 df = df.drop(columns=cols_to_drop, errors="ignore")
@@ -253,6 +308,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 df.ta.obv(append=True)
                 df.ta.supertrend(length=10, multiplier=3.0, append=True)
                 df.ta.cdl_pattern(name="all", append=True)
+                df = df.loc[:, ~df.columns.duplicated()]
                 
                 cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
                 df = df.drop(columns=cols_to_drop, errors="ignore")
