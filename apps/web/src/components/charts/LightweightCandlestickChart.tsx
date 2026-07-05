@@ -818,13 +818,13 @@ export function LightweightCandlestickChart({
 
     mainChart.subscribeCrosshairMove(handleCrosshairMove);
 
-    // Resize observer handling
+    // Resize observer: sub-pane charts need manual width sync since they don't use autoSize
+    // The main chart uses autoSize=true so it handles its own resizing
     const observer = new ResizeObserver(() => {
       if (!mainContainerRef.current) return;
       const width = mainContainerRef.current.clientWidth;
-      mainChart.applyOptions({ width });
       subCharts.forEach((ch) => {
-        ch.applyOptions({ width });
+        try { ch.applyOptions({ width }); } catch { /* ignore */ }
       });
     });
     observer.observe(mainContainerRef.current);
@@ -891,7 +891,7 @@ export function LightweightCandlestickChart({
 
       {/* Main Container Wrapper */}
       <div className="relative w-full flex-1 min-h-[240px] overflow-hidden">
-        <div ref={mainContainerRef} className="w-full h-full" />
+        <div ref={mainContainerRef} className="absolute inset-0" />
 
         {/* Floating Drawing Toolbar */}
         <div className="absolute left-2 top-10 z-[30] flex flex-col gap-1 rounded border border-[var(--nq-border)] bg-[rgba(14,17,23,0.85)] p-1 shadow-2xl backdrop-blur-md">

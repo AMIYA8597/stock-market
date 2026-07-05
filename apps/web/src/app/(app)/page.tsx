@@ -27,7 +27,7 @@ export default function RootPage(): JSX.Element {
         </div>
       }
       watchlist={<Watchlist signals={watchlistSignals} selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} />}
-      chartSection={<ChartSection signal={selectedSignal} onSelectSymbol={setSelectedSymbol} />}
+      chartSection={<ChartSection signal={selectedSignal} onSelectSymbol={setSelectedSymbol} defaultSymbol={selectedSymbol} />}
       signalPanel={<SignalPanel signal={selectedSignal} />}
       overlay={
         loading && watchlistSignals.length === 0 ? (

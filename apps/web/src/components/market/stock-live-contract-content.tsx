@@ -332,10 +332,17 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
           <h1 className="text-2xl font-semibold">{symbol}</h1>
           <p className="mt-1 text-sm text-[var(--nq-text-secondary)]">Live market + signal contracts with websocket tick overlay.</p>
         </div>
-        <div className="grid w-full grid-cols-2 gap-2 text-xs sm:w-auto">
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">Price {formatInr(latestPrice)}</div>
-          <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">Day {formatPercent(latestChangePct)}</div>
-        </div>
+          <div className="grid w-full grid-cols-2 gap-2 text-xs sm:w-auto items-center">
+            <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2 flex items-center gap-2">
+              Price {formatInr(latestPrice)}
+              {liveTick?.source && (
+                <span className="ml-2 rounded-full bg-[rgba(0,212,245,0.1)] px-2 py-0.5 text-xs text-[var(--nq-accent-cyan)] border border-[var(--nq-accent-cyan)]">
+                  {liveTick.source}
+                </span>
+              )}
+            </div>
+            <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">Day {formatPercent(latestChangePct)}</div>
+          </div>
       </div>
 
       <p className="relative z-10 mt-2 text-xs text-[var(--nq-text-secondary)]">WS status: {status}</p>

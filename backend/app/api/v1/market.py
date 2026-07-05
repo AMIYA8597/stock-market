@@ -92,6 +92,7 @@ async def get_quote(symbol: str) -> QuoteResponse:
             regime=RegimeData(state=regime_state, probs=[0.25, 0.25, 0.25, 0.25]),
             signal=SignalData(direction=sig_dir, confidence=sig_conf),
             timestamp=datetime.now(UTC),
+            source=quote.get("source", "yfinance"),
         )
     except Exception as e:
         raise HTTPException(
@@ -103,11 +104,29 @@ async def get_quote(symbol: str) -> QuoteResponse:
         )
 
 
+# Mapping: interval -> sensible default period when the client omits period
+_INTERVAL_DEFAULT_PERIOD: dict[str, str] = {
+    "1m":  "5d",
+    "3m":  "5d",
+    "5m":  "5d",
+    "10m": "5d",
+    "15m": "5d",
+    "30m": "5d",
+    "45m": "5d",
+    "1h":  "5d",
+    "2h":  "5d",
+    "4h":  "5d",
+    "1d":  "1y",
+    "1w":  "2y",
+    "1mo": "max",
+}
+
+
 @router.get("/history/{symbol}", response_model=HistoryResponse)
 async def get_history(
     symbol: str,
     interval: str = Query("1d", pattern="^(1m|3m|5m|10m|15m|30m|45m|1h|2h|4h|1d|1w|1mo)$"),
-    period: str = Query("1mo", pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
+    period: str | None = Query(None, pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
 ) -> HistoryResponse:
     if not symbol.strip():
         raise HTTPException(
@@ -118,14 +137,17 @@ async def get_history(
             ).dict(),
         )
 
+    # Auto-select period from interval when the client doesn't specify one
+    effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
+
     try:
-        bars_data = await MarketDataService.get_history(symbol, interval, period)
+        bars_data = await MarketDataService.get_history(symbol, interval, effective_period)
         if not bars_data:
             raise HTTPException(
                 status_code=404,
                 detail=f"No market data available for {symbol}"
             )
-        
+
         bars = []
         for b in bars_data:
             time_str = b["time"]
@@ -137,9 +159,11 @@ async def get_history(
             except Exception:
                 time_val = int(datetime.now(UTC).timestamp())
 
+            # Convert timestamp to ISO string for frontend compatibility
+            iso_time = datetime.fromtimestamp(time_val, tz=UTC).isoformat()
             bars.append(
                 OHLCVBar(
-                    time=time_val,
+                    timestamp=iso_time,
                     open=round(Decimal(str(b["open"])), 8),
                     high=round(Decimal(str(b["high"])), 8),
                     low=round(Decimal(str(b["low"])), 8),
@@ -147,8 +171,21 @@ async def get_history(
                     volume=round(Decimal(str(b["volume"])), 4),
                 )
             )
-        source_val = getattr(bars_data, "source", "yfinance")
-        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source=source_val)
+
+        # bars_data may be a HistoryList (carries .source) or a plain list.
+        # Guard against None just in case the service returns it despite the
+        # empty-list check above (shouldn't happen, but be safe).
+        source_val: str = (
+            getattr(bars_data, "source", None) or "yfinance"
+            if bars_data is not None
+            else "yfinance"
+        )
+        return HistoryResponse(
+            symbol=symbol.upper(),
+            interval=interval,
+            bars=bars,
+            source=source_val,
+        )
     except HTTPException:
         raise
     except Exception as e:

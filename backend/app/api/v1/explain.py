@@ -132,6 +132,14 @@ async def get_shap_explanation(symbol: str) -> SHAPResponse:
 
     except HTTPException:
         raise
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=422,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(val_err),
+            ).dict(),
+        ) from val_err
     except Exception as exc:
         raise HTTPException(
             status_code=500,
@@ -400,6 +408,14 @@ async def post_counterfactual_explanation(
 
     except HTTPException:
         raise
+    except ValueError as val_err:
+        raise HTTPException(
+            status_code=422,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(val_err),
+            ).dict(),
+        ) from val_err
     except Exception as exc:
         raise HTTPException(
             status_code=500,

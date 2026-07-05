@@ -47,6 +47,7 @@ export interface Quote {
   open: number;
   previous_close: number;
   timestamp: string;
+  source?: string;
 }
 
 export interface OHLCVBar {
@@ -64,6 +65,7 @@ export interface HistoryResponse {
   interval: string;
   bars: OHLCVBar[];
   count: number;
+  source?: string;
 }
 
 export type Timeframe =

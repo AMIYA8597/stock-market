@@ -115,19 +115,7 @@ async def startup_events() -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"Failed to start price ticker task: {e}")
 
-            # Example: Signal broadcaster (if websocket module exists)
-            try:
-                from app.websocket.signal_broadcaster import run_signal_broadcaster
 
-                if redis_client:
-                    signal_task = asyncio.create_task(
-                        run_signal_broadcaster(redis_client),
-                        name="signal_broadcaster",
-                    )
-                    background_tasks.append(signal_task)
-                    logger.info("startup_signal_broadcaster_created")
-            except (ImportError, AttributeError):
-                logger.debug("signal_broadcaster_module_not_found")
 
             # Alert polling loop task
             try:

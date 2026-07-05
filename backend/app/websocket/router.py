@@ -29,16 +29,17 @@ _SIGNAL_CACHE_TTL = 60.0  # seconds
 
 
 
-@router.websocket("/portfolio")
-async def ws_portfolio_feed(websocket: WebSocket):
-    manager = get_connection_manager()
-    channel = "portfolio:live"
-    await manager.connect(websocket, channel)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        await manager.disconnect(websocket, channel)
+# Removed dead ws_portfolio_feed route (unused)
+# @router.websocket("/portfolio")
+# async def ws_portfolio_feed(websocket: WebSocket):
+#     manager = get_connection_manager()
+#     channel = "portfolio:live"
+#     await manager.connect(websocket, channel)
+#     try:
+#         while True:
+#             await websocket.receive_text()
+#     except WebSocketDisconnect:
+#         await manager.disconnect(websocket, channel)
 
 
 @router.websocket("/prices")
@@ -78,6 +79,7 @@ async def ws_prices(websocket: WebSocket):
                                     "change": float(q.get("change", 0.0)),
                                     "change_pct": float(q.get("change_pct", 0.0)),
                                     "timestamp": datetime.now(UTC).isoformat(),
+                                    "source": q.get("source", "yfinance"),
                                 })
                         except Exception as q_err:
                             logger.debug(f"Error sending initial quote snapshot for {sym}: {q_err}")
@@ -204,15 +206,16 @@ async def ws_signals(websocket: WebSocket):
         await manager.disconnect(websocket, channel)
 
 
-@router.websocket("/alerts")
-async def ws_alerts(websocket: WebSocket):
-    manager = get_connection_manager()
-    await manager.connect(websocket, "signals:alerts")
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        await manager.disconnect(websocket, "signals:alerts")
+# Removed dead ws_alerts route (managed via signals)
+# @router.websocket("/alerts")
+# async def ws_alerts(websocket: WebSocket):
+#     manager = get_connection_manager()
+#     await manager.connect(websocket, "signals:alerts")
+#     try:
+#         while True:
+#             await websocket.receive_text()
+#     except WebSocketDisconnect:
+#         await manager.disconnect(websocket, "signals:alerts")
 
 
 @router.websocket("/backtest-progress")
