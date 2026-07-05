@@ -7,6 +7,7 @@ import { safeFormat } from "@/lib/formatters";
 import type { OHLCVBar } from "@neuroquant/types";
 import type { SignalResponse, ForecastPoint } from "@/types/intelligence";
 import {
+  FinancialCandlestickChart,
   LightweightCandlestickChart,
   SimpleLineAreaChart,
   type LineAreaPoint,
@@ -26,6 +27,7 @@ import PortfolioTab from "./panes/PortfolioTab";
 interface ChartSectionProps {
   signal: SignalResponse | null;
   onSelectSymbol?: (symbol: string) => void;
+  defaultSymbol?: string;
 }
 
 function getIsMarketClosed(): boolean {
@@ -47,7 +49,9 @@ function getIsMarketClosed(): boolean {
   return !(isOpenDay && isOpenTime);
 }
 
-export default function ChartSection({ signal, onSelectSymbol }: ChartSectionProps): JSX.Element {
+export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: ChartSectionProps): JSX.Element {
+  // Use signal's symbol or defaultSymbol to load data even before signal arrives
+  const activeSymbol = signal?.symbol ?? defaultSymbol ?? null;
   const [isClosed, setIsClosed] = useState<boolean>(getIsMarketClosed());
 
   useEffect(() => {
@@ -87,11 +91,12 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
 
   const [predictions, setPredictions] = useState<ForecastPoint[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historySource, setHistorySource] = useState<string | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
 
   // Live Price Feed Integration for real-time chart updates
-  const { ticks } = usePriceFeed(signal?.symbol ? [signal.symbol] : []);
-  const liveTick = signal?.symbol ? ticks.get(signal.symbol.toUpperCase()) : null;
+  const { ticks } = usePriceFeed(activeSymbol ? [activeSymbol] : []);
+  const liveTick = activeSymbol ? ticks.get(activeSymbol.toUpperCase()) : null;
 
   useEffect(() => {
     if (!liveTick || bars.length === 0) return;
@@ -202,7 +207,7 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
     let mounted = true;
 
     async function loadHistoryAndForecast(): Promise<void> {
-      if (!signal?.symbol) {
+      if (!activeSymbol) {
         setBars([]);
         setPredictions([]);
         return;
@@ -211,18 +216,23 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
       // 1. Fetch History
       let loadedBars: OHLCVBar[] = [];
       try {
-        const history = await marketApi.getHistory(signal.symbol, timeframe);
+        const history = await marketApi.getHistory(activeSymbol, timeframe);
         if (history.bars && history.bars.length > 0) {
-          loadedBars = history.bars.slice(-180);
+          loadedBars = history.bars.slice(-300);
           if (mounted) {
             setHistoryError(null);
+            setHistorySource(history.source ?? "yfinance");
           }
         } else if (mounted) {
-          setHistoryError(`No ${timeframe} history returned by the market data API.`);
+          setHistoryError(`No ${timeframe} history returned for ${activeSymbol}.`);
+          if (mounted) {
+            setHistorySource(null);
+          }
         }
       } catch (error) {
         if (mounted) {
           setHistoryError(error instanceof Error ? error.message : "Unable to load market history.");
+          setHistorySource(null);
         }
       }
 
@@ -230,7 +240,8 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
         setBars(loadedBars);
       }
 
-      // 2. Fetch Forecast
+      // 2. Fetch Forecast (only when we have a signal)
+      if (!signal?.symbol) return;
       try {
         const fetchUrl = "/api/v1/predictions/forecast";
         const response = await fetch(fetchUrl, {
@@ -281,7 +292,7 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
     return () => {
       mounted = false;
     };
-  }, [signal?.symbol, timeframe]);
+  }, [activeSymbol, timeframe, signal?.symbol]);
 
   const indicatorSeries = useMemo<LineAreaPoint[]>(() => {
     if (bars.length === 0) {
@@ -307,16 +318,27 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
   }, [bars]);
 
   const currentPrice = bars.length > 0 ? (bars[bars.length - 1]?.close ?? 100) : 100;
+  const displaySymbol = activeSymbol ?? "Select symbol";
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-[var(--nq-bg-primary)] p-3">
-      <div className="mb-3 flex items-center justify-between rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">
+    <section className="flex h-full min-h-0 flex-col bg-[var(--nq-bg-primary)]">
+      {/* Chart Header */}
+      <div className="mb-0 flex shrink-0 items-center justify-between border-b border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="font-mono text-sm text-[var(--nq-text-primary)]">{signal?.symbol ?? "Select symbol"}</h2>
-            {isClosed && signal?.timestamp && (
+            <h2 className="font-mono text-sm font-bold text-[var(--nq-text-primary)]">{displaySymbol}</h2>
+            {historySource && (
+              <span className={`rounded border px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider ${
+                historySource.toLowerCase() === "nse"
+                  ? "bg-[rgba(0,230,118,0.12)] border-[rgba(0,230,118,0.3)] text-[#00E676]"
+                  : "bg-[rgba(255,255,255,0.05)] border-[var(--nq-border)] text-[var(--nq-text-muted)]"
+              }`}>
+                {historySource.toLowerCase() === "nse" ? "NSE live" : `${historySource} (delayed)`}
+              </span>
+            )}
+            {isClosed && activeSymbol && (
               <span className="rounded bg-[rgba(255,59,92,0.12)] border border-[rgba(255,59,92,0.3)] px-2 py-0.5 text-[10px] font-medium text-[#FF3B5C]">
-                Market Closed (Last Close: {new Date(signal.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })})
+                Market Closed
               </span>
             )}
           </div>
@@ -521,52 +543,84 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
         </div>
       </div>
 
-      <div className="grid h-full grid-rows-[1.4fr_1fr] gap-3 lg:grid-rows-[2fr_1fr]">
-        <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">
-            Price and signal canvas
-          </p>
-          <div className="relative aspect-video overflow-hidden rounded border border-[var(--nq-border-hover)] bg-[linear-gradient(180deg,rgba(0,212,255,0.08),rgba(0,0,0,0))] p-3 lg:aspect-auto lg:h-[85%]">
-            {bars.length > 0 ? (
-              <LightweightCandlestickChart
-                bars={bars}
-                chartStyle={chartStyle}
-                indicators={activeIndicators}
-                predictions={predictions}
-                symbol={signal?.symbol}
-              />
-            ) : null}
-            {bars.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-[rgba(7,9,15,0.48)]">
-                <span className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1 text-xs text-[var(--nq-text-secondary)]">
-                  No market history returned for {signal?.symbol ?? "selected symbol"}
+      {/* Main chart + tabs area: use explicit flex layout */}
+      <div className="flex min-h-0 flex-1 flex-col gap-0">
+        {/* CHART AREA - takes most of the vertical space */}
+        <div className="relative min-h-[300px] flex-1 border border-[var(--nq-border)] bg-[var(--nq-bg-card)] rounded mx-3 mb-2">
+          <div className="absolute inset-0 flex flex-col">
+            <div className="flex shrink-0 items-center gap-2 px-3 pt-2 pb-1">
+              <p className="text-[9px] uppercase tracking-[0.12em] text-[var(--nq-text-secondary)] font-semibold">
+                Price &amp; Signal Canvas
+              </p>
+              {liveTick && (
+                <span className="font-mono text-xs font-bold text-[#00E676]">
+                  ₹{liveTick.price.toFixed(2)}
+                  <span className={`ml-1 text-[10px] ${liveTick.change_pct >= 0 ? "text-[#00E676]" : "text-[#FF3B5C]"}`}>
+                    {liveTick.change_pct >= 0 ? "+" : ""}{liveTick.change_pct.toFixed(2)}%
+                  </span>
                 </span>
+              )}
+            </div>
+            <div className="relative min-h-0 flex-1">
+              {bars.length > 0 ? (
+                chartStyle === "candlestick" ? (
+                  <FinancialCandlestickChart
+                    bars={bars}
+                  />
+                ) : (
+                  <LightweightCandlestickChart
+                    bars={bars}
+                    chartStyle={chartStyle}
+                    indicators={activeIndicators}
+                    predictions={predictions}
+                    symbol={activeSymbol ?? undefined}
+                  />
+                )
+              ) : (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  {historyError ? (
+                    <>
+                      <div className="h-12 w-12 rounded-full bg-[rgba(255,59,92,0.1)] border border-[rgba(255,59,92,0.3)] flex items-center justify-center">
+                        <span className="text-[#FF3B5C] text-lg">!</span>
+                      </div>
+                      <span className="text-xs text-[#FF3B5C] text-center max-w-[200px]">{historyError}</span>
+                    </>
+                  ) : activeSymbol ? (
+                    <>
+                      <div className="h-8 w-8 rounded-full border-2 border-[var(--nq-accent-cyan)] border-t-transparent animate-spin" />
+                      <span className="text-xs text-[var(--nq-text-secondary)]">Loading {activeSymbol}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="h-12 w-12 rounded-full bg-[rgba(0,212,245,0.08)] border border-[rgba(0,212,245,0.2)] flex items-center justify-center">
+                        <span className="text-[var(--nq-accent-cyan)] text-lg">📈</span>
+                      </div>
+                      <span className="text-xs text-[var(--nq-text-secondary)]">Select a symbol from the watchlist to load chart data</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            {(historyError || forecastError) && bars.length > 0 ? (
+              <div className="shrink-0 flex flex-wrap gap-2 px-3 pb-2 text-[11px]">
+                {historyError ? (
+                  <span className="rounded border border-[rgba(255,59,92,0.35)] bg-[rgba(255,59,92,0.08)] px-2 py-1 text-[var(--nq-accent-red)]">
+                    {historyError}
+                  </span>
+                ) : null}
+                {forecastError ? (
+                  <span className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-2 py-1 text-[#F7C948]">
+                    Forecast: {forecastError}
+                  </span>
+                ) : null}
               </div>
             ) : null}
-            <div className="absolute left-3 top-3 rounded border border-[var(--nq-border)] bg-[rgba(5,12,22,0.9)] px-2 py-1 text-[10px] text-[var(--nq-text-secondary)] sm:text-xs">
-              {historyError ? "Market history unavailable" : "Live overlay active: price, signal, regime bands"}
-            </div>
-          </div>
-          {historyError || forecastError ? (
-            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[var(--nq-text-secondary)]">
-              {historyError ? (
-                <span className="rounded border border-[rgba(255,59,92,0.35)] bg-[rgba(255,59,92,0.08)] px-2 py-1 text-[var(--nq-accent-red)]">
-                  {historyError}
-                </span>
-              ) : null}
-              {forecastError ? (
-                <span className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-2 py-1 text-[#F7C948]">
-                  Forecast unavailable: {forecastError}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <div className="mt-2 text-[10px] text-[var(--nq-text-secondary)] opacity-80 border-t border-[var(--nq-border)] pt-2">
-            * Disclaimer: Outputs are model-generated probabilistic estimates for educational/research purposes. No accuracy guarantee.
           </div>
         </div>
-        <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
-          <div className="mb-2 flex items-center gap-1 overflow-x-auto pb-1 ds-scrollable">
+
+        {/* BOTTOM PANEL - sub-tabs */}
+        <div className="flex flex-col shrink-0 border border-[var(--nq-border)] bg-[var(--nq-bg-card)] rounded mx-3 mb-3" style={{ height: "260px" }}>
+          <div className="flex shrink-0 items-center gap-1 border-b border-[var(--nq-border)] px-2 pt-1 pb-1 overflow-x-auto ds-scrollable">
             {(
               [
                 ["signals", "Signals"],
@@ -594,7 +648,7 @@ export default function ChartSection({ signal, onSelectSymbol }: ChartSectionPro
               </button>
             ))}
           </div>
-          <div className="h-[200px] lg:h-[240px] overflow-y-auto ds-scrollable rounded bg-[rgba(255,255,255,0.02)] p-2">
+          <div className="flex-1 min-h-0 overflow-y-auto ds-scrollable rounded bg-[rgba(255,255,255,0.02)] p-2">
             {subTab === "signals" && <SignalsTab signal={signal} forecast={predictions} />}
 
             {subTab === "indicators" && (

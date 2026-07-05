@@ -327,6 +327,7 @@ const mapQuote = (raw: UnknownRecord): Quote => {
     open: parseNumber(raw.open, price - change),
     previous_close: parseNumber(raw.previous_close, price - change),
     timestamp: typeof raw.timestamp === "string" ? raw.timestamp : new Date().toISOString(),
+    source: typeof raw.source === "string" ? raw.source : undefined,
   };
 };
 
@@ -368,6 +369,7 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
     interval: typeof raw.interval === "string" ? raw.interval : "1d",
     bars,
     count: parseNumber(raw.count, bars.length),
+    source: typeof raw.source === "string" ? raw.source : undefined,
   };
 };
 

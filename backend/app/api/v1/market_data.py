@@ -23,6 +23,7 @@ from app.database.mongodb import (
 )
 from app.database.redis_client import get_redis
 from app.schemas.errors import ErrorCode, ErrorResponse
+from app.schemas.market import HistoryResponse, OHLCVBar as OhlcvPoint
 
 router = APIRouter()
 
@@ -55,28 +56,6 @@ class QuoteResponse(BaseModel):
     data_freshness_seconds: int | None = None
     source: str = "realtime"
 
-
-class OhlcvPoint(BaseModel):
-    time: int
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: float
-    ema9: float | None = None
-    ema21: float | None = None
-    rsi: float | None = None
-    macd: float | None = None
-    macd_signal: float | None = None
-    macd_hist: float | None = None
-
-
-class HistoryResponse(BaseModel):
-    symbol: str
-    interval: str
-    bars: list[OhlcvPoint]
-    data_freshness_seconds: int | None = None
-    source: str = "realtime"
 
 
 class IndexResponse(BaseModel):
@@ -161,26 +140,7 @@ async def _fetch_quote_from_yfinance(symbol: str) -> QuoteResponse:
     except Exception as e:
         logger.warning(f"MarketDataService quote fetch failed for {symbol}: {e}")
         raise HTTPException(status_code=503, detail={"message": f"Market provider failure: {str(e)}"})
-    signal_score = max(-1.0, min(1.0, float(result["change_pct"]) / 5.0))
-    probs = _state_probs_from_signal(signal_score)
-    state = max(probs, key=probs.get).upper()
-    direction = _direction_from_signal(signal_score)
 
-    return QuoteResponse(
-        ticker=str(result["ticker"]),
-        name=str(result["name"]),
-        price=float(result["price"]),
-        change=float(result["change"]),
-        change_pct=float(result["change_pct"]),
-        volume=int(result["volume"]),
-        market_cap=float(result["market_cap"]),
-        pe_ratio=float(result["pe_ratio"]),
-        high_52w=float(result["high_52w"]),
-        low_52w=float(result["low_52w"]),
-        regime={"state": state, "probs": probs},
-        signal={"direction": direction, "confidence": round(min(0.95, 0.55 + abs(signal_score) * 0.35), 3)},
-        timestamp=datetime.now(UTC),
-    )
 
 
 def _state_probs_from_signal(signal: float) -> dict[str, float]:
@@ -213,12 +173,14 @@ def _direction_from_signal(signal: float) -> str:
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
 async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
     """Return quote via Redis cache, then yfinance fallback on cache miss."""
+    logger.info(f"Received quote request for symbol: {symbol}")
     key = f"quote:{symbol.upper()}"
     redis = None
     try:
         redis = await get_redis()
     except Exception:
         redis = None
+        # redis remains None on failure
 
     if redis is not None:
         try:
@@ -227,8 +189,8 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
                 payload = json.loads(cached)
                 payload["timestamp"] = datetime.fromisoformat(payload["timestamp"]) if isinstance(payload.get("timestamp"), str) else datetime.now(UTC)
                 return QuoteResponse(**payload)
-        except Exception:
-            # If Redis is unavailable, we still serve from yfinance fallback.
+        except Exception as redis_err:
+            logger.warning(f"Redis error for key {key}: {redis_err}. Proceeding to DB lookup.")
             pass
 
     try:
@@ -334,6 +296,7 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
             )
 
     if redis is not None:
+        logger.info(f"Caching quote for symbol {symbol} in Redis with key {key}")
         try:
             cache_payload = quote.model_dump()
             cache_payload["timestamp"] = quote.timestamp.isoformat()
@@ -361,27 +324,9 @@ async def get_history(
     interval: str = Query(default="1d", pattern="^(1m|3m|5m|10m|15m|30m|45m|1h|2h|4h|1d|1w|1mo)$"),
     period: str = Query(default="1y", pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
     db: AsyncSession = Depends(get_db),
-):
+) -> HistoryResponse:
     """Delegate to canonical get_history in market.py"""
-    canonical_res = await canonical_get_history(symbol, interval, period)
-    bars = [
-        OhlcvPoint(
-            time=b.time,
-            open=float(b.open),
-            high=float(b.high),
-            low=float(b.low),
-            close=float(b.close),
-            volume=float(b.volume),
-        )
-        for b in canonical_res.bars
-    ]
-    return HistoryResponse(
-        symbol=canonical_res.symbol,
-        interval=canonical_res.interval,
-        bars=bars,
-        data_freshness_seconds=canonical_res.data_freshness_seconds,
-        source=canonical_res.source
-    )
+    return await canonical_get_history(symbol, interval, period)
 
 
 @router.get("/indices", response_model=list[IndexResponse])

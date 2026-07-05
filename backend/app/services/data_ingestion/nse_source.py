@@ -6,6 +6,7 @@ import asyncio
 from datetime import UTC, datetime
 import logging
 import httpx
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
 
@@ -29,16 +30,23 @@ class NSESource(MarketDataSource):
             "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "referer": "https://www.nseindia.com/",
         }
+        backoff_delays = [1.0, 3.0, 8.0]
         for attempt in range(3):
             try:
                 response = await client.get("https://www.nseindia.com", headers=headers, timeout=10)
                 if response.status_code == 200:
                     return dict(response.cookies)
+                if response.status_code in (401, 403):
+                    raise DataSourceError(f"NSE session bootstrap forbidden: status {response.status_code}")
+            except DataSourceError:
+                raise
             except Exception as e:
                 logger.warning(f"NSE session bootstrap attempt {attempt+1} failed: {e}")
-                await asyncio.sleep(1 * (attempt + 1))
+                if attempt < 2:
+                    await asyncio.sleep(backoff_delays[attempt])
         raise DataSourceError("Failed to bootstrap NSE session cookies")
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=8))
     async def fetch_ohlcv(
         self,
         symbol: str,
@@ -79,10 +87,14 @@ class NSESource(MarketDataSource):
                         logger.info(f"NSE session expired or forbidden (status {response.status_code}), re-bootstrapping...")
                         try:
                             cookies = await self._bootstrap_session(client)
+                        except DataSourceError:
+                            raise
                         except Exception as e:
                             logger.warning(f"Failed to bootstrap session on attempt {attempt+1}: {e}")
                     else:
                         logger.warning(f"NSE request returned status {response.status_code}, retrying...")
+                except DataSourceError:
+                    raise
                 except Exception as ex:
                     logger.warning(f"NSE fetch attempt {attempt+1} failed: {ex}")
                 

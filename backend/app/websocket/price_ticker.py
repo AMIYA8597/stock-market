@@ -79,6 +79,7 @@ async def run_price_ticker(redis: Redis) -> None:
                     "change": float(quote.get("change", 0.0)),
                     "change_pct": float(quote.get("change_pct", 0.0)),
                     "timestamp": datetime.now(UTC).isoformat(),
+                    "source": quote.get("source", "yfinance"),
                     "ema9": ema9_val,
                     "ema21": ema21_val,
                     "rsi": rsi_val,
@@ -126,7 +127,7 @@ async def run_price_ticker(redis: Redis) -> None:
                             "timestamp": datetime.now(UTC).isoformat(),
                         }
                         
-                        # Publish signal to Redis channel prices.ticks (so it goes to the same price_broadcaster -> prices:global WS connection!)
+                        # Publish signal to Redis channel prices.ticks (so it goes to the ws_prices /ws/prices WS connection!)
                         await redis.publish("prices.ticks", json.dumps(signal_msg))
                 except Exception as sig_err:
                     logger.warning(f"Failed to compute live signal for tick {normalized_symbol}: {sig_err}")

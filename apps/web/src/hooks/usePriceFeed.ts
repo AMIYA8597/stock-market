@@ -8,6 +8,7 @@ export interface LivePriceTick {
   price: number;
   change_pct: number;
   timestamp: string;
+  source?: string;
 }
 
 interface UsePriceFeedState {
@@ -69,6 +70,7 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
           price?: number;
           change_pct?: number;
           timestamp?: string;
+          source?: string;
         };
         if (payload.type !== "tick" || !payload.symbol || typeof payload.price !== "number") {
           return;
@@ -82,6 +84,7 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
             price,
             change_pct: payload.change_pct ?? 0,
             timestamp: payload.timestamp ?? new Date().toISOString(),
+            source: payload.source,
           });
           return next;
         });

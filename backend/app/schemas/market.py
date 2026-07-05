@@ -46,7 +46,7 @@ class QuoteResponse(BaseModel):
 
 class OHLCVBar(BaseModel):
     """Single OHLCV candle."""
-    time: int
+    timestamp: str
     open: Decimal = Field(..., decimal_places=8)
     high: Decimal = Field(..., decimal_places=8)
     low: Decimal = Field(..., decimal_places=8)

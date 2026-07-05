@@ -158,6 +158,15 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
   }, [activeSymbols, signals]);
 
   const symbols = useMemo(() => visibleSignals.map((s) => s.symbol), [visibleSignals]);
+  
+  const lastCloseTimestamp = useMemo(() => {
+    if (selectedSymbol) {
+      const selSig = signals.find((s) => s.symbol.toUpperCase() === selectedSymbol.toUpperCase());
+      if (selSig?.timestamp) return selSig.timestamp;
+    }
+    return signals.find((s) => s.timestamp)?.timestamp;
+  }, [signals, selectedSymbol]);
+
   const { ticks } = usePriceFeed(symbols);
 
   const [tickHistories, setTickHistories] = useState<Record<string, number[]>>({});
@@ -328,6 +337,15 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
               <span className="rounded bg-[rgba(255,255,255,0.05)] px-1 py-0.2 text-[7px] text-[var(--nq-text-secondary)] font-mono font-semibold uppercase tracking-wider">
                 {exchange}
               </span>
+              {tick?.source && (
+                <span className={`rounded px-1 py-0.2 text-[7px] font-mono font-semibold uppercase tracking-wider ${
+                  tick.source.toLowerCase() === "nse"
+                    ? "bg-[rgba(0,230,118,0.12)] text-[#00E676]"
+                    : "bg-[rgba(255,255,255,0.05)] text-[var(--nq-text-muted)]"
+                }`}>
+                  {tick.source.toLowerCase() === "nse" ? "NSE live" : `${tick.source} (delayed)`}
+                </span>
+              )}
             </div>
             <span className="block font-sans text-[9px] text-[var(--nq-text-secondary)] truncate max-w-[120px]" title={name}>
               {name}
@@ -440,9 +458,9 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
       {isClosed && signals.length > 0 && (
         <div className="mb-2 rounded border border-[rgba(255,59,92,0.3)] bg-[rgba(255,59,92,0.06)] px-2.5 py-1.5 text-[10px] text-[#FF3B5C] font-mono flex items-center justify-between shrink-0">
           <span className="font-bold">Market Closed</span>
-          {signals.find((s) => s.timestamp)?.timestamp && (
+          {lastCloseTimestamp && (
             <span className="opacity-85">
-              Last Close: {new Date(signals.find((s) => s.timestamp)!.timestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
+              Last Close: {new Date(lastCloseTimestamp).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}
             </span>
           )}
         </div>

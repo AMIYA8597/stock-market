@@ -43,6 +43,8 @@ class YFinanceSource(MarketDataSource):
                 progress=False,
                 threads=False,
             )
+            if not frame.empty and isinstance(frame.columns, pd.MultiIndex):
+                frame.columns = frame.columns.get_level_values(0)
         except Exception as e:
             logger.warning(f"yfinance download failed for {symbol}: {e}. Trying direct HTTP fallback...")
             frame = pd.DataFrame()

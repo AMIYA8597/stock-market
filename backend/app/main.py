@@ -3,14 +3,19 @@ QuantEdge — FastAPI Application Entry Point.
 
 Configures CORS, mounts API v1 router, and registers WebSocket endpoints.
 """
-
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 import asyncio
 
-if sys.platform == "win32":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+# Ensure the repository's `backend` directory is on sys.path so sibling
+# top-level packages like `research` (located at backend/research)
+# are importable when the server is started from the repository root.
+_backend_root = Path(__file__).resolve().parent.parent
+_backend_root_str = str(_backend_root)
+if _backend_root_str not in sys.path:
+    sys.path.insert(0, _backend_root_str)
 
 from contextlib import asynccontextmanager
 
@@ -144,6 +149,11 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 # ─── Mount API v1 ─────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 app.include_router(websocket_router)
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    return {"status": "ok"}
 
 # ─── Mount QuantEdge specific router ──────────────────────
 from app.api.quantedge_router import router as quantedge_router

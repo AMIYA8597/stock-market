@@ -33,7 +33,10 @@ interface OhlcvPoint {
 interface HistoryResponse {
   symbol: string;
   interval: string;
-  data: OhlcvPoint[];
+  bars?: OhlcvPoint[];
+  data?: OhlcvPoint[];
+  source?: string;
+  data_freshness_seconds?: number | null;
 }
 
 interface QuoteResponse {
@@ -69,145 +72,22 @@ const fetchHistory = async (
   return data;
 };
 
+const getHistoryBars = (history?: HistoryResponse): OhlcvPoint[] => {
+  if (!history) return [];
+  return history.bars ?? history.data ?? [];
+};
+
+function safeNum(val: unknown, fallback = 0): number {
+  if (val == null) return fallback;
+  const n = Number(val);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 const fetchQuote = async (symbol: string): Promise<QuoteResponse> => {
   const { data } = await axios.get(
     `${API}/global/quote/${encodeURIComponent(symbol)}`,
   );
   return data;
-};
-
-/* ─── Formatters ────────────────────────────────────── */
-function fmt(n: number, decimals = 2) {
-  if (n == null || isNaN(n)) return "—";
-  return n.toLocaleString("en-IN", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-}
-
-function fmtBig(n: number): string {
-  if (n == null || isNaN(n) || n === 0) return "—";
-  if (n >= 1e12) return `₹${(n / 1e12).toFixed(2)}T`;
-  if (n >= 1e9) return `₹${(n / 1e9).toFixed(2)}B`;
-  if (n >= 1e6) return `₹${(n / 1e6).toFixed(2)}M`;
-  return fmt(n);
-}
-
-/* ─── Safe number helper ────────────────────────────── */
-function safeNum(val: unknown, fallback = 0): number {
-  if (val == null) return fallback;
-  const n = Number(val);
-  if (isNaN(n) || !isFinite(n)) return fallback;
-  return n;
-}
-
-/* ─── Helper to parse and round tick bar times ────────── */
-const getBarTime = (timestamp: string, interval: string): number => {
-  const dateSecs = Math.floor(new Date(timestamp).getTime() / 1000);
-  if (isNaN(dateSecs)) return Math.floor(Date.now() / 1000);
-
-  if (interval === "1m") return Math.floor(dateSecs / 60) * 60;
-  if (interval === "5m") return Math.floor(dateSecs / 300) * 300;
-  if (interval === "15m") return Math.floor(dateSecs / 900) * 900;
-  if (interval === "1h") return Math.floor(dateSecs / 3600) * 3600;
-  if (interval === "1d" || interval === "1D") {
-    return Math.floor(dateSecs / 86400) * 86400;
-  }
-  return dateSecs;
-};
-
-/* ─── Indicator Math Helpers ─────────────────────────── */
-const computeBollingerBands = (unique: any[], period = 20, multiplier = 2) => {
-  const upper: any[] = [];
-  const middle: any[] = [];
-  const lower: any[] = [];
-
-  for (let i = 0; i < unique.length; i++) {
-    if (i < period - 1) continue;
-    const slice = unique.slice(i - period + 1, i + 1);
-    const closes = slice.map((item) => safeNum(item.p.close));
-    const sum = closes.reduce((a, b) => a + b, 0);
-    const mean = sum / period;
-
-    const sqDiffSum = closes.reduce((a, b) => a + Math.pow(b - mean, 2), 0);
-    const stdDev = Math.sqrt(sqDiffSum / period);
-    const time = unique[i].ts;
-
-    middle.push({ time, value: mean });
-    upper.push({ time, value: mean + multiplier * stdDev });
-    lower.push({ time, value: mean - multiplier * stdDev });
-  }
-
-  return { upper, middle, lower };
-};
-
-const computeVWAP = (unique: any[]) => {
-  let cumulativePV = 0;
-  let cumulativeV = 0;
-  const vwapData: any[] = [];
-
-  for (let i = 0; i < unique.length; i++) {
-    const p = unique[i].p;
-    const ts = unique[i].ts;
-    const h = safeNum(p.high),
-      l = safeNum(p.low),
-      c = safeNum(p.close),
-      v = safeNum(p.volume);
-
-    const typicalPrice = (h + l + c) / 3;
-    cumulativePV += typicalPrice * v;
-    cumulativeV += v;
-
-    if (cumulativeV > 0) {
-      vwapData.push({ time: ts, value: cumulativePV / cumulativeV });
-    }
-  }
-  return vwapData;
-};
-
-const computeSupportResistance = (unique: any[], currentPrice: number) => {
-  const prices = unique.map((item) => safeNum(item.p.close));
-  const windowSize = 5;
-  const levels: number[] = [];
-
-  for (let i = windowSize; i < prices.length - windowSize; i++) {
-    const val = prices[i];
-    let isMax = true;
-    let isMin = true;
-
-    for (let w = -windowSize; w <= windowSize; w++) {
-      if (w === 0) continue;
-      if (prices[i + w] >= val) isMax = false;
-      if (prices[i + w] <= val) isMin = false;
-    }
-
-    if (isMax || isMin) {
-      levels.push(val);
-    }
-  }
-
-  const mergedLevels: number[] = [];
-  const sorted = [...levels].sort((a, b) => a - b);
-  for (const lvl of sorted) {
-    if (mergedLevels.length === 0) {
-      mergedLevels.push(lvl);
-    } else {
-      const last = mergedLevels[mergedLevels.length - 1];
-      if ((lvl - last) / last > 0.015) {
-        mergedLevels.push(lvl);
-      }
-    }
-  }
-
-  const supports = mergedLevels
-    .filter((lvl) => lvl < currentPrice)
-    .reverse()
-    .slice(0, 3);
-  const resistances = mergedLevels
-    .filter((lvl) => lvl > currentPrice)
-    .slice(0, 3);
-
-  return { supports, resistances };
 };
 
 /* ─── CandleChart ───────────────────────────────────── */
@@ -228,7 +108,12 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const volumeRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
 
-  // Indicator series refs
+  // New Indicator series refs
+  const bbUpperRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const bbMiddleRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const bbLowerRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const vwapRef = useRef<ISeriesApi<SeriesType> | null>(null);
+  const srLinesRef = useRef<any[]>([]);
   const ema9Ref = useRef<ISeriesApi<SeriesType> | null>(null);
   const ema21Ref = useRef<ISeriesApi<SeriesType> | null>(null);
   const rsiRef = useRef<ISeriesApi<SeriesType> | null>(null);
@@ -236,24 +121,19 @@ export const CandleChart: React.FC<CandleChartProps> = ({
   const macdSignalRef = useRef<ISeriesApi<SeriesType> | null>(null);
   const macdHistRef = useRef<ISeriesApi<SeriesType> | null>(null);
 
-  // New Indicator series refs
-  const bbUpperRef = useRef<ISeriesApi<SeriesType> | null>(null);
-  const bbMiddleRef = useRef<ISeriesApi<SeriesType> | null>(null);
-  const bbLowerRef = useRef<ISeriesApi<SeriesType> | null>(null);
-  const vwapRef = useRef<ISeriesApi<SeriesType> | null>(null);
-  const srLinesRef = useRef<any[]>([]);
-
   // States
   const [chartType, setChartType] = useState<
     "candlestick" | "line" | "area" | "bar" | "heikin-ashi"
   >("candlestick");
-  const [showEMA, setShowEMA] = useState(false);
-  const [showRSI, setShowRSI] = useState(false);
-  const [showMACD, setShowMACD] = useState(false);
-  const [showBB, setShowBB] = useState(false);
-  const [showVWAP, setShowVWAP] = useState(false);
-  const [showSR, setShowSR] = useState(false);
+  const [showEMA, setShowEMA] = useState(true);
+  const [showRSI, setShowRSI] = useState(true);
+  const [showMACD, setShowMACD] = useState(true);
+  const [showBB, setShowBB] = useState(true);
+  const [showVWAP, setShowVWAP] = useState(true);
+  const [showSR, setShowSR] = useState(true);
   const liveMarkersRef = useRef<any[]>([]);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnectAttempt, setWsReconnectAttempt] = useState(0);
 
   // Manual Drawings state & refs
   const [drawings, setDrawings] = useState<{
@@ -521,22 +401,6 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     };
   }, [symbol, interval, period, chartType, destroyChart]);
 
-  /* Toggle Indicators Visibility */
-  useEffect(() => {
-    ema9Ref.current?.applyOptions({ visible: showEMA });
-    ema21Ref.current?.applyOptions({ visible: showEMA });
-  }, [showEMA]);
-
-  useEffect(() => {
-    rsiRef.current?.applyOptions({ visible: showRSI });
-  }, [showRSI]);
-
-  useEffect(() => {
-    macdRef.current?.applyOptions({ visible: showMACD });
-    macdSignalRef.current?.applyOptions({ visible: showMACD });
-    macdHistRef.current?.applyOptions({ visible: showMACD });
-  }, [showMACD]);
-
   useEffect(() => {
     bbUpperRef.current?.applyOptions({ visible: showBB });
     bbMiddleRef.current?.applyOptions({ visible: showBB });
@@ -571,7 +435,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       start: { time: any; price: number },
       end: { time: any; price: number },
     ) => {
-      if (!data || !data.data || data.data.length === 0) return [];
+      const historyBars = getHistoryBars(data);
+      if (!data || historyBars.length === 0) return [];
 
       const parseTime = (t: unknown): number => {
         if (t == null) return NaN;
@@ -581,10 +446,10 @@ export const CandleChart: React.FC<CandleChartProps> = ({
         return isNaN(ms) ? NaN : Math.floor(ms / 1000);
       };
 
-      const parsedTimes = data.data
+      const parsedTimes = historyBars
         .map((p) => {
-          const t = parseTime(p.time);
-          return { original: p.time, numeric: t };
+          const t = parseTime((p as any).time ?? (p as any).timestamp);
+          return { original: (p as any).time ?? (p as any).timestamp, numeric: t };
         })
         .filter((t) => !isNaN(t.numeric))
         .sort((a, b) => a.numeric - b.numeric);
@@ -721,8 +586,10 @@ export const CandleChart: React.FC<CandleChartProps> = ({
 
   /* Update data when query result arrives */
   useEffect(() => {
-    if (!data || !candleRef.current || !volumeRef.current) return;
-    if (!data.data || data.data.length === 0) return;
+    if (!data || !candleRef.current || !volumeRef.current || !chartRef.current) return;
+
+    const historyBars = getHistoryBars(data);
+    if (historyBars.length === 0) return;
 
     const parseTime = (t: unknown): number => {
       if (t == null) return NaN;
@@ -735,9 +602,9 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       return Math.floor(ms / 1000);
     };
 
-    const parsed = data.data
+    const parsed = historyBars
       .map((p) => {
-        const ts = parseTime(p.time);
+        const ts = parseTime((p as any).time ?? (p as any).timestamp);
         return { ts, p };
       })
       .filter(({ ts, p }) => {
@@ -899,88 +766,51 @@ export const CandleChart: React.FC<CandleChartProps> = ({
     }
   }, [data, chartType]);
 
-  /* Support & Resistance lines redraw useEffect */
-  useEffect(() => {
-    if (!candleRef.current || !data || !data.data || data.data.length === 0)
-      return;
-
-    srLinesRef.current.forEach((line) => {
-      try {
-        candleRef.current?.removePriceLine(line);
-      } catch (e) {}
-    });
-    srLinesRef.current = [];
-
-    if (showSR) {
-      const parseTime = (t: unknown): number => {
-        if (t == null) return NaN;
-        if (typeof t === "number")
-          return t > 1e12 ? Math.floor(t / 1000) : Math.floor(t);
-        const ms = new Date(String(t).trim()).getTime();
-        return isNaN(ms) ? NaN : Math.floor(ms / 1000);
-      };
-
-      const parsed = data.data
-        .map((p) => ({ ts: parseTime(p.time), p }))
-        .filter(
-          ({ ts, p }) =>
-            !isNaN(ts) && ts > 0 && (p.open !== 0 || p.close !== 0),
-        )
-        .sort((a, b) => a.ts - b.ts);
-
-      const seen = new Set<number>();
-      const unique = parsed.filter(({ ts }) => {
-        if (seen.has(ts)) return false;
-        seen.add(ts);
-        return true;
-      });
-
-      if (unique.length > 0) {
-        const lastPrice = safeNum(unique[unique.length - 1].p.close);
-        const { supports, resistances } = computeSupportResistance(
-          unique,
-          lastPrice,
-        );
-        supports.forEach((sup) => {
-          const line = candleRef.current!.createPriceLine({
-            price: sup,
-            color: "#00d97e",
-            lineWidth: 1,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: `Sup ₹${sup.toFixed(1)}`,
-          });
-          srLinesRef.current.push(line);
-        });
-        resistances.forEach((res) => {
-          const line = candleRef.current!.createPriceLine({
-            price: res,
-            color: "#ff4757",
-            lineWidth: 1,
-            lineStyle: LineStyle.Dotted,
-            axisLabelVisible: true,
-            title: `Res ₹${res.toFixed(1)}`,
-          });
-          srLinesRef.current.push(line);
-        });
-      }
-    }
-  }, [showSR, data]);
-
   /* WebSocket live ticks handler */
   useEffect(() => {
     if (!candleRef.current || !volumeRef.current) return;
 
     const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${wsProtocol}//${window.location.host}/ws/prices`;
-    const socket = new WebSocket(wsUrl);
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let shouldReconnect = true;
 
-    socket.onopen = () => {
-      console.log(`ws_chart: connected to ${wsUrl}, subscribing to ${symbol}`);
-      socket.send(JSON.stringify({ action: "subscribe", symbols: [symbol] }));
-    };
+    const connect = () => {
+      socket = new WebSocket(wsUrl);
 
-    socket.onmessage = (event) => {
+      socket.onopen = () => {
+        console.log(`ws_chart: connected to ${wsUrl}, subscribing to ${symbol}`);
+        setWsConnected(true);
+        setWsReconnectAttempt(0);
+        socket?.send(JSON.stringify({ action: "subscribe", symbols: [symbol] }));
+      };
+
+      socket.onclose = () => {
+        console.log(`ws_chart: disconnected`);
+        setWsConnected(false);
+        if (!shouldReconnect) return;
+        setWsReconnectAttempt((attempt) => {
+          const nextAttempt = attempt + 1;
+          reconnectTimer = window.setTimeout(
+            connect,
+            Math.min(1000 * Math.pow(2, nextAttempt), 15000),
+          );
+          return nextAttempt;
+        });
+      };
+
+      socket.onerror = (err) => {
+        console.error("ws_chart: socket error", err);
+        setWsConnected(false);
+        try {
+          socket?.close();
+        } catch (closeErr) {
+          console.error("ws_chart: close after error failed", closeErr);
+        }
+      };
+
+      socket.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
         if (payload.symbol?.toUpperCase() === symbol.toUpperCase()) {
@@ -1117,23 +947,72 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       }
     };
 
-    socket.onerror = (err) => {
-      console.error("ws_chart: socket error", err);
     };
+
+    connect();
 
     return () => {
+      shouldReconnect = false;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
       console.log(`ws_chart: closing socket and unsubscribing from ${symbol}`);
       try {
-        socket.send(
-          JSON.stringify({ action: "unsubscribe", symbols: [symbol] }),
-        );
-      } catch (e) {}
-      socket.close();
+        socket?.send(JSON.stringify({ action: "unsubscribe", symbols: [symbol] }));
+      } catch (_e) {}
+      socket?.close();
     };
-  }, [symbol, interval, chartType]);
+  }, [symbol, interval, chartType, wsReconnectAttempt]);
 
   return (
-    <div style={{ position: "relative", width: "100%", minHeight: 510 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", position: "relative" }}>
+      {/* Controls */}
+      <div style={{ padding: "0.5rem", background: "#1a1b26", color: "#c0caf5", display: "flex", flexWrap: "wrap", gap: "0.5rem", alignItems: "center" }}>
+        <label>Chart type:
+          <select value={chartType} onChange={(e) => setChartType(e.target.value as any)} style={{ marginLeft: "0.5rem" }}>
+            <option value="candlestick">Candlestick</option>
+            <option value="line">Line</option>
+            <option value="area">Area</option>
+            <option value="bar">Bar</option>
+            <option value="heikin-ashi">Heikin‑Ashi</option>
+          </select>
+        </label>
+        <label><input type="checkbox" checked={showEMA} onChange={() => setShowEMA(!showEMA)} /> EMA</label>
+        <label><input type="checkbox" checked={showRSI} onChange={() => setShowRSI(!showRSI)} /> RSI</label>
+        <label><input type="checkbox" checked={showMACD} onChange={() => setShowMACD(!showMACD)} /> MACD</label>
+        <label><input type="checkbox" checked={showBB} onChange={() => setShowBB(!showBB)} /> Bollinger</label>
+        <label><input type="checkbox" checked={showVWAP} onChange={() => setShowVWAP(!showVWAP)} /> VWAP</label>
+        <label><input type="checkbox" checked={showSR} onChange={() => setShowSR(!showSR)} /> S/R</label>
+        <span style={{ marginLeft: "auto", color: wsConnected ? "#00d97e" : "#ff4757" }}>
+          WS {wsConnected ? "Connected" : "Disconnected"}
+        </span>
+      </div>
+      <div ref={containerRef} style={{ position: "relative", width: "100%", flexGrow: 1 }} />
+      <div
+        style={{
+          position: "absolute",
+          left: 12,
+          top: 48,
+          zIndex: 11,
+          fontSize: 11,
+          color: "#c0caf5",
+          background: "rgba(13,14,20,0.88)",
+          border: "1px solid rgba(37,40,54,0.6)",
+          borderRadius: 6,
+          padding: "4px 8px",
+        }}
+      >
+        <span style={{ color: data?.source ? "#00d97e" : "#8b90a0" }}>
+          Data: {data?.source ?? "loading"}
+        </span>
+        {data?.data_freshness_seconds != null ? (
+          <span> · as of {Math.max(0, data.data_freshness_seconds)}s ago</span>
+        ) : null}
+      </div>
+      {/* WebSocket connection status badge */}
+      <div style={{ position: "absolute", top: 8, right: 8, fontSize: 12, color: "#fff", background: wsConnected ? "#00d97e" : "#ff4757", padding: "2px 6px", borderRadius: 4 }}>
+        {wsConnected ? "Connected" : "Disconnected"}
+      </div>
       {/* Chart Controls Panel */}
       <div
         style={{
@@ -1504,7 +1383,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({
       {!isLoading &&
         !error &&
         data &&
-        (!data.data || data.data.length === 0) && (
+        (getHistoryBars(data).length === 0) && (
           <div
             style={{
               position: "absolute",
@@ -1558,6 +1437,7 @@ export const StockQuote: React.FC<StockQuoteProps> = ({
 }) => {
   const [livePrice, setLivePrice] = useState<number | null>(null);
   const [liveChange, setLiveChange] = useState<number | null>(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const [liveChangePct, setLiveChangePct] = useState<number | null>(null);
 
   // AI Live Signal states
@@ -1653,15 +1533,19 @@ export const StockQuote: React.FC<StockQuoteProps> = ({
       }
     };
 
+    connect();
+
     return () => {
+      shouldReconnect = false;
+      if (reconnectTimer) {
+        window.clearTimeout(reconnectTimer);
+      }
+      console.log(`ws_chart: closing socket and unsubscribing from ${symbol}`);
       try {
-        socket.send(
-          JSON.stringify({ action: "unsubscribe", symbols: [symbol] }),
-        );
-      } catch (e) {}
-      socket.close();
+        socket?.send(JSON.stringify({ action: "unsubscribe", symbols: [symbol] }));
+      } catch (_e) {}
+      socket?.close();
     };
-  }, [symbol, onPriceChange, onSignalChange]);
 
   if (isLoading) {
     return (
