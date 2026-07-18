@@ -9,16 +9,16 @@ Provides out-of-sample Precision, Recall, and F1 metrics on historical zone touc
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
 import pickle
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from sklearn.cluster import DBSCAN
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from typing import Dict, Any, List, Tuple
+from sklearn.cluster import DBSCAN
 
 from app.core.config import get_settings
 
@@ -32,10 +32,10 @@ class SRBiLSTM(nn.Module):
     def __init__(self, input_dim: int = 5, hidden_dim: int = 32, num_classes: int = 3):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_dim, 
-            hidden_dim, 
-            num_layers=1, 
-            batch_first=True, 
+            input_dim,
+            hidden_dim,
+            num_layers=1,
+            batch_first=True,
             bidirectional=True
         )
         self.fc = nn.Linear(hidden_dim * 2, num_classes)
@@ -52,10 +52,10 @@ class SupportResistanceEngine:
 
     @staticmethod
     def detect_classical_zones(
-        df: pd.DataFrame, 
-        eps_pct: float = 0.012, 
+        df: pd.DataFrame,
+        eps_pct: float = 0.012,
         min_touches: int = 2
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Identify S/R zones using swing highs/lows clustered with DBSCAN."""
         if len(df) < 20:
             return []
@@ -63,7 +63,7 @@ class SupportResistanceEngine:
         highs = df["high"].values
         lows = df["low"].values
         closes = df["close"].values
-        
+
         swing_highs = []
         swing_lows = []
 
@@ -90,7 +90,7 @@ class SupportResistanceEngine:
             X_low = np.array(swing_lows).reshape(-1, 1)
             clustering_low = DBSCAN(eps=eps, min_samples=min_touches).fit(X_low)
             labels_low = clustering_low.labels_
-            
+
             for cluster_idx in set(labels_low):
                 if cluster_idx == -1:
                     continue  # Ignore noise
@@ -108,7 +108,7 @@ class SupportResistanceEngine:
             X_high = np.array(swing_highs).reshape(-1, 1)
             clustering_high = DBSCAN(eps=eps, min_samples=min_touches).fit(X_high)
             labels_high = clustering_high.labels_
-            
+
             for cluster_idx in set(labels_high):
                 if cluster_idx == -1:
                     continue  # Ignore noise
@@ -127,9 +127,9 @@ class SupportResistanceEngine:
 
     @staticmethod
     def _prepare_sequence_data(
-        df: pd.DataFrame, 
+        df: pd.DataFrame,
         seq_len: int = 30
-    ) -> Tuple[np.ndarray, np.ndarray, List[Dict[str, Any]]]:
+    ) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
         """Prepares normalized sequences and labels for sequence labeling."""
         highs = df["high"].values
         lows = df["low"].values
@@ -139,19 +139,19 @@ class SupportResistanceEngine:
 
         # 1. Get ground truth zones using full history DBSCAN
         classical_zones = SupportResistanceEngine.detect_classical_zones(df, eps_pct=0.012, min_touches=2)
-        
+
         # 2. Label each candle: 0=neither, 1=support, 2=resistance
         labels = np.zeros(len(df), dtype=int)
         for i in range(len(df)):
             low_i = lows[i]
             high_i = highs[i]
-            
+
             # Check support
             for zone in classical_zones:
                 if zone["type"] == "support" and zone["min"] <= low_i <= zone["max"]:
                     labels[i] = 1
                     break
-                    
+
             # Check resistance (resistance takes priority or overrides if overlap)
             if labels[i] == 0:
                 for zone in classical_zones:
@@ -161,33 +161,33 @@ class SupportResistanceEngine:
 
         # 3. Build sliding window sequences
         features = np.column_stack([opens, highs, lows, closes, volumes])
-        
+
         X_seq = []
         y_seq = []
-        
+
         for i in range(len(df) - seq_len + 1):
             window = features[i : i + seq_len].copy()
             # Normalize price by the first candle close in sequence
             ref_close = window[0, 3] if window[0, 3] != 0 else 1.0
             window[:, 0:4] = window[:, 0:4] / ref_close
-            
+
             # Normalize volume by its mean in sequence
             vol_mean = np.mean(window[:, 4]) if np.mean(window[:, 4]) != 0 else 1.0
             window[:, 4] = window[:, 4] / vol_mean
-            
+
             X_seq.append(window)
             y_seq.append(labels[i : i + seq_len])
-            
+
         return np.array(X_seq), np.array(y_seq), classical_zones
 
     @classmethod
     def train_and_evaluate_bilstm(
-        cls, 
-        df: pd.DataFrame, 
-        symbol: str, 
-        seq_len: int = 30, 
+        cls,
+        df: pd.DataFrame,
+        symbol: str,
+        seq_len: int = 30,
         epochs: int = 8
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Trains BiLSTM model on historical candles and reports out-of-sample performance."""
         if len(df) < seq_len + 20:
             return {
@@ -198,7 +198,7 @@ class SupportResistanceEngine:
             }
 
         X, y, classical_zones = cls._prepare_sequence_data(df, seq_len=seq_len)
-        
+
         # Train-Test Split (Walk-forward out-of-sample: 80% train, 20% test)
         split_idx = int(len(X) * 0.8)
         X_train, X_test = X[:split_idx], X[split_idx:]
@@ -236,12 +236,12 @@ class SupportResistanceEngine:
         if np.sum(mask) > 0:
             pred_events = predictions[mask]
             target_events = targets[mask]
-            
+
             # Simple TP, FP, FN calculation
             tp = np.sum((pred_events == target_events) & (target_events > 0))
             fp = np.sum((pred_events != target_events) & (pred_events > 0))
             fn = np.sum((pred_events != target_events) & (target_events > 0))
-            
+
             precision = float(tp / (tp + fp)) if (tp + fp) > 0 else 0.50
             recall = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.50
             f1 = float(2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.50
@@ -256,7 +256,7 @@ class SupportResistanceEngine:
         # Generate predicted DL zones from the latest window
         latest_window = X[-1:]
         latest_window_t = torch.tensor(latest_window, dtype=torch.float32).to(device)
-        
+
         with torch.no_grad():
             latest_out = model(latest_window_t)
             latest_preds = torch.argmax(latest_out, dim=-1).cpu().numpy()[0]
@@ -265,10 +265,10 @@ class SupportResistanceEngine:
         closes = df["close"].values
         lows = df["low"].values
         highs = df["high"].values
-        
+
         dl_support_prices = []
         dl_resistance_prices = []
-        
+
         # Map last seq_len items
         start_idx = len(df) - seq_len
         for offset in range(seq_len):
@@ -283,7 +283,7 @@ class SupportResistanceEngine:
         dl_zones = []
         current_price = closes[-1]
         eps = current_price * 0.012
-        
+
         if dl_support_prices:
             X_s = np.array(dl_support_prices).reshape(-1, 1)
             db_s = DBSCAN(eps=eps, min_samples=1).fit(X_s)
@@ -296,7 +296,7 @@ class SupportResistanceEngine:
                     "touches": int(len(c_pr)),
                     "avg": float(np.mean(c_pr))
                 })
-                
+
         if dl_resistance_prices:
             X_r = np.array(dl_resistance_prices).reshape(-1, 1)
             db_r = DBSCAN(eps=eps, min_samples=1).fit(X_r)
@@ -316,7 +316,7 @@ class SupportResistanceEngine:
         model_path = MODEL_DIR / f"sr_lstm_{symbol}.pth"
         try:
             torch.save(model.state_dict(), model_path)
-            
+
             # Save evaluation metrics
             metrics_path = MODEL_DIR / f"sr_metrics_{symbol}.pkl"
             with open(metrics_path, "wb") as f:

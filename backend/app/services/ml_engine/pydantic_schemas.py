@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -12,13 +13,13 @@ class SignalPrediction(BaseModel):
 
     model_name: str
     p50_return: float = Field(..., description="Median predicted return")
-    p10_return: Optional[float] = Field(None, description="10th percentile")
-    p90_return: Optional[float] = Field(None, description="90th percentile")
+    p10_return: float | None = Field(None, description="10th percentile")
+    p90_return: float | None = Field(None, description="90th percentile")
     raw_signal: float = Field(..., description="Continuous signal in [-1, +1]")
     confidence: float = Field(..., description="Model confidence in [0, 1]")
     horizon_days: int = Field(default=1)
-    shap_values: Optional[dict[str, float]] = None
-    attention_weights: Optional[dict[str, float]] = None
+    shap_values: dict[str, float] | None = None
+    attention_weights: dict[str, float] | None = None
 
 
 class RegimeState(BaseModel):

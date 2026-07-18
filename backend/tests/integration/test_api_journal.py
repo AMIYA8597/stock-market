@@ -1,10 +1,13 @@
 import uuid
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.sql import Select
+
 from app.api.v1.journal import router as journal_router
 from app.core.dependencies import get_db
+
 
 class InMemorySession:
     def __init__(self, store=None):
@@ -45,7 +48,7 @@ class InMemorySession:
         if isinstance(statement, Select):
             entity = statement.column_descriptions[0]["entity"]
             objs = [v for v in self.store.values() if isinstance(v, entity)]
-            
+
             # Precise filtering by id and user_id
             try:
                 params = statement.compile().params

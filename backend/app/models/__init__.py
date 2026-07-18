@@ -18,16 +18,16 @@ from app.models.backtest import BacktestJob  # noqa: F401
 from app.models.blog import BlogPost  # noqa: F401
 from app.models.email_job import EmailJob  # noqa: F401
 from app.models.feature_vectors import FeatureVector  # noqa: F401
+from app.models.journal import TradeJournal  # noqa: F401
 from app.models.notification import Notification  # noqa: F401
 
 # Time-Series Data (OHLCV & Features)
 from app.models.ohlcv import OHLCV  # noqa: F401
+from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet  # noqa: F401
 from app.models.payment import PaymentTransaction  # noqa: F401
 
 # User Portfolio & Transactions
 from app.models.portfolio import PortfolioHolding  # noqa: F401
-from app.models.journal import TradeJournal  # noqa: F401
-from app.models.paper_trading import PaperWallet, PaperPosition, PaperOrder  # noqa: F401
 
 # Model Predictions & Signals
 from app.models.prediction import MLPrediction  # noqa: F401

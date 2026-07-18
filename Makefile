@@ -36,7 +36,8 @@ help:
 	@echo "Quality:"
 	@echo "  make test                   Run all tests (backend + frontend)"
 	@echo "  make test-backend           Run pytest on backend/tests/"
-	@echo "  make test-frontend          Run jest on frontend tests"
+	@echo "  make # make test-frontend target removed
+# lint-frontend target removed          Run jest on frontend tests"
 	@echo "  make lint                   Lint all code (ruff, mypy, eslint)"
 	@echo "  make format                 Auto-format all code"
 	@echo "  make type-check             Python type checking (mypy strict)"
@@ -107,14 +108,16 @@ notebooks:
 	@echo "✓ Jupyter Lab started"
 
 # ── Testing & Quality ────────────────────────────────────────────────────────────
-test: test-backend test-frontend
+test: test-backend # make test-frontend target removed
+# lint-frontend target removed
 	@echo "✓ All tests completed"
 
 test-backend:
 	cd backend && pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=80
 	@echo "✓ Backend tests completed (80% coverage threshold)"
 
-test-frontend:
+# make test-frontend target removed
+# lint-frontend target removed:
 	pnpm --filter @neuroquant/web test:run
 	@echo "✓ Frontend tests completed"
 

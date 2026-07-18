@@ -11,6 +11,7 @@ import asyncio
 import math
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+
 import numpy as np
 
 from app.schemas.intelligence import (
@@ -42,8 +43,8 @@ from app.schemas.intelligence import (
     TFTSignal,
     XGBoostSignal,
 )
-from app.services.prediction_engine import get_full_prediction
 from app.services.market_data_service import MarketDataService
+from app.services.prediction_engine import get_full_prediction
 
 REGIME_STATES = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
 MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
@@ -295,14 +296,14 @@ class IntelligenceService:
         reg_sub = ens.get("regime", {})
         state = reg_sub.get("regime", "SIDEWAYS")
         probs = reg_sub.get("probs", {"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34})
-        
+
         t_matrix = [
             [0.85, 0.05, 0.08, 0.02],
             [0.05, 0.80, 0.10, 0.05],
             [0.10, 0.10, 0.75, 0.05],
             [0.02, 0.18, 0.10, 0.70],
         ]
-        
+
         vol_1d = math.sqrt(reg_sub.get("regime_variance", 0.01)) if "regime_variance" in reg_sub else 0.013
         return RegimeCurrentResponse(
             state=state,
@@ -337,7 +338,7 @@ class IntelligenceService:
         if len(bars) >= 2:
             closes = [b["close"] for b in bars]
             times = [b["time"] for b in bars]
-            
+
             if len(closes) < days:
                 pad_count = days - len(closes)
                 first_date = datetime.fromisoformat(times[0]).date()
@@ -351,7 +352,7 @@ class IntelligenceService:
                             cond_vol=0.0,
                         )
                     )
-            
+
             for i in range(max(0, len(closes) - days), len(closes)):
                 d = datetime.fromisoformat(times[i]).date()
                 window = closes[max(0, i-21):i+1]
@@ -360,7 +361,7 @@ class IntelligenceService:
                     vol = float(np.std(ret_window))
                 else:
                     vol = 0.015
-                
+
                 ret_5d = (closes[i] - closes[max(0, i-5)]) / closes[max(0, i-5)] if i > 0 else 0.0
                 if ret_5d > 0.015 and vol < 0.015:
                     state = "BULL"
@@ -371,7 +372,7 @@ class IntelligenceService:
                 else:
                     state = "SIDEWAYS"
                     probs = {"BULL": 0.20, "BEAR": 0.20, "SIDEWAYS": 0.60}
-                    
+
                 rows.append(
                     RegimeHistoryPoint(
                         time=d,
@@ -421,7 +422,7 @@ class IntelligenceService:
         ens = pred.get("ensemble", {})
         xgb_sub = ens.get("xgboost", {})
         top_features = xgb_sub.get("top_features", [])
-        
+
         contribs = []
         if top_features:
             for feat in top_features:
@@ -448,7 +449,7 @@ class IntelligenceService:
                         pct_rank=0.5,
                     )
                 )
-        
+
         output_value = sum(item.shap_val for item in contribs)
         return ExplainShapResponse(
             model="xgboost",
@@ -483,10 +484,10 @@ class IntelligenceService:
             while len(log_returns) < 60:
                 log_returns.append(0.0)
             log_returns = log_returns[:60]
-            
+
             sum_ret = sum(log_returns) + 1e-9
             mean_weights = [round(val / sum_ret, 6) for val in log_returns]
-            
+
             weights = []
             for h in range(8):
                 shifted = mean_weights[h:] + mean_weights[:h]
@@ -528,7 +529,7 @@ class IntelligenceService:
         ens = pred.get("ensemble", {})
         tech_sub = ens.get("technical", {})
         rsi_val = tech_sub.get("rsi", 50.0)
-        
+
         rows: list[CounterfactualResponse] = []
         for idx in range(payload.num_cfs):
             cf_rsi = 30.0 - idx * 2.0 if payload.target_direction == "BUY" else 70.0 + idx * 2.0
@@ -594,12 +595,12 @@ class IntelligenceService:
             mid = len(returns) // 2
             p1 = returns[:mid]
             p2 = returns[mid:]
-            
+
             from scipy.stats import ks_2samp
             res = ks_2samp(p1, p2)
             ks_stat = float(res.statistic)
             p_val = float(res.pvalue)
-            
+
             for model in MODELS:
                 rows.append(
                     DriftItem(
@@ -650,13 +651,13 @@ class IntelligenceService:
                     continue
                 d = datetime.fromisoformat(times[i]).date()
                 ret = (closes[i] - closes[i-1])/closes[i-1] if i > 0 else 0.0
-                
+
                 tft_w = 0.28 + ret * 0.1
                 xg_w = 0.25 + ret * 0.1
                 hmm_w = 0.13 - ret * 0.05
                 gnn_w = 0.12
                 lstm_w = 0.22 - ret * 0.05
-                
+
                 weights = self._normalize_weights({
                     "tft": max(0.05, tft_w),
                     "hmm_garch": max(0.05, hmm_w),
@@ -729,7 +730,7 @@ class IntelligenceService:
             ("BTC-USD", "Crypto"),
             ("ETH-USD", "Crypto"),
         ]
-        
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -739,7 +740,7 @@ class IntelligenceService:
             async def fetch_all():
                 tasks = [MarketDataService.get_history(sym[0], "1d", f"{window_days + 5}d") for sym in symbols]
                 return await asyncio.gather(*tasks)
-                
+
             if loop and loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -758,7 +759,7 @@ class IntelligenceService:
                 df_temp["time"] = pd.to_datetime(df_temp["time"])
                 df_temp.set_index("time", inplace=True)
                 returns_dict[ticker] = df_temp["close"].pct_change().dropna()
-                
+
         if returns_dict:
             df_returns = pd.DataFrame(returns_dict).dropna()
             corr_matrix = df_returns.corr()
@@ -814,7 +815,7 @@ class IntelligenceService:
     def get_factor_exposure(self, symbol: str, window_days: int = 126) -> FactorExposureResponse:
         ticker = symbol.upper()
         market_symbol = "^NSEI"
-        
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -825,7 +826,7 @@ class IntelligenceService:
                 t1 = MarketDataService.get_history(ticker, "1d", f"{window_days + 5}d")
                 t2 = MarketDataService.get_history(market_symbol, "1d", f"{window_days + 5}d")
                 return await asyncio.gather(t1, t2)
-                
+
             if loop and loop.is_running():
                 import concurrent.futures
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
@@ -842,30 +843,30 @@ class IntelligenceService:
         info_ratio = 0.50
         vol_factor = 0.15
         mom_factor = 0.05
-        
+
         if len(hist_sym) >= 10 and len(hist_mkt) >= 10:
             import pandas as pd
             df_sym = pd.DataFrame(hist_sym)
             df_sym["time"] = pd.to_datetime(df_sym["time"])
             df_sym.set_index("time", inplace=True)
             ret_sym = df_sym["close"].pct_change().dropna()
-            
+
             df_mkt = pd.DataFrame(hist_mkt)
             df_mkt["time"] = pd.to_datetime(df_mkt["time"])
             df_mkt.set_index("time", inplace=True)
             ret_mkt = df_mkt["close"].pct_change().dropna()
-            
+
             df_aligned = pd.concat([ret_sym.rename("sym"), ret_mkt.rename("mkt")], axis=1).dropna()
             if len(df_aligned) >= 5:
                 cov_val = df_aligned["sym"].cov(df_aligned["mkt"])
                 var_mkt = df_aligned["mkt"].var()
                 if var_mkt > 0:
                     beta_mkt = cov_val / var_mkt
-                    
+
                 mean_sym = df_aligned["sym"].mean()
                 mean_mkt = df_aligned["mkt"].mean()
                 alpha = mean_sym - beta_mkt * mean_mkt
-                
+
                 residuals = df_aligned["sym"] - beta_mkt * df_aligned["mkt"] - alpha
                 tracking_error = residuals.std() * math.sqrt(252.0)
                 alpha_annual = alpha * 252.0

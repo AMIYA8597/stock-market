@@ -8,8 +8,8 @@ paper-trading wallet state, and cached market snapshots.
 from __future__ import annotations
 
 import logging
-from decimal import Decimal
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 

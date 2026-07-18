@@ -17,8 +17,9 @@ from app.services.data_ingestion.base import DataSourceError, Interval, MarketDa
 from app.services.data_ingestion.coingecko_source import CoinGeckoSource
 from app.services.data_ingestion.fred_source import FREDSource
 from app.services.data_ingestion.nse_source import NSESource
-from app.services.data_ingestion.yfinance_source import YFinanceSource
 from app.services.data_ingestion.stooq_source import StooqSource
+from app.services.data_ingestion.yfinance_source import YFinanceSource
+from app.config.live_data import settings as live_data_settings
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +48,22 @@ class DataIngestionOrchestrator:
         }
 
     def _select_sources(self, task: IngestionTask) -> list[MarketDataSource]:
-        if task.asset_type == "CRYPTO":
-            return [self._sources["coingecko"], self._sources["yfinance"]]
-        if task.asset_type == "MACRO":
-            return [self._sources["fred"]]
-        if task.symbol.endswith(".NS") or task.symbol in {"^NSEI", "^BSESN"}:
-            return [self._sources["nse"], self._sources["yfinance"], self._sources["stooq"]]
-        return [self._sources["yfinance"], self._sources["stooq"]]
+        # Dynamically select source(s) based on configured live data provider
+        provider = live_data_settings.provider.lower()
+        if provider == "yfinance":
+            if task.asset_type == "CRYPTO":
+                return [self._sources["coingecko"], self._sources["yfinance"]]
+            if task.asset_type == "MACRO":
+                return [self._sources["fred"]]
+            if task.symbol.endswith(".NS") or task.symbol in {"^NSEI", "^BSESN"}:
+                return [self._sources["yfinance"], self._sources["stooq"]]
+            return [self._sources["yfinance"], self._sources["stooq"]]
+        elif provider == "alpha_vantage":
+            # Use Alpha Vantage as primary source for all asset types
+            return [self._sources["alpha_vantage"]]
+        else:
+            # Fallback to default selection
+            return [self._sources["yfinance"], self._sources["stooq"]]
 
     async def _fetch_with_retry(self, source: MarketDataSource, task: IngestionTask, max_attempts: int = 3) -> list[OHLCVBar]:
         last_error: Exception | None = None

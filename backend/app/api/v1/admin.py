@@ -39,7 +39,7 @@ class UpdateRoleRequest(BaseModel):
 @router.get("/users", response_model=list[AdminUserItem])
 async def list_users(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> list[AdminUserItem]:
     _require_admin(current_user)
-    
+
     from app.core.config import get_settings
     settings = get_settings()
 

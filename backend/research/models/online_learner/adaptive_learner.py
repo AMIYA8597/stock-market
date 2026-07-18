@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
-import logging
 from pathlib import Path
+
 import river
-from river import compose
-from river import preprocessing
-from river import linear_model
+from river import compose, linear_model, preprocessing
 
 logger = logging.getLogger(__name__)
 

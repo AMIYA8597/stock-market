@@ -23,7 +23,7 @@ class ScreenerFilterConfig(BaseModel):
     volume_ratio_min: Decimal | None = None
     signal_direction: list[str] | str | None = None
     regime_compatible: bool = False
-    
+
     # Extra fields sent by frontend
     min_market_cap: Decimal | None = None
     max_market_cap: Decimal | None = None

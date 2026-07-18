@@ -84,7 +84,7 @@ async def create_notification(
     settings = get_settings()
 
     if settings.MONGODB_URL:
-        from app.database.mongodb import mongo_get_user_by_id, mongo_create_notification
+        from app.database.mongodb import mongo_create_notification, mongo_get_user_by_id
         user = await mongo_get_user_by_id(payload.user_id)
         if user is None:
             raise HTTPException(

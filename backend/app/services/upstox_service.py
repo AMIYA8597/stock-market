@@ -7,36 +7,34 @@ caching live prices, enriching ticks with indicators, and auditing logs.
 
 from __future__ import annotations
 
-import os
+import asyncio
 import json
 import logging
-import asyncio
-import httpx
-from datetime import datetime, UTC
-from pathlib import Path
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Optional, Dict, List
-import pandas as pd
-import pandas_ta as ta
+from pathlib import Path
+from typing import Any
 
+import httpx
+import pandas as pd
 import upstox_client
 
 logger = logging.getLogger(__name__)
 
 # Cache for ticks: symbol (e.g. "RELIANCE") -> tick dict
-UPSTOX_TICK_CACHE: Dict[str, dict] = {}
+UPSTOX_TICK_CACHE: dict[str, dict] = {}
 # Symbol mappings
-SYMBOL_TO_KEY: Dict[str, str] = {}
-KEY_TO_SYMBOL: Dict[str, str] = {}
+SYMBOL_TO_KEY: dict[str, str] = {}
+KEY_TO_SYMBOL: dict[str, str] = {}
 
 class UpstoxService:
     TRADING_MODE: str = "PAPER"  # ALWAYS defaults to PAPER, not persisted
-    ACCESS_TOKEN: Optional[str] = None
-    STREAMER: Optional[Any] = None
+    ACCESS_TOKEN: str | None = None
+    STREAMER: Any | None = None
     CONNECTION_STATUS: str = "disconnected"  # disconnected, connecting, connected, reconnecting, error
-    USER_PROFILE: Optional[dict] = None
-    LOOP: Optional[asyncio.AbstractEventLoop] = None
-    
+    USER_PROFILE: dict | None = None
+    LOOP: asyncio.AbstractEventLoop | None = None
+
     @classmethod
     def get_token_cache_path(cls) -> Path:
         """Returns path to cached token file in user's home Gemini config directory."""
@@ -53,17 +51,17 @@ class UpstoxService:
             logs_dir = backend_root / "logs"
             logs_dir.mkdir(exist_ok=True)
             audit_file = logs_dir / "trading_audit.log"
-            
+
             timestamp = datetime.now(UTC).isoformat()
             log_line = f"[{timestamp}] {message}\n"
-            
+
             with open(audit_file, "a", encoding="utf-8") as f:
                 f.write(log_line)
         except Exception as e:
             logger.error(f"Failed to write to audit log: {e}")
 
     @classmethod
-    def get_cached_quote(cls, symbol: str) -> Optional[dict]:
+    def get_cached_quote(cls, symbol: str) -> dict | None:
         """Looks up a symbol (base or suffix) in our memory cache."""
         sym = symbol.upper().strip()
         base_sym = sym.split(".")[0]
@@ -74,10 +72,10 @@ class UpstoxService:
         """Generates Upstox login dialog URL."""
         from app.core.config import get_settings
         settings = get_settings()
-        
+
         if not settings.UPSTOX_API_KEY:
             raise ValueError("UPSTOX_API_KEY is not configured in environment/.env file.")
-            
+
         return (
             f"https://api.upstox.com/v2/login/authorization/dialog"
             f"?response_type=code"
@@ -90,7 +88,7 @@ class UpstoxService:
         """Exchanges authorization code for access token and caches it."""
         from app.core.config import get_settings
         settings = get_settings()
-        
+
         url = "https://api.upstox.com/v2/login/authorization/token"
         headers = {
             "Accept": "application/json",
@@ -103,35 +101,35 @@ class UpstoxService:
             "redirect_uri": settings.UPSTOX_REDIRECT_URI,
             "grant_type": "authorization_code"
         }
-        
+
         async with httpx.AsyncClient() as client:
             r = await client.post(url, headers=headers, data=data, timeout=15.0)
             if r.status_code != 200:
                 err_msg = f"Token exchange failed: status={r.status_code} body={r.text}"
                 logger.error(err_msg)
                 raise ValueError(err_msg)
-                
+
             res = r.json()
             token = res.get("access_token")
             if not token:
                 raise ValueError("Access token missing in Upstox authorization response.")
-                
+
             cls.ACCESS_TOKEN = token
             # Store in token cache file
             try:
                 cls.get_token_cache_path().write_text(token, encoding="utf-8")
             except Exception as te:
                 logger.warning(f"Could not persist access token to disk cache: {te}")
-                
+
             # Fetch profile details
             profile = await cls.fetch_profile()
             cls.USER_PROFILE = profile
             cls.log_audit(f"Successfully authenticated Upstox user: {profile.get('user_name', 'Unknown')}")
-            
+
             # Start streamer feed
             cls.LOOP = asyncio.get_running_loop()
             asyncio.create_task(cls.start_websocket_feed())
-            
+
             return res
 
     @classmethod
@@ -154,7 +152,7 @@ class UpstoxService:
         """Initializes service on boot: restores cached token, verifies it, and auto-starts connection."""
         cls.TRADING_MODE = "PAPER"  # Force default mode on boot
         cls.LOOP = asyncio.get_running_loop()
-        
+
         token_file = cls.get_token_cache_path()
         if token_file.exists():
             try:
@@ -175,14 +173,14 @@ class UpstoxService:
                 logger.warning(f"Error restoring cached token: {e}")
 
     @classmethod
-    async def resolve_symbol(cls, symbol: str) -> Optional[str]:
+    async def resolve_symbol(cls, symbol: str) -> str | None:
         """Resolves NSE trading symbol to Upstox instrument_key."""
         sym = symbol.upper().strip()
-        
+
         # Check cache
         if sym in SYMBOL_TO_KEY:
             return SYMBOL_TO_KEY[sym]
-            
+
         # Hardcoded overrides for common index feeds
         if sym in ("NIFTY 50", "NIFTY_50", "NIFTY"):
             key = "NSE_INDEX|Nifty 50"
@@ -210,7 +208,7 @@ class UpstoxService:
                 if r.status_code == 200:
                     res = r.json()
                     data = res.get("data", [])
-                    
+
                     # 1st pass: exact trading symbol match for NSE EQ or Index
                     for item in data:
                         t_sym = item.get("trading_symbol", "").upper()
@@ -220,7 +218,7 @@ class UpstoxService:
                             SYMBOL_TO_KEY[sym] = key
                             KEY_TO_SYMBOL[key] = sym
                             return key
-                            
+
                     # 2nd pass: prefix/partial match under NSE EQ
                     for item in data:
                         t_sym = item.get("trading_symbol", "").upper()
@@ -232,7 +230,7 @@ class UpstoxService:
                             return key
         except Exception as e:
             logger.error(f"Error resolving Upstox symbol {sym}: {e}")
-            
+
         return None
 
     @classmethod
@@ -241,46 +239,46 @@ class UpstoxService:
         if not cls.ACCESS_TOKEN:
             logger.warning("Attempted to start Upstox WebSocket feed without access token.")
             return
-            
+
         # Close active streamer if any
         await cls.stop_websocket_feed()
-        
+
         default_symbols = [
             "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN",
             "NIFTY 50", "NIFTY BANK"
         ]
-        
+
         keys_to_subscribe = []
         for sym in default_symbols:
             key = await cls.resolve_symbol(sym)
             if key:
                 keys_to_subscribe.append(key)
-                
+
         if not keys_to_subscribe:
             logger.warning("No instruments resolved for Upstox subscription.")
             return
 
         cls.CONNECTION_STATUS = "connecting"
         cls.log_audit(f"Connecting Upstox WebSocket feed for keys: {keys_to_subscribe}")
-        
+
         try:
             cfg = upstox_client.Configuration()
             cfg.access_token = cls.ACCESS_TOKEN
             api_client = upstox_client.ApiClient(cfg)
-            
+
             # Instantiate MarketDataStreamerV3
             cls.STREAMER = upstox_client.MarketDataStreamerV3(api_client, keys_to_subscribe, mode="full")
-            
+
             # Wire up callbacks
             cls.STREAMER.on("open", cls.on_open)
             cls.STREAMER.on("close", cls.on_close)
             cls.STREAMER.on("message", cls.on_message)
             cls.STREAMER.on("error", cls.on_error)
             cls.STREAMER.on("reconnecting", cls.on_reconnecting)
-            
+
             # Non-blocking connect (SDK spawns standard background daemon thread)
             cls.STREAMER.connect()
-            
+
         except Exception as e:
             cls.CONNECTION_STATUS = "error"
             cls.log_audit(f"Failed to start Upstox WebSocket feed: {e}")
@@ -298,7 +296,7 @@ class UpstoxService:
         cls.CONNECTION_STATUS = "disconnected"
 
     # ─── Streamer callbacks (Executed on SDK background daemon thread) ────
-    
+
     @classmethod
     def on_open(cls):
         cls.CONNECTION_STATUS = "connected"
@@ -339,7 +337,7 @@ class UpstoxService:
                 price = None
                 prev_close = 0.0
                 open_p, high, low, volume = 0.0, 0.0, 0.0, 0
-                
+
                 # Check union fields
                 if "ltpc" in feed:
                     ltpc = feed["ltpc"]
@@ -363,7 +361,7 @@ class UpstoxService:
                 if price is not None:
                     change = price - prev_close
                     change_pct = (change / prev_close * 100.0) if prev_close > 0 else 0.0
-                    
+
                     tick = {
                         "symbol": symbol.upper(),
                         "price": float(price),
@@ -378,7 +376,7 @@ class UpstoxService:
                         "live": True,
                         "timestamp": datetime.now(UTC).isoformat()
                     }
-                    
+
                     # Store both basic symbol and suffix versions
                     base_sym = symbol.split(".")[0].upper()
                     UPSTOX_TICK_CACHE[base_sym] = tick
@@ -399,13 +397,13 @@ class UpstoxService:
         try:
             from app.database.redis_client import get_redis_client
             redis_client = await get_redis_client()
-            
+
             # Enrich tick with overlay indicators
             enriched_tick = await cls.enrich_tick_with_indicators(tick)
-            
+
             # Publish to Redis channel
             await redis_client.publish("prices.ticks", json.dumps(enriched_tick))
-            
+
             # Trigger limit order check in simulated paper wallet
             try:
                 from app.database.connection import async_session_factory
@@ -418,7 +416,7 @@ class UpstoxService:
                     )
             except Exception as err:
                 logger.error(f"Limit order validation error for {tick['symbol']}: {err}")
-                
+
         except Exception as e:
             logger.debug(f"Redis publish fail for {tick['symbol']}: {e}")
 
@@ -428,7 +426,7 @@ class UpstoxService:
         from app.services.market_data_service import MarketDataService
         symbol = tick["symbol"]
         price = tick["price"]
-        
+
         # Set baseline keys
         keys = ["ema9", "ema21", "ema50", "ema200", "rsi", "macd", "macd_signal", "macd_hist", "vwap", "supertrend", "bb_basis", "bb_upper", "bb_lower"]
         for k in keys:
@@ -438,14 +436,14 @@ class UpstoxService:
             # yfinance NS suffix mapping check
             lookup_sym = symbol if "." in symbol else f"{symbol}.NS"
             hist = await MarketDataService.get_history(lookup_sym, interval="1d", period="3mo")
-            
+
             if hist and len(hist) >= 10:
                 closes = [float(h["close"]) for h in hist] + [float(price)]
                 highs = [float(h["high"]) for h in hist] + [float(tick.get("high", price))]
                 lows = [float(h["low"]) for h in hist] + [float(tick.get("low", price))]
                 opens = [float(h["open"]) for h in hist] + [float(tick.get("open", price))]
                 volumes = [int(h["volume"]) for h in hist] + [int(tick.get("volume", 0))]
-                
+
                 df = pd.DataFrame({
                     "open": opens,
                     "high": highs,
@@ -453,7 +451,7 @@ class UpstoxService:
                     "close": closes,
                     "volume": volumes
                 })
-                
+
                 # Append indicators
                 df.ta.ema(length=9, append=True)
                 df.ta.ema(length=21, append=True)
@@ -464,9 +462,9 @@ class UpstoxService:
                 df.ta.bbands(length=20, std=2, append=True)
                 df.ta.vwap(append=True)
                 df.ta.supertrend(length=10, multiplier=3.0, append=True)
-                
+
                 last_row = df.iloc[-1]
-                
+
                 for col in df.columns:
                     col_lower = col.lower()
                     if col_lower.startswith("ema_9") or col_lower == "ema_9":
@@ -497,5 +495,5 @@ class UpstoxService:
                         tick["bb_lower"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
         except Exception as e:
             logger.debug(f"Error enriching tick for {symbol}: {e}")
-            
+
         return tick

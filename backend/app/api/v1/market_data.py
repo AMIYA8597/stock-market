@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import math
 from datetime import UTC, date, datetime, timedelta
 from typing import Literal
 
-import pandas as pd
-from app.services.market_data_service import MarketDataService
 from fastapi import APIRouter, Depends, HTTPException, Query
 from loguru import logger
 from pydantic import BaseModel
@@ -23,7 +20,8 @@ from app.database.mongodb import (
 )
 from app.database.redis_client import get_redis
 from app.schemas.errors import ErrorCode, ErrorResponse
-from app.schemas.market import HistoryResponse, OHLCVBar as OhlcvPoint
+from app.schemas.market import HistoryResponse
+from app.services.market_data_service import MarketDataService
 
 router = APIRouter()
 
@@ -116,7 +114,7 @@ async def _fetch_quote_from_yfinance(symbol: str) -> QuoteResponse:
         q = await MarketDataService.get_quote(symbol)
         info = await MarketDataService.get_ticker_info(symbol)
         pe = safe_float(info.get("trailingPE") or info.get("forwardPE") or 0.0)
-        
+
         signal_score = max(-1.0, min(1.0, float(q["change_pct"]) / 5.0))
         probs = _state_probs_from_signal(signal_score)
         state = max(probs, key=probs.get).upper()
@@ -286,7 +284,7 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
                     return QuoteResponse(**cached_quote)
             except Exception:
                 pass
-            
+
             raise HTTPException(
                 status_code=503,
                 detail=ErrorResponse.create(
@@ -317,6 +315,7 @@ async def get_quote(symbol: str, db: AsyncSession = Depends(get_db)):
     return quote
 
 from app.api.v1.market import get_history as canonical_get_history
+
 
 @router.get("/history/{symbol}", response_model=HistoryResponse)
 async def get_history(

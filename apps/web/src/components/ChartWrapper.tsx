@@ -38,7 +38,7 @@ export const ChartWrapper: React.FC<{
     switch (type) {
       case "candlestick":
         // eslint-disable-next-line @typescript-eslint/no-var-requires
-        return require("./charts/FinancialCandlestickChart").default;
+        return require("./charts/LightweightCandlestickChart").default;
       case "line":
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         return require("./charts/SimpleLineAreaChart").default;

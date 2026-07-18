@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import httpx
-import asyncio
 
 NSE_BASE = "https://www.nseindia.com/api"
 NSE_HEADERS = {

@@ -2,6 +2,7 @@
 """Signal prediction endpoints — all values computed from real yfinance OHLCV data."""
 
 from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -10,9 +11,9 @@ from decimal import Decimal
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.signal import BulkSignalResponse, SignalResponse
-from app.schemas.errors import ErrorCode, ErrorResponse
 from app.database.redis_client import get_redis
+from app.schemas.errors import ErrorCode, ErrorResponse
+from app.schemas.signal import BulkSignalResponse, SignalResponse
 from app.services.prediction_engine import get_full_prediction
 
 logger = logging.getLogger(__name__)
@@ -148,13 +149,13 @@ async def get_signals_bulk(
             if isinstance(result, Exception):
                 logger.warning(f"Failed to get prediction for symbol={symbol} in bulk check: {result}")
                 continue
-            
+
             response = _build_response_object(result)
             signals.append(response)
-            
+
             if redis is not None:
                 cache_tasks.append(redis.setex(f"prediction:{symbol}", CACHE_TTL, response.model_dump_json()))
-        
+
         if cache_tasks:
             try:
                 await asyncio.gather(*cache_tasks, return_exceptions=True)
@@ -183,7 +184,7 @@ async def get_signal(symbol: str) -> SignalResponse:
                 message="symbol is required."
             ).dict()
         )
-    
+
     symbol_upper = symbol.strip().upper()
     redis = None
     try:
@@ -220,21 +221,21 @@ async def get_signal_history(symbol: str) -> dict:
         raise HTTPException(status_code=503, detail=f"Prediction engine error: {e}")
 
     ens = result.get("ensemble", {})
-    
+
     # Load backtest metrics dynamically
     import json
-    from pathlib import Path
+
     from app.services.prediction_engine import MODEL_DIR
-    
+
     metrics_path = MODEL_DIR / "backtest_metrics.json"
     sharpe = 1.24
     max_dd = -14.2
     accuracy = round(ens.get("xgboost", {}).get("xgb_confidence", 0.592), 4)
     cost_adj_ret = 18.5
-    
+
     if metrics_path.exists():
         try:
-            with open(metrics_path, "r") as f:
+            with open(metrics_path) as f:
                 metrics_data = json.load(f)
             # Use xgboost as representative or average them
             if "xgboost" in metrics_data:

@@ -15,19 +15,18 @@ Exposes:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from typing import Literal, Optional, Dict, Any, List
+from datetime import datetime
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
-from app.services.market_data_service import MarketDataService
-from app.services.prediction_engine import get_full_prediction, detect_regime
-from app.services.sr_service import SupportResistanceEngine
-from app.services.paper_trading import PaperTradingService
 from app.services.broker_adapter import BrokerAdapter
+from app.services.market_data_service import MarketDataService
+from app.services.paper_trading import PaperTradingService
+from app.services.prediction_engine import detect_regime, get_full_prediction
+from app.services.sr_service import SupportResistanceEngine
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +81,7 @@ async def get_indicators(
 
         df = df.loc[:, ~df.columns.duplicated()]
         df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=["close"])
-        
+
         # Build response series
         results = []
         for idx, row in df.iterrows():
@@ -106,7 +105,7 @@ async def get_indicators(
                 "vwap": float(row.get("VWAP_D", 0.0)) if not np.isnan(row.get("VWAP_D", np.nan)) else None,
                 "adx": float(row.get("ADX_14", 0.0)) if not np.isnan(row.get("ADX_14", np.nan)) else None,
             })
-            
+
         return {"symbol": symbol.upper(), "timeframe": timeframe, "indicators": results}
     except Exception as e:
         logger.error(f"Error computing indicators for {symbol}: {e}")
@@ -125,7 +124,7 @@ async def get_zones(symbol: str):
         # Run detection service
         df.columns = [c.lower() for c in df.columns]
         res = SupportResistanceEngine.train_and_evaluate_bilstm(df, symbol)
-        
+
         # Clean formatting for response
         return {
             "symbol": symbol.upper(),
@@ -135,11 +134,11 @@ async def get_zones(symbol: str):
                 "f1": res["f1"]
             },
             "classical_zones": [
-                {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]} 
+                {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]}
                 for z in res["classical_zones"]
             ],
             "deep_learning_zones": [
-                {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]} 
+                {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]}
                 for z in res["dl_zones"]
             ]
         }
@@ -154,7 +153,7 @@ async def get_signal_quantedge(symbol: str):
     try:
         pred = await get_full_prediction(symbol, bypass_cache=False)
         ens = pred.get("ensemble", {})
-        
+
         return {
             "symbol": symbol.upper(),
             "bias": "bullish" if ens.get("raw_ensemble", 0.0) > 0.15 else ("bearish" if ens.get("raw_ensemble", 0.0) < -0.15 else "neutral"),
@@ -181,10 +180,10 @@ async def get_regime(symbol: str):
         df = await MarketDataService.get_ticker_history_df(symbol, "1y", "1d")
         if df.empty or len(df) < 50:
             raise HTTPException(status_code=404, detail="Insufficient price history for regime analysis")
-        
+
         df.columns = [c.lower() for c in df.columns]
         regime_info = detect_regime(df)
-        
+
         # Consolidate standard return transition matrix structure
         transition_matrix = [
             [0.912, 0.042, 0.036, 0.010],
@@ -192,7 +191,7 @@ async def get_regime(symbol: str):
             [0.210, 0.110, 0.640, 0.040],
             [0.080, 0.390, 0.180, 0.350],
         ]
-        
+
         return {
             "symbol": symbol.upper(),
             "state": regime_info["regime"],
@@ -221,14 +220,14 @@ async def get_backtest_report(
     """Run walk-forward simulation backtest on symbol and return analytical metrics."""
     try:
         from research.backtesting.run_walk_forward import run_backtest_for_symbol
-        
+
         # Parse test window length
         dt_from = datetime.strptime(from_date, "%Y-%m-%d")
         dt_to = datetime.strptime(to_date, "%Y-%m-%d")
         test_days = max(10, (dt_to - dt_from).days)
-        
+
         res = await run_backtest_for_symbol(symbol, test_days=min(test_days, 150))
-        
+
         return {
             "symbol": symbol.upper(),
             "strategy": strategy,
@@ -254,7 +253,7 @@ class QuantEdgeOrderRequest(BaseModel):
     side: Literal["BUY", "SELL"]
     quantity: float
     order_type: Literal["MARKET", "LIMIT"]
-    limit_price: Optional[float] = None
+    limit_price: float | None = None
 
 
 @router.post("/paper-trade")

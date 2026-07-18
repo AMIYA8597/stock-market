@@ -1,13 +1,14 @@
 import uuid
-from decimal import Decimal
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.sql import Select
-from app.api.v1.router import api_router
-from app.core.dependencies import get_db
+
 import app.database.mongodb as mongodb_module
+from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.dependencies import get_db
 
 # Force MONGODB_URL to be set in settings
 get_settings().MONGODB_URL = "mongodb://mock"
@@ -88,7 +89,7 @@ class InMemorySession:
     async def execute(self, statement, *args, **kwargs):
         if isinstance(statement, Select):
             entity = statement.column_descriptions[0]["entity"]
-            
+
             if entity.__name__ == "Symbol":
                 try:
                     params = statement.compile().params
@@ -110,7 +111,7 @@ class InMemorySession:
                 return Result()
 
             objs = [v for v in self.store.values() if isinstance(v, entity)]
-            
+
             try:
                 params = statement.compile().params
                 for k, v in params.items():

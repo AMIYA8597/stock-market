@@ -13,10 +13,10 @@ import argparse
 import asyncio
 import json
 
+from pipelines.data_pipeline import run_full_history
 from scripts.compute_features import compute_features
 from scripts.model_trainer import run_training
 from scripts.verify_schema import verify_schema
-from pipelines.data_pipeline import run_full_history
 
 
 async def run_all(years: int, interval: str, batch_size: int, model: str, symbol: str, universe: str, epochs: int) -> int:

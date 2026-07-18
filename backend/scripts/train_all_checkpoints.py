@@ -1,10 +1,11 @@
-import sys
 import pathlib
+import sys
 
 project_root = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
 from tasks.training_tasks import retrain_model
+
 
 def main():
     print("Starting full model retraining...")

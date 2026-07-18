@@ -8,6 +8,7 @@ import logging
 from datetime import UTC, datetime
 
 import httpx
+
 from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
 
 logger = logging.getLogger(__name__)
@@ -37,9 +38,9 @@ class StooqSource(MarketDataSource):
             stooq_symbol = f"{stooq_symbol}.US"
 
         url = f"https://stooq.com/q/d/l/?s={stooq_symbol}&f=sd2t2ohlcv&a=dn"
-        
+
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        
+
         async with httpx.AsyncClient(timeout=15) as client:
             try:
                 response = await client.get(url, headers=headers)
@@ -52,7 +53,7 @@ class StooqSource(MarketDataSource):
         # Parse CSV
         f = io.StringIO(csv_data)
         reader = csv.DictReader(f)
-        
+
         # Check if we got an empty response or error page
         if not reader.fieldnames or "Date" not in reader.fieldnames:
             logger.warning(f"Invalid Stooq response for {stooq_symbol}")
@@ -68,10 +69,10 @@ class StooqSource(MarketDataSource):
                 # Normalize start/end timezone
                 start_tz = start.replace(tzinfo=UTC) if start.tzinfo is None else start.astimezone(UTC)
                 end_tz = end.replace(tzinfo=UTC) if end.tzinfo is None else end.astimezone(UTC)
-                
+
                 if not (start_tz <= dt <= end_tz):
                     continue
-                    
+
                 bars.append(
                     OHLCVBar(
                         time=dt,

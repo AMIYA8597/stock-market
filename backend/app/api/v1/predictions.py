@@ -5,7 +5,7 @@ Replaces the fake linear forecast with real model output.
 """
 
 from __future__ import annotations
-import asyncio
+
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException

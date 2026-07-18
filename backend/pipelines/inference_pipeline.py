@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from research.models.ensemble.orchestrator import EnsembleInferenceResult, InferenceContext, build_ensemble_result
+from research.models.ensemble.orchestrator import (
+    EnsembleInferenceResult,
+    InferenceContext,
+    build_ensemble_result,
+)
 
 
 @dataclass(slots=True)

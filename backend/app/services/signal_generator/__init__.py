@@ -33,13 +33,13 @@ class MeanReversionStrategy:
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         if len(df) < self.window:
             return pd.Series(0.0, index=df.index)
-        
+
         close = df["close"].astype(float)
         rolling_mean = close.rolling(self.window).mean()
         rolling_std = close.rolling(self.window).std().replace(0, 1e-6)
-        
+
         z_score = (close - rolling_mean) / rolling_std
-        
+
         signals = pd.Series(0.0, index=df.index)
         signals[z_score < -self.entry_z] = 1.0  # Buy oversold
         signals[z_score > self.entry_z] = -1.0  # Short overbought
@@ -58,13 +58,13 @@ class MomentumTrendStrategy:
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         if len(df) < self.slow:
             return pd.Series(0.0, index=df.index)
-            
+
         close = df["close"].astype(float)
-        
+
         ema_fast = ta.ema(close, length=self.fast)
         ema_med = ta.ema(close, length=self.medium)
         ema_slow = ta.ema(close, length=self.slow)
-        
+
         # Safely compute ADX
         adx_df = ta.adx(df["high"], df["low"], df["close"], length=14)
         if adx_df is not None and not adx_df.empty:
@@ -73,12 +73,12 @@ class MomentumTrendStrategy:
             adx = pd.Series(30.0, index=df.index)  # Default to trending if failed
 
         signals = pd.Series(0.0, index=df.index)
-        
+
         # Bullish condition
         bullish = (ema_fast > ema_med) & (ema_med > ema_slow) & (adx > self.trend_strength)
         # Bearish condition
         bearish = (ema_fast < ema_med) & (ema_med < ema_slow) & (adx > self.trend_strength)
-        
+
         signals[bullish] = 1.0
         signals[bearish] = -1.0
         return signals
@@ -96,30 +96,30 @@ class VolatilityBreakoutStrategy:
     def generate_signals(self, df: pd.DataFrame) -> pd.Series:
         if len(df) < max(self.bb_window, self.atr_window):
             return pd.Series(0.0, index=df.index)
-            
+
         close = df["close"].astype(float)
         high = df["high"].astype(float)
         low = df["low"].astype(float)
-        
+
         # Bollinger Bands
         bb_ma = close.rolling(self.bb_window).mean()
         bb_std_val = close.rolling(self.bb_window).std()
         upper_bb = bb_ma + self.bb_std * bb_std_val
         lower_bb = bb_ma - self.bb_std * bb_std_val
-        
+
         # ATR Channel Breakout
         atr = ta.atr(high, low, close, length=self.atr_window)
         if atr is None:
             atr = (high - low).rolling(self.atr_window).mean()
-            
+
         atr_upper = bb_ma + self.multiplier * atr
         atr_lower = bb_ma - self.multiplier * atr
 
         signals = pd.Series(0.0, index=df.index)
-        
+
         breakout_up = (close > upper_bb) & (close > atr_upper)
         breakout_down = (close < lower_bb) & (close < atr_lower)
-        
+
         signals[breakout_up] = 1.0
         signals[breakout_down] = -1.0
         return signals
@@ -155,7 +155,7 @@ class StatisticalArbitrageStrategy:
         self.entry_z = entry_z
         self.is_active = False
 
-    def generate_signals_pair(self, df_a: pd.DataFrame, df_b: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+    def generate_signals_pair(self, df_a: pd.DataFrame, df_b: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
         """Generate long/short signals for a pair of cointegrated assets."""
         if len(df_a) < self.window or len(df_b) < self.window:
             return pd.Series(0.0, index=df_a.index), pd.Series(0.0, index=df_b.index)
@@ -218,14 +218,14 @@ class SignalGeneratorService:
         strategy_name: str,
         df: pd.DataFrame,
         initial_capital: float = 100000.0,
-    ) -> Dict[str, float]:
+    ) -> dict[str, float]:
         """Runs a vectorized backtest for a strategy on historical OHLCV data."""
         if strategy_name not in self.strategies:
             raise ValueError(f"Unknown strategy: {strategy_name}")
 
         strategy = self.strategies[strategy_name]
         signals = strategy.generate_signals(df)
-        
+
         # Setup matrix shapes (T, N) for single-asset backtest engine
         signals_mat = signals.values.reshape(-1, 1)
         prices_mat = df["close"].values.reshape(-1, 1)
@@ -241,7 +241,7 @@ class SignalGeneratorService:
         daily_rets = res.daily_returns
         sharpe = np.mean(daily_rets) / np.std(daily_rets) * np.sqrt(252) if np.std(daily_rets) > 0 else 0.0
         win_rate = float(np.mean(daily_rets > 0))
-        
+
         # Calculate max drawdown
         equity = res.equity_curve
         peak = np.maximum.accumulate(equity)

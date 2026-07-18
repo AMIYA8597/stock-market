@@ -1,6 +1,6 @@
 """Health check endpoint."""
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from sqlalchemy import text
 
 from app.core.dependencies import get_db, get_redis
@@ -22,16 +22,17 @@ async def health_check():
 async def health_live_data():
     """Pings external data sources to check reachability."""
     import httpx
+
     from app.core.config import get_settings
     settings = get_settings()
-    
+
     status = {
         "yfinance": "down",
         "nse": "down",
         "coingecko": "down",
         "fred": "down"
     }
-    
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }

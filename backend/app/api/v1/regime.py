@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from fastapi import APIRouter, Query
+
 from app.schemas.regime import (
     RegimeCurrentResponse,
     RegimeHistoryPoint,

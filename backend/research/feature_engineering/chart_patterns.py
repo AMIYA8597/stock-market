@@ -9,9 +9,11 @@ using slope and swing analysis on historical OHLCV data.
 from __future__ import annotations
 
 import logging
+from typing import Any
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Any, List, Tuple
+
 from research.feature_engineering.base import FeatureBuilder
 
 logger = logging.getLogger(__name__)
@@ -27,7 +29,7 @@ class ChartPatternsBuilder(FeatureBuilder):
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         df = frame.copy()
         n = len(df)
-        
+
         # Initialize output columns
         df["pattern_double_top"] = 0.0
         df["pattern_double_bottom"] = 0.0
@@ -36,25 +38,25 @@ class ChartPatternsBuilder(FeatureBuilder):
         df["pattern_ascending_triangle"] = 0.0
         df["pattern_descending_triangle"] = 0.0
         df["pattern_symmetrical_triangle"] = 0.0
-        
+
         # We need a minimum of 20 bars to look back for swing points
         if n < 20:
             return df
-            
+
         highs = df["high"].values
         lows = df["low"].values
         closes = df["close"].values
-        
+
         # Strength of swing point (lookback/lookahead of 2 bars to confirm a swing point)
         strength = 2
-        
+
         # We compute patterns in a loop to ensure causality-safety
         for t in range(15, n):
             # Find swing highs and lows confirmed up to time t
             # A swing high at i is confirmed at i + strength <= t
             swing_highs = []
             swing_lows = []
-            
+
             for i in range(strength, t - strength + 1):
                 # Check swing high
                 is_high = True
@@ -64,7 +66,7 @@ class ChartPatternsBuilder(FeatureBuilder):
                         break
                 if is_high:
                     swing_highs.append((i, highs[i]))
-                    
+
                 # Check swing low
                 is_low = True
                 for offset in range(-strength, strength + 1):
@@ -73,11 +75,11 @@ class ChartPatternsBuilder(FeatureBuilder):
                         break
                 if is_low:
                     swing_lows.append((i, lows[i]))
-            
+
             # Require at least 2 swing highs and 2 swing lows to detect patterns
             if len(swing_highs) < 2 or len(swing_lows) < 2:
                 continue
-                
+
             # 1. Double Top
             # Last two swing highs
             h2_idx, h2_val = swing_highs[-1]
@@ -89,7 +91,7 @@ class ChartPatternsBuilder(FeatureBuilder):
                 # Confirmation: close breaks below the lowest low between the tops
                 if closes[t] < lowest_low:
                     df.at[df.index[t], "pattern_double_top"] = 1.0
-                    
+
             # 2. Double Bottom
             l2_idx, l2_val = swing_lows[-1]
             l1_idx, l1_val = swing_lows[-2]
@@ -98,7 +100,7 @@ class ChartPatternsBuilder(FeatureBuilder):
                 highest_high = max(highs_between)
                 if closes[t] > highest_high:
                     df.at[df.index[t], "pattern_double_bottom"] = 1.0
-                    
+
             # 3. Head and Shoulders
             if len(swing_highs) >= 3:
                 h3_idx, h3_val = swing_highs[-1]
@@ -112,7 +114,7 @@ class ChartPatternsBuilder(FeatureBuilder):
                         neckline = min(lows_between_head)
                         if closes[t] < neckline:
                             df.at[df.index[t], "pattern_head_shoulders"] = 1.0
-                            
+
             # 4. Inverse Head and Shoulders
             if len(swing_lows) >= 3:
                 l3_idx, l3_val = swing_lows[-1]
@@ -124,22 +126,22 @@ class ChartPatternsBuilder(FeatureBuilder):
                         neckline = max(highs_between_head)
                         if closes[t] > neckline:
                             df.at[df.index[t], "pattern_inv_head_shoulders"] = 1.0
-                            
+
             # 5. Triangles
             # Triangles require at least 3 swing highs and 3 swing lows
             if len(swing_highs) >= 3 and len(swing_lows) >= 3:
                 h3_idx, h3_val = swing_highs[-1]
                 h2_idx, h2_val = swing_highs[-2]
                 h1_idx, h1_val = swing_highs[-3]
-                
+
                 l3_idx, l3_val = swing_lows[-1]
                 l2_idx, l2_val = swing_lows[-2]
                 l1_idx, l1_val = swing_lows[-3]
-                
+
                 # Check slopes
                 highs_slope = (h3_val - h1_val) / (h3_idx - h1_idx + 1e-6)
                 lows_slope = (l3_val - l1_val) / (l3_idx - l1_idx + 1e-6)
-                
+
                 # Symmetrical Triangle: falling highs and rising lows
                 if highs_slope < -0.0005 and lows_slope > 0.0005:
                     df.at[df.index[t], "pattern_symmetrical_triangle"] = 1.0
@@ -149,7 +151,7 @@ class ChartPatternsBuilder(FeatureBuilder):
                 # Descending Triangle: falling highs and flat lows
                 elif highs_slope < -0.0005 and abs(lows_slope) < 0.0005:
                     df.at[df.index[t], "pattern_descending_triangle"] = 1.0
-                    
+
         return df
 
 
@@ -159,7 +161,7 @@ class ChartPatternDetector:
     def __init__(self, window: int = 5):
         self.window = window
 
-    def get_swing_levels(self, df: pd.DataFrame) -> Tuple[List[Tuple[int, float]], List[Tuple[int, float]]]:
+    def get_swing_levels(self, df: pd.DataFrame) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
         """Identify swing highs and swing lows.
         
         Returns lists of (index_position, price_value) tuples.
@@ -167,10 +169,10 @@ class ChartPatternDetector:
         highs = df["high"].values
         lows = df["low"].values
         n = len(df)
-        
+
         swing_highs = []
         swing_lows = []
-        
+
         for i in range(self.window, n - self.window):
             # Check swing high
             is_high = True
@@ -180,7 +182,7 @@ class ChartPatternDetector:
                     break
             if is_high:
                 swing_highs.append((i, float(highs[i])))
-                
+
             # Check swing low
             is_low = True
             for w in range(-self.window, self.window + 1):
@@ -189,18 +191,18 @@ class ChartPatternDetector:
                     break
             if is_low:
                 swing_lows.append((i, float(lows[i])))
-                
+
         return swing_highs, swing_lows
 
-    def compute_pivots(self, df: pd.DataFrame) -> Dict[str, float]:
+    def compute_pivots(self, df: pd.DataFrame) -> dict[str, float]:
         """Compute Classical and Fibonacci Pivot Points from the last bar."""
         last_row = df.iloc[-1]
         h = float(last_row["high"])
         l = float(last_row["low"])
         c = float(last_row["close"])
-        
+
         p = (h + l + c) / 3.0
-        
+
         # Classical
         r1 = 2 * p - l
         s1 = 2 * p - h
@@ -208,7 +210,7 @@ class ChartPatternDetector:
         s2 = p - (h - l)
         r3 = h + 2 * (p - l)
         s3 = l - 2 * (h - p)
-        
+
         # Fibonacci
         fib_r1 = p + 0.382 * (h - l)
         fib_s1 = p - 0.382 * (h - l)
@@ -216,7 +218,7 @@ class ChartPatternDetector:
         fib_s2 = p - 0.618 * (h - l)
         fib_r3 = p + 1.000 * (h - l)
         fib_s3 = p - 1.000 * (h - l)
-        
+
         return {
             "pivot": p,
             "r1": r1, "s1": s1,
@@ -227,30 +229,30 @@ class ChartPatternDetector:
             "fib_r3": fib_r3, "fib_s3": fib_s3,
         }
 
-    def compute_volume_profile(self, df: pd.DataFrame, bins: int = 20) -> Dict[str, Any]:
+    def compute_volume_profile(self, df: pd.DataFrame, bins: int = 20) -> dict[str, Any]:
         """Compute Volume Profile and find Point of Control (POC)."""
         closes = df["close"].values
         volumes = df["volume"].values
-        
+
         min_p = float(np.min(closes))
         max_p = float(np.max(closes))
-        
+
         if min_p == max_p:
             return {"poc": min_p, "bins": []}
-            
+
         bin_edges = np.linspace(min_p, max_p, bins + 1)
         bin_vols = np.zeros(bins)
-        
+
         for price, vol in zip(closes, volumes):
             # Find which bin this price belongs to
             for b in range(bins):
                 if bin_edges[b] <= price <= bin_edges[b+1]:
                     bin_vols[b] += vol
                     break
-                    
+
         poc_idx = int(np.argmax(bin_vols))
         poc = float((bin_edges[poc_idx] + bin_edges[poc_idx + 1]) / 2)
-        
+
         profile_bins = []
         for b in range(bins):
             profile_bins.append({
@@ -258,22 +260,22 @@ class ChartPatternDetector:
                 "high": float(bin_edges[b+1]),
                 "volume": float(bin_vols[b])
             })
-            
+
         return {
             "poc": poc,
             "profile": profile_bins
         }
 
-    def detect_patterns(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def detect_patterns(self, df: pd.DataFrame) -> dict[str, Any]:
         """Detect chart patterns using swing highs and swing lows."""
         sh, sl = self.get_swing_levels(df)
-        
+
         # We need a minimum number of swing points to detect complex shapes
         patterns = []
         pattern_score = 0.0  # +1 bullish, -1 bearish
-        
+
         current_close = float(df["close"].iloc[-1])
-        
+
         # 1. Double Top (M-Shape) / Double Bottom (W-Shape)
         if len(sh) >= 2:
             sh1_idx, sh1_val = sh[-2]
@@ -306,7 +308,7 @@ class ChartPatternDetector:
             s1 = sh[-3][1] # Left shoulder
             head = sh[-2][1] # Head
             s2 = sh[-1][1] # Right shoulder
-            
+
             if head > s1 and head > s2 and abs(s1 - s2) / max(s1, s2) <= 0.03:
                 # Neckline support check
                 between_lows = [l for l in sl if sh[-3][0] < l[0] < sh[-1][0]]
@@ -320,7 +322,7 @@ class ChartPatternDetector:
             s1 = sl[-3][1] # Left shoulder
             head = sl[-2][1] # Head
             s2 = sl[-1][1] # Right shoulder
-            
+
             if head < s1 and head < s2 and abs(s1 - s2) / max(s1, s2) <= 0.03:
                 between_highs = [h for h in sh if sl[-3][0] < h[0] < sl[-1][0]]
                 if len(between_highs) >= 2:
@@ -336,10 +338,10 @@ class ChartPatternDetector:
             high_vals = [h[1] for h in sh[-3:]]
             low_indices = [l[0] for l in sl[-3:]]
             low_vals = [l[1] for l in sl[-3:]]
-            
+
             sh_slope = np.polyfit(high_indices, high_vals, 1)[0] if len(high_vals) >= 2 else 0.0
             sl_slope = np.polyfit(low_indices, low_vals, 1)[0] if len(low_vals) >= 2 else 0.0
-            
+
             # Symmetrical (Highs sloping down, Lows sloping up)
             if sh_slope < -1e-4 and sl_slope > 1e-4:
                 patterns.append("SYMMETRICAL_TRIANGLE")
@@ -352,7 +354,7 @@ class ChartPatternDetector:
             elif sh_slope < -1e-4 and abs(sl_slope) < 2e-4:
                 patterns.append("DESCENDING_TRIANGLE")
                 pattern_score -= 0.25
-                
+
             # 4. Wedges (Converging in same direction)
             # Rising Wedge (both sloping up, but highs flattening, bearish)
             if sh_slope > 1e-4 and sl_slope > 1e-4 and sh_slope < sl_slope:
@@ -371,7 +373,7 @@ class ChartPatternDetector:
             right_rim = past_40[-10]
             mid_trough = np.min(past_40[:-10])
             trough_idx = int(np.argmin(past_40[:-10]))
-            
+
             # Cup condition
             if abs(left_rim - right_rim) / max(left_rim, right_rim) <= 0.05 and mid_trough < min(left_rim, right_rim) * 0.90:
                 if 10 < trough_idx < 30: # trough is centered
@@ -388,7 +390,7 @@ class ChartPatternDetector:
             from app.services.sr_service import SupportResistanceEngine
             zones_res = SupportResistanceEngine.detect_classical_zones(df)
             sr_zones = [z["avg"] for z in zones_res]
-        except Exception as e:
+        except Exception:
             all_swings = [s[1] for s in sh] + [s[1] for s in sl]
             if all_swings:
                 hist, bin_edges = np.histogram(all_swings, bins=10)

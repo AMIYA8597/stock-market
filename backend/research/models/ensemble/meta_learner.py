@@ -2,18 +2,19 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
-import logging
+from pathlib import Path
+from typing import Any
+
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, List, Tuple
-from pathlib import Path
-from sklearn.linear_model import LogisticRegression
 from sklearn.calibration import CalibratedClassifierCV, FrozenEstimator
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import brier_score_loss
 from sklearn.model_selection import TimeSeriesSplit
-from sklearn.metrics import brier_score_loss, accuracy_score
-import lightgbm as lgb
 
 logger = logging.getLogger(__name__)
 
@@ -50,9 +51,8 @@ class EnsembleMetaLearner:
         logger.info(f"EnsembleMetaLearner loaded from {target_path}")
         return obj
 
-    def prepare_training_data(self, symbols: List[str]) -> Tuple[pd.DataFrame, pd.Series]:
+    def prepare_training_data(self, symbols: list[str]) -> tuple[pd.DataFrame, pd.Series]:
         """Fetch historical data and generate sub-scores for training."""
-        from app.services.prediction_engine import get_full_prediction
         import yfinance as yf
 
         X_list = []
@@ -60,11 +60,9 @@ class EnsembleMetaLearner:
 
         # Make imports dynamic to avoid circular dependencies
         from app.services.prediction_engine import (
-            score_technical,
-            score_patterns,
             score_momentum,
-            detect_regime,
-            score_xgboost,
+            score_patterns,
+            score_technical,
         )
 
         for symbol in symbols:
@@ -106,7 +104,7 @@ class EnsembleMetaLearner:
             df.ta.cdl_pattern(name="all", append=True)
             cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
             df = df.drop(columns=cols_to_drop, errors="ignore")
-            
+
             # Standardize column names
             rename_map = {}
             RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
@@ -114,13 +112,13 @@ class EnsembleMetaLearner:
             BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
             ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
             ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-            
+
             if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
             if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
             if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
             if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
             if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
-            
+
             if rename_map:
                 df = df.rename(columns=rename_map)
 
@@ -135,7 +133,7 @@ class EnsembleMetaLearner:
 
             # We generate walk-forward predictions for XGBoost with a step size of 21 days
             xgb_scores = np.zeros(len(df))
-            
+
             # Simple walk forward XGBoost simulation to prevent lookahead bias
             # Start at index 60
             for idx in range(60, len(df)):
@@ -172,7 +170,7 @@ class EnsembleMetaLearner:
                         self_clf = clf
                     else:
                         self_clf = None
-                
+
                 if 'self_clf' in locals() and self_clf is not None:
                     row = df.iloc[[idx]][features_xgb]
                     if not row.isnull().any().any():
@@ -190,14 +188,14 @@ class EnsembleMetaLearner:
                 tech = score_technical(df_slice)
                 patt = score_patterns(df_slice)
                 mom = score_momentum(df_slice)
-                
+
                 # Fast regime detection proxy to prevent statsmodels loop overhead
                 ret_63d = float((df_slice["close"].iloc[-1] / df_slice["close"].iloc[max(0, len(df_slice)-64)]) - 1.0) if len(df_slice) >= 64 else 0.0
                 realized_vol = float(np.log(df_slice["close"]/df_slice["close"].shift(1)).rolling(21).std().iloc[-1]) if len(df_slice) >= 22 else 0.02
                 ann_vol = realized_vol * np.sqrt(252)
                 sharpe_proxy = ret_63d / (ann_vol + 1e-6)
                 reg_val = 1.0 if sharpe_proxy > 0.5 else (-1.0 if sharpe_proxy < -0.5 else 0.0)
-                
+
                 # Lookahead-free simulated sentiment score based on past 5-day return and deterministic noise
                 ret_5d = float(df_slice["ret_5d"].iloc[-1]) if "ret_5d" in df_slice.columns else 0.0
                 dt_str = str(df["time"].iloc[idx])
@@ -218,10 +216,10 @@ class EnsembleMetaLearner:
 
         return pd.DataFrame(X_list), pd.Series(y_list)
 
-    def train(self, X: pd.DataFrame, y: pd.Series) -> Dict[str, Any]:
+    def train(self, X: pd.DataFrame, y: pd.Series) -> dict[str, Any]:
         """Train models using TimeSeriesSplit and CalibratedClassifierCV."""
         tscv = TimeSeriesSplit(n_splits=5)
-        
+
         lr_briers = []
         lgb_briers = []
         old_briers = []
@@ -283,7 +281,7 @@ class EnsembleMetaLearner:
         mean_lgb_brier = np.mean(lgb_briers)
         mean_old_brier = np.mean(old_briers)
 
-        logger.info(f"Mean Out-Of-Sample Brier Scores:")
+        logger.info("Mean Out-Of-Sample Brier Scores:")
         logger.info(f"  Old Fixed-Weight: {mean_old_brier:.5f}")
         logger.info(f"  Logistic Meta:    {mean_lr_brier:.5f}")
         logger.info(f"  LightGBM Meta:    {mean_lgb_brier:.5f}")
@@ -304,7 +302,7 @@ class EnsembleMetaLearner:
             "coefficients": dict(zip(self.feature_names, [float(c) for c in coefs]))
         }
 
-    def predict_proba(self, scores: List[float]) -> float:
+    def predict_proba(self, scores: list[float]) -> float:
         """Predict the probability of upward movement from layer scores."""
         X_pred = pd.DataFrame([scores], columns=self.feature_names)
         if self.best_model_name == "logistic" and self.lr_model is not None:

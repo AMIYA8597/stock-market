@@ -4,15 +4,14 @@ Produces real P10, P50, and P90 return forecasts.
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
-import logging
+from pathlib import Path
+
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
-from typing import Dict, List, Tuple, Any
-from pathlib import Path
-import lightgbm as lgb
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +22,7 @@ class QuantileLGBForecaster:
 
     def __init__(self):
         self.quantiles = [0.1, 0.5, 0.9]
-        self.models: Dict[float, lgb.LGBMRegressor] = {}
+        self.models: dict[float, lgb.LGBMRegressor] = {}
         self.features = [
             "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
             "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
@@ -58,9 +57,10 @@ class QuantileLGBForecaster:
             logger.warning("Some or all quantile models were missing. Need training.")
         return forecaster
 
-    def prepare_training_data(self, symbols: List[str]) -> Tuple[pd.DataFrame, pd.Series]:
+    def prepare_training_data(self, symbols: list[str]) -> tuple[pd.DataFrame, pd.Series]:
         """Collect historical stacked features and 5d forward return targets across symbols."""
         import yfinance as yf
+
         from research.feature_engineering.price_factors import PriceFactorsBuilder
         from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
 
@@ -106,7 +106,7 @@ class QuantileLGBForecaster:
 
             # Target: 5-day forward return
             df["target_5d"] = (df["close"].shift(-5) / df["close"]) - 1.0
-            
+
             # Standardize columns to match self.features
             rename_map = {}
             RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
@@ -114,13 +114,13 @@ class QuantileLGBForecaster:
             BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
             ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
             ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-            
+
             if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
             if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
             if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
             if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
             if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
-            
+
             if rename_map:
                 df = df.rename(columns=rename_map)
 
@@ -155,7 +155,7 @@ class QuantileLGBForecaster:
             model.fit(X, y)
             self.models[q] = model
 
-    def predict(self, features: Dict[str, float]) -> Tuple[float, float, float]:
+    def predict(self, features: dict[str, float]) -> tuple[float, float, float]:
         """Predict P10, P50, and P90 returns for a single feature vector.
         
         Args:
@@ -166,7 +166,7 @@ class QuantileLGBForecaster:
         """
         # Build single row dataframe
         row = pd.DataFrame([features], columns=self.features)
-        
+
         preds = {}
         for q in self.quantiles:
             model = self.models.get(q)
@@ -185,5 +185,5 @@ class QuantileLGBForecaster:
         p10 = preds[0.1]
         p50 = max(p10, preds[0.5])
         p90 = max(p50, preds[0.9])
-        
+
         return p10, p50, p90

@@ -4,17 +4,18 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any, Optional
 from pathlib import Path
-from fastapi import APIRouter, Depends, Query, HTTPException, status
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
-from app.services.upstox_service import UpstoxService
 from app.services.broker_adapter import BrokerAdapter
+from app.services.upstox_service import UpstoxService
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +31,8 @@ class OrderSubmitSchema(BaseModel):
     side: str = Field(..., description="Transaction direction: 'BUY' or 'SELL'")
     quantity: float = Field(..., description="Number of units to trade")
     order_type: str = Field(..., description="Execution type: 'MARKET' or 'LIMIT'")
-    limit_price: Optional[float] = Field(None, description="Price boundary for LIMIT orders")
-    product: Optional[str] = Field("I", description="Product selection: 'I' (Intraday) or 'D' (Delivery)")
+    limit_price: float | None = Field(None, description="Price boundary for LIMIT orders")
+    product: str | None = Field("I", description="Product selection: 'I' (Intraday) or 'D' (Delivery)")
 
 
 @router.get("/trading/mode")
@@ -44,7 +45,7 @@ async def get_trading_mode(current_user: Any = Depends(get_current_user_or_none)
             "email": UpstoxService.USER_PROFILE.get("email"),
             "broker": "Upstox"
         }
-        
+
     return {
         "trading_mode": UpstoxService.TRADING_MODE,
         "connection_status": UpstoxService.CONNECTION_STATUS,
@@ -60,25 +61,25 @@ async def set_trading_mode(
 ):
     """Toggles trading session mode between PAPER and LIVE."""
     target_mode = payload.mode.upper().strip()
-    
+
     if target_mode not in ("PAPER", "LIVE"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid mode. Must be 'PAPER' or 'LIVE'."
         )
-        
+
     if target_mode == "LIVE":
         if not UpstoxService.ACCESS_TOKEN:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication Required: Upstox access token is missing or expired. Authenticate first."
             )
-            
+
     old_mode = UpstoxService.TRADING_MODE
     UpstoxService.TRADING_MODE = target_mode
     user_id = current_user.get("sub") if (current_user and isinstance(current_user, dict)) else "guest-user"
     UpstoxService.log_audit(f"TRADING MODE SWITCHED: {old_mode} -> {target_mode} by user={user_id}")
-    
+
     return {
         "status": "success",
         "trading_mode": UpstoxService.TRADING_MODE,
@@ -127,18 +128,19 @@ async def emergency_kill_switch(
     user_id = current_user.get("sub") if (current_user and isinstance(current_user, dict)) else "guest-user"
     old_mode = UpstoxService.TRADING_MODE
     UpstoxService.TRADING_MODE = "PAPER"
-    
+
     UpstoxService.log_audit(
         f"[KILL SWITCH ACTIVATED] Mode forced to PAPER by user={user_id} (Previous: {old_mode})"
     )
-    
+
     cancel_info = []
-    
+
     # 1. Cancel open simulated limit orders from database
     try:
-        from app.models.paper_trading import PaperOrder
         from sqlalchemy import update
-        
+
+        from app.models.paper_trading import PaperOrder
+
         # Mark all pending paper orders as CANCELLED
         stmt = (
             update(PaperOrder)
@@ -147,7 +149,7 @@ async def emergency_kill_switch(
         )
         res = await db.execute(stmt)
         await db.commit()
-        
+
         cancel_info.append(f"Cancelled {res.rowcount} pending paper orders.")
     except Exception as e:
         logger.error(f"Failed to cancel pending paper orders during kill switch: {e}")
@@ -160,7 +162,7 @@ async def emergency_kill_switch(
     except Exception as e:
         logger.error(f"Failed to disconnect Upstox feed during kill switch: {e}")
         cancel_info.append(f"Upstox WS close error: {str(e)}")
-        
+
     return {
         "status": "success",
         "trading_mode": "PAPER",
@@ -177,15 +179,15 @@ async def get_audit_log(
     """Reads the trailing rows of the audit log file d:\\work\\stock-market\\backend\\logs\\trading_audit.log."""
     backend_root = Path(__file__).resolve().parent.parent.parent.parent
     audit_file = backend_root / "logs" / "trading_audit.log"
-    
+
     if not audit_file.exists():
         return {"logs": []}
-        
+
     try:
         # Read trailing lines
-        with open(audit_file, "r", encoding="utf-8") as f:
+        with open(audit_file, encoding="utf-8") as f:
             lines = f.readlines()
-        
+
         trail = [line.strip() for line in lines[-limit:]]
         return {"logs": trail}
     except Exception as e:
@@ -213,22 +215,22 @@ async def get_upstox_login_url(current_user: Any = Depends(get_current_user_or_n
 
 @router.get("/auth/upstox/callback")
 async def upstox_oauth_callback(
-    code: Optional[str] = None,
-    error: Optional[str] = None,
-    error_description: Optional[str] = None
+    code: str | None = None,
+    error: str | None = None,
+    error_description: str | None = None
 ):
     """OAuth redirect handler callback from Upstox API code consent dialog."""
     settings = get_settings()
     frontend_url = settings.NEXTAUTH_URL or "http://localhost:3000"
-    
+
     if error:
         logger.error(f"Upstox OAuth error callback: {error} - {error_description}")
         return RedirectResponse(url=f"{frontend_url}/?upstox_auth=failed&error={error}")
-        
+
     if not code:
         logger.error("Upstox callback endpoint hit without authorization code.")
         return RedirectResponse(url=f"{frontend_url}/?upstox_auth=failed&error=no_code")
-        
+
     try:
         # exchange code for token
         await UpstoxService.exchange_code_for_token(code)
@@ -248,7 +250,7 @@ async def get_upstox_auth_status(current_user: Any = Depends(get_current_user_or
             "email": UpstoxService.USER_PROFILE.get("email"),
             "client_id": UpstoxService.USER_PROFILE.get("client_id")
         }
-        
+
     return {
         "authenticated": UpstoxService.ACCESS_TOKEN is not None,
         "profile": profile_summary,

@@ -1,10 +1,8 @@
-import os
-from typing import Dict, List
 
 # Simple algorithm registry mapping identifiers to implementation import paths.
 # This can be extended to load algorithms dynamically.
-ALGORITHM_MAP: Dict[str, str] = {
-    "candlestick": "app.components.charts.FinancialCandlestickChart",
+ALGORITHM_MAP: dict[str, str] = {
+    "candlestick": "app.components.charts.LightweightCandlestickChart",
     "line": "app.components.charts.SimpleLineAreaChart",
     "ohlcv": "app.components.charts.OHLCVChart",
     "xgboost": "app.services.ml.fallback_model.FallbackModel",
@@ -22,6 +20,6 @@ def get_algorithm_path(name: str) -> str:
         raise KeyError(f"Algorithm '{name}' is not registered.")
     return ALGORITHM_MAP[name]
 
-def list_algorithms() -> List[str]:
+def list_algorithms() -> list[str]:
     """Return a list of all available algorithm identifiers."""
     return list(ALGORITHM_MAP.keys())

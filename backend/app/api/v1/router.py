@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.v1 import (
+from app.api.v1 import (  # noqa: E402
     admin,
     alerts,
     auth,
@@ -10,20 +10,21 @@ from app.api.v1 import (
     blog,
     explain,
     health,
+    journal,
     market,
     market_data,
     models,
     notifications,
+    paper_trading,
     payments,
+    # ai,  # AI module disabled (missing)
     portfolio,
+    predictions,
     regime,
     screener,
     signals,
-    users,
-    predictions,
-    journal,
-    paper_trading,
     trading,
+    users,
 )
 
 router = APIRouter()
@@ -51,6 +52,7 @@ router.include_router(alerts.router)
 router.include_router(models.router)
 router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])
 router.include_router(journal.router)
+# router.include_router(ai.router)  # Disabled due to missing module
 
 
 @router.get("/version", tags=["system"])

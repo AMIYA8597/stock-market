@@ -4,16 +4,16 @@
 from __future__ import annotations
 
 import uuid
-from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Response
-from sqlalchemy import select, delete
+
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
 from app.models.journal import TradeJournal
 from app.models.user import User
-from app.schemas.journal import JournalCreate, JournalResponse
 from app.schemas.errors import ErrorCode, ErrorResponse
+from app.schemas.journal import JournalCreate, JournalResponse
 
 router = APIRouter(prefix="/journal", tags=["journal"])
 
@@ -33,11 +33,11 @@ async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UU
         return uuid.UUID("d3b07384-d113-4956-a5d8-4f24d1e89bd9")
 
 
-@router.get("", response_model=List[JournalResponse])
+@router.get("", response_model=list[JournalResponse])
 async def get_journals(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
-) -> List[JournalResponse]:
+) -> list[JournalResponse]:
     """Retrieve all trade journal entries for the current user."""
     user_uuid = await get_db_user_id(current_user, db)
     result = await db.execute(

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type FactorExposureResponse } from "@/lib/contracts-api";
 
-const DEFAULT_SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"];
+import { SYMBOLS as DEFAULT_SYMBOLS } from "@/shared/constants/symbols";
 
 function pct(value: number | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) {

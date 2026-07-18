@@ -213,7 +213,6 @@ async def init_db() -> None:
         if settings.INIT_DB_ON_STARTUP:
             await init_db()
     """
-    import app.models  # Ensure all models are registered in Base.metadata
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("database_schema_initialized")

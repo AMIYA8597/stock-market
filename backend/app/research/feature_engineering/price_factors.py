@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import pandas_ta as ta
 
+
 class PriceFactorsBuilder:
     """Computes price-derived features and momentum factors."""
 
@@ -13,7 +14,7 @@ class PriceFactorsBuilder:
         data = df.copy()
         if "time" in data.columns:
             data = data.sort_values("time")
-        
+
         close = data["close"].astype(float)
         high = data["high"].astype(float)
         low = data["low"].astype(float)

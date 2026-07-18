@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import os
+
 os.environ["RATE_LIMIT_ENABLED"] = "true"
 
-import sys
 import socket
+import sys
 from pathlib import Path
 
 # Ensure backend root is importable as top-level packages: app, research, tests.
@@ -31,6 +32,7 @@ socket.setdefaulttimeout(1.5)
 # Mock yfinance to raise exceptions immediately, preventing slow network hangs during tests
 from unittest.mock import MagicMock
 
+
 class MockTicker:
     def __init__(self, *args, **kwargs):
         pass
@@ -41,6 +43,7 @@ class MockTicker:
         raise RuntimeError("Network offline (mocked yfinance)")
 
 import importlib.machinery
+
 mock_yf = MagicMock()
 mock_yf.Ticker = MockTicker
 def mock_download(*args, **kwargs):
@@ -50,7 +53,9 @@ mock_yf.__spec__ = importlib.machinery.ModuleSpec('yfinance', None)
 
 sys.modules['yfinance'] = mock_yf
 
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
+
+
 async def mock_get_full_prediction(symbol: str) -> dict:
     return {
         "symbol": symbol.upper(),
@@ -125,6 +130,7 @@ async def mock_get_full_prediction(symbol: str) -> dict:
     }
 
 import app.services.prediction_engine as prediction_engine_module
+
 prediction_engine_module.get_full_prediction = mock_get_full_prediction
 
 async def mock_get_quote(symbol: str) -> dict:
@@ -198,12 +204,14 @@ def mock_get_mongo_db() -> any:
     return DummyMongoDb()
 
 import app.services.market_data_service as market_data_service_module
+
 market_data_service_module.MarketDataService.get_quote = mock_get_quote
 market_data_service_module.MarketDataService.get_history = mock_get_history
 market_data_service_module.MarketDataService.get_ticker_history_df = mock_get_ticker_history_df
 market_data_service_module.MarketDataService.get_ticker_info = mock_get_ticker_info
 
 import app.database.mongodb as mongodb_module
+
 mongodb_module.get_mongo_db = mock_get_mongo_db
 
 

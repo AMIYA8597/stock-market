@@ -158,4 +158,5 @@ class OptimizationResponse(BaseModel):
     efficient_frontier: list[EfficientFrontierPoint] | None = None
     hrp_dendrogram: dict | None = None
     bl_posterior_returns: dict[str, Decimal] | None = None
+    excluded_tickers: list[dict] | None = None
     timestamp: datetime

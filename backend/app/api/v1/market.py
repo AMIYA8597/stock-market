@@ -5,11 +5,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-import asyncio
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.services.market_data_service import MarketDataService
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.market import (
     EconomicCalendarResponse,
@@ -28,6 +26,7 @@ from app.schemas.market import (
     SectorNode,
     SignalData,
 )
+from app.services.market_data_service import MarketDataService
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -59,7 +58,7 @@ async def get_quote(symbol: str) -> QuoteResponse:
         quote = await MarketDataService.get_quote(symbol)
         price_val = quote["price"]
         change_pct = quote["change_pct"]
-        
+
         # Build neutral/deterministic regime/signal metrics for simple quotes
         sig_dir = "NEUTRAL"
         if change_pct > 2.0:
@@ -70,14 +69,14 @@ async def get_quote(symbol: str) -> QuoteResponse:
             sig_dir = "STRONG_SELL"
         elif change_pct < -0.5:
             sig_dir = "SELL"
-            
+
         sig_conf = round(min(0.95, 0.50 + abs(change_pct) * 0.1), 4)
         regime_state = "sideways"
         if change_pct > 1.0:
             regime_state = "bull"
         elif change_pct < -1.0:
             regime_state = "bear"
-            
+
         return QuoteResponse(
             ticker=quote["symbol"],
             name=quote["symbol"].split(".")[0],
@@ -207,7 +206,7 @@ async def get_indices() -> IndicesResponse:
                 status_code=404,
                 detail="No market data available for indices",
             )
-            
+
         indices = [
             IndexData(
                 name=ind["name"],
@@ -245,7 +244,7 @@ async def get_movers(
                 status_code=404,
                 detail="No market data available for movers",
             )
-            
+
         assets = [
             MoverData(
                 ticker=m["ticker"],
@@ -298,7 +297,7 @@ async def get_heatmap(
             sector = SECTOR_MAP.get(name_root, "Other")
             if sector not in sectors:
                 sectors[sector] = []
-            
+
             sectors[sector].append(
                 SectorNode(
                     ticker=m["ticker"],
