@@ -96,7 +96,7 @@ async def update_profile(
     db: AsyncSession = Depends(get_db),
 ) -> UserProfileResponse:
     user_id = current_user.get("sub")
-    
+
     from app.core.config import get_settings
     settings = get_settings()
 

@@ -151,7 +151,7 @@ class BacktestResultsResponse(BaseModel):
 
     status: str = "DONE"
     completed_at: datetime
-
+    excluded_tickers: list[dict] | None = None
 
 class BacktestRunResponse(BaseModel):
     """POST /backtest/run response."""

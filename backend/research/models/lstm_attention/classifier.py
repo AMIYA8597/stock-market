@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
-import logging
 from pathlib import Path
-from typing import Any
+
 import numpy as np
 import pandas as pd
 import torch
@@ -73,53 +73,53 @@ class LSTMAttentionClassifier:
         X_clean = df[self.features].dropna()
         y_clean = y.loc[X_clean.index].values
         X_scaled = self.scaler.fit_transform(X_clean)
-        
+
         if len(X_scaled) <= self.seq_len:
             logger.warning("Insufficient samples to train LSTM")
             return self
-            
+
         X_seq, y_seq = self._create_sequences(X_scaled, y_clean)
-        
+
         X_tensor = torch.tensor(X_seq, dtype=torch.float32)
         y_tensor = torch.tensor(y_seq, dtype=torch.float32).unsqueeze(1)
-        
+
         self.model = LSTMAttentionNet(input_dim=len(self.features))
         self.model.train()
-        
+
         criterion = nn.BCELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
-        
+
         for epoch in range(self.epochs):
             optimizer.zero_grad()
             outputs, _ = self.model(X_tensor)
             loss = criterion(outputs, y_tensor)
             loss.backward()
             optimizer.step()
-            
+
         return self
 
     def predict_proba(self, df: pd.DataFrame) -> tuple[float, dict[str, float]]:
         """Predict directional probability and return attention weights."""
         if self.model is None:
             return 0.5, {}
-            
+
         X_clean = df[self.features]
         X_scaled = self.scaler.transform(X_clean)
-        
+
         if len(X_scaled) < self.seq_len:
             padding = np.zeros((self.seq_len - len(X_scaled), len(self.features)))
             X_scaled = np.vstack([padding, X_scaled])
         else:
             X_scaled = X_scaled[-self.seq_len:]
-            
+
         X_tensor = torch.tensor(X_scaled, dtype=torch.float32).unsqueeze(0)
-        
+
         self.model.eval()
         with torch.no_grad():
             prob, attn_weights = self.model(X_tensor)
             prob_val = float(prob.squeeze().item())
             attn_weights_val = attn_weights.squeeze().tolist()
-            
+
         attn_dict = {f"t-{self.seq_len - 1 - i}": float(w) for i, w in enumerate(attn_weights_val)}
         return prob_val, attn_dict
 

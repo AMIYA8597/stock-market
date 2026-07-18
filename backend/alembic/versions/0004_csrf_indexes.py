@@ -5,9 +5,9 @@ Revises: 0003_auth_billing_content_notifications
 Create Date: 2026-03-29 12:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic
 revision = "0004"
@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     """Create CSRF token table and add missing indexes."""
-    
+
     # ───  CREATE CSRF_TOKENS TABLE ───
     op.create_table(
         "csrf_tokens",
@@ -32,20 +32,20 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("token"),
     )
-    
+
     # Indexes for CSRF token queries
     op.create_index("ix_csrf_tokens_user_id", "csrf_tokens", ["user_id"])
     op.create_index("ix_csrf_tokens_token", "csrf_tokens", ["token"])
     op.create_index("ix_csrf_tokens_expires_at", "csrf_tokens", ["expires_at"])
-    
+
     # ─── ADD MISSING INDEXES FOR CRITICAL QUERIES ───
-    
+
     # User email lookup (login, password reset)
     op.create_index("ix_users_email", "users", ["email"], if_not_exists=True)
-    
+
     # Lookups by user ID
     op.create_index("ix_users_id", "users", ["id"], if_not_exists=True)
-    
+
     # Payment lookups
     op.create_index(
         "ix_payment_transactions_intent_id",
@@ -71,22 +71,22 @@ def upgrade() -> None:
         ["idempotency_key"],
         if_not_exists=True
     )
-    
+
     # Notification lookups
     op.create_index("ix_notifications_user_id", "notifications", ["user_id"], if_not_exists=True)
     op.create_index("ix_notifications_is_read", "notifications", ["is_read"], if_not_exists=True)
     op.create_index("ix_notifications_created_at", "notifications", ["created_at"], if_not_exists=True)
-    
+
     # Refresh token lookups
     op.create_index("ix_refresh_sessions_user_id", "refresh_sessions", ["user_id"], if_not_exists=True)
     op.create_index("ix_refresh_sessions_family_id", "refresh_sessions", ["family_id"], if_not_exists=True)
     op.create_index("ix_refresh_sessions_expires_at", "refresh_sessions", ["expires_at"], if_not_exists=True)
-    
+
     # Blog post queries
     op.create_index("ix_blog_posts_slug", "blog_posts", ["slug"], if_not_exists=True)
     op.create_index("ix_blog_posts_status", "blog_posts", ["status"], if_not_exists=True)
     op.create_index("ix_blog_posts_published_at", "blog_posts", ["published_at"], if_not_exists=True)
-    
+
     # Alert queries
     op.create_index("ix_alerts_user_id", "alerts", ["user_id"], if_not_exists=True)
     op.create_index("ix_alerts_symbol_id", "alerts", ["symbol_id"], if_not_exists=True)
@@ -95,15 +95,15 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop CSRF token table and indexes."""
-    
+
     # Drop indexes
     op.drop_index("ix_csrf_tokens_expires_at", table_name="csrf_tokens")
     op.drop_index("ix_csrf_tokens_token", table_name="csrf_tokens")
     op.drop_index("ix_csrf_tokens_user_id", table_name="csrf_tokens")
-    
+
     # Drop table
     op.drop_table("csrf_tokens")
-    
+
     # Drop other indexes (if_exists check)
     indexes_to_drop = [
         ("ix_users_email", "users"),
@@ -125,6 +125,6 @@ def downgrade() -> None:
         ("ix_alerts_symbol_id", "alerts"),
         ("ix_alerts_alert_type", "alerts"),
     ]
-    
+
     for index_name, table_name in indexes_to_drop:
         op.drop_index(index_name, table_name=table_name, if_exists=True)

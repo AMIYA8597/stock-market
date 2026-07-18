@@ -86,7 +86,7 @@ async def startup_events() -> dict[str, Any]:
                     else "SELECT 1"
                 )
             logger.info("startup_database_success", database_url=settings.DATABASE_URL)
-            
+
             # Automatically create tables if not exists
             logger.info("startup_database_schema_sync")
             await init_db()
@@ -124,7 +124,7 @@ async def startup_events() -> dict[str, Any]:
                     "ICICIBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "WIPRO.NS", "BAJFINANCE.NS",
                     "^NSEI"
                 ]
-                
+
                 async def alert_polling_loop():
                     # Sleep slightly on startup to let server initialize
                     await asyncio.sleep(5)

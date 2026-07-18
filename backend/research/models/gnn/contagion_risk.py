@@ -5,9 +5,9 @@ Computes rolling index correlation, rolling beta, idiosyncratic alpha, and conta
 from __future__ import annotations
 
 import logging
+
 import numpy as np
 import pandas as pd
-from typing import Dict, Any
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class ContagionRiskAnalyzer:
     def __init__(self, index_symbol: str = "^NSEI"):
         self.index_symbol = index_symbol
 
-    def compute_risk_factors(self, stock_df: pd.DataFrame, index_df: pd.DataFrame | None = None) -> Dict[str, float]:
+    def compute_risk_factors(self, stock_df: pd.DataFrame, index_df: pd.DataFrame | None = None) -> dict[str, float]:
         """Compute index correlation, beta, spread, alpha, and contagion score.
         
         Args:
@@ -59,7 +59,7 @@ class ContagionRiskAnalyzer:
         # Align close prices
         stock_close = stock_df["close"].astype(float)
         index_close = index_df["Close"].astype(float)
-        
+
         # Localize timezones if mismatch
         if stock_close.index.tz is not None:
             stock_close.index = stock_close.index.tz_localize(None)
@@ -123,7 +123,7 @@ class ContagionRiskAnalyzer:
         # Contagion score calculation
         corr_risk = abs(corr)
         contagion_score = 0.6 * corr_risk + 0.3 * min(abs(beta - 1.0), 1.0) + 0.1 * min(spread * 500, 1.0)
-        
+
         # Raw signal combining alpha and contagion dampening
         raw_signal = float(np.tanh(alpha * 20.0) * (1.0 - 0.65 * contagion_score))
 

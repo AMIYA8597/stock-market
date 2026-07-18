@@ -6,9 +6,9 @@ import asyncio
 from datetime import UTC, datetime
 
 import pandas as pd
-from app.services.market_data_service import MarketDataService
 
 from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
+from app.services.market_data_service import MarketDataService
 
 _YF_INTERVAL_MAP: dict[Interval, str] = {
     "1m": "1m",
@@ -52,26 +52,26 @@ class YFinanceSource(MarketDataSource):
         if frame.empty:
             # Try direct HTTP v8 API fallback
             try:
-                import urllib.request
                 import json
-                
+                import urllib.request
+
                 # Convert datetime to Unix timestamps
                 start_ts = int(start.timestamp())
                 end_ts = int(end.timestamp())
-                
+
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol.upper()}?period1={start_ts}&period2={end_ts}&interval={y_interval}"
                 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-                
+
                 def _fetch_direct():
                     req = urllib.request.Request(url, headers=headers)
                     with urllib.request.urlopen(req, timeout=15) as response:
                         return json.loads(response.read().decode())
-                
+
                 payload = await asyncio.to_thread(_fetch_direct)
                 res = payload["chart"]["result"][0]
                 indicators = res["indicators"]["quote"][0]
                 timestamps = res["timestamp"]
-                
+
                 frame = pd.DataFrame({
                     "Date": pd.to_datetime(timestamps, unit="s"),
                     "Open": indicators["open"],
@@ -81,7 +81,7 @@ class YFinanceSource(MarketDataSource):
                     "Volume": indicators["volume"],
                     "Adj Close": indicators["close"]  # Fallback adjusted close
                 }).dropna(subset=["Close"])
-                
+
                 logger.info(f"Direct HTTP v8 API fallback succeeded for {symbol}")
             except Exception as e:
                 logger.error(f"Direct HTTP v8 fallback failed for {symbol}: {e}")

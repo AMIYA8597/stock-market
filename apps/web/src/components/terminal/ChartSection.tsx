@@ -7,7 +7,6 @@ import { safeFormat } from "@/lib/formatters";
 import type { OHLCVBar } from "@neuroquant/types";
 import type { SignalResponse, ForecastPoint } from "@/types/intelligence";
 import {
-  FinancialCandlestickChart,
   LightweightCandlestickChart,
   SimpleLineAreaChart,
   type LineAreaPoint,
@@ -563,19 +562,13 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
             </div>
             <div className="relative min-h-0 flex-1">
               {bars.length > 0 ? (
-                chartStyle === "candlestick" ? (
-                  <FinancialCandlestickChart
-                    bars={bars}
-                  />
-                ) : (
-                  <LightweightCandlestickChart
-                    bars={bars}
-                    chartStyle={chartStyle}
-                    indicators={activeIndicators}
-                    predictions={predictions}
-                    symbol={activeSymbol ?? undefined}
-                  />
-                )
+                <LightweightCandlestickChart
+                  bars={bars}
+                  chartStyle={chartStyle}
+                  indicators={activeIndicators}
+                  predictions={predictions}
+                  symbol={activeSymbol ?? undefined}
+                />
               ) : (
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
                   {historyError ? (

@@ -6,8 +6,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
-import numpy as np
 
+import numpy as np
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,7 +43,7 @@ class SignalEngine:
         regime = prediction.get("regime", {})
         regime_name = regime.get("regime", "SIDEWAYS")
         conditional_vol = regime.get("conditional_vol", 0.02)
-        
+
         target_price_5d = float(prediction.get("target_price_5d", 0.0))
         stop_loss = float(prediction.get("stop_loss", 0.0))
         take_profit = float(prediction.get("take_profit", 0.0))
@@ -67,7 +67,7 @@ class SignalEngine:
         if direction in ("BUY", "STRONG_BUY") and regime_name in ("BEAR", "CRISIS"):
             logger.info(f"Signal rejected for {symbol_ticker}: BUY direction is incompatible with HMM regime {regime_name}.")
             return None
-        
+
         # SELL signals are blocked during BULL states
         if direction in ("SELL", "STRONG_SELL") and regime_name == "BULL":
             logger.info(f"Signal rejected for {symbol_ticker}: SELL direction is incompatible with HMM regime {regime_name}.")
@@ -80,12 +80,12 @@ class SignalEngine:
         prices = np.array([[current_price]])
         adv = np.array([[10000000.0]])
         realized_vol = np.array([[conditional_vol]])
-        
+
         # Calculate single-trip cost
         cost_arr = compute_costs(trades_abs, prices, adv, realized_vol)
         single_trip_cost = float(cost_arr[0][0])
         round_trip_cost = single_trip_cost * 2.0
-        
+
         expected_gain = abs(target_price_5d - current_price)
         if expected_gain < (3.0 * round_trip_cost):
             logger.info(
@@ -108,7 +108,7 @@ class SignalEngine:
 
         # Check if a signal already exists for this exact timestamp and symbol
         signal_time = datetime.now(UTC)
-        
+
         ensemble_signal = EnsembleSignal(
             time=signal_time,
             symbol_id=symbol.id,

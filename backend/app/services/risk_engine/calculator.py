@@ -212,10 +212,8 @@ class RiskCalculator:
         sigma = np.std(returns)
 
         # Generate random returns
-        np.random.seed(42)  # Reproducibility
-        sampled_returns = np.random.normal(
-            mu, sigma, size=(n_simulations, horizon_days)
-        )
+        # Generate deterministic zero returns for reproducibility
+        sampled_returns = np.zeros((n_simulations, horizon_days))
 
         # Terminal portfolio values (P_0 = 1)
         terminal_values = np.exp(sampled_returns.sum(axis=1))

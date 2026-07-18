@@ -1,11 +1,12 @@
 """Live Tick Producer Broadcaster — Background loop polling prices and publishing to Redis."""
 
-import sys
-import pathlib
 import asyncio
 import json
 import logging
-from datetime import datetime, UTC
+import pathlib
+import sys
+from datetime import UTC, datetime
+
 import yfinance as yf
 
 # Add backend directory to path
@@ -22,7 +23,7 @@ SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 
 async def main():
     logger.info("Starting live tick producer broadcaster...")
-    
+
     try:
         redis = await get_redis()
         logger.info("Connected to Redis successfully.")
@@ -31,7 +32,7 @@ async def main():
         return
 
     last_prices = {}
-    
+
     # Initialize with current prices
     for symbol in SYMBOLS:
         try:
@@ -50,11 +51,11 @@ async def main():
                 # Fetch fresh last price
                 ticker = yf.Ticker(symbol)
                 price = getattr(ticker.fast_info, "last_price", None)
-                
+
                 if price is not None:
                     price_val = float(price)
                     old_price = last_prices.get(symbol)
-                    
+
                     if old_price is None or price_val != old_price:
                         last_prices[symbol] = price_val
                         payload = {
@@ -68,7 +69,7 @@ async def main():
                         logger.info(f"Broadcast update: {symbol} -> {price_val}")
             except Exception as e:
                 logger.error(f"Error checking tick for {symbol}: {e}")
-                
+
         # Poll every 15 seconds to respect free tier boundaries
         await asyncio.sleep(15)
 

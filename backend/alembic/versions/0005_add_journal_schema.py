@@ -5,9 +5,9 @@ Revises: 0004
 Create Date: 2026-06-03 12:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic
 revision = "0005"
@@ -34,7 +34,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    
+
     # Create indexes for performance
     op.create_index("ix_trade_journals_user_id", "trade_journals", ["user_id"])
     op.create_index("ix_trade_journals_symbol", "trade_journals", ["symbol"])

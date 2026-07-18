@@ -15,7 +15,7 @@ import { getWsBaseUrl } from "@/lib/runtime-config";
 import { ChartCard, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
 import { safeFormat } from "@/lib/formatters";
 
-const DEFAULT_SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"];
+import { SYMBOLS as DEFAULT_SYMBOLS } from "@/shared/constants/symbols";
 const cleanWsUrl = getWsBaseUrl();
 
 function toPercent(value: unknown): string {

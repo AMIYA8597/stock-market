@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import pickle
-import logging
 from pathlib import Path
 from typing import Any
-import numpy as np
+
 import pandas as pd
 import xgboost as xgb
 from sklearn.preprocessing import StandardScaler
@@ -42,9 +42,9 @@ class XGBoostDirectionalClassifier:
         """Fit the scaler and classifier."""
         X_clean = X[self.features].dropna()
         y_clean = y.loc[X_clean.index]
-        
+
         X_scaled = self.scaler.fit_transform(X_clean)
-        
+
         self.model = xgb.XGBClassifier(
             n_estimators=self.n_estimators,
             max_depth=self.max_depth,
@@ -99,7 +99,7 @@ class XGBoostDirectionalClassifier:
         try:
             with open(path, "rb") as f:
                 state = pickle.load(f)
-            
+
             inst = cls()
             if isinstance(state, dict) and "model" in state:
                 inst.scaler = state.get("scaler")

@@ -1,8 +1,8 @@
 import yfinance as yf
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
-import sys, pathlib
+import sys
+import pathlib
 project_root = pathlib.Path(__file__).resolve().parent.parent / "backend"
 sys.path.insert(0, str(project_root))
 from research.feature_engineering.price_factors import PriceFactorsBuilder

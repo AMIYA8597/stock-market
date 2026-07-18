@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+
 from research.models.ensemble.meta_learner import EnsembleMetaLearner
+
 
 def test_meta_learner_train_predict() -> None:
     # Build synthetic features representing the layer scores and label
     np.random.seed(42)
     n_samples = 200
-    
+
     # 6 features: ["technical", "pattern", "momentum", "regime", "xgboost", "sentiment"]
     X = pd.DataFrame({
         "technical": np.random.uniform(-1, 1, n_samples),
@@ -24,11 +26,11 @@ def test_meta_learner_train_predict() -> None:
 
     learner = EnsembleMetaLearner()
     metrics = learner.train(X, y)
-    
+
     assert "logistic_brier" in metrics
     assert "lightgbm_brier" in metrics
     assert "best_model" in metrics
-    
+
     # Predict probability for a single score vector
     test_scores = [0.2, 0.1, 0.3, 1.0, 0.4, 0.2]
     prob = learner.predict_proba(test_scores)

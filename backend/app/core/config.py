@@ -522,7 +522,7 @@ def get_settings() -> Settings:
             parent_env_2 = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".env"))
             if os.path.exists(parent_env_2):
                 env_file = parent_env_2
-                
+
     if os.path.exists(env_file):
         return Settings(_env_file=env_file)
     return Settings()

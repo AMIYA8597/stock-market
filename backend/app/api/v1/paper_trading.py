@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
-from app.services.paper_trading import PaperTradingService
 from app.schemas.errors import ErrorCode, ErrorResponse
+from app.services.paper_trading import PaperTradingService
 
 router = APIRouter(prefix="/paper-trade", tags=["paper-trading"])
 

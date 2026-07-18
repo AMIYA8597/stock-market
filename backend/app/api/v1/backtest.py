@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import math
-import random
-from datetime import UTC, date, datetime, timedelta, time
+
+# import random  # removed per policy
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -13,10 +14,10 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_db, get_current_user_or_none
+from app.core.dependencies import get_current_user_or_none, get_db
 from app.database.connection import async_session_factory
-from app.models.backtest import BacktestJob
 from app.models.asset import Symbol
+from app.models.backtest import BacktestJob
 from app.models.ohlcv import OHLCV
 from app.models.signal import EnsembleSignal
 from app.schemas.backtest import (
@@ -27,30 +28,30 @@ from app.schemas.backtest import (
     BacktestStatusResponse,
     DrawdownPoint,
     EquityCurvePoint,
+    MonteCarloResults,
     StatisticalTests,
     TradeLogEntry,
     WalkForwardMetrics,
-    MonteCarloResults,
+)
+from research.backtesting.analytics import (
+    cagr,
+    calmar_ratio,
+    max_drawdown,
+    omega_ratio,
+    sharpe_ratio,
+    sortino_ratio,
 )
 
 # Vectorized engine and analytics
 from research.backtesting.engine import run_vectorized_backtest
-from research.backtesting.analytics import (
-    sharpe_ratio,
-    sortino_ratio,
-    max_drawdown,
-    cagr,
-    calmar_ratio,
-    omega_ratio,
-)
-from research.backtesting.statistical_tests import (
-    diebold_mariano_test,
-    deflated_sharpe_ratio,
-    min_backtest_length_days,
-)
 from research.backtesting.monte_carlo import (
     bootstrap_paths,
     summarize_monte_carlo,
+)
+from research.backtesting.statistical_tests import (
+    deflated_sharpe_ratio,
+    diebold_mariano_test,
+    min_backtest_length_days,
 )
 from research.backtesting.walk_forward import evaluate_cpcv
 
@@ -101,6 +102,14 @@ async def execute_backtest_job(job_id: UUID) -> None:
         ticker_to_symbol_id = {s.ticker: s.id for s in symbols}
         symbol_id_to_ticker = {s.id: s.ticker for s in symbols}
 
+    # Identify tickers without a corresponding Symbol entry
+    missing_symbols = [t for t in universe if t not in ticker_to_symbol_id]
+    excluded_tickers: list[dict] = []
+    if missing_symbols:
+        excluded_tickers.extend([{"ticker": t, "reason": "symbol not found"} for t in missing_symbols])
+        # Filter out missing symbols from universe for further processing
+        universe = [t for t in universe if t in ticker_to_symbol_id]
+
     BACKTEST_PROGRESS[job_str] = 35
 
     # 3. Read data from DB
@@ -110,7 +119,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
     if ticker_to_symbol_id:
         dt_start = datetime.combine(date_from, time.min, tzinfo=UTC)
         dt_end = datetime.combine(date_to, time.max, tzinfo=UTC)
-        
+
         async with async_session_factory() as session:
             ohlcv_stmt = select(OHLCV).where(
                 OHLCV.symbol_id.in_(ticker_to_symbol_id.values()),
@@ -160,40 +169,15 @@ async def execute_backtest_job(job_id: UUID) -> None:
             signals_dict[(d, t)] = float(r.signal)
             kelly_dict[(d, t)] = float(r.kelly_fraction) if r.kelly_fraction is not None else 0.05
 
-    base_prices = {
-        "BTC-USD": 55000.0, "ETH-USD": 3000.0, "SOL-USD": 140.0, "ADA-USD": 0.45, "BNB-USD": 580.0,
-        "AAPL": 175.0, "MSFT": 400.0, "NVDA": 800.0, "AMZN": 170.0, "GOOGL": 150.0,
-        "META": 480.0, "TSLA": 180.0, "JPM": 190.0, "V": 270.0, "WMT": 60.0,
-        "RELIANCE.NS": 2500.0, "TCS.NS": 3800.0, "INFY.NS": 1500.0, "HDFCBANK.NS": 1500.0,
-        "ICICIBANK.NS": 1100.0, "SBIN.NS": 750.0, "LT.NS": 3000.0, "ITC.NS": 430.0,
-        "BHARTIARTL.NS": 1100.0, "ASIANPAINT.NS": 2900.0, "AXISBANK.NS": 1000.0,
-        "KOTAKBANK.NS": 1700.0, "BAJFINANCE.NS": 7000.0, "SUNPHARMA.NS": 1500.0,
-        "TATAMOTORS.NS": 900.0, "TATASTEEL.NS": 150.0, "WIPRO.NS": 450.0,
-        "ADANIPORTS.NS": 1200.0, "NTPC.NS": 350.0, "POWERGRID.NS": 280.0
-    }
+        # Synthetic base_prices removed per policy – real data required.
 
-    use_synthetic = len(ohlcv_records) < (len(universe) * 5)
 
-    if use_synthetic:
-        for ticker in universe:
-            seed_val = sum(ord(c) for c in ticker)
-            rng = random.Random(seed_val)
-            
-            price = base_prices.get(ticker.upper(), 100.0)
-            volatility = 0.02
-            drift = 0.0002
-            
-            for d in dates:
-                pct_change = rng.normalvariate(drift, volatility)
-                price = price * (1 + pct_change)
-                prices_dict[(d, ticker)] = price
-                
-                sig = rng.uniform(-1, 1)
-                sig = 0.7 * sig + 0.3 * np.clip(pct_change * 50.0, -1.0, 1.0)
-                sig = float(np.clip(sig, -1.0, 1.0))
-                
-                signals_dict[(d, ticker)] = sig
-                kelly_dict[(d, ticker)] = float(abs(sig) * 0.15)
+    # Determine tickers that have no price data after DB fetch
+    tickers_with_data = {t for (_, t) in prices_dict.keys()}
+    missing_data_tickers = [t for t in universe if t not in tickers_with_data]
+    if missing_data_tickers:
+        excluded_tickers.extend([{"ticker": t, "reason": "no price data"} for t in missing_data_tickers])
+        universe = [t for t in universe if t in tickers_with_data]
 
     # Reconstruct aligned matrices
     T = len(dates)
@@ -209,11 +193,11 @@ async def execute_backtest_job(job_id: UUID) -> None:
             k = kelly_dict.get((d, ticker))
 
             if p is None:
-                p = prices_mat[i - 1, j] if i > 0 else base_prices.get(ticker.upper(), 100.0)
+                raise HTTPException(status_code=400, detail=f"Missing price data for ticker {ticker} on date {d}")
             if s is None:
-                s = signals_mat[i - 1, j] if i > 0 else 0.0
+                raise HTTPException(status_code=400, detail=f"Missing signal data for ticker {ticker} on date {d}")
             if k is None:
-                k = kelly_mat[i - 1, j] if i > 0 else 0.05
+                raise HTTPException(status_code=400, detail=f"Missing kelly data for ticker {ticker} on date {d}")
 
             prices_mat[i, j] = p
             signals_mat[i, j] = s
@@ -245,11 +229,11 @@ async def execute_backtest_job(job_id: UUID) -> None:
     # 5. Extract statistics and trade log
     trades = []
     cum_pnl = 0.0
-    
+
     for j, ticker in enumerate(universe):
         pos_series = res_backtest.positions[:, j]
         price_series = prices_mat[:, j]
-        
+
         for i in range(1, T):
             prev_pos = pos_series[i-1]
             curr_pos = pos_series[i]
@@ -257,11 +241,11 @@ async def execute_backtest_job(job_id: UUID) -> None:
                 change = curr_pos - prev_pos
                 direction = "BUY" if change > 0 else "SELL"
                 qty = abs(change) * initial_capital / price_series[i]
-                
+
                 trade_pnl = change * (price_series[i] - price_series[i-1]) * (initial_capital / price_series[i-1])
                 cum_pnl += trade_pnl
                 commission = abs(qty) * price_series[i] * strategy_params.get("commission_pct", 0.001)
-                
+
                 trades.append({
                     "date": dates[i].isoformat(),
                     "symbol": ticker,
@@ -276,7 +260,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
     num_trades = len(trades)
     wins = [t["pnl"] for t in trades if t["pnl"] > 0]
     losses = [t["pnl"] for t in trades if t["pnl"] < 0]
-    
+
     win_rate = len(wins) / num_trades if num_trades > 0 else 0.5
     gross_profit = sum(wins) if wins else 0.0
     gross_loss = sum(losses) if losses else 0.0
@@ -297,7 +281,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
     # 6. Monte Carlo and CPCV
     paths = bootstrap_paths(res_backtest.daily_returns, n_simulations=1000)
     mc_res = summarize_monte_carlo(paths, initial_capital=initial_capital)
-    
+
     fan_paths = []
     step_mc = max(1, T // 50)
     for path in mc_res.paths[:100]:
@@ -314,14 +298,14 @@ async def execute_backtest_job(job_id: UUID) -> None:
             )
             fold_sharpes = [float(s) for s in cpcv_sharpes]
         else:
-            fold_sharpes = [float(sharpe_ratio(res_backtest.daily_returns)) * random.uniform(0.8, 1.2) for _ in range(5)]
+            fold_sharpes = [float(sharpe_ratio(res_backtest.daily_returns)) for _ in range(5)]
     except Exception:
-        fold_sharpes = [float(sharpe_ratio(res_backtest.daily_returns)) * random.uniform(0.8, 1.2) for _ in range(5)]
+        fold_sharpes = [float(sharpe_ratio(res_backtest.daily_returns)) for _ in range(5)]
 
     mean_sharpe = float(np.mean(fold_sharpes)) if fold_sharpes else 0.0
     std_sharpe = float(np.std(fold_sharpes)) if len(fold_sharpes) > 1 else 0.0
 
-    benchmark_returns = np.random.normal(0.0002, 0.01, size=len(res_backtest.daily_returns))
+    benchmark_returns = np.full(len(res_backtest.daily_returns), np.mean(res_backtest.daily_returns))
     dm_stat, dm_p = diebold_mariano_test(loss_a=np.square(res_backtest.daily_returns), loss_b=np.square(benchmark_returns))
     sr = sharpe_ratio(res_backtest.daily_returns)
     sharpe_se = float(math.sqrt((1 + 0.5 * sr**2) / len(res_backtest.daily_returns))) if len(res_backtest.daily_returns) > 0 else 0.08
@@ -402,7 +386,8 @@ async def execute_backtest_job(job_id: UUID) -> None:
             "sharpe_se": safe_round(sharpe_se, 6),
             "min_backtest_length_days": int(min_len),
             "multiple_testing_correction": "Bonferroni"
-        }
+        },
+        "excluded_tickers": excluded_tickers if excluded_tickers else None
     }
 
     async with async_session_factory() as session:

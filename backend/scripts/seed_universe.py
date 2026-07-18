@@ -23,15 +23,15 @@ os.environ.setdefault("ENVIRONMENT", "development")
 async def main():
     from app.database.connection import init_db
     from app.services.data_ingestion.scheduler import market_scheduler
-    
+
     print("Step 1: Initializing database tables...")
     await init_db()
     print("Database tables initialized successfully.")
-    
+
     print("Step 2: Triggering historical backfill for the universe...")
     # Temporarily set backfill_running to False in case of unclean state
     market_scheduler._backfill_running = False
-    
+
     await market_scheduler.perform_backfill()
     print("Historical backfill completed successfully!")
 

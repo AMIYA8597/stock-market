@@ -7,6 +7,7 @@ import asyncio
 import json
 import math
 from datetime import UTC, datetime
+
 import yfinance as yf
 
 from app.core.logging import get_logger
@@ -38,7 +39,7 @@ class MarketDataService:
     _in_memory_history_cache = {}  # key -> (history_list, timestamp)
     _in_memory_ticker_history_df_cache = {}  # key -> (df, timestamp)
     _semaphore = asyncio.Semaphore(8)  # limit concurrency to avoid descriptor exhaustion under select()
-    
+
     _last_yfinance_request_time = 0.0
     _last_nse_request_time = 0.0
 
@@ -89,7 +90,7 @@ class MarketDataService:
         Also maps index symbols like NIFTY50, BANKNIFTY, SENSEX to their Yahoo Finance tickers.
         """
         s = symbol.upper().strip()
-        
+
         # Map indices to their correct yfinance tickers
         mappings = {
             "NIFTY50": "^NSEI",
@@ -111,15 +112,15 @@ class MarketDataService:
         }
         if s in mappings:
             return mappings[s]
-            
+
         # Bypass common US stock tickers to prevent appending .NS
         us_tickers = {
-            "AAPL", "MSFT", "GOOG", "GOOGL", "TSLA", "AMZN", "NVDA", "META", 
+            "AAPL", "MSFT", "GOOG", "GOOGL", "TSLA", "AMZN", "NVDA", "META",
             "NFLX", "AMD", "INTC", "QCOM", "AVGO", "CSCO", "PEP", "KO", "DIS"
         }
         if s in us_tickers:
             return s
-            
+
         if "." not in s and "^" not in s and "-" not in s:
             return f"{s}.NS"
         return s
@@ -133,7 +134,7 @@ class MarketDataService:
         Caches in in-memory and Redis.
         """
         sym = MarketDataService._normalize_symbol(symbol)
-        
+
         # 1. Check Upstox live cache first
         try:
             from app.services.upstox_service import UpstoxService
@@ -144,10 +145,10 @@ class MarketDataService:
                 return up_quote
         except Exception as ue:
             logger.debug(f"Upstox live cache check failed for {sym}: {ue}")
-            
+
         cache_key = f"mds:quote:{sym}"
         now = datetime.now(UTC).timestamp()
-        
+
         # Check fast in-memory cache first
         if cache_key in MarketDataService._in_memory_quote_cache:
             cached, ts = MarketDataService._in_memory_quote_cache[cache_key]
@@ -175,7 +176,7 @@ class MarketDataService:
         def _fetch_quote() -> dict:
             session = MarketDataService.get_session()
             ticker = yf.Ticker(sym, session=session)
-            
+
             try:
                 info = ticker.fast_info
                 price = getattr(info, "last_price", None)
@@ -214,7 +215,7 @@ class MarketDataService:
                 high = float(hist.iloc[-1]["High"]) if not hist.empty else price
                 low = float(hist.iloc[-1]["Low"]) if not hist.empty else price
                 volume = int(hist.iloc[-1]["Volume"]) if not hist.empty else 0
-                
+
                 try:
                     info_dict = ticker.info or {}
                     market_cap = float(info_dict.get("marketCap") or 0.0)
@@ -282,7 +283,7 @@ class MarketDataService:
         Maps frontend timeframes to yfinance interval strings.
         """
         sym = MarketDataService._normalize_symbol(symbol)
-        
+
         tf_map = {
             "1m": "1m",
             "3m": "5m",
@@ -302,7 +303,7 @@ class MarketDataService:
             "1M": "1mo"
         }
         yf_interval = tf_map.get(interval, "1d")
-        
+
         cache_key = f"mds:history:{sym}:{yf_interval}:{period}"
         now = datetime.now(UTC).timestamp()
 
@@ -368,9 +369,13 @@ class MarketDataService:
 
         result = None
         try:
-            from app.services.data_ingestion.orchestrator import DataIngestionOrchestrator, IngestionTask
             from datetime import timedelta
-            
+
+            from app.services.data_ingestion.orchestrator import (
+                DataIngestionOrchestrator,
+                IngestionTask,
+            )
+
             orch_interval_map = {
                 "1m": "1m",
                 "3m": "5m",
@@ -390,7 +395,7 @@ class MarketDataService:
                 "1M": "1d"
             }
             orch_interval = orch_interval_map.get(interval, "1d")
-            
+
             period_days = {
                 "1d": 1,
                 "5d": 5,
@@ -405,7 +410,7 @@ class MarketDataService:
             days = period_days.get(period, 30)
             start_time = datetime.now(UTC) - timedelta(days=days)
             end_time = datetime.now(UTC)
-            
+
             asset_type = "CRYPTO" if sym.endswith("-USD") else "EQUITY"
             task = IngestionTask(
                 symbol=sym,
@@ -429,6 +434,7 @@ class MarketDataService:
                         "volume": float(b.volume),
                     })
                 result = HistoryList(bars_list, source=source_name)
+                logger.info(f"Historical data fetched via orchestrator source: {source_name} for {sym}")
         except Exception as e:
             logger.info(f"Orchestrator fetch failed for {sym}: {e}, falling back to direct yfinance...")
 
@@ -438,6 +444,7 @@ class MarketDataService:
                     raw_bars = await asyncio.to_thread(_fetch_history)
                 if raw_bars:
                     result = HistoryList(raw_bars, source="yfinance")
+                    logger.info(f"Historical data fallback fetched via yfinance for {sym}")
             except Exception as e:
                 logger.warning(f"yfinance download failed for {sym}: {e}")
                 result = None
@@ -479,14 +486,14 @@ class MarketDataService:
             "1d": "1y"
         }
         period = period_map.get(interval, "30d")
-        
+
         try:
             bars = await cls.get_history(symbol, interval=interval, period=period)
             if bars:
                 return bars
         except Exception as e:
             logger.warning(f"Failed to fetch intraday candles for {symbol} ({interval}) via yfinance: {e}")
-            
+
         # If empty or fails, attempt a fallback. If it is an NSE symbol, we can try to append a live quote as a single candle
         try:
             logger.info(f"Falling back to NSE service/quote for {symbol}")
@@ -502,7 +509,7 @@ class MarketDataService:
                 }]
         except Exception as fe:
             logger.warning(f"NSE fallback/quote fetch also failed for {symbol}: {fe}")
-            
+
         return []
 
     @staticmethod
@@ -519,10 +526,10 @@ class MarketDataService:
             "ADANIPORTS", "TITAN", "COALINDIA", "WIPRO", "HCLTECH",
             "ONGC", "JSWSTEEL", "ASIANPAINT", "NESTLEIND", "GRASIM"
         ]
-        
+
         tasks = [MarketDataService.get_quote(sym) for sym in symbols]
         quotes_res = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         quotes = []
         for sym, q in zip(symbols, quotes_res):
             if isinstance(q, Exception):
@@ -565,13 +572,13 @@ class MarketDataService:
         index_symbols = ["^NSEI", "^BSESN", "^NSEBANK"]
         tasks = [MarketDataService.get_quote(sym) for sym in index_symbols]
         res = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         names_map = {
             "^NSEI": "NIFTY 50",
             "^BSESN": "BSE Sensex",
             "^NSEBANK": "Bank Nifty"
         }
-        
+
         indices = []
         for sym, q in zip(index_symbols, res):
             if isinstance(q, Exception):
@@ -612,7 +619,7 @@ class MarketDataService:
     async def get_ticker_history_df(symbol: str, period: str, interval: str):
         """Fetch history dataframe directly from yfinance Ticker."""
         sym = MarketDataService._normalize_symbol(symbol)
-        
+
         # Check in-memory cache
         cache_key = f"mds:df:{sym}:{interval}:{period}"
         now = datetime.now(UTC).timestamp()
@@ -628,7 +635,7 @@ class MarketDataService:
 
         async with MarketDataService._semaphore:
             result = await asyncio.to_thread(_fetch)
-        
+
         if not result.empty:
             MarketDataService._in_memory_ticker_history_df_cache[cache_key] = (result, datetime.now(UTC).timestamp())
         return result
@@ -701,7 +708,7 @@ class MarketDataService:
                 return bars
         except Exception as e:
             logger.warning(f"get_ohlcv: yfinance failed for {sym}: {e}. Trying history fallback...")
-            
+
         # Fallback to get_history and map it
         try:
             bars_iso = await MarketDataService.get_history(sym, interval, period)
@@ -721,7 +728,7 @@ class MarketDataService:
                 return mapped_bars
         except Exception as ex:
             logger.error(f"get_ohlcv: history fallback failed for {sym}: {ex}")
-            
+
         return []
 
     @staticmethod
@@ -732,7 +739,7 @@ class MarketDataService:
         if df.empty:
             return []
         df.reset_index(inplace=True)
-        
+
         bars = []
         for _, row in df.iterrows():
             ts = row["Datetime"] if "Datetime" in row else row["Date"]
@@ -740,7 +747,7 @@ class MarketDataService:
                 unix_ts = int(ts.timestamp())
             else:
                 unix_ts = int(pd.Timestamp(ts).timestamp())
-            
+
             bars.append({
                 "time": unix_ts,
                 "open": round(float(row["Open"]), 2),
@@ -775,7 +782,7 @@ class MarketDataService:
                     movers.append({"symbol": sym.replace(".NS",""), "price": today, "change_pct": round(chg_pct, 2)})
             except Exception:
                 continue
-        
+
         movers_sorted = sorted(movers, key=lambda x: x["change_pct"], reverse=True)
         return {
             "gainers": movers_sorted[:5],

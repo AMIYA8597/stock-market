@@ -7,16 +7,15 @@ Configured for async SQLAlchemy with auto-detection of model changes.
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from app.core.config import get_settings
-from app.core.database import Base
-
 # Import all models so Alembic detects them
 import app.models  # noqa: F401
+from alembic import context
+from app.core.config import get_settings
+from app.core.database import Base
 
 config = context.config
 settings = get_settings()

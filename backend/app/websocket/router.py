@@ -7,14 +7,15 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
+# Logging
+from app.core.logging import get_logger
+
 # Import MarketDataService for real quotes
 from app.services.market_data_service import MarketDataService
 
 # Import prediction engine for real signal streaming
 from app.services.prediction_engine import get_full_prediction
 
-# Logging
-from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 from app.websocket.connection_manager import get_connection_manager
@@ -52,9 +53,10 @@ async def ws_prices(websocket: WebSocket):
     await websocket.accept()
     subscribed_symbols: set[str] = set()
 
-    from app.database.redis_client import get_redis_client
     import json
-    
+
+    from app.database.redis_client import get_redis_client
+
     redis_client = await get_redis_client()
     pubsub = redis_client.pubsub()
     await pubsub.subscribe("prices.ticks")
@@ -98,11 +100,11 @@ async def ws_prices(websocket: WebSocket):
                     continue
                 payload_raw = message.get("data")
                 payload = json.loads(payload_raw) if isinstance(payload_raw, str) else payload_raw
-                
+
                 symbol = str(payload.get("symbol", "")).upper().strip()
                 # Check normal symbol and symbol without exchange suffix (e.g. RELIANCE.NS vs RELIANCE)
                 symbol_base = symbol.split(".")[0]
-                
+
                 if symbol in subscribed_symbols or symbol_base in subscribed_symbols:
                     await websocket.send_json(payload)
         except WebSocketDisconnect:
@@ -151,7 +153,7 @@ async def ws_signals(websocket: WebSocket):
                     subscribed_symbols.update(symbols)
                 elif action == "unsubscribe":
                     subscribed_symbols.difference_update(symbols)
-            except (TimeoutError, asyncio.TimeoutError):
+            except TimeoutError:
                 pass
 
             now_ts = asyncio.get_event_loop().time()
@@ -220,25 +222,27 @@ async def ws_signals(websocket: WebSocket):
 
 @router.websocket("/backtest-progress")
 async def ws_backtest_progress(websocket: WebSocket):
-    from app.api.v1.backtest import BACKTEST_PROGRESS
-    from app.models.backtest import BacktestJob
-    from app.database.connection import async_session_factory
-    from sqlalchemy import select
     from uuid import UUID
+
+    from sqlalchemy import select
+
+    from app.api.v1.backtest import BACKTEST_PROGRESS
+    from app.database.connection import async_session_factory
+    from app.models.backtest import BacktestJob
 
     manager = get_connection_manager()
     channel = "backtest:progress"
     await manager.connect(websocket, channel)
-    
+
     subscribed_job_id = None
-    
+
     try:
         while True:
             try:
                 msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
                 if isinstance(msg, dict) and msg.get("action") == "subscribe":
                     subscribed_job_id = msg.get("job_id")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             except Exception:
                 pass
@@ -304,10 +308,10 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
     """
     await websocket.accept()
     logger.info(f"ws_live: Client connected for symbol={symbol}")
-    
+
     last_price = None
     tick_count = 0
-    
+
     try:
         while True:
             # 1. Fetch live quote
@@ -316,7 +320,7 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
                 price = float(quote["price"])
                 change_pct = float(quote.get("change_pct", 0.0))
                 volume = int(quote.get("volume", 0))
-                
+
                 # Push tick if price changed or every 30s
                 await websocket.send_json({
                     "type": "price_update",
@@ -329,7 +333,7 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
                 last_price = price
             except Exception as e:
                 logger.warning(f"ws_live: Quote fetch failed for {symbol}: {e}")
-            
+
             # 2. Fetch and push signal every 5 minutes (every 10 ticks of 30s)
             if tick_count % 10 == 0:
                 try:
@@ -345,10 +349,10 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
                         })
                 except Exception as e:
                     logger.warning(f"ws_live: Prediction fetch failed for {symbol}: {e}")
-            
+
             tick_count += 1
             await asyncio.sleep(30)
-            
+
     except WebSocketDisconnect:
         logger.info(f"ws_live: Client disconnected for symbol={symbol}")
     except Exception as e:

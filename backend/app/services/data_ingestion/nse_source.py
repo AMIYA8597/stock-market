@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 import logging
+from datetime import UTC, datetime
+
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -97,7 +98,7 @@ class NSESource(MarketDataSource):
                     raise
                 except Exception as ex:
                     logger.warning(f"NSE fetch attempt {attempt+1} failed: {ex}")
-                
+
                 if attempt < 3:
                     await asyncio.sleep(backoff_delays[attempt])
 

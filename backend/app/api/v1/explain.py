@@ -8,9 +8,9 @@ are computed deterministically from real market data and prediction engine state
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import uuid5, NAMESPACE_DNS
+from uuid import NAMESPACE_DNS, uuid5
 
 from fastapi import APIRouter, HTTPException
 
@@ -25,8 +25,8 @@ from app.schemas.explain import (
     SHAPContribution,
     SHAPResponse,
 )
-from app.services.prediction_engine import get_full_prediction
 from app.services.market_data_service import MarketDataService
+from app.services.prediction_engine import get_full_prediction
 
 router = APIRouter(prefix="/explain", tags=["explainability"])
 
@@ -158,17 +158,17 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
                 status_code=400,
                 detail={"explainability": "unavailable", "message": "TFT model attention weights are unavailable."}
             )
-            
+
         from app.services.prediction_engine import MODEL_DIR
         from research.models.lstm_attention.classifier import LSTMAttentionClassifier
-        
+
         lstm_path = MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
         if not lstm_path.exists():
             raise HTTPException(
                 status_code=400,
                 detail={"explainability": "unavailable", "message": f"LSTM Attention model for {symbol} is untrained."}
             )
-            
+
         clf = LSTMAttentionClassifier.load(lstm_path)
         if clf is None or clf.model is None:
             raise HTTPException(
@@ -185,8 +185,8 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
             )
 
         # Convert to DataFrame
-        import pandas as pd
         import numpy as np
+        import pandas as pd
         df = pd.DataFrame(bars)
         df.columns = [c.lower() for c in df.columns]
         df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
@@ -202,7 +202,7 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
         df = PriceFactorsBuilder().transform(df)
         df = VolatilityFactorsBuilder().transform(df)
-        
+
         # Calculate pandas-ta indicators to match training
         df.ta.rsi(length=14, append=True)
         df.ta.macd(fast=12, slow=26, signal=9, append=True)
@@ -218,11 +218,11 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         df.ta.obv(append=True)
         df.ta.supertrend(length=10, multiplier=3.0, append=True)
         df.ta.cdl_pattern(name="all", append=True)
-        
+
         df = df.loc[:, ~df.columns.duplicated()]
         cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
         df = df.drop(columns=cols_to_drop, errors="ignore")
-        
+
         # Standardize columns
         rename_map = {}
         RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
@@ -230,7 +230,7 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
         ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
         ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-        
+
         if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
         if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
         if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
@@ -240,7 +240,7 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
             df = df.rename(columns=rename_map)
 
         df = df.replace([np.inf, -np.inf], np.nan).dropna()
-        
+
         if len(df) < clf.seq_len:
             raise HTTPException(
                 status_code=400,
@@ -249,23 +249,23 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 
         # Run predict_proba which returns attn_dict (mapping t-i -> weight)
         prob_val, attn_dict = clf.predict_proba(df)
-        
+
         # Get actual dates corresponding to the sequence window
         # The sequence uses the last seq_len rows of df
         seq_df = df.iloc[-clf.seq_len:]
         dates = seq_df["time"].tolist()
-        
+
         # Format weights
         weights_list = [float(attn_dict.get(f"t-{clf.seq_len - 1 - i}", 0.0)) for i in range(clf.seq_len)]
-        
+
         # Normalize weights so they sum to 1.0
         sum_w = sum(weights_list) + 1e-9
         weights_list = [w / sum_w for w in weights_list]
-        
+
         # Build AttentionResponse
         mean_weights_dec = [Decimal(str(safe_round(w, 6))) for w in weights_list]
         weights = [[Decimal(str(safe_round(w, 6))) for w in weights_list]]
-        
+
         top_timesteps = []
         # Sort indices by weight desc
         top_indices = sorted(range(len(weights_list)), key=lambda idx: weights_list[idx], reverse=True)[:5]

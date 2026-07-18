@@ -1,7 +1,9 @@
 import numpy as np
 import pandas as pd
 import pandas_ta as ta
-from research.models.hmm_garch.garch import fit_garch_11, garch_conditional_variance, GarchParams
+
+from research.models.hmm_garch.garch import fit_garch_11, garch_conditional_variance
+
 
 class VolatilityFactorsBuilder:
     """Computes volatility-derived features, ATR, Bollinger Bands, and GARCH forecasts."""
@@ -14,7 +16,7 @@ class VolatilityFactorsBuilder:
         data = df.copy()
         if "time" in data.columns:
             data = data.sort_values("time")
-        
+
         close = data["close"].astype(float)
         high = data["high"].astype(float)
         low = data["low"].astype(float)
@@ -37,7 +39,7 @@ class VolatilityFactorsBuilder:
         bb_std = close.rolling(20).std()
         bb_upper = bb_ma + 2.0 * bb_std
         bb_lower = bb_ma - 2.0 * bb_std
-        
+
         # Bollinger Band Width
         data["BBB_20_2.0"] = ((bb_upper - bb_lower) / bb_ma.replace(0, np.nan)) * 100.0
         data["BBB_20_2.0"] = data["BBB_20_2.0"].fillna(0.0)
@@ -55,14 +57,14 @@ class VolatilityFactorsBuilder:
             params = fit_garch_11(returns_np)
             cond_var = garch_conditional_variance(returns_np, params)
             data["garch_vol"] = np.sqrt(cond_var)
-            
+
             # 1-day ahead conditional volatility forecast for each point:
             # sigma_{t+1}^2 = omega + alpha * eps_t^2 + beta * sigma_t^2
             # eps_t is the log return at t.
             # sigma_t^2 is the conditional variance at t.
             forecast_var = params.omega + params.alpha * (returns_np ** 2) + params.beta * cond_var
             data["garch_vol_forecast_1d"] = np.sqrt(forecast_var)
-        except Exception as e:
+        except Exception:
             # Fallback to rolling standard deviation if GARCH fit fails
             data["garch_vol"] = log_ret_filled.rolling(20).std()
             data["garch_vol_forecast_1d"] = data["garch_vol"]

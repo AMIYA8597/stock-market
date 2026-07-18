@@ -5,10 +5,10 @@ Run this after setting backend/.env (already created).
 
 import asyncio
 import os
+import sys
 
 # Ensure backend path is on sys.path
 from pathlib import Path
-import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:

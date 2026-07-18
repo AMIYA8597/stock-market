@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.email_job import EmailJob
+
 # Optional email background task – use a no‑op placeholder if Celery/RQ is not installed
 try:
     from tasks.email_tasks import send_email_task  # type: ignore

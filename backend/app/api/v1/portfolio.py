@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -44,7 +43,7 @@ async def get_holdings(
         user_id = current_user.get("sub") if current_user else "test-user-id"
 
         if settings.MONGODB_URL:
-            from app.database.mongodb import get_mongo_db, get_live_price, mongo_get_portfolio
+            from app.database.mongodb import get_live_price, get_mongo_db, mongo_get_portfolio
             if get_mongo_db() is None:
                 raise HTTPException(
                     status_code=503,
@@ -391,19 +390,19 @@ async def post_optimize(
 ) -> OptimizationResponse:
     """Return normalized optimization output for requested universe and method."""
     try:
-        import random
+        # import random  # removed synthetic data usage
         import numpy as np
+        from scipy.cluster.hierarchy import linkage
         from sqlalchemy import select
+
         from app.models.asset import Symbol
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
-
-        from research.portfolio.mean_variance import optimize_mean_variance, ledoit_wolf_shrinkage
-        from research.portfolio.hrp import hrp_weights
-        from research.portfolio.cvar_optimization import optimize_cvar
-        from research.portfolio.black_litterman import optimize_black_litterman
-        from scipy.cluster.hierarchy import linkage
         from app.schemas.portfolio import EfficientFrontierPoint, HRPDendrogramNode
+        from research.portfolio.black_litterman import optimize_black_litterman
+        from research.portfolio.cvar_optimization import optimize_cvar
+        from research.portfolio.hrp import hrp_weights
+        from research.portfolio.mean_variance import ledoit_wolf_shrinkage, optimize_mean_variance
 
         universe = request.universe[:50]
         if len(universe) < 2:
@@ -445,21 +444,8 @@ async def post_optimize(
             date_res = await db.execute(date_stmt)
             dates_list = sorted([d[0] for d in date_res.all()])
 
-        # Check if we need synthetic fallback
-        use_synthetic = len(dates_list) < 10
-
-        if use_synthetic:
-            # Generate synthetic dates
-            end_dt = datetime.now(UTC)
-            start_dt = end_dt - timedelta(days=365)
-            curr_date = start_dt
-            dates_list = []
-            while curr_date <= end_dt:
-                if curr_date.weekday() < 5:
-                    dates_list.append(curr_date)
-                curr_date += timedelta(days=1)
-            # Limit to 252
-            dates_list = dates_list[-252:]
+        # Check if we need synthetic fallback (removed synthetic generation)
+        use_synthetic = False  # Synthetic data generation disabled; missing data handled via excluded_tickers
 
         prices_dict = {}
         signals_dict = {}
@@ -494,36 +480,37 @@ async def post_optimize(
                     signals_dict[(r.time, ticker)] = float(r.signal)
                     kelly_dict[(r.time, ticker)] = float(r.kelly_fraction) if r.kelly_fraction is not None else 0.05
 
-        base_prices = {
-            "BTC-USD": 55000.0, "ETH-USD": 3000.0, "SOL-USD": 140.0, "ADA-USD": 0.45, "BNB-USD": 580.0,
-            "AAPL": 175.0, "MSFT": 400.0, "NVDA": 800.0, "AMZN": 170.0, "GOOGL": 150.0,
-            "META": 480.0, "TSLA": 180.0, "JPM": 190.0, "V": 270.0, "WMT": 60.0,
-            "RELIANCE.NS": 2500.0, "TCS.NS": 3800.0, "INFY.NS": 1500.0, "HDFCBANK.NS": 1500.0,
-            "ICICIBANK.NS": 1100.0, "SBIN.NS": 750.0, "LT.NS": 3000.0, "ITC.NS": 430.0,
-            "BHARTIARTL.NS": 1100.0, "ASIANPAINT.NS": 2900.0, "AXISBANK.NS": 1000.0,
-            "KOTAKBANK.NS": 1700.0, "BAJFINANCE.NS": 7000.0, "SUNPHARMA.NS": 1500.0,
-            "TATAMOTORS.NS": 900.0, "TATASTEEL.NS": 150.0, "WIPRO.NS": 450.0,
-            "ADANIPORTS.NS": 1200.0, "NTPC.NS": 350.0, "POWERGRID.NS": 280.0
-        }
+        # Synthetic base price fallback removed per policy – real data required.
 
-        # Seed missing asset data deterministically
-        for ticker in universe:
-            ticker_missing = all((d, ticker) not in prices_dict for d in dates_list)
-            if use_synthetic or ticker_missing:
-                seed_val = sum(ord(c) for c in ticker)
-                rng = random.Random(seed_val)
-                price = base_prices.get(ticker.upper(), 100.0)
-                volatility = 0.02
-                drift = 0.0002
-                for d in dates_list:
-                    pct_change = rng.normalvariate(drift, volatility)
-                    price = price * (1 + pct_change)
-                    prices_dict[(d, ticker)] = price
-                    sig = rng.uniform(-1, 1)
-                    sig = 0.7 * sig + 0.3 * np.clip(pct_change * 50.0, -1.0, 1.0)
-                    sig = float(np.clip(sig, -1.0, 1.0))
-                    signals_dict[(d, ticker)] = sig
-                    kelly_dict[(d, ticker)] = float(abs(sig) * 0.15)
+        # Identify tickers lacking historical price data and record them
+        missing_tickers = [ticker for ticker in universe if all((d, ticker) not in prices_dict for d in dates_list)]
+        excluded_tickers = [{"ticker": t, "reason": "no_historical_data"} for t in missing_tickers]
+        # Exclude missing tickers from universe
+        if missing_tickers:
+            universe = [t for t in universe if t not in missing_tickers]
+            if not universe:
+                # No valid tickers with historical data; return placeholder optimization result.
+                placeholder_frontier = [
+                    EfficientFrontierPoint(
+                        expected_return=Decimal("0.0"),
+                        expected_volatility=Decimal("0.0"),
+                        sharpe_ratio=Decimal("0.0"),
+                        weights={},
+                    )
+                    for _ in range(100)
+                ]
+                return OptimizationResponse(
+                    method=request.method,
+                    weights=[],
+                    expected_return=Decimal("0.0"),
+                    expected_volatility=Decimal("0.0"),
+                    sharpe_ratio=Decimal("0.0"),
+                    efficient_frontier=placeholder_frontier,
+                    hrp_dendrogram=None,
+                    bl_posterior_returns=None,
+                    excluded_tickers=excluded_tickers,
+                    timestamp=datetime.now(UTC),
+                )
 
         # Build aligned matrices
         T = len(dates_list)
@@ -539,11 +526,11 @@ async def post_optimize(
                 k = kelly_dict.get((d, ticker))
 
                 if p is None:
-                    p = prices_mat[i - 1, j] if i > 0 else base_prices.get(ticker.upper(), 100.0)
+                    raise HTTPException(status_code=400, detail=f"Missing price data for ticker {ticker} on date {d}")
                 if s is None:
-                    s = signals_mat[i - 1, j] if i > 0 else 0.0
+                    raise HTTPException(status_code=400, detail=f"Missing signal data for ticker {ticker} on date {d}")
                 if k is None:
-                    k = kelly_mat[i - 1, j] if i > 0 else 0.05
+                    raise HTTPException(status_code=400, detail=f"Missing kelly data for ticker {ticker} on date {d}")
 
                 prices_mat[i, j] = p
                 signals_mat[i, j] = s
@@ -705,6 +692,7 @@ async def post_optimize(
             efficient_frontier=frontier,
             hrp_dendrogram=hrp_dendrogram,
             bl_posterior_returns=bl_posterior_returns,
+            excluded_tickers=excluded_tickers,
             timestamp=datetime.now(UTC),
         )
     except HTTPException:

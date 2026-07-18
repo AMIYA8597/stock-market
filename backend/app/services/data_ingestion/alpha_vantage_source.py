@@ -1,39 +1,53 @@
-"""Alpha Vantage OHLCV adapter."""
+"""Alpha Vantage market data adapter.
+
+Provides OHLCV data using the Alpha Vantage API. Requires an API key set in the
+environment variable ``ALPHAVANTAGE_KEY``.
+"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import os
+import asyncio
+from datetime import datetime, UTC
+from typing import Optional
 
-import httpx
+import requests
+import pandas as pd
 
-from app.core.config import get_settings
-from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
-
-settings = get_settings()
-
-
-_INTERVAL_TO_FUNCTION: dict[Interval, str] = {
-    "1m": "TIME_SERIES_INTRADAY",
-    "5m": "TIME_SERIES_INTRADAY",
-    "15m": "TIME_SERIES_INTRADAY",
-    "1h": "TIME_SERIES_INTRADAY",
-    "1d": "TIME_SERIES_DAILY_ADJUSTED",
-}
-
-_INTRADAY_INTERVAL_MAP: dict[Interval, str] = {
-    "1m": "1min",
-    "5m": "5min",
-    "15m": "15min",
-    "1h": "60min",
-    "1d": "",
-}
+from app.services.data_ingestion.base import (
+    DataSourceError,
+    Interval,
+    MarketDataSource,
+    OHLCVBar,
+)
 
 
 class AlphaVantageSource(MarketDataSource):
-    """Fetch OHLCV bars from Alpha Vantage with interval-aware parsing."""
+    """Fetch OHLCV data from Alpha Vantage.
+
+    The free tier allows up to 5 requests per minute and 500 per day. The class
+    respects this limitation by throttling calls.
+    """
 
     name = "alpha_vantage"
-    _base_url = "https://www.alphavantage.co/query"
+    _semaphore = asyncio.Semaphore(4)  # limit concurrency
+    _last_request_ts: float = 0.0
+
+    @staticmethod
+    def _get_api_key() -> str:
+        key = os.getenv("ALPHAVANTAGE_KEY")
+        if not key:
+            raise DataSourceError("Alpha Vantage API key not configured (env ALPHAVANTAGE_KEY)")
+        return key
+
+    @classmethod
+    async def _throttle(cls) -> None:
+        """Ensure at most one request per 12 seconds (5 per minute)."""
+        now = asyncio.get_event_loop().time()
+        elapsed = now - cls._last_request_ts
+        if elapsed < 12:
+            await asyncio.sleep(12 - elapsed)
+        cls._last_request_ts = asyncio.get_event_loop().time()
 
     async def fetch_ohlcv(
         self,
@@ -42,55 +56,79 @@ class AlphaVantageSource(MarketDataSource):
         start: datetime,
         end: datetime,
     ) -> list[OHLCVBar]:
-        function = _INTERVAL_TO_FUNCTION[interval]
-        params: dict[str, str] = {
+        # Alpha Vantage uses its own interval strings – map the generic Interval
+        # to the API format.
+        av_interval_map = {
+            "1m": "1min",
+            "5m": "5min",
+            "15m": "15min",
+            "30m": "30min",
+            "60m": "60min",
+            "1h": "60min",
+            "1d": "daily",
+        }
+        av_interval = av_interval_map.get(interval)
+        if not av_interval:
+            raise DataSourceError(f"Interval {interval} not supported by Alpha Vantage")
+
+        api_key = self._get_api_key()
+        base_url = "https://www.alphavantage.co/query"
+
+        # Choose the correct function based on interval.
+        function = "TIME_SERIES_INTRADAY" if "min" in av_interval else "TIME_SERIES_DAILY_ADJUSTED"
+        params = {
             "function": function,
             "symbol": symbol,
-            "apikey": settings.ALPHA_VANTAGE_API_KEY,
+            "apikey": api_key,
             "outputsize": "full",
         }
         if function == "TIME_SERIES_INTRADAY":
-            params["interval"] = _INTRADAY_INTERVAL_MAP[interval]
+            params["interval"] = av_interval
+        params["datatype"] = "json"
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(self._base_url, params=params)
-            if response.status_code >= 400:
-                raise DataSourceError(f"Alpha Vantage failed for {symbol}: {response.status_code}")
-            payload = response.json()
+        await self._throttle()
+        async with self._semaphore:
+            def _do_request() -> dict:
+                resp = requests.get(base_url, params=params, timeout=15)
+                resp.raise_for_status()
+                return resp.json()
 
-        if "Note" in payload:
-            raise DataSourceError(f"Alpha Vantage rate limit for {symbol}")
+            data = await asyncio.to_thread(_do_request)
 
-        if function == "TIME_SERIES_DAILY_ADJUSTED":
-            key = "Time Series (Daily)"
-            series = payload.get(key, {})
+        if function == "TIME_SERIES_INTRADAY":
+            key = f"Time Series ({av_interval})"
         else:
-            key = f"Time Series ({_INTRADAY_INTERVAL_MAP[interval]})"
-            series = payload.get(key, {})
+            key = "Time Series (Daily)"
+        if key not in data:
+            raise DataSourceError(f"Alpha Vantage response missing expected key {key} for {symbol}")
+
+        raw = data[key]
+        df = pd.DataFrame.from_dict(raw, orient="index")
+        df.index = pd.to_datetime(df.index)
+        df = df.apply(pd.to_numeric, errors="coerce")
+        mask = (df.index >= start) & (df.index <= end)
+        df = df.loc[mask]
+        df = df.sort_index()
 
         bars: list[OHLCVBar] = []
-        for ts_str, row in series.items():
-            ts = datetime.fromisoformat(ts_str)
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-            else:
-                ts = ts.astimezone(UTC)
-
-            if ts < start or ts > end:
+        for ts, row in df.iterrows():
+            open_ = row.get("1. open") if "1. open" in row else row.get("open")
+            high_ = row.get("2. high") if "2. high" in row else row.get("high")
+            low_ = row.get("3. low") if "3. low" in row else row.get("low")
+            close_ = row.get("4. close") if "4. close" in row else row.get("close")
+            volume_ = row.get("5. volume") if "5. volume" in row else row.get("volume")
+            if any(v is None for v in (open_, high_, low_, close_, volume_)):
                 continue
-
             bars.append(
                 OHLCVBar(
-                    time=ts,
-                    open=float(row["1. open"]),
-                    high=float(row["2. high"]),
-                    low=float(row["3. low"]),
-                    close=float(row["4. close"]),
-                    volume=float(row.get("6. volume", row.get("5. volume", 0.0)) or 0.0),
-                    adjusted_close=float(row["5. adjusted close"]) if "5. adjusted close" in row else None,
+                    time=ts.replace(tzinfo=UTC),
+                    open=float(open_),
+                    high=float(high_),
+                    low=float(low_),
+                    close=float(close_),
+                    volume=float(volume_),
+                    adjusted_close=None,
                     interval=interval,
                 )
             )
-
-        bars.sort(key=lambda x: x.time)
         return bars

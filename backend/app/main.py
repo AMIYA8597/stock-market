@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-import asyncio
 
 # Ensure the repository's `backend` directory is on sys.path so sibling
 # top-level packages like `research` (located at backend/research)
@@ -34,6 +33,7 @@ except ImportError:  # pragma: no cover
     FastApiIntegration = None
 
 import logging as _logging
+
 # Suppress noisy third-party library logs
 for _noisy_lib in ("pymongo", "motor", "yfinance", "urllib3", "urllib3.connectionpool", "peewee"):
     _logging.getLogger(_noisy_lib).setLevel(_logging.WARNING)
@@ -157,5 +157,6 @@ async def health_check():
 
 # ─── Mount QuantEdge specific router ──────────────────────
 from app.api.quantedge_router import router as quantedge_router
+
 app.include_router(quantedge_router)
 

@@ -6,15 +6,14 @@ position tracking, risk limits, daily loss circuit breakers, and LIMIT orders.
 
 from __future__ import annotations
 
-from datetime import date, datetime, UTC
-from decimal import Decimal
 import logging
-from uuid import UUID
+from datetime import UTC, date, datetime
+from decimal import Decimal
 
-from sqlalchemy import select, delete
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.paper_trading import PaperWallet, PaperPosition, PaperOrder
+from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
 from app.services.market_data_service import MarketDataService
 
 logger = logging.getLogger(__name__)
@@ -83,7 +82,7 @@ class PaperTradingService:
     async def get_pnl(db: AsyncSession, user_id: str) -> dict:
         """Compute summary of paper trading wallet, holdings, equity, and P&L."""
         wallet = await PaperTradingService.get_or_create_wallet(db, user_id)
-        
+
         # Reset daily realized loss if date has changed
         if wallet.last_reset_date != date.today():
             wallet.daily_realized_loss = Decimal("0.00")
@@ -137,7 +136,7 @@ class PaperTradingService:
             raise ValueError("Quantity must be greater than zero")
 
         wallet = await PaperTradingService.get_or_create_wallet(db, user_id)
-        
+
         # Reset daily realized loss if date has changed
         if wallet.last_reset_date != date.today():
             wallet.daily_realized_loss = Decimal("0.00")
@@ -160,7 +159,7 @@ class PaperTradingService:
         total_equity = Decimal(str(pnl_summary["total_equity"]))
         order_price = Decimal(str(limit_price)) if order_type == "LIMIT" and limit_price is not None else quote_price
         order_value = Decimal(str(quantity)) * order_price
-        
+
         if side == "BUY" and order_value > Decimal("0.5") * total_equity:
             raise ValueError(f"Order size ₹{order_value:,.2f} exceeds risk limit of 50% of portfolio equity (₹{Decimal('0.5') * total_equity:,.2f})")
 
@@ -187,10 +186,10 @@ class PaperTradingService:
         if order_type == "LIMIT":
             if limit_price is None or limit_price <= 0:
                 raise ValueError("Limit price must be specified and greater than zero for LIMIT orders")
-            
+
             lim_price_dec = Decimal(str(limit_price))
             gross_amount = qty_dec * lim_price_dec
-            
+
             # Simple pre-flight checks for LIMIT orders
             if side == "BUY" and wallet.balance < gross_amount:
                 raise ValueError(f"Insufficient cash balance for limit order. Required: ₹{gross_amount:,.2f}, Available: ₹{wallet.balance:,.2f}")
@@ -231,10 +230,10 @@ class PaperTradingService:
         if side == "BUY":
             execute_price = quote_price + (slippage / qty_dec)
             net_amount = gross_amount + brokerage + stt + slippage
-            
+
             if wallet.balance < net_amount:
                 raise ValueError(f"Insufficient cash balance. Required: ₹{net_amount:,.2f}, Available: ₹{wallet.balance:,.2f}")
-            
+
             wallet.balance -= net_amount
 
             # Update position
@@ -306,7 +305,7 @@ class PaperTradingService:
     async def check_and_execute_limit_orders(db: AsyncSession, symbol: str, current_price: Decimal) -> int:
         """Scan PENDING limit orders for symbol and fill them if price triggers are met."""
         sym = MarketDataService._normalize_symbol(symbol).upper().strip()
-        
+
         # Query pending orders
         stmt = select(PaperOrder).where(
             PaperOrder.symbol == sym,

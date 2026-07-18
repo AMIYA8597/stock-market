@@ -13,20 +13,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import math
 import pickle
 from datetime import UTC, datetime, timedelta
-from typing import Any, Dict, List
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
 import xgboost as xgb
-from statsmodels.tsa.regime_switching.markov_regression import MarkovRegression
-from statsmodels.tsa.statespace.sarimax import SARIMAX
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from sklearn.preprocessing import StandardScaler
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+from statsmodels.tsa.statespace.sarimax import SARIMAX
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +33,13 @@ MODEL_DIR = Path(__file__).parent.parent.parent / "data" / "models"
 # Redis & In-Memory Cache Helpers
 # ---------------------------------------------------------------------------
 
-_in_memory_prediction_cache: dict[str, tuple[Dict[str, Any], float]] = {}
+_in_memory_prediction_cache: dict[str, tuple[dict[str, Any], float]] = {}
 
-async def _cache_fetch(symbol: str) -> Dict[str, Any] | None:
+async def _cache_fetch(symbol: str) -> dict[str, Any] | None:
     """Attempt to retrieve cached full prediction for *symbol*."""
     key = f"prediction_raw:{symbol.upper()}"
     now = datetime.now(UTC).timestamp()
-    
+
     # Check in-memory cache first
     if key in _in_memory_prediction_cache:
         cached, ts = _in_memory_prediction_cache[key]
@@ -61,12 +58,12 @@ async def _cache_fetch(symbol: str) -> Dict[str, Any] | None:
         logger.warning(f"Redis cache fetch failed for prediction key={key}: {e}")
     return None
 
-async def _cache_store(symbol: str, payload: Dict[str, Any]) -> None:
+async def _cache_store(symbol: str, payload: dict[str, Any]) -> None:
     """Store *payload* in Redis & memory for *symbol* with a TTL of 3600 seconds (1 hour)."""
     key = f"prediction_raw:{symbol.upper()}"
     now = datetime.now(UTC).timestamp()
     _in_memory_prediction_cache[key] = (payload, now)
-    
+
     try:
         from app.database.redis_client import get_redis
         redis = await get_redis()
@@ -78,9 +75,9 @@ async def _cache_store(symbol: str, payload: Dict[str, Any]) -> None:
 # Layer 1 – Technical Indicator Consensus
 # ---------------------------------------------------------------------------
 
-def score_technical(df: pd.DataFrame) -> Dict[str, Any]:
+def score_technical(df: pd.DataFrame) -> dict[str, Any]:
     score = 0.0
-    
+
     # Safely resolve column names from pandas-ta output
     RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
     MACD_col = "MACD_12_26_9" if "MACD_12_26_9" in df.columns else [c for c in df.columns if "MACD" in c and "h" not in c and "s" not in c][0]
@@ -137,7 +134,7 @@ def score_technical(df: pd.DataFrame) -> Dict[str, Any]:
         score += 0.20
     elif macd_hist_val < 0 and macd_hist_val < float(prev_row[MACDh_col]):
         score -= 0.20
-    
+
     if macd_val > macds_val:
         score += 0.10
     else:
@@ -224,7 +221,7 @@ def score_technical(df: pd.DataFrame) -> Dict[str, Any]:
 # Layer 2 – Candlestick Pattern Recognition
 # ---------------------------------------------------------------------------
 
-def score_patterns(df: pd.DataFrame) -> Dict[str, Any]:
+def score_patterns(df: pd.DataFrame) -> dict[str, Any]:
     last_row = df.iloc[-1]
     bullish_patterns = []
     bearish_patterns = []
@@ -238,7 +235,7 @@ def score_patterns(df: pd.DataFrame) -> Dict[str, Any]:
             continue
 
         name = col.replace("CDL_", "")
-        
+
         # Bullish patterns (value > 0)
         if val > 0:
             if name in ["HAMMER", "MORNINGSTAR", "DRAGONFLYDOJI", "INVERTEDHAMMER", "3WHITESOLDIERS", "PIERCING"]:
@@ -289,7 +286,7 @@ def score_patterns(df: pd.DataFrame) -> Dict[str, Any]:
 # Layer 3 – Momentum Factor Scoring
 # ---------------------------------------------------------------------------
 
-def score_momentum(df: pd.DataFrame) -> Dict[str, Any]:
+def score_momentum(df: pd.DataFrame) -> dict[str, Any]:
     last_row = df.iloc[-1]
 
     ret_1d = float(last_row["ret_1d"])
@@ -340,14 +337,14 @@ _HMM_CACHE = {}
 _MODEL_CACHE = {}
 _INDEX_DATA_CACHE = None
 
-def detect_regime(df: pd.DataFrame) -> Dict[str, Any]:
+def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) < 60:
         return {"regime": "unknown", "regime_confidence": 0.5, "bull_prob": 0.5, "bear_prob": 0.5, "hmm_used": False}
 
     try:
         from research.models.hmm_garch.inference import InferenceEngine
         ohlcv_data = df[["open", "high", "low", "close", "volume"]].astype(float).values
-        
+
         symbol = df.attrs.get("symbol", "DEFAULT")
         if symbol in _HMM_CACHE:
             engine = _HMM_CACHE[symbol]
@@ -355,14 +352,14 @@ def detect_regime(df: pd.DataFrame) -> Dict[str, Any]:
         else:
             engine = InferenceEngine()
             train_flag = True
-            
+
         res = engine.predict(ohlcv_data, train=train_flag)
         if train_flag:
             _HMM_CACHE[symbol] = engine
-        
+
         current_state = res.current_state
         probs = res.state_probs
-        
+
         state_to_regime = {
             0: "BULL",
             1: "BEAR",
@@ -374,11 +371,11 @@ def detect_regime(df: pd.DataFrame) -> Dict[str, Any]:
         bear_prob = float(probs[1])
         regime_confidence = float(probs[current_state])
         hmm_used = True
-        
+
         conditional_vol = float(res.conditional_vol)
         forecast_5d = res.vol_forecast_5d
         forecast_21d = res.vol_forecast_21d
-        
+
         return {
             "regime": regime,
             "bull_prob": bull_prob,
@@ -418,7 +415,7 @@ def detect_regime(df: pd.DataFrame) -> Dict[str, Any]:
 # Layer 5 – XGBoost Walk-Forward Directional Classifier
 # ---------------------------------------------------------------------------
 
-def score_xgboost(df: pd.DataFrame, symbol: str = "") -> Dict[str, Any]:
+def score_xgboost(df: pd.DataFrame, symbol: str = "") -> dict[str, Any]:
     # Resolve columns dynamically
     RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
     MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
@@ -436,7 +433,7 @@ def score_xgboost(df: pd.DataFrame, symbol: str = "") -> Dict[str, Any]:
 
     # Target: sign of 5-day forward return
     df_copy = df.copy()
-    
+
     # Rename resolved columns to match standard features
     rename_map = {}
     if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
@@ -444,7 +441,7 @@ def score_xgboost(df: pd.DataFrame, symbol: str = "") -> Dict[str, Any]:
     if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
     if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
     if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
-    
+
     if rename_map:
         df_copy = df_copy.rename(columns=rename_map)
 
@@ -467,7 +464,7 @@ def score_xgboost(df: pd.DataFrame, symbol: str = "") -> Dict[str, Any]:
     clf = None
     scaler = None
     checkpoint_loaded = False
-    
+
     if symbol:
         checkpoint_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
         if checkpoint_path.exists():
@@ -492,7 +489,7 @@ def score_xgboost(df: pd.DataFrame, symbol: str = "") -> Dict[str, Any]:
 
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
-        
+
         clf = xgb.XGBClassifier(
             n_estimators=100, max_depth=4, learning_rate=0.05,
             subsample=0.8, colsample_bytree=0.8,
@@ -550,10 +547,10 @@ def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> flo
     # Load measured walk-forward backtest statistics for Kelly calculation
     p, b = 0.54, 1.05  # Safe conservative defaults
     stats_path = MODEL_DIR / f"xgboost_backtest_{symbol.upper()}.json"
-    
+
     if stats_path.exists():
         try:
-            with open(stats_path, "r") as f:
+            with open(stats_path) as f:
                 stats = json.load(f)
             p = stats.get("win_rate", p)
             b = stats.get("payoff_ratio", b)
@@ -563,7 +560,7 @@ def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> flo
     q = 1.0 - p
     # Kelly sizing formula
     f_star = (p * b - q) / b if b > 0 else 0
-    
+
     # Apply scaling and risk caps
     f_half = f_star / 2.0  # half-Kelly
     f_scaled = f_half * confidence * abs(signal)
@@ -572,20 +569,20 @@ def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> flo
 
 def standardize_df_columns(df: pd.DataFrame, expected_features: list[str]) -> pd.DataFrame:
     df_copy = df.copy()
-    
+
     # Drop any duplicate columns first
     df_copy = df_copy.loc[:, ~df_copy.columns.duplicated()]
-    
+
     # Case-insensitive mapping to expected features
     rename_map = {}
     col_map = {c.lower(): c for c in df_copy.columns}
-    
+
     # 1. Exact case-insensitive matching
     for exp in expected_features:
         exp_lower = exp.lower()
         if exp_lower in col_map:
             rename_map[col_map[exp_lower]] = exp
-            
+
     # 2. Heuristic mapping for pandas-ta generated columns
     for col in df_copy.columns:
         if col in rename_map:
@@ -606,26 +603,26 @@ def standardize_df_columns(df: pd.DataFrame, expected_features: list[str]) -> pd
         # ADX
         elif "adx" in col_lower and "14" in col_lower:
             rename_map[col] = "ADX_14"
-            
+
     # Apply rename
     if rename_map:
         df_copy = df_copy.rename(columns=rename_map)
-        
+
     # Drop duplicates again in case two columns were renamed to the same name
     df_copy = df_copy.loc[:, ~df_copy.columns.duplicated()]
-    
+
     # Fill any missing expected features with 0.0
     for exp in expected_features:
         if exp not in df_copy.columns:
             df_copy[exp] = 0.0
-            
+
     return df_copy
 
 
-async def build_ensemble_signal(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
+async def build_ensemble_signal(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     return await asyncio.to_thread(build_ensemble_signal_sync, symbol, df)
 
-def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
+def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     expected_features = [
         "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
         "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
@@ -650,7 +647,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
 
     # Define model lists
     model_names = ["tft", "hmm_garch", "gnn", "lstm_attention", "xgboost"]
-    
+
     # Prior weights matrix matching regimes (bull, bear, sideways, crisis)
     regime_weights_matrix = np.array(
         [
@@ -661,20 +658,23 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         ],
         dtype=np.float32,
     )
-    
+
     # 2. Compute individual model signals
     model_signals = {}
     model_confidences = {}
     model_statuses = {}
-    
+
     # --- XGBoost ---
-    from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier, FeatureMismatchError
+    from research.models.xgboost_model.classifier import (
+        FeatureMismatchError,
+        XGBoostDirectionalClassifier,
+    )
     xgb_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
     xgb_score = 0.0
     xgb_confidence = 0.5
     xgb_top_features = []
     xgb_status = "untrained"
-    
+
     if xgb_path.exists():
         try:
             xgb_key = f"xgboost_{symbol.upper()}"
@@ -683,7 +683,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
             else:
                 xgb_clf = XGBoostDirectionalClassifier.load(xgb_path)
                 _MODEL_CACHE[xgb_key] = xgb_clf
-                
+
             if xgb_clf is not None and xgb_clf.model is not None:
                 prob_up = xgb_clf.predict_proba(df)
                 xgb_score = float((prob_up - 0.5) * 2.0)
@@ -694,7 +694,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
             raise
         except Exception as e:
             logger.warning(f"Failed to load or run XGBoost model for {symbol}: {e}")
-            
+
     model_signals["xgboost"] = xgb_score
     model_confidences["xgboost"] = xgb_confidence
     model_statuses["xgboost"] = xgb_status
@@ -706,7 +706,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     lstm_confidence = 0.5
     lstm_attn_peaks = []
     lstm_status = "untrained"
-    
+
     if lstm_path.exists():
         try:
             lstm_key = f"lstm_attention_{symbol.upper()}"
@@ -715,7 +715,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
             else:
                 lstm_clf = LSTMAttentionClassifier.load(lstm_path)
                 _MODEL_CACHE[lstm_key] = lstm_clf
-                
+
             if lstm_clf is not None and lstm_clf.model is not None:
                 prob_up, attn_dict = lstm_clf.predict_proba(df)
                 lstm_score = float((prob_up - 0.5) * 2.0)
@@ -724,7 +724,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
                 lstm_status = "trained"
         except Exception as e:
             logger.warning(f"Failed to load or run LSTM model for {symbol}: {e}")
-            
+
     model_signals["lstm_attention"] = lstm_score
     model_confidences["lstm_attention"] = lstm_confidence
     model_statuses["lstm_attention"] = lstm_status
@@ -735,7 +735,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     tft_confidence = 0.5
     tft_status = "untrained"
     tft_p10, tft_p50, tft_p90 = -0.015, 0.002, 0.015
-    
+
     try:
         tft_key = "tft_forecaster"
         if tft_key in _MODEL_CACHE:
@@ -743,7 +743,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         else:
             tft_forecaster = QuantileLGBForecaster.load()
             _MODEL_CACHE[tft_key] = tft_forecaster
-            
+
         if len(tft_forecaster.models) == len(tft_forecaster.quantiles):
             last_row_features = {}
             for feat in tft_forecaster.features:
@@ -759,7 +759,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
             tft_status = "trained"
     except Exception as e:
         logger.warning(f"Failed to load or run TFT forecaster for {symbol}: {e}")
-        
+
     model_signals["tft"] = tft_score
     model_confidences["tft"] = tft_confidence
     model_statuses["tft"] = tft_status
@@ -770,7 +770,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     hmm_score = float(state_to_signal.get(regime_state, 0.0))
     hmm_confidence = float(regime_info["regime_confidence"])
     hmm_status = "trained"
-    
+
     model_signals["hmm_garch"] = hmm_score
     model_confidences["hmm_garch"] = hmm_confidence
     model_statuses["hmm_garch"] = hmm_status
@@ -782,7 +782,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     gnn_top_correlated = []
     gnn_status = "untrained"
     gnn_res = None
-    
+
     try:
         global _INDEX_DATA_CACHE
         if _INDEX_DATA_CACHE is None or _INDEX_DATA_CACHE.empty:
@@ -793,13 +793,13 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
                 _INDEX_DATA_CACHE.index = pd.DatetimeIndex(_INDEX_DATA_CACHE.index).tz_localize(None)
             except Exception as index_err:
                 logger.error(f"Failed to pre-fetch index data globally: {index_err}")
-                
+
         index_slice = None
         if _INDEX_DATA_CACHE is not None and not _INDEX_DATA_CACHE.empty:
             start_date = df.index.min()
             end_date = df.index.max()
             index_slice = _INDEX_DATA_CACHE.loc[start_date:end_date]
-            
+
         gnn_analyzer = ContagionRiskAnalyzer()
         gnn_res = gnn_analyzer.compute_risk_factors(df, index_df=index_slice)
         gnn_score = float(gnn_res["raw_signal"])
@@ -808,7 +808,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         gnn_status = "trained"
     except Exception as e:
         logger.warning(f"Failed to compute GNN contagion risk for {symbol}: {e}")
-        
+
     model_signals["gnn"] = gnn_score
     model_confidences["gnn"] = gnn_confidence
     model_statuses["gnn"] = gnn_status
@@ -836,7 +836,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     metrics_path = MODEL_DIR / "backtest_metrics.json"
     if metrics_path.exists():
         try:
-            with open(metrics_path, "r") as f:
+            with open(metrics_path) as f:
                 metrics_data = json.load(f)
             rolling_performance = {
                 "tft": float(metrics_data.get("tft", {}).get("sharpe", 1.88)),
@@ -847,7 +847,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
             }
         except Exception as e:
             logger.warning(f"Failed to parse backtest_metrics.json: {e}")
-            
+
     if not rolling_performance:
         rolling_performance = {
             "tft": 1.88,
@@ -861,59 +861,59 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
     sharpes = np.array([rolling_performance.get(m, 0.0) for m in model_names], dtype=np.float32)
     e_x = np.exp(sharpes - np.max(sharpes))
     perf_weights = e_x / e_x.sum()
-    
+
     regime_weights = regime_weights_matrix[regime_state]
     final_weights = 0.6 * perf_weights + 0.4 * regime_weights
     final_weights /= final_weights.sum()
-    
+
     # Filter out untrained models
     active_mask = np.array([1.0 if model_statuses[m] == "trained" else 0.0 for m in model_names], dtype=np.float32)
-    
+
     # If no model is trained, fallback to equal weights on all
     if active_mask.sum() == 0:
         active_mask = np.ones(len(model_names), dtype=np.float32)
-        
+
     masked_weights = final_weights * active_mask
     if masked_weights.sum() > 0:
         masked_weights /= masked_weights.sum()
     else:
         masked_weights = active_mask / active_mask.sum()
-        
+
     # 3. Load EnsembleMetaLearner and predict calibrated direction probability
     prob_up = None
     try:
         from research.models.ensemble.meta_learner import EnsembleMetaLearner
         meta_path = MODEL_DIR / "ensemble_meta_learner.pkl"
         meta_learner = EnsembleMetaLearner.load(meta_path)
-        
+
         # Calculate subscores exactly as in meta_learner training prep
         tech_score = score_technical(df)["score"]
-        
+
         # Get pattern score
         patt_score = 0.0
         try:
             patt_score = score_patterns(df)["pattern_score"]
         except Exception:
             pass
-            
+
         # Get momentum score
         mom_score = 0.0
         try:
             mom_score = score_momentum(df)["momentum_score"]
         except Exception:
             pass
-            
+
         reg_val = 1.0 if regime_info["regime"] == "BULL" else (-1.0 if regime_info["regime"] in ("BEAR", "CRISIS") else 0.0)
-        
+
         # simulated lookahead-free sentiment score
         ret_5d = float((df["close"].iloc[-1] / df["close"].iloc[max(0, len(df)-6)]) - 1.0) if len(df) >= 6 else 0.0
         dt_str = str(df["time"].iloc[-1]) if "time" in df.columns else str(datetime.now().date())
         noise_val = (((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0) - 0.1
         sentiment_score = float(np.clip(1.5 * ret_5d + noise_val, -1.0, 1.0))
-        
+
         scores_list = [tech_score, patt_score, mom_score, reg_val, xgb_score, sentiment_score]
         prob_up = meta_learner.predict_proba(scores_list)
-        
+
         # Calibrated output metrics
         raw_ensemble = float((prob_up - 0.5) * 2.0)
         ensemble_confidence = float(prob_up if prob_up > 0.5 else (1.0 - prob_up))
@@ -921,27 +921,27 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         agreement = 1.0
     except Exception as e:
         logger.warning(f"Failed to run calibrated EnsembleMetaLearner for {symbol}: {e}. Falling back to default ensemble aggregation.")
-        
+
         # Default fallback aggregation
         signals_arr = np.array([model_signals[m] for m in model_names], dtype=np.float32)
         raw_ensemble = float(np.sum(signals_arr * masked_weights))
-        
+
         active_signals = [model_signals[m] for m in model_names if model_statuses[m] == "trained"]
         if len(active_signals) > 1:
             signal_std = float(np.std(active_signals))
             agreement = float(max(0.0, min(1.0, 1.0 - signal_std / 2.0)))
         else:
             agreement = 1.0
-            
+
         active_confidences = [model_confidences[m] for m in model_names if model_statuses[m] == "trained"]
         if active_confidences:
             ensemble_confidence = float(np.mean(active_confidences) * agreement)
         else:
             ensemble_confidence = 0.5
-        
+
     # 4. Sizing and Stops
     kelly_fraction = compute_kelly_fraction(symbol, raw_ensemble, ensemble_confidence)
-    
+
     direction = "NEUTRAL"
     if raw_ensemble > 0.35:
         direction = "STRONG_BUY"
@@ -951,15 +951,15 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         direction = "STRONG_SELL"
     elif raw_ensemble < -0.15:
         direction = "SELL"
-        
+
     current_price = float(df["close"].iloc[-1])
     atr = float(df["ATRr_14"].iloc[-1]) if "ATRr_14" in df.columns else 0.0
     garch_vol = float(regime_info["conditional_vol"])
     garch_vol_5d = float(regime_info["vol_forecast_5d"])
-    
+
     stop_distance = max(current_price * 2.0 * garch_vol, 1.5 * atr) if atr > 0 else current_price * 2.0 * garch_vol
     take_profit_distance = max(current_price * 3.0 * garch_vol, 2.5 * atr) if atr > 0 else current_price * 3.0 * garch_vol
-    
+
     if direction in ("STRONG_BUY", "BUY"):
         stop_loss = current_price - stop_distance
         take_profit = current_price + take_profit_distance
@@ -972,15 +972,15 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         stop_loss = current_price
         take_profit = current_price
         max_loss_pct = 0.0
-        
+
     target_price_5d = current_price * (1.0 + raw_ensemble * garch_vol_5d)
-    
+
     weights_dict = {m: float(masked_weights[i]) for i, m in enumerate(model_names)}
-    
+
     # Check if there is any trained model loaded
     any_trained = any(status == "trained" for status in model_statuses.values())
     ensemble_status = "trained" if any_trained else "heuristic"
-    
+
     return {
         "model_status": ensemble_status,
         "raw_ensemble": raw_ensemble,
@@ -1003,7 +1003,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
         "model_signals": model_signals,
         "model_confidences": model_confidences,
         "model_statuses": model_statuses,
-        
+
         "technical": score_technical(df),
         "pattern": score_patterns(df),
         "momentum": score_momentum(df),
@@ -1061,7 +1061,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> Dict[str, Any]:
 # Layer 7 – Price Forecast
 # ---------------------------------------------------------------------------
 
-def forecast_prices(df: pd.DataFrame, horizons: List[int]) -> List[Dict[str, Any]]:
+def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any]]:
     log_prices = np.log(df["close"].values[-90:])  # Use last 90 days
     try:
         model = SARIMAX(log_prices, order=(2, 1, 2), trend='c')
@@ -1107,7 +1107,7 @@ def forecast_prices(df: pd.DataFrame, horizons: List[int]) -> List[Dict[str, Any
 # Main Entry Point
 # ---------------------------------------------------------------------------
 
-async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[str, Any]:
+async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> dict[str, Any]:
     """Fetch OHLCV, run all 7 methods, return complete prediction payload."""
     from app.services.market_data_service import MarketDataService
     symbol = MarketDataService._normalize_symbol(symbol)
@@ -1120,10 +1120,10 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
 
     def _fetch():
         from tenacity import retry, stop_after_attempt, wait_exponential
-        
+
         def _v8_fallback():
-            import urllib.request
             import json
+            import urllib.request
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol.upper()}?range=2y&interval=1d"
             headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
             req = urllib.request.Request(url, headers=headers)
@@ -1187,7 +1187,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
     # Prepare DataFrame by running all builders and indicators
     df.index = pd.DatetimeIndex(df["time"])
     df.index.name = None
-    
+
     # Import pipeline dynamically to avoid circular references
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -1211,7 +1211,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
     df.ta.obv(append=True)
     df.ta.supertrend(length=10, multiplier=3.0, append=True)
     df.ta.cdl_pattern(name="all", append=True)
-    
+
     # Deduplicate columns (e.g. RSI_14, MACD, etc. added by both builders and df.ta)
     df = df.loc[:, ~df.columns.duplicated()]
 
@@ -1220,7 +1220,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
         from research.models.online_learner import OnlineAdaptiveLearner
         online_checkpoint = MODEL_DIR / f"online_learner_{symbol.upper()}.pkl"
         learner = OnlineAdaptiveLearner.load(online_checkpoint)
-        
+
         # Prepare columns standardizing just like in scoring
         df_clean_copy = df.copy()
         rename_map = {}
@@ -1229,7 +1229,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
         BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df_clean_copy.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "BBP" in c][0])
         ATR_col = "ATRr_14" if "ATRr_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "ATR" in c][0]
         ADX_col = "ADX_14" if "ADX_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "ADX" in c][0]
-        
+
         if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
         if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
         if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
@@ -1243,7 +1243,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
             close_t = float(row_6["close"])
             close_t5 = float(df_clean_copy["close"].iloc[-1])
             y_val = 1 if close_t5 > close_t else 0
-            
+
             x_dict_6 = {feat: float(row_6[feat]) for feat in learner.features if feat in df_clean_copy.columns}
             if not any(np.isnan(v) for v in x_dict_6.values()):
                 learner.update(x_dict_6, y_val)
@@ -1259,7 +1259,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
     except FeatureMismatchError as e:
         logger.error(f"Prediction mismatch for {symbol}: {e}")
         raise ValueError(f"model unavailable: missing features {e.missing_features}")
-    
+
     forecast = forecast_prices(df, horizons=[1, 3, 5, 10, 21])
 
     # Generate plain-language reasoning
@@ -1271,11 +1271,11 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
             reasons.append("RSI oversold")
         elif rsi_val > 70:
             reasons.append("RSI overbought")
-            
+
         # 2. HMM Regime
         regime_name = ensemble.get("regime", {}).get("regime", "UNKNOWN").lower()
         reasons.append(f"{regime_name} regime")
-        
+
         # 3. S/R zones
         current_price = float(df["close"].iloc[-1])
         from app.services.sr_service import SupportResistanceEngine
@@ -1293,7 +1293,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
             reasons.append("price near support zone")
         elif near_resistance:
             reasons.append("price near resistance zone")
-            
+
         # 4. Trend Crossover
         macd_val = float(df["MACDh_12_26_9"].iloc[-1]) if "MACDh_12_26_9" in df.columns else 0.0
         if macd_val > 0:
@@ -1302,7 +1302,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> Dict[s
             reasons.append("MACD bearish crossover")
     except Exception as re_err:
         logger.warning(f"Failed to generate plain-language reasoning message: {re_err}")
-        
+
     reasoning_msg = " + ".join(reasons) if reasons else "No clear signal drivers detected."
 
     result = {

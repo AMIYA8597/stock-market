@@ -27,6 +27,7 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
     try:
         import numpy as np
         from sqlalchemy import select
+
         from app.models.asset import Symbol
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
@@ -150,38 +151,38 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
         for item in results:
             if filters.asset_class and item["asset_type"] != filters.asset_class.upper():
                 continue
-                
+
             mcap_base = item["market_cap"] * 1000000.0
             if filters.market_cap_min is not None and mcap_base < float(filters.market_cap_min):
                 continue
             if filters.market_cap_max is not None and mcap_base > float(filters.market_cap_max):
                 continue
-                
+
             if filters.pe_ratio_max is not None:
                 if item["pe_ratio"] is None or item["pe_ratio"] > float(filters.pe_ratio_max):
                     continue
-                    
+
             if filters.rsi_min is not None and item["rsi"] < float(filters.rsi_min):
                 continue
             if filters.rsi_max is not None and item["rsi"] > float(filters.rsi_max):
                 continue
-                
+
             if filters.momentum_21d_min is not None and item["momentum_21d"] < float(filters.momentum_21d_min):
                 continue
-                
+
             if filters.volume_ratio_min is not None and item["volume_ratio"] < float(filters.volume_ratio_min):
                 continue
-                
+
             if filters.signal_direction:
                 if item["signal_direction"] not in [sd.upper() for sd in filters.signal_direction]:
                     continue
-                    
+
             if filters.regime_compatible:
                 is_bull_regime = item["regime_state"] == "bull"
                 is_bear_regime = item["regime_state"] in {"bear", "crisis"}
                 is_buy_signal = item["signal_direction"] in {"BUY", "STRONG_BUY"}
                 is_sell_signal = item["signal_direction"] in {"SELL", "STRONG_SELL"}
-                
+
                 compatible = False
                 if is_buy_signal and is_bull_regime:
                     compatible = True
@@ -189,7 +190,7 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
                     compatible = True
                 elif item["signal_direction"] == "NEUTRAL":
                     compatible = True
-                    
+
                 if not compatible:
                     continue
 
@@ -212,7 +213,7 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
         reverse = True
         if sort_by == "pe_ratio":
             reverse = False
-            
+
         filtered.sort(key=get_sort_key, reverse=reverse)
 
         final_results = []

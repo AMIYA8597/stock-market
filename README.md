@@ -1,6 +1,6 @@
 # NeuroQuant — Local Run & Test Guide
 
-This repository contains the NeuroQuant monorepo (frontend + backend). These instructions show how to get a working local dev environment and run the unified test gate that validates both frontend and backend.
+This repository contains the NeuroQuant monorepo ( + backend). These instructions show how to get a working local dev environment and run the unified test gate that validates both  and backend.
 
 Prerequisites
 - Node.js 20+, pnpm 8+ (or as specified in `package.json`)
@@ -35,7 +35,7 @@ cp .env.example .env
 Copy-Item .env.example .env
 ```
 
-4. Run frontend in dev:
+4. Run  in dev:
 ```bash
 pnpm --filter @neuroquant/web dev
 ```
@@ -49,7 +49,7 @@ uvicorn app.main:app --reload --port 8000
 ```
 
 Unified validation (what CI should run locally)
-- Run the repo-level test (this builds the frontend and executes backend pytest):
+- Run the repo-level test (this builds the  and executes backend pytest):
 
 ```bash
 pnpm test
