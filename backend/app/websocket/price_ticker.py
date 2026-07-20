@@ -19,12 +19,7 @@ from app.services.prediction_engine import get_full_prediction
 
 logger = logging.getLogger(__name__)
 
-WATCHLIST_SYMBOLS = [
-    "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK",
-    "SBIN", "BHARTIARTL", "LT", "ITC", "HINDUNILVR",
-    "AXISBANK", "KOTAKBANK", "BAJFINANCE", "SUNPHARMA", "MARUTI",
-    "NTPC", "TATASTEEL", "POWERGRID", "ADANIPORTS", "TITAN"
-]
+from app.core.watchlist import WATCHLIST_SYMBOLS
 
 
 async def run_price_ticker(redis: Redis) -> None:

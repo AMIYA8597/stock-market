@@ -9,6 +9,7 @@ import math
 from datetime import UTC, datetime
 
 import yfinance as yf
+from app.services.indian_stock_api import IndianStockAPI
 
 from app.core.logging import get_logger
 
@@ -252,6 +253,30 @@ class MarketDataService:
             if not result or result.get("price") is None:
                 raise ValueError(sym)
         except Exception as e:
+            # Attempt fallback using IndianStockAPI (0xramm) before caching failure
+            try:
+                fallback = IndianStockAPI.fetch_quote(sym)
+                if fallback:
+                    # Cache fallback result
+                    MarketDataService._in_memory_quote_cache[cache_key] = (fallback, datetime.now(UTC).timestamp())
+                    if redis:
+                        await redis.setex(cache_key, 60, json.dumps(fallback))
+                    return fallback
+            except Exception as fe:
+                logger.debug(f"IndianStockAPI fallback failed for {sym}: {fe}")
+
+            # Tombstone / cache the failure so we don't spam network
+            now_ts = datetime.now(UTC).timestamp()
+            failure_dict = {"error": True, "message": str(e)}
+            MarketDataService._in_memory_quote_cache[cache_key] = (failure_dict, now_ts)
+            if redis:
+                try:
+                    await redis.setex(cache_key, 60, json.dumps(failure_dict))
+                except Exception:
+                    pass
+            if isinstance(e, ValueError):
+                raise
+            raise ValueError(sym) from e
             # Tombstone / cache the failure so we don't spam network
             now_ts = datetime.now(UTC).timestamp()
             failure_dict = {"error": True, "message": str(e)}
@@ -768,11 +793,12 @@ class MarketDataService:
     def _fetch_movers_sync() -> dict:
         # Batch download is faster than individual calls
         data = yf.download(
-            MarketDataService.NSE_NIFTY50[:20],  # Limit for free tier speed
+            MarketDataService.NSE_NIFTY50,
             period="2d", interval="1d", group_by="ticker", progress=False
         )
+
         movers = []
-        for sym in MarketDataService.NSE_NIFTY50[:20]:
+        for sym in MarketDataService.NSE_NIFTY50:
             try:
                 sym_data = data[sym] if sym in data.columns.get_level_values(0) else None
                 if sym_data is not None and len(sym_data) >= 2:

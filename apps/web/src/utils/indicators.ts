@@ -25,7 +25,7 @@ export interface IndicatorResult {
   superTrend?: {
     time: number | string;
     value: number;
-    trend: 'up' | 'down';
+    trend: "up" | "down";
   }[];
   ichimoku?: {
     time: number | string;
@@ -38,7 +38,7 @@ export interface IndicatorResult {
   smc?: {
     orderBlocks: {
       id: string;
-      type: 'bullish' | 'bearish';
+      type: "bullish" | "bearish";
       top: number;
       bottom: number;
       startTime: number | string;
@@ -47,7 +47,7 @@ export interface IndicatorResult {
     }[];
     fairValueGaps: {
       id: string;
-      type: 'bullish' | 'bearish';
+      type: "bullish" | "bearish";
       top: number;
       bottom: number;
       time: number | string;
@@ -55,15 +55,15 @@ export interface IndicatorResult {
     }[];
     liquidityZones: {
       id: string;
-      type: 'bsl' | 'ssl';
+      type: "bsl" | "ssl";
       level: number;
       time: number | string;
       isSwept: boolean;
     }[];
     marketStructure: {
       time: number | string;
-      type: 'BOS' | 'CHoCH';
-      direction: 'bullish' | 'bearish';
+      type: "BOS" | "CHoCH";
+      direction: "bullish" | "bearish";
       level: number;
     }[];
   };
@@ -91,18 +91,21 @@ export function calculateEMA(data: number[], period: number): number[] {
 /**
  * Calculate Wilder's Smoothing.
  */
-export function calculateWilderSmoothing(data: number[], period: number): number[] {
+export function calculateWilderSmoothing(
+  data: number[],
+  period: number,
+): number[] {
   const smoothed: number[] = [];
   if (data.length === 0) return smoothed;
   let sum = 0;
-  
+
   // Initial SMA
   const initialPeriod = Math.min(period, data.length);
   for (let i = 0; i < initialPeriod; i++) {
     sum += data[i] ?? 0;
   }
   let prevVal = sum / initialPeriod;
-  
+
   for (let i = 0; i < data.length; i++) {
     const val = data[i] ?? 0;
     if (i < period - 1) {
@@ -121,21 +124,24 @@ export function calculateWilderSmoothing(data: number[], period: number): number
 /**
  * Compute all selected technical indicators from a list of candles.
  */
-export function computeIndicators(candles: Candle[], selected: {
-  rsi?: boolean;
-  macd?: boolean;
-  vwap?: boolean;
-  atr?: boolean;
-  superTrend?: boolean;
-  ichimoku?: boolean;
-  smc?: boolean;
-}): IndicatorResult {
+export function computeIndicators(
+  candles: Candle[],
+  selected: {
+    rsi?: boolean;
+    macd?: boolean;
+    vwap?: boolean;
+    atr?: boolean;
+    superTrend?: boolean;
+    ichimoku?: boolean;
+    smc?: boolean;
+  },
+): IndicatorResult {
   const result: IndicatorResult = {};
   if (candles.length < 2) return result;
 
-  const closes = candles.map(c => c.close);
-  const highs = candles.map(c => c.high);
-  const lows = candles.map(c => c.low);
+  const closes = candles.map((c) => c.close);
+  const highs = candles.map((c) => c.high);
+  const lows = candles.map((c) => c.low);
 
   // 1. RSI (14)
   if (selected.rsi) {
@@ -155,7 +161,10 @@ export function computeIndicators(candles: Candle[], selected: {
       const avgLoss = avgLosses[i] ?? 0;
       if (avgLoss === 0) return { time: c.time, value: 100 };
       const rs = avgGain / avgLoss;
-      return { time: c.time, value: Math.round((100 - 100 / (1 + rs)) * 100) / 100 };
+      return {
+        time: c.time,
+        value: Math.round((100 - 100 / (1 + rs)) * 100) / 100,
+      };
     });
 
     result.rsi = rsiList.slice(14); // Trim initialization period
@@ -167,32 +176,35 @@ export function computeIndicators(candles: Candle[], selected: {
     const ema26 = calculateEMA(closes, 26);
     const macdLine = ema12.map((val, i) => val - (ema26[i] ?? 0));
     const signalLine = calculateEMA(macdLine, 9);
-    
-    result.macd = candles.map((c, i) => {
-      const macdVal = macdLine[i] ?? 0;
-      const signalVal = signalLine[i] ?? 0;
-      return {
-        time: c.time,
-        macd: Math.round(macdVal * 100) / 100,
-        signal: Math.round(signalVal * 100) / 100,
-        histogram: Math.round((macdVal - signalVal) * 100) / 100
-      };
-    }).slice(26);
+
+    result.macd = candles
+      .map((c, i) => {
+        const macdVal = macdLine[i] ?? 0;
+        const signalVal = signalLine[i] ?? 0;
+        return {
+          time: c.time,
+          macd: Math.round(macdVal * 100) / 100,
+          signal: Math.round(signalVal * 100) / 100,
+          histogram: Math.round((macdVal - signalVal) * 100) / 100,
+        };
+      })
+      .slice(26);
   }
 
   // 3. VWAP
   if (selected.vwap) {
     let cumTPV = 0;
     let cumVol = 0;
-    let lastDate = '';
+    let lastDate = "";
 
     result.vwap = candles.map((c) => {
       const tp = (c.high + c.low + c.close) / 3;
       const vol = c.volume || 0;
-      
-      const dateStr = typeof c.time === 'number'
-        ? new Date(c.time * 1000).toDateString()
-        : String(c.time);
+
+      const dateStr =
+        typeof c.time === "number"
+          ? new Date(c.time * 1000).toDateString()
+          : String(c.time);
 
       if (dateStr !== lastDate) {
         cumTPV = 0;
@@ -204,7 +216,7 @@ export function computeIndicators(candles: Candle[], selected: {
       cumVol += vol;
       return {
         time: c.time,
-        value: Math.round((cumVol > 0 ? cumTPV / cumVol : tp) * 100) / 100
+        value: Math.round((cumVol > 0 ? cumTPV / cumVol : tp) * 100) / 100,
       };
     });
   }
@@ -215,19 +227,17 @@ export function computeIndicators(candles: Candle[], selected: {
     const h = highs[i] ?? 0;
     const l = lows[i] ?? 0;
     const prevC = closes[i - 1] ?? 0;
-    tr.push(Math.max(
-      h - l,
-      Math.abs(h - prevC),
-      Math.abs(l - prevC)
-    ));
+    tr.push(Math.max(h - l, Math.abs(h - prevC), Math.abs(l - prevC)));
   }
   const atrList = calculateWilderSmoothing(tr, 14);
 
   if (selected.atr) {
-    result.atr = candles.map((c, i) => ({
-      time: c.time,
-      value: Math.round((atrList[i] ?? 0) * 100) / 100
-    })).slice(14);
+    result.atr = candles
+      .map((c, i) => ({
+        time: c.time,
+        value: Math.round((atrList[i] ?? 0) * 100) / 100,
+      }))
+      .slice(14);
   }
 
   // 5. SuperTrend (10, 3)
@@ -237,16 +247,16 @@ export function computeIndicators(candles: Candle[], selected: {
       const h = highs[i] ?? 0;
       const l = lows[i] ?? 0;
       const prevC = closes[i - 1] ?? 0;
-      stTr.push(Math.max(
-        h - l,
-        Math.abs(h - prevC),
-        Math.abs(l - prevC)
-      ));
+      stTr.push(Math.max(h - l, Math.abs(h - prevC), Math.abs(l - prevC)));
     }
     const atr10 = calculateWilderSmoothing(stTr, 10);
-    const superTrend: { time: number | string; value: number; trend: 'up' | 'down' }[] = [];
-    
-    let trend: 'up' | 'down' = 'up';
+    const superTrend: {
+      time: number | string;
+      value: number;
+      trend: "up" | "down";
+    }[] = [];
+
+    let trend: "up" | "down" = "up";
     let prevLowerBand = ((highs[0] ?? 0) + (lows[0] ?? 0)) / 2;
     let prevUpperBand = ((highs[0] ?? 0) + (lows[0] ?? 0)) / 2;
 
@@ -254,7 +264,7 @@ export function computeIndicators(candles: Candle[], selected: {
       const c = candles[i];
       if (!c) continue;
       if (i < 10) {
-        superTrend.push({ time: c.time, value: c.close, trend: 'up' });
+        superTrend.push({ time: c.time, value: c.close, trend: "up" });
         continue;
       }
       const mid = (c.high + c.low) / 2;
@@ -263,20 +273,26 @@ export function computeIndicators(candles: Candle[], selected: {
       const basicUpper = mid + offset;
 
       const prevC = closes[i - 1] ?? 0;
-      const finalLower = (basicLower > prevLowerBand || prevC < prevLowerBand) ? basicLower : prevLowerBand;
-      const finalUpper = (basicUpper < prevUpperBand || prevC > prevUpperBand) ? basicUpper : prevUpperBand;
+      const finalLower =
+        basicLower > prevLowerBand || prevC < prevLowerBand
+          ? basicLower
+          : prevLowerBand;
+      const finalUpper =
+        basicUpper < prevUpperBand || prevC > prevUpperBand
+          ? basicUpper
+          : prevUpperBand;
 
-      if (trend === 'up' && c.close < finalLower) {
-        trend = 'down';
-      } else if (trend === 'down' && c.close > finalUpper) {
-        trend = 'up';
+      if (trend === "up" && c.close < finalLower) {
+        trend = "down";
+      } else if (trend === "down" && c.close > finalUpper) {
+        trend = "up";
       }
 
-      const stVal = trend === 'up' ? finalLower : finalUpper;
+      const stVal = trend === "up" ? finalLower : finalUpper;
       superTrend.push({
         time: c.time,
         value: Math.round(stVal * 100) / 100,
-        trend
+        trend,
       });
 
       prevLowerBand = finalLower;
@@ -331,7 +347,10 @@ export function computeIndicators(candles: Candle[], selected: {
       }
 
       const senkouA = tenkan && kijun ? (tenkan + kijun) / 2 : 0;
-      const chikou = i + 26 < closes.length ? (closes[i + 26] ?? 0) : (closes[closes.length - 1] ?? 0); // future index representation
+      const chikou =
+        i + 26 < closes.length
+          ? (closes[i + 26] ?? 0)
+          : (closes[closes.length - 1] ?? 0); // future index representation
 
       ichimokuList.push({
         time: candles[i]?.time ?? 0,
@@ -398,51 +417,55 @@ export function computeIndicators(candles: Candle[], selected: {
 
     // A. Liquidity Zones
     swingHighs.forEach((sh) => {
-      const isSwept = closes.slice(sh.idx + 1).some(c => c > sh.val);
+      const isSwept = closes.slice(sh.idx + 1).some((c) => c > sh.val);
       liquidityZones.push({
         id: `bsl-${sh.idx}`,
         type: "bsl",
         level: sh.val,
         time: candles[sh.idx]?.time ?? 0,
-        isSwept
+        isSwept,
       });
     });
 
     swingLows.forEach((sl) => {
-      const isSwept = closes.slice(sl.idx + 1).some(c => c < sl.val);
+      const isSwept = closes.slice(sl.idx + 1).some((c) => c < sl.val);
       liquidityZones.push({
         id: `ssl-${sl.idx}`,
         type: "ssl",
         level: sl.val,
         time: candles[sl.idx]?.time ?? 0,
-        isSwept
+        isSwept,
       });
     });
 
     // B. Market Structure & Order Blocks
-    let currentTrend: 'bullish' | 'bearish' | null = null;
+    let currentTrend: "bullish" | "bearish" | null = null;
     let lastHighLevel = 0;
     let lastLowLevel = 9999999;
 
     for (let i = windowSize * 2; i < candles.length; i++) {
       const c = candles[i];
       if (!c) continue;
-      
+
       // Look back for breaking swing highs/lows
-      const relevantHighs = swingHighs.filter(sh => sh.idx < i && sh.val > lastHighLevel);
-      const relevantLows = swingLows.filter(sl => sl.idx < i && sl.val < lastLowLevel);
+      const relevantHighs = swingHighs.filter(
+        (sh) => sh.idx < i && sh.val > lastHighLevel,
+      );
+      const relevantLows = swingLows.filter(
+        (sl) => sl.idx < i && sl.val < lastLowLevel,
+      );
 
       if (relevantHighs.length > 0) {
         const lastSH = relevantHighs[relevantHighs.length - 1];
         if (lastSH && c.close > lastSH.val) {
-          const type = currentTrend === 'bearish' ? 'CHoCH' : 'BOS';
+          const type = currentTrend === "bearish" ? "CHoCH" : "BOS";
           marketStructure.push({
             time: c.time,
             type,
-            direction: 'bullish',
-            level: lastSH.val
+            direction: "bullish",
+            level: lastSH.val,
           });
-          currentTrend = 'bullish';
+          currentTrend = "bullish";
           lastHighLevel = lastSH.val;
 
           // Bullish Order Block: last bearish candle before this breakout/displacement
@@ -460,11 +483,13 @@ export function computeIndicators(candles: Candle[], selected: {
             if (obCandle) {
               orderBlocks.push({
                 id: `ob-bull-${obIdx}`,
-                type: 'bullish',
+                type: "bullish",
                 top: obCandle.high,
                 bottom: obCandle.low,
                 startTime: obCandle.time,
-                isMitigated: closes.slice(i + 1).some(cl => cl < obCandle.low)
+                isMitigated: closes
+                  .slice(i + 1)
+                  .some((cl) => cl < obCandle.low),
               });
             }
           }
@@ -474,14 +499,14 @@ export function computeIndicators(candles: Candle[], selected: {
       if (relevantLows.length > 0) {
         const lastSL = relevantLows[relevantLows.length - 1];
         if (lastSL && c.close < lastSL.val) {
-          const type = currentTrend === 'bullish' ? 'CHoCH' : 'BOS';
+          const type = currentTrend === "bullish" ? "CHoCH" : "BOS";
           marketStructure.push({
             time: c.time,
             type,
-            direction: 'bearish',
-            level: lastSL.val
+            direction: "bearish",
+            level: lastSL.val,
           });
-          currentTrend = 'bearish';
+          currentTrend = "bearish";
           lastLowLevel = lastSL.val;
 
           // Bearish Order Block: last bullish candle in range [lastSL.idx, i]
@@ -498,11 +523,13 @@ export function computeIndicators(candles: Candle[], selected: {
             if (obCandle) {
               orderBlocks.push({
                 id: `ob-bear-${obIdx}`,
-                type: 'bearish',
+                type: "bearish",
                 top: obCandle.high,
                 bottom: obCandle.low,
                 startTime: obCandle.time,
-                isMitigated: closes.slice(i + 1).some(cl => cl > obCandle.high)
+                isMitigated: closes
+                  .slice(i + 1)
+                  .some((cl) => cl > obCandle.high),
               });
             }
           }
@@ -518,27 +545,33 @@ export function computeIndicators(candles: Candle[], selected: {
 
         if (cur && prev1 && prev2) {
           // Bullish FVG: Low of candle i > High of candle i-2
-          if (cur.low > prev2.high && (prev1.close - prev1.open) > (atrList[i] ?? 0) * 0.5) {
-            const isFilled = closes.slice(i + 1).some(cl => cl < prev2.high);
+          if (
+            cur.low > prev2.high &&
+            prev1.close - prev1.open > (atrList[i] ?? 0) * 0.5
+          ) {
+            const isFilled = closes.slice(i + 1).some((cl) => cl < prev2.high);
             fairValueGaps.push({
               id: `fvg-bull-${i - 1}`,
-              type: 'bullish',
+              type: "bullish",
               top: cur.low,
               bottom: prev2.high,
               time: prev1.time,
-              isFilled
+              isFilled,
             });
           }
           // Bearish FVG: High of candle i < Low of candle i-2
-          else if (cur.high < prev2.low && (prev1.open - prev1.close) > (atrList[i] ?? 0) * 0.5) {
-            const isFilled = closes.slice(i + 1).some(cl => cl > prev2.low);
+          else if (
+            cur.high < prev2.low &&
+            prev1.open - prev1.close > (atrList[i] ?? 0) * 0.5
+          ) {
+            const isFilled = closes.slice(i + 1).some((cl) => cl > prev2.low);
             fairValueGaps.push({
               id: `fvg-bear-${i - 1}`,
-              type: 'bearish',
+              type: "bearish",
               top: prev2.low,
               bottom: cur.high,
               time: prev1.time,
-              isFilled
+              isFilled,
             });
           }
         }
@@ -546,10 +579,10 @@ export function computeIndicators(candles: Candle[], selected: {
     }
 
     result.smc = {
-      orderBlocks: orderBlocks.filter(ob => !ob.isMitigated).slice(-5), // only return top 5 valid OBs
-      fairValueGaps: fairValueGaps.filter(fvg => !fvg.isFilled).slice(-5),
+      orderBlocks: orderBlocks.filter((ob) => !ob.isMitigated).slice(-5), // only return top 5 valid OBs
+      fairValueGaps: fairValueGaps.filter((fvg) => !fvg.isFilled).slice(-5),
       liquidityZones: liquidityZones.slice(-10),
-      marketStructure: marketStructure.slice(-10)
+      marketStructure: marketStructure.slice(-10),
     };
   }
 

@@ -26,6 +26,12 @@ const Header = (): JSX.Element => {
   const [searchQuery, setSearchQuery] = useState('');
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
   const { status: connectionStatus } = usePriceFeed(['NIFTY50']);
+  const [isDark, setIsDark] = useState(true); // default dark mode
+
+  // Apply theme to html element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
 
   const navItems = [
     { href: '/', label: 'Terminal' },
@@ -80,6 +86,14 @@ const Header = (): JSX.Element => {
               NeuroQuant
             </span>
           </Link>
+          {/* Theme toggle button */}
+          <button
+            onClick={() => setIsDark(!isDark)}
+            className="ml-4 p-2 rounded-full bg-[#161B24] hover:bg-[#1E2532] transition-colors"
+            aria-label="Toggle dark/light mode"
+          >
+            {isDark ? '🌙' : '☀️'}
+          </button>
 
           {/* Main Navigation */}
           <nav className="hidden xl:flex items-center gap-6">

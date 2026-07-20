@@ -22,6 +22,7 @@ from sqlalchemy import text
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.database.redis_client import _redis_pool_singleton
+from app.core.watchlist import WATCHLIST_SYMBOLS
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -119,11 +120,7 @@ async def startup_events() -> dict[str, Any]:
 
             # Alert polling loop task
             try:
-                WATCHLIST_SYMBOLS = [
-                    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "HINDUNILVR.NS",
-                    "ICICIBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "WIPRO.NS", "BAJFINANCE.NS",
-                    "^NSEI"
-                ]
+                # WATCHLIST_SYMBOLS imported from central module
 
                 async def alert_polling_loop():
                     # Sleep slightly on startup to let server initialize

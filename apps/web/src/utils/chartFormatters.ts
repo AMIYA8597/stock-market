@@ -1,4 +1,8 @@
-import { type UTCTimestamp, type CandlestickData, type LineData } from "lightweight-charts";
+import {
+  type UTCTimestamp,
+  type CandlestickData,
+  type LineData,
+} from "lightweight-charts";
 
 export interface PriceBar {
   timestamp: string;
@@ -51,7 +55,11 @@ export function buildEma(values: number[], period: number): number[] {
   return ema;
 }
 
-export function buildBollingerBands(values: number[], period: number = 20, multiplier: number = 2): BollingerBandsPoints {
+export function buildBollingerBands(
+  values: number[],
+  period: number = 20,
+  multiplier: number = 2,
+): BollingerBandsPoints {
   const middle = buildSma(values, period);
   const upper: number[] = [];
   const lower: number[] = [];
@@ -59,7 +67,9 @@ export function buildBollingerBands(values: number[], period: number = 20, multi
     const sliceStart = Math.max(0, i - period + 1);
     const slice = values.slice(sliceStart, i + 1);
     const mid = middle[i] ?? 0;
-    const variance = slice.reduce((sum, val) => sum + Math.pow(val - mid, 2), 0) / slice.length;
+    const variance =
+      slice.reduce((sum, val) => sum + Math.pow(val - mid, 2), 0) /
+      slice.length;
     const stdDev = Math.sqrt(variance);
     upper.push(mid + multiplier * stdDev);
     lower.push(mid - multiplier * stdDev);
@@ -77,7 +87,8 @@ export function buildHeikinAshi(bars: PriceBar[]): CandlestickData[] {
     const bar = bars[i];
     if (!bar) continue;
     const haClose = (bar.open + bar.high + bar.low + bar.close) / 4;
-    const haOpen = i === 0 ? (bar.open + bar.close) / 2 : (prevOpen + prevClose) / 2;
+    const haOpen =
+      i === 0 ? (bar.open + bar.close) / 2 : (prevOpen + prevClose) / 2;
     const haHigh = Math.max(bar.high, haOpen, haClose);
     const haLow = Math.min(bar.low, haOpen, haClose);
     haBars.push({
@@ -195,7 +206,11 @@ export function buildPointAndFigure(bars: PriceBar[]): CandlestickData[] {
         }
         currentTimestamp = bar.timestamp;
       } else if (boxesMoved <= -3) {
-        columns.push({ isUp, boxes: currentColumn, timestamp: currentTimestamp });
+        columns.push({
+          isUp,
+          boxes: currentColumn,
+          timestamp: currentTimestamp,
+        });
         isUp = false;
         currentColumn = [];
         const numReversals = Math.abs(boxesMoved);
@@ -214,7 +229,11 @@ export function buildPointAndFigure(bars: PriceBar[]): CandlestickData[] {
         }
         currentTimestamp = bar.timestamp;
       } else if (boxesMoved >= 3) {
-        columns.push({ isUp, boxes: currentColumn, timestamp: currentTimestamp });
+        columns.push({
+          isUp,
+          boxes: currentColumn,
+          timestamp: currentTimestamp,
+        });
         isUp = true;
         currentColumn = [];
         for (let j = 1; j <= boxesMoved; j++) {
@@ -283,7 +302,13 @@ export function buildKagi(bars: PriceBar[]): CandlestickData[] {
         peak = price;
         kagiPrice = price;
       } else if (price <= peak * (1 - reversalPct)) {
-        kagiBars.push({ time, open: peak, high: peak, low: kagiPrice, close: kagiPrice });
+        kagiBars.push({
+          time,
+          open: peak,
+          high: peak,
+          low: kagiPrice,
+          close: kagiPrice,
+        });
         direction = -1;
         trough = price;
         kagiPrice = price;
@@ -293,7 +318,13 @@ export function buildKagi(bars: PriceBar[]): CandlestickData[] {
         trough = price;
         kagiPrice = price;
       } else if (price >= trough * (1 + reversalPct)) {
-        kagiBars.push({ time, open: trough, high: kagiPrice, low: trough, close: kagiPrice });
+        kagiBars.push({
+          time,
+          open: trough,
+          high: kagiPrice,
+          low: trough,
+          close: kagiPrice,
+        });
         direction = 1;
         peak = price;
         kagiPrice = price;
@@ -342,7 +373,10 @@ export function buildRangeBars(bars: PriceBar[]): CandlestickData[] {
   if (lastBar) {
     const lastTime = toUtcTimestamp(lastBar.timestamp);
     const lastBarInList = rangeBars[rangeBars.length - 1];
-    if (rangeBars.length === 0 || (lastBarInList && lastBarInList.time !== lastTime)) {
+    if (
+      rangeBars.length === 0 ||
+      (lastBarInList && lastBarInList.time !== lastTime)
+    ) {
       rangeBars.push({ time: lastTime, open, high, low, close });
     }
   }
@@ -383,7 +417,9 @@ export function buildThreeLineBreak(bars: PriceBar[]): CandlestickData[] {
       if (price > lastClose) {
         blocks.push({ open: lastClose, close: price, time });
       } else if (price < lastOpen) {
-        const limit = Math.min(...blocks.slice(-3).map((b) => Math.min(b.open, b.close)));
+        const limit = Math.min(
+          ...blocks.slice(-3).map((b) => Math.min(b.open, b.close)),
+        );
         if (price < limit) {
           blocks.push({ open: lastClose, close: price, time });
         }
@@ -392,7 +428,9 @@ export function buildThreeLineBreak(bars: PriceBar[]): CandlestickData[] {
       if (price < lastClose) {
         blocks.push({ open: lastClose, close: price, time });
       } else if (price > lastOpen) {
-        const limit = Math.max(...blocks.slice(-3).map((b) => Math.max(b.open, b.close)));
+        const limit = Math.max(
+          ...blocks.slice(-3).map((b) => Math.max(b.open, b.close)),
+        );
         if (price > limit) {
           blocks.push({ open: lastClose, close: price, time });
         }
@@ -408,7 +446,10 @@ export function buildThreeLineBreak(bars: PriceBar[]): CandlestickData[] {
   }));
 }
 
-export function buildTickChart(bars: PriceBar[], ticksPerBar = 5): CandlestickData[] {
+export function buildTickChart(
+  bars: PriceBar[],
+  ticksPerBar = 5,
+): CandlestickData[] {
   const tickBars: CandlestickData[] = [];
   for (let i = 0; i < bars.length; i += ticksPerBar) {
     const chunk = bars.slice(i, i + ticksPerBar);
@@ -566,3 +607,5 @@ export function buildRelativeStrength(bars: PriceBar[]): LineData[] {
     return { time, value: (bar.close / (benchmark || 1)) * 100 };
   });
 }
+
+
