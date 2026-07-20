@@ -17,7 +17,14 @@ import {
 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge } from "@/components/ui/Badge";
-import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from "@/components/ui/Dropdown";
+import {
+  Dropdown,
+  DropdownContent,
+  DropdownItem,
+  DropdownLabel,
+  DropdownSeparator,
+  DropdownTrigger,
+} from "@/components/ui/Dropdown";
 import { Drawer } from "@/components/ui/Drawer";
 import { Input } from "@/components/ui/Input";
 import { Tooltip } from "@/components/ui/Tooltip";
@@ -44,12 +51,19 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }): JSX.Element {
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold tracking-tight text-[var(--nq-text-primary)]">NeuroQuant</p>
-            <Badge variant="bull" className="px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]">
+            <p className="text-sm font-semibold tracking-tight text-[var(--nq-text-primary)]">
+              NeuroQuant
+            </p>
+            <Badge
+              variant="bull"
+              className="px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]"
+            >
               Live
             </Badge>
           </div>
-          <p className="mt-1 text-xs text-[var(--nq-text-secondary)]">Institutional control center</p>
+          <p className="mt-1 text-xs text-[var(--nq-text-secondary)]">
+            Institutional control center
+          </p>
         </div>
       </div>
 
@@ -70,12 +84,19 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }): JSX.Element {
                 "group flex items-center gap-3 rounded-[1rem] px-3 py-2.75 text-sm transition-all duration-200",
                 active
                   ? "bg-[linear-gradient(135deg,rgba(0,212,245,0.16),rgba(255,255,255,0.04))] text-[var(--nq-text-primary)] shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
-                  : "text-[var(--nq-text-secondary)] hover:bg-white/[0.06] hover:text-[var(--nq-text-primary)]"
+                  : "text-[var(--nq-text-secondary)] hover:bg-white/[0.06] hover:text-[var(--nq-text-primary)]",
               )}
             >
-              <Icon className={cn("h-4.5 w-4.5 shrink-0 transition-colors", active && "text-[var(--nq-accent)]")} />
+              <Icon
+                className={cn(
+                  "h-4.5 w-4.5 shrink-0 transition-colors",
+                  active && "text-[var(--nq-accent)]",
+                )}
+              />
               <span className="font-medium">{item.label}</span>
-              {active ? <span className="ml-auto h-2 w-2 rounded-full bg-[var(--nq-accent)] shadow-[0_0_12px_rgba(0,212,245,0.7)]" /> : null}
+              {active ? (
+                <span className="ml-auto h-2 w-2 rounded-full bg-[var(--nq-accent)] shadow-[0_0_12px_rgba(0,212,245,0.7)]" />
+              ) : null}
             </Link>
           );
         })}
@@ -85,10 +106,17 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }): JSX.Element {
         <div className="rounded-[1.25rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4 shadow-[0_16px_40px_rgba(0,0,0,0.2)]">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">System health</p>
-              <p className="mt-2 text-2xl font-semibold tracking-tight text-[var(--nq-text-primary)]">98.4%</p>
+              <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
+                System health
+              </p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight text-[var(--nq-text-primary)]">
+                98.4%
+              </p>
             </div>
-            <Badge variant="buy" className="h-fit text-[10px] uppercase tracking-[0.12em]">
+            <Badge
+              variant="buy"
+              className="h-fit text-[10px] uppercase tracking-[0.12em]"
+            >
               Optimal
             </Badge>
           </div>
@@ -96,11 +124,15 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }): JSX.Element {
           <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
             <div className="rounded-2xl border border-white/[0.08] bg-white/5 p-3">
               <p className="text-[var(--nq-text-secondary)]">Latency</p>
-              <p className="mt-1 text-sm font-semibold text-[var(--nq-text-primary)]">42 ms</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--nq-text-primary)]">
+                42 ms
+              </p>
             </div>
             <div className="rounded-2xl border border-white/[0.08] bg-white/5 p-3">
               <p className="text-[var(--nq-text-secondary)]">Signals</p>
-              <p className="mt-1 text-sm font-semibold text-[var(--nq-text-primary)]">17 live</p>
+              <p className="mt-1 text-sm font-semibold text-[var(--nq-text-primary)]">
+                17 live
+              </p>
             </div>
           </div>
         </div>
@@ -122,7 +154,15 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }): JSX.Element {
 }
 
 export function Layout({ children }: LayoutProps): JSX.Element {
-  const { mobileSidebarOpen, openMobileSidebar, closeMobileSidebar, openCommandPalette, themeMode, toggleThemeMode, toggleMobileSidebar } = useUIStore();
+  const {
+    mobileSidebarOpen,
+    openMobileSidebar,
+    closeMobileSidebar,
+    openCommandPalette,
+    themeMode,
+    toggleThemeMode,
+    toggleMobileSidebar,
+  } = useUIStore();
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[var(--nq-bg-primary)] text-[var(--nq-text-primary)]">
@@ -142,11 +182,23 @@ export function Layout({ children }: LayoutProps): JSX.Element {
         <div className="flex min-w-0 flex-col">
           <header className="sticky top-0 z-30 border-b border-white/10 bg-[rgba(7,9,15,0.76)] px-4 py-4 backdrop-blur-2xl sm:px-6">
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="lg:hidden" onClick={toggleMobileSidebar} aria-label="Open navigation">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="lg:hidden"
+                onClick={toggleMobileSidebar}
+                aria-label="Open navigation"
+              >
                 <Menu className="h-4 w-4" />
               </Button>
 
-              <Button variant="secondary" size="sm" className="hidden md:inline-flex" onClick={openCommandPalette} leftIcon={<Command className="h-4 w-4" />}>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="hidden md:inline-flex"
+                onClick={openCommandPalette}
+                leftIcon={<Command className="h-4 w-4" />}
+              >
                 Command
               </Button>
 
@@ -157,7 +209,9 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                   className="hidden min-w-0 flex-1 items-center gap-3 rounded-[1rem] border border-white/10 bg-white/5 px-4 py-2.5 text-left text-sm text-[var(--nq-text-secondary)] transition hover:border-white/15 hover:bg-white/[0.08] hover:text-[var(--nq-text-primary)] md:flex"
                 >
                   <Search className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Search markets, positions, reports, and pages</span>
+                  <span className="truncate">
+                    Search markets, positions, reports, and pages
+                  </span>
                   <kbd className="ml-auto inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.08] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">
                     <Command className="h-3 w-3" />K
                   </kbd>
@@ -176,7 +230,10 @@ export function Layout({ children }: LayoutProps): JSX.Element {
               </Tooltip>
 
               <div className="ml-auto flex items-center gap-2 sm:gap-3">
-                <Badge variant="bull" className="hidden items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] sm:inline-flex">
+                <Badge
+                  variant="bull"
+                  className="hidden items-center gap-1.5 px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] sm:inline-flex"
+                >
                   <span className="h-1.5 w-1.5 rounded-full bg-current" />
                   Live feed
                 </Badge>
@@ -188,7 +245,11 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                     className="flex h-10 w-10 items-center justify-center rounded-[1rem] border border-white/10 bg-white/5 text-[var(--nq-text-secondary)] transition hover:bg-white/[0.08] hover:text-[var(--nq-text-primary)]"
                     aria-label="Toggle theme"
                   >
-                    {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                    {themeMode === "dark" ? (
+                      <Sun className="h-4 w-4" />
+                    ) : (
+                      <Moon className="h-4 w-4" />
+                    )}
                   </button>
                 </Tooltip>
 
@@ -197,10 +258,17 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                 <Dropdown>
                   <DropdownTrigger asChild>
                     <button className="flex items-center gap-2 rounded-[1rem] border border-white/10 bg-white/5 px-2.5 py-2 text-left text-sm text-[var(--nq-text-secondary)] transition hover:bg-white/[0.08] hover:text-[var(--nq-text-primary)]">
-                      <Avatar fallback="NQ" className="h-8 w-8 border-white/10 bg-white/[0.08]" />
+                      <Avatar
+                        fallback="NQ"
+                        className="h-8 w-8 border-white/10 bg-white/[0.08]"
+                      />
                       <div className="hidden sm:block">
-                        <p className="text-sm font-semibold text-[var(--nq-text-primary)]">NeuroQuant</p>
-                        <p className="text-[11px] text-[var(--nq-text-secondary)]">Portfolio ops</p>
+                        <p className="text-sm font-semibold text-[var(--nq-text-primary)]">
+                          NeuroQuant
+                        </p>
+                        <p className="text-[11px] text-[var(--nq-text-secondary)]">
+                          Portfolio ops
+                        </p>
                       </div>
                       <ChevronDown className="h-4 w-4 text-[var(--nq-text-secondary)]" />
                     </button>
@@ -227,16 +295,31 @@ export function Layout({ children }: LayoutProps): JSX.Element {
           </header>
 
           <main className="relative flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="mx-auto max-w-[1600px]">
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="mx-auto max-w-[1600px]"
+            >
               {children}
             </motion.div>
           </main>
         </div>
       </div>
 
-      <Drawer open={mobileSidebarOpen} onOpenChange={(open) => (open ? openMobileSidebar() : closeMobileSidebar())} title="Navigation" side="left">
+      <Drawer
+        open={mobileSidebarOpen}
+        onOpenChange={(open) =>
+          open ? openMobileSidebar() : closeMobileSidebar()
+        }
+        title="Navigation"
+        side="left"
+      >
         <div className="space-y-5">
-          <Input placeholder="Search markets or pages" className="h-11 bg-white/[0.06]" />
+          <Input
+            placeholder="Search markets or pages"
+            className="h-11 bg-white/[0.06]"
+          />
           <Sidebar onNavigate={closeMobileSidebar} />
         </div>
       </Drawer>

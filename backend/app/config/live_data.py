@@ -1,6 +1,7 @@
 # Live data provider configuration
 
-from pydantic import BaseSettings, Field
+from pydantic_settings import BaseSettings
+from pydantic import Field
 
 class LiveDataSettings(BaseSettings):
     """Configuration for live market data source selection and rate limiting."""
