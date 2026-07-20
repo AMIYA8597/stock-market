@@ -549,7 +549,7 @@ async def get_movers(
             else:  # momentum / default
                 generated.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
 
-            result = generated[:20]
+            result = generated
         except Exception as e:
             logger.error(f"Error fetching batch movers: {e}")
             result = []

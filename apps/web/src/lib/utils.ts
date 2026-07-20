@@ -1,5 +1,5 @@
-import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
 
 /**
  * Combine classnames with Tailwind CSS merge support
@@ -41,7 +41,7 @@ export function isNullish(value: unknown): value is null | undefined {
  * Check if value is an object
  */
 export function isObject(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object';
+  return value !== null && typeof value === "object";
 }
 
 /**
@@ -49,7 +49,7 @@ export function isObject(value: unknown): value is Record<string, unknown> {
  */
 export function isEmpty(value: unknown): boolean {
   if (isNullish(value)) return true;
-  if (typeof value === 'string') return value.length === 0;
+  if (typeof value === "string") return value.length === 0;
   if (Array.isArray(value)) return value.length === 0;
   if (value instanceof Map || value instanceof Set) return value.size === 0;
   if (isObject(value)) return Object.keys(value).length === 0;
