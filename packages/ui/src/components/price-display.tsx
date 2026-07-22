@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn, formatPrice, formatPercent, getPriceColor, getDirectionArrow } from "../lib/utils";
 
-interface PriceDisplayProps {
+export interface PriceDisplayProps {
   price: number;
   change?: number;
   changePercent?: number;

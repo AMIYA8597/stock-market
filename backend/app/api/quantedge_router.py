@@ -42,9 +42,9 @@ async def get_ohlc(
 ):
     """Retrieve historical candle bars (OHLCV) for a given symbol and interval."""
     # Leverage existing market_data history getter logic
-    from app.api.v1.market_data import get_history
+    from app.api.v1.market import get_history
     try:
-        res = await get_history(symbol=symbol, interval=timeframe, period=period, db=db)
+        res = await get_history(symbol=symbol, interval=timeframe, period=period)
         return res
     except Exception as e:
         logger.error(f"Error fetching OHLC data for {symbol}: {e}")

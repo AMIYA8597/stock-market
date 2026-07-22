@@ -12,31 +12,31 @@ class ModelAccuracyMetrics(BaseModel):
 
     model_name: str
     period_days: int = 21
-    precision: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    recall: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    f1_score: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    directional_accuracy: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    p50_rmse: Decimal = Field(..., ge=0, decimal_places=6)
-    winkler_coverage: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+    precision: Decimal = Field(..., ge=0, le=1)
+    recall: Decimal = Field(..., ge=0, le=1)
+    f1_score: Decimal = Field(..., ge=0, le=1)
+    directional_accuracy: Decimal = Field(..., ge=0, le=1)
+    p50_rmse: Decimal = Field(..., ge=0)
+    winkler_coverage: Decimal = Field(..., ge=0, le=1)
     as_of_date: datetime
 
 
 class ModelAccuracyResponse(BaseModel):
     """GET /monitor/model-accuracy response."""
     models: list[ModelAccuracyMetrics]
-    benchmark_ensemble_accuracy: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+    benchmark_ensemble_accuracy: Decimal = Field(..., ge=0, le=1)
     generated_at: datetime
 
 
 class DriftDistribution(BaseModel):
     """Residual distribution statistics."""
-    mean: Decimal = Field(..., decimal_places=6)
-    std: Decimal = Field(..., ge=0, decimal_places=6)
-    p25: Decimal = Field(..., decimal_places=6)
-    p50: Decimal = Field(..., decimal_places=6)
-    p75: Decimal = Field(..., decimal_places=6)
-    min: Decimal = Field(..., decimal_places=6)
-    max: Decimal = Field(..., decimal_places=6)
+    mean: Decimal = Field(...)
+    std: Decimal = Field(..., ge=0)
+    p25: Decimal = Field(...)
+    p50: Decimal = Field(...)
+    p75: Decimal = Field(...)
+    min: Decimal = Field(...)
+    max: Decimal = Field(...)
 
 
 class ModelDriftMetrics(BaseModel):
@@ -44,10 +44,10 @@ class ModelDriftMetrics(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     model_name: str
-    adwin_p_value: Decimal = Field(..., ge=0, le=1, decimal_places=6)
+    adwin_p_value: Decimal = Field(..., ge=0, le=1)
     drift_detected: bool
-    ks_statistic: Decimal = Field(..., ge=0, le=1, decimal_places=6)
-    ks_p_value: Decimal = Field(..., ge=0, le=1, decimal_places=6)
+    ks_statistic: Decimal = Field(..., ge=0, le=1)
+    ks_p_value: Decimal = Field(..., ge=0, le=1)
     residual_distribution_now: DriftDistribution
     residual_distribution_baseline: DriftDistribution
     days_since_retrain: int
@@ -65,11 +65,11 @@ class DriftResponse(BaseModel):
 class EnsembleWeightPoint(BaseModel):
     """Single point in ensemble weights history."""
     date: datetime
-    tft: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    hmm_garch: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    gnn: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    lstm_attn: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    xgboost: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+    tft: Decimal = Field(..., ge=0, le=1)
+    hmm_garch: Decimal = Field(..., ge=0, le=1)
+    gnn: Decimal = Field(..., ge=0, le=1)
+    lstm_attn: Decimal = Field(..., ge=0, le=1)
+    xgboost: Decimal = Field(..., ge=0, le=1)
 
 
 class WeightsHistoryResponse(BaseModel):

@@ -25,6 +25,8 @@ export function useChartInstance({
     const element = containerRef.current;
     if (!element) return;
 
+    console.log(`[HOP 7 useChartInstance] element w=${element.clientWidth}, h=${element.clientHeight}, mainChartHeight=${mainChartHeight}`);
+
     const chartInstance = createChart(element, {
       autoSize: true,
       ...(mainChartHeight ? { height: mainChartHeight } : {}),
@@ -71,8 +73,19 @@ export function useChartInstance({
     chartInstance.isAlive = true;
     setChart(chartInstance);
 
+    const resizeObserver = new ResizeObserver((entries) => {
+      if (!chartInstance.isAlive) return;
+      const { width, height } = entries[0]?.contentRect || { width: 0, height: 0 };
+      if (width > 0 && height > 0) {
+        chartInstance.applyOptions({ width, height: mainChartHeight ?? height });
+      }
+    });
+
+    resizeObserver.observe(element);
+
     return () => {
       chartInstance.isAlive = false;
+      resizeObserver.disconnect();
       try { chartInstance.remove(); } catch { /* already removed */ }
       setChart(null);
     };

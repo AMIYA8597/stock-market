@@ -1,5 +1,5 @@
 # backend/app/services/alert_engine.py
-"""Alert Engine – evaluates stock predictions and user alerts from MongoDB to fire updates."""
+"""Alert Engine – evaluates stock predictions and user alerts from SQLAlchemy to fire updates."""
 
 from __future__ import annotations
 
@@ -7,7 +7,10 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from app.database.mongodb import get_mongo_db
+from sqlalchemy import select, and_
+from app.database.connection import async_session_factory
+from app.models.alert import Alert
+from app.models.asset import Symbol
 from app.services.prediction_engine import get_full_prediction
 
 logger = logging.getLogger(__name__)
@@ -69,16 +72,19 @@ async def check_and_fire_alerts(symbols: list[str], websocket_manager) -> list[d
             except Exception as e:
                 logger.warning(f"Failed to broadcast system alert: {e}")
 
-    # 3. Check user subscriptions in MongoDB
-    database = get_mongo_db()
-    if database is not None:
-        try:
-            # Query all active, untriggered alert subscriptions
-            cursor = database.alerts.find({"enabled": True, "is_triggered": False})
-            active_alerts = await cursor.to_list(length=200)
+    # 3. Check user subscriptions in SQLAlchemy
+    try:
+        async with async_session_factory() as db:
+            stmt = select(Alert, Symbol.ticker).outerjoin(Symbol, Alert.symbol_id == Symbol.id).where(
+                and_(Alert.enabled == True, Alert.is_triggered == False)
+            )
+            res = await db.execute(stmt)
+            active_alerts = res.all()
 
-            for alert in active_alerts:
-                alert_symbol = alert["symbol"].upper()
+            for alert_obj, ticker in active_alerts:
+                if not ticker:
+                    continue
+                alert_symbol = ticker.upper()
                 if alert_symbol not in prediction_map:
                     continue
 
@@ -87,8 +93,8 @@ async def check_and_fire_alerts(symbols: list[str], websocket_manager) -> list[d
                 regime_state = pred["ensemble"]["regime"]["regime"].upper()
                 direction = pred["ensemble"]["direction"].upper()
 
-                alert_type = alert["alert_type"]
-                threshold = float(alert["threshold"])
+                alert_type = alert_obj.alert_type
+                threshold = float(alert_obj.threshold) if alert_obj.threshold is not None else 0.0
                 trigger_fired = False
                 trigger_message = ""
 
@@ -98,30 +104,23 @@ async def check_and_fire_alerts(symbols: list[str], websocket_manager) -> list[d
                 elif alert_type == "PRICE_BELOW" and price < threshold:
                     trigger_fired = True
                     trigger_message = f"PRICE ALERT: {alert_symbol} crossed BELOW ₹{threshold:.2f} (Current: ₹{price:.2f})"
-                elif alert_type == "REGIME_CHANGE" and regime_state == alert.get("name", "").upper():
+                elif alert_type == "REGIME_CHANGE" and regime_state == alert_obj.name.upper():
                     trigger_fired = True
                     trigger_message = f"REGIME ALERT: {alert_symbol} regime shifted to {regime_state}"
-                elif alert_type == "SIGNAL_CHANGE" and direction == alert.get("name", "").upper():
+                elif alert_type == "SIGNAL_CHANGE" and direction == alert_obj.name.upper():
                     trigger_fired = True
                     trigger_message = f"SIGNAL ALERT: {alert_symbol} generated signal {direction}"
 
                 if trigger_fired:
-                    # Update status in MongoDB
-                    await database.alerts.update_one(
-                        {"_id": alert["_id"]},
-                        {
-                            "$set": {
-                                "is_triggered": True,
-                                "triggered_at": datetime.now(UTC),
-                                "updated_at": datetime.now(UTC)
-                            }
-                        }
-                    )
+                    # Update status in SQLAlchemy
+                    alert_obj.is_triggered = True
+                    alert_obj.triggered_at = datetime.now(UTC)
+                    await db.commit()
 
                     user_alert_payload = {
                         "type": "user_alert",
-                        "alert_id": alert["_id"],
-                        "user_id": alert["user_id"],
+                        "alert_id": str(alert_obj.id),
+                        "user_id": str(alert_obj.user_id),
                         "symbol": alert_symbol,
                         "alert_type": alert_type,
                         "threshold": threshold,
@@ -138,7 +137,7 @@ async def check_and_fire_alerts(symbols: list[str], websocket_manager) -> list[d
                     except Exception as b_err:
                         logger.warning(f"Failed to broadcast user alert: {b_err}")
 
-        except Exception as mongo_err:
-            logger.warning(f"Error querying active user alert subscriptions in MongoDB: {mongo_err}")
+    except Exception as sqla_err:
+        logger.warning(f"Error querying active user alert subscriptions in SQLAlchemy: {sqla_err}")
 
     return fired

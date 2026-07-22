@@ -21,9 +21,11 @@ logger = logging.getLogger(__name__)
 
 class PaperTradingService:
     @staticmethod
-    async def get_or_create_wallet(db: AsyncSession, user_id: str) -> PaperWallet:
+    async def get_or_create_wallet(db: AsyncSession, user_id: str, for_update: bool = False) -> PaperWallet:
         """Fetch the paper trading wallet for the user, or create one if missing."""
         stmt = select(PaperWallet).where(PaperWallet.user_id == user_id)
+        if for_update:
+            stmt = stmt.with_for_update()
         res = await db.execute(stmt)
         wallet = res.scalar_one_or_none()
 
@@ -135,7 +137,7 @@ class PaperTradingService:
         if quantity <= 0:
             raise ValueError("Quantity must be greater than zero")
 
-        wallet = await PaperTradingService.get_or_create_wallet(db, user_id)
+        wallet = await PaperTradingService.get_or_create_wallet(db, user_id, for_update=True)
 
         # Reset daily realized loss if date has changed
         if wallet.last_reset_date != date.today():
@@ -162,6 +164,17 @@ class PaperTradingService:
 
         if side == "BUY" and order_value > Decimal("0.5") * total_equity:
             raise ValueError(f"Order size ₹{order_value:,.2f} exceeds risk limit of 50% of portfolio equity (₹{Decimal('0.5') * total_equity:,.2f})")
+
+        # VaR Margin Verification
+        var_percentage = Decimal("0.09")
+        elm_percentage = Decimal("0.035")
+        leverage_multiplier = Decimal("0.0")
+        margin_req = order_value * (var_percentage + elm_percentage) * (Decimal("1.0") - leverage_multiplier)
+
+        if side == "BUY":
+            available_balance = wallet.balance - wallet.locked_margin
+            if margin_req > available_balance:
+                raise ValueError(f"Margin requirement (₹{margin_req:,.2f}) exceeds available balance (₹{available_balance:,.2f})")
 
         qty_dec = Decimal(str(quantity))
 
@@ -212,6 +225,8 @@ class PaperTradingService:
                 net_amount=gross_amount if side == "BUY" else -gross_amount,
                 signal_relation=signal_relation,
             )
+            if side == "BUY":
+                wallet.locked_margin += gross_amount # Lock full amount for limit buy
             db.add(new_order)
             await db.commit()
             await db.refresh(new_order)
@@ -326,7 +341,7 @@ class PaperTradingService:
                 continue
 
             # Execute the order
-            wallet = await PaperTradingService.get_or_create_wallet(db, order.user_id)
+            wallet = await PaperTradingService.get_or_create_wallet(db, order.user_id, for_update=True)
             qty_dec = order.quantity
             limit_price_dec = order.limit_price
 
@@ -344,10 +359,12 @@ class PaperTradingService:
 
                 if wallet.balance < net_amount:
                     order.status = "CANCELLED"
+                    wallet.locked_margin -= gross_amount
                     logger.warning(f"Cancelled limit BUY order {order.id} due to insufficient funds.")
                     continue
 
                 wallet.balance -= net_amount
+                wallet.locked_margin -= gross_amount
 
                 # Update position
                 pos_stmt = select(PaperPosition).where(PaperPosition.user_id == order.user_id, PaperPosition.symbol == sym)

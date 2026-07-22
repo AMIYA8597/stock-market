@@ -3,7 +3,7 @@
 import type { LucideIcon } from "lucide-react";
 import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { cn } from "@/lib/utils";
 import { Card, CardDescription, CardHeader, CardTitle } from "./Card";
 
@@ -20,7 +20,7 @@ export function StatCard({ title, value, delta, trend, icon: Icon }: StatCardPro
   const gradient = trend === "up" ? "from-[rgba(0,230,118,0.28)] to-[rgba(0,230,118,0.06)]" : trend === "down" ? "from-[rgba(255,59,92,0.28)] to-[rgba(255,59,92,0.06)]" : "from-white/18 to-white/6";
 
   return (
-    <Card interactive className="p-5">
+    <Card className="p-5">
       <CardHeader className="mb-4">
         <div className="flex items-start gap-3">
           <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))] p-3 text-[var(--nq-accent)] shadow-[0_14px_24px_rgba(0,0,0,0.18)]">

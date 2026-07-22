@@ -43,7 +43,7 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.events import shutdown_events, startup_events
 from app.core.logging import setup_logging
-from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware, parse_rate_limit
+from app.core.middleware import SecurityHeadersMiddleware
 from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
 from app.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
@@ -98,8 +98,18 @@ if settings.ALLOWED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
 app.add_middleware(SecurityHeadersMiddleware)
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+
+# Setup SlowAPI Limiter
+limiter = Limiter(key_func=get_remote_address, default_limits=[settings.DEFAULT_RATE_LIMIT])
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 if settings.RATE_LIMIT_ENABLED:
-    app.add_middleware(RateLimitMiddleware, config=parse_rate_limit(settings.DEFAULT_RATE_LIMIT))
+    app.add_middleware(SlowAPIMiddleware)
 
 
 def _error_code_for_status(status_code: int) -> ErrorCode:

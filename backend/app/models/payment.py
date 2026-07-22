@@ -27,3 +27,35 @@ class PaymentTransaction(Base):
     metadata_json: Mapped[str | None] = mapped_column(String(1200), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Plan(Base):
+    __tablename__ = "plans"
+    id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    price_inr: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    interval: Mapped[str] = mapped_column(String(20), default="monthly")
+    features_json: Mapped[str] = mapped_column(String(1200), default="[]")
+    is_active: Mapped[bool] = mapped_column(default=True)
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), ForeignKey("users.id"))
+    plan_id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), ForeignKey("plans.id"))
+    status: Mapped[str] = mapped_column(String(50), default="active")
+    current_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class WalletLedger(Base):
+    __tablename__ = "wallet_ledger"
+    id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), ForeignKey("users.id"))
+    amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
+    transaction_type: Mapped[str] = mapped_column(String(20), default="credit") # credit or debit
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    reference_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

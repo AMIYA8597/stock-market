@@ -19,6 +19,7 @@ import type {
   RegimeData,
   CorrelationNode,
   CorrelationEdge,
+  SignalResponse,
 } from "@neuroquant/types";
 import { getApiBaseUrl } from "@/lib/runtime-config";
 
@@ -261,13 +262,16 @@ export const notificationsApi = {
 };
 
 export const paymentsApi = {
+  getPlans(): Promise<{ items: Array<{ id: string; name: string; description: string; price_inr: string; features: string[] }> }> {
+    return fetchApi("/payments/plans");
+  },
   methods(): Promise<{ methods: Array<{ code: string; min_amount: string; max_amount: string; enabled: boolean }> }> {
     return fetchApi("/payments/methods");
   },
   balance(): Promise<{ currency: string; wallet_balance: string }> {
     return fetchApi("/payments/balance");
   },
-  async createIntent(data: { amount: number; method: "UPI" | "CARD" | "NETBANKING"; currency?: string; description?: string }): Promise<{ intent_id: string; provider_ref: string; amount: string; status: string }> {
+  async createIntent(data: { amount: number; method: "UPI" | "CARD" | "NETBANKING" | "RAZORPAY"; currency?: string; description?: string }): Promise<{ intent_id: string; provider_ref: string; amount: string; status: string }> {
     const idem = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `idem-${Date.now()}`;
     return fetchApi("/payments/intents", {
       method: "POST",
@@ -275,13 +279,13 @@ export const paymentsApi = {
       body: JSON.stringify(data),
     });
   },
-  confirmIntent(intent_id: string, confirmation_code: string): Promise<{ intent_id: string; status: string; credited_amount: string; completed_at: string | null }> {
+  confirmIntent(intent_id: string, razorpay_payment_id: string): Promise<{ intent_id: string; status: string; credited_amount: string; completed_at: string | null }> {
     return fetchApi("/payments/confirm", {
       method: "POST",
-      body: JSON.stringify({ intent_id, confirmation_code }),
+      body: JSON.stringify({ intent_id, razorpay_payment_id }),
     });
   },
-  history(limit = 20): Promise<{ items: Array<{ intent_id: string; amount: string; currency: string; method: string; status: string; created_at: string }>; total: number }> {
+    history(limit = 20): Promise<{ items: Array<{ id: string; amount: string; type: string; description: string; created_at: string }>; total: number }> {
     return fetchApi(`/payments/history?limit=${limit}`);
   },
 };
@@ -338,8 +342,8 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
       ? (raw.data as UnknownRecord[])
       : [];
 
-  const bars = rawBars.map((bar) => {
-    let timestamp = new Date().toISOString();
+  let validBars = rawBars.map((bar) => {
+    let timestamp = "";
     if (typeof bar.timestamp === "string") {
       timestamp = bar.timestamp;
     } else if (typeof bar.time === "string") {
@@ -350,8 +354,12 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
       timestamp = new Date(bar.timestamp * 1000).toISOString();
     }
 
+    const tsNum = new Date(timestamp).getTime();
+    if (isNaN(tsNum)) return null;
+
     return {
       timestamp,
+      _tsNum: tsNum, // temporary numeric value for sorting and deduplication
       open: parseNumber(bar.open),
       high: parseNumber(bar.high),
       low: parseNumber(bar.low),
@@ -362,13 +370,26 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
           ? parseNumber(bar.adjusted_close)
           : undefined,
     };
-  });
+  }).filter((b) => b !== null);
+
+  // Sort ascending by time
+  validBars.sort((a, b) => a._tsNum - b._tsNum);
+
+  // De-duplicate exactly identical timestamps (last one wins)
+  const dedupedMap = new Map();
+  for (const b of validBars) {
+    dedupedMap.set(b._tsNum, b);
+  }
+  
+  const finalBars = Array.from(dedupedMap.values()).map(({ _tsNum, ...rest }) => rest);
+
+  console.log(`[HOP 4 api-client] count_out=${finalBars.length}, first=${finalBars[0]?.timestamp}, last=${finalBars[finalBars.length - 1]?.timestamp}`);
 
   return {
     symbol: typeof raw.symbol === "string" ? raw.symbol : "UNKNOWN",
     interval: typeof raw.interval === "string" ? raw.interval : "1d",
-    bars,
-    count: parseNumber(raw.count, bars.length),
+    bars: finalBars,
+    count: parseNumber(raw.count, finalBars.length),
     source: typeof raw.source === "string" ? raw.source : undefined,
   };
 };
@@ -404,6 +425,14 @@ export const marketApi = {
     return settled
       .filter((result): result is PromiseFulfilledResult<Quote> => result.status === "fulfilled")
       .map((result) => result.value);
+  },
+
+  getUniverse(): Promise<{ universe: string[] }> {
+    return fetchApi<{ universe: string[] }>("/market/universe");
+  },
+
+  getStatus(): Promise<{ is_open: boolean; current_time: string; market_timezone: string; regular_market_hours: string }> {
+    return fetchApi<{ is_open: boolean; current_time: string; market_timezone: string; regular_market_hours: string }>("/market/status");
   },
 };
 
@@ -521,6 +550,11 @@ export const portfolioApi = {
     return fetchApi(`/portfolio/${id}`);
   },
 
+  getPerformance(): Promise<{series: any[], start_date: string, end_date: string, total_return: number, benchmark_return: number, excess_return: number}> {
+    return fetchApi("/portfolio/performance");
+  },
+
+
   create(data: {
     name: string;
     description?: string;
@@ -543,7 +577,7 @@ export const portfolioApi = {
   },
 
   getRisk(portfolioId: number): Promise<RiskMetrics> {
-    return fetchApi(`/portfolio/${portfolioId}/risk`);
+    return fetchApi(`/portfolio/risk-metrics`);
   },
 
   optimize(data: OptimizeRequest): Promise<OptimizeResponse> {
@@ -679,20 +713,18 @@ export const alertsApi = {
 
 export const researchApi = {
   generateReport(symbol: string): Promise<ResearchReport> {
-    return fetchApi(`/predictions/research/${encodeURIComponent(symbol)}`, {
-      method: "POST",
-    });
+    return fetchApi(`/research/factor-exposure?symbol=${encodeURIComponent(symbol)}`);
   },
 
-  getRegime(symbol: string): Promise<RegimeData> {
-    return fetchApi(`/predictions/regime/${encodeURIComponent(symbol)}`);
+  getRegime(): Promise<RegimeData> {
+    return fetchApi(`/regime/current`);
   },
 
   getCorrelationGraph(): Promise<{
     nodes: CorrelationNode[];
     edges: CorrelationEdge[];
   }> {
-    return fetchApi("/predictions/correlation-graph");
+    return fetchApi("/research/correlation-graph");
   },
 };
 
@@ -762,6 +794,12 @@ export const paperTradingApi = {
   },
   cancelOrder(orderId: string, symbol: string): Promise<unknown> {
     return fetchApi<unknown>(`/paper-trade/cancel/${encodeURIComponent(orderId)}?symbol=${encodeURIComponent(symbol)}`, { method: "POST" });
+  },
+};
+
+export const signalsApi = {
+  getSignal(symbol: string): Promise<SignalResponse> {
+    return fetchApi(`/signals/${encodeURIComponent(symbol)}`);
   },
 };
 

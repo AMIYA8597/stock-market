@@ -34,7 +34,7 @@ settings = get_settings()
 # ─── Singleton Pool ───────────────────────────────────────────────────────
 
 class InMemoryPubSub:
-    """Mock pubsub subscription implementation for offline/fallback mode."""
+    """Offline pubsub subscription implementation for fallback mode."""
     def __init__(self, cache: InMemoryCache):
         self.cache = cache
         self.subscribed_channels: set[str] = set()
@@ -64,7 +64,7 @@ class InMemoryPubSub:
 
 
 class InMemoryCache:
-    """Simple in‑memory mock implementing a subset of Redis methods used in the app.
+    """Simple in‑memory fallback implementing a subset of Redis methods used in the app.
     Stores values in a dict; methods are async for compatibility.
     """
     def __init__(self):

@@ -73,9 +73,12 @@ class Settings(BaseSettings):
         default="",
         description="Sync database URL (for Alembic migrations)"
     )
+    # DEPRECATED: MongoDB is being removed in Phase 2 (defect #25).
+    # All payment/wallet state is migrating to PostgreSQL/SQLite.
+    # Keep field so env files with MONGODB_URL= don't cause ValidationError.
     MONGODB_URL: str = Field(
         default="",
-        description="MongoDB connection URL"
+        description="[DEPRECATED] MongoDB URL — being removed in Phase 2"
     )
     DATABASE_POOL_SIZE: int = Field(
         default=20,
@@ -245,6 +248,19 @@ class Settings(BaseSettings):
         default="",
         description="Finnhub API key for intraday and company data"
     )
+    # Angel One SmartAPI credentials (free tier)
+    ANGEL_ONE_CLIENT_ID: str = Field(
+        default="",
+        description="Angel One SmartAPI client ID"
+    )
+    ANGEL_ONE_CLIENT_SECRET: str = Field(
+        default="",
+        description="Angel One SmartAPI client secret"
+    )
+    ANGEL_ONE_TOTP_SECRET: str = Field(
+        default="",
+        description="Base32 TOTP secret for Angel One login"
+    )
 
     # ─── Upstox Integration ───────────────────────────────────────────────
     UPSTOX_API_KEY: str = Field(
@@ -302,6 +318,20 @@ class Settings(BaseSettings):
     FORECAST_HORIZON: int = Field(
         default=5,
         description="Number of days ahead to forecast"
+    )
+
+    # ─── Live Data ────────────────────────────────────────────────────────
+    LIVE_DATA_PROVIDER: str = Field(
+        default="yfinance",
+        description="Default live data provider"
+    )
+    LIVE_DATA_YFINANCE_RATE_LIMIT: int = Field(
+        default=5,
+        description="Requests per minute for yfinance (if applicable)"
+    )
+    LIVE_DATA_ALPHA_VANTAGE_RATE_LIMIT: int = Field(
+        default=5,
+        description="Requests per minute for Alpha Vantage"
     )
 
     # ─── Feature Engineering ──────────────────────────────────────────────
@@ -413,6 +443,14 @@ class Settings(BaseSettings):
         default=30,
         description="Password reset token validity window in minutes"
     )
+    RAZORPAY_KEY_ID: str = Field(
+        default="rzp_test_replace_me",
+        description="Razorpay API Key ID"
+    )
+    RAZORPAY_KEY_SECRET: str = Field(
+        default="replace_me",
+        description="Razorpay API Key Secret"
+    )
 
     # ─── WebSocket ────────────────────────────────────────────────────────
     WEBSOCKET_HEARTBEAT_INTERVAL: int = Field(
@@ -421,7 +459,13 @@ class Settings(BaseSettings):
     )
     WEBSOCKET_MAX_CONNECTIONS_PER_USER: int = Field(
         default=5,
-        description="Maximum concurrent WebSocket connections per user"
+        description="Maximum concurrent WebSocket connections per user",
+    )
+
+    # ─── WebSocket URL ────────────────────────────────────────────────────────
+    WEBSOCKET_URL: str = Field(
+        default="ws://localhost:8000/ws",
+        description="WebSocket URL for clients (can be overridden via env var)",
     )
 
     # ─── Rate Limiting ────────────────────────────────────────────────────
@@ -440,6 +484,15 @@ class Settings(BaseSettings):
     PREMIUM_RATE_LIMIT: str = Field(
         default="1000/minute",
         description="Rate limit for premium tier users"
+    )
+
+    MAX_TRACKED_SYMBOLS: int = Field(
+        default=100,
+        description="Maximum number of symbols to track in free tier (adjustable)."
+    )
+    BATCH_SIZE: int = Field(
+        default=20,
+        description="Number of symbols per batch request to yfinance."
     )
 
     @model_validator(mode="after")

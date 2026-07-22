@@ -1,10 +1,17 @@
 "use client";
 
-import { Bell, CheckCheck, Clock3 } from 'lucide-react';
-import { Badge } from '@/components/ui/Badge';
-import { Dropdown, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator, DropdownTrigger } from '@/components/ui/Dropdown';
-import { useSignalAlerts } from '@/hooks/useSignalAlerts';
-import { safeFormat } from '@/lib/formatters';
+import { Bell, CheckCheck, Clock3 } from "lucide-react";
+import { Badge } from "@neuroquant/ui";
+import {
+  Dropdown,
+  DropdownContent,
+  DropdownItem,
+  DropdownLabel,
+  DropdownSeparator,
+  DropdownTrigger,
+} from "@neuroquant/ui";
+import { useSignalAlerts } from "@/hooks/useSignalAlerts";
+import { safeFormat } from "@/lib/formatters";
 
 export function NotificationMenu(): JSX.Element {
   const { alerts, unread, markAllRead } = useSignalAlerts();
@@ -14,13 +21,13 @@ export function NotificationMenu(): JSX.Element {
     try {
       const diffMs = Date.now() - new Date(timestampStr).getTime();
       const diffMin = Math.max(0, Math.floor(diffMs / 60000));
-      if (diffMin < 1) return 'Just now';
+      if (diffMin < 1) return "Just now";
       if (diffMin < 60) return `${diffMin}m`;
       const diffHr = Math.floor(diffMin / 60);
       if (diffHr < 24) return `${diffHr}h`;
       return `${Math.floor(diffHr / 24)}d`;
     } catch {
-      return '';
+      return "";
     }
   };
 
@@ -38,7 +45,9 @@ export function NotificationMenu(): JSX.Element {
       </DropdownTrigger>
       <DropdownContent align="end" className="w-[340px]">
         <div className="flex items-center justify-between px-3 py-2">
-          <DropdownLabel className="p-0 text-[10px]">Notifications</DropdownLabel>
+          <DropdownLabel className="p-0 text-[10px]">
+            Notifications
+          </DropdownLabel>
           {unread > 0 && (
             <button
               onClick={markAllRead}
@@ -61,9 +70,13 @@ export function NotificationMenu(): JSX.Element {
               maximumFractionDigits: 2,
             });
             const formattedConf = safeFormat(item.confidence * 100, 1) + "%";
-            const patternsStr = item.patterns_detected && item.patterns_detected.length > 0
-              ? item.patterns_detected.slice(0, 2).map(p => p.replace("CDL_", "").replace(/_/g, " ")).join(", ")
-              : "-";
+            const patternsStr =
+              item.patterns_detected && item.patterns_detected.length > 0
+                ? item.patterns_detected
+                    .slice(0, 2)
+                    .map((p) => p.replace("CDL_", "").replace(/_/g, " "))
+                    .join(", ")
+                : "-";
 
             return (
               <DropdownItem
@@ -76,12 +89,14 @@ export function NotificationMenu(): JSX.Element {
                     <p className="text-xs font-semibold text-[var(--ds-text-primary)]">
                       {item.symbol}
                     </p>
-                    <span className="text-[10px] text-[var(--ds-text-muted)] shrink-0">{timeAgo} ago</span>
+                    <span className="text-[10px] text-[var(--ds-text-muted)] shrink-0">
+                      {timeAgo} ago
+                    </span>
                   </div>
                   <p className="text-[11px] text-[var(--ds-text-secondary)] mt-0.5 line-clamp-2">
                     {item.message}
                   </p>
-                  
+
                   <div className="mt-1 flex flex-wrap gap-1">
                     <span className="text-[8px] text-[var(--nq-text-muted)] font-mono uppercase bg-[rgba(255,255,255,0.04)] px-1 rounded">
                       Patterns: {patternsStr}
@@ -90,7 +105,10 @@ export function NotificationMenu(): JSX.Element {
 
                   <div className="mt-1.5 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Badge variant={badgeVariant} className="text-[9px] px-1.5 py-0">
+                      <Badge
+                        variant={badgeVariant}
+                        className="text-[9px] px-1.5 py-0"
+                      >
                         {item.direction.replace("_", " ")}
                       </Badge>
                       <span className="text-[10px] font-mono text-[var(--ds-text-muted)]">

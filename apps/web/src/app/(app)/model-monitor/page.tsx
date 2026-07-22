@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { Button } from "@/components/dashboard/premium";
 import { contractsApi, type DriftItem, type EnsembleWeightPoint, type ModelAccuracyItem } from "@/lib/contracts-api";
 import { ChartCard, SimpleBarChart, type SimpleBarPoint, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
