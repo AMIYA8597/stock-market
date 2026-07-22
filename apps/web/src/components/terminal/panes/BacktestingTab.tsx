@@ -144,24 +144,24 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
       </div>
 
       {backtestStats && (
-        <div className="mt-1 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-2">
+        <div className="mt-1 rounded border border-[var(--nq-border)] glass-panel fade-in p-2">
           <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold mb-1">
             Backtest Performance Results
           </p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-5 font-mono text-[10px]">
-            <div className="rounded bg-[rgba(255,255,255,0.02)] p-1.5 border border-[var(--nq-border)]">
+            <div className="rounded glass-panel glow-hover p-1.5 border border-[var(--nq-border)]" style={{ animationDelay: '50ms' }}>
               <p className="text-[8px] text-[var(--nq-text-muted)] uppercase">Win Rate</p>
               <p className="text-xs font-bold text-[var(--nq-accent-green)]">
                 {safeFormat(backtestStats.win_rate * 100, 1)}%
               </p>
             </div>
-            <div className="rounded bg-[rgba(255,255,255,0.02)] p-1.5 border border-[var(--nq-border)]">
+            <div className="rounded glass-panel glow-hover p-1.5 border border-[var(--nq-border)]" style={{ animationDelay: '100ms' }}>
               <p className="text-[8px] text-[var(--nq-text-muted)] uppercase">Total Trades</p>
               <p className="text-xs font-bold text-[var(--nq-text-primary)]">
                 {backtestStats.total_trades}
               </p>
             </div>
-            <div className="rounded bg-[rgba(255,255,255,0.02)] p-1.5 border border-[var(--nq-border)]">
+            <div className="rounded glass-panel glow-hover p-1.5 border border-[var(--nq-border)]" style={{ animationDelay: '150ms' }}>
               <p className="text-[8px] text-[var(--nq-text-muted)] uppercase">Profit Factor</p>
               <p
                 className={`text-xs font-bold ${
@@ -171,13 +171,13 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
                 {safeFormat(backtestStats.profit_factor, 2)}
               </p>
             </div>
-            <div className="rounded bg-[rgba(255,255,255,0.02)] p-1.5 border border-[var(--nq-border)]">
+            <div className="rounded glass-panel glow-hover p-1.5 border border-[var(--nq-border)]" style={{ animationDelay: '200ms' }}>
               <p className="text-[8px] text-[var(--nq-text-muted)] uppercase">Max Drawdown</p>
               <p className="text-xs font-bold text-[#FF3B5C]">
                 {safeFormat(backtestStats.max_drawdown, 1)}%
               </p>
             </div>
-            <div className="rounded bg-[rgba(255,255,255,0.02)] p-1.5 border border-[var(--nq-border)] col-span-2 sm:col-span-1">
+            <div className="rounded glass-panel glow-hover p-1.5 border border-[var(--nq-border)] col-span-2 sm:col-span-1" style={{ animationDelay: '250ms' }}>
               <p className="text-[8px] text-[var(--nq-text-muted)] uppercase">Sharpe Ratio</p>
               <p className="text-xs font-bold text-[var(--nq-text-primary)]">
                 {safeFormat(backtestStats.sharpe_ratio, 2)}

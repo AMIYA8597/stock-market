@@ -53,7 +53,7 @@ export default function AIAssistantTab({ signal }: AIAssistantTabProps): JSX.Ele
 
   return (
     <div className="flex flex-col gap-2 h-full min-h-[190px]">
-      <div className="flex-1 overflow-y-auto max-h-[145px] border border-[var(--nq-border)] bg-[rgba(0,0,0,0.20)] rounded p-2 flex flex-col gap-1.5 ds-scrollable font-mono text-[9px] sm:text-[10px]">
+      <div className="flex-1 overflow-y-auto max-h-[145px] border border-[var(--nq-border)] glass-panel glow-hover bg-[rgba(0,0,0,0.20)] rounded p-2 flex flex-col gap-1.5 ds-scrollable font-mono text-[9px] sm:text-[10px]">
         {chatMessages.map((msg, idx) => (
           <div
             key={idx}
@@ -79,7 +79,7 @@ export default function AIAssistantTab({ signal }: AIAssistantTabProps): JSX.Ele
             if (e.key === "Enter") handleSendChat();
           }}
           placeholder="Ask AI Assistant about predictive signals, regime state..."
-          className="flex-1 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
+          className="flex-1 rounded border border-[var(--nq-border)] glass-panel focus:glow-hover bg-[var(--nq-bg-card)] px-3 py-1 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono transition-all duration-300"
         />
         <button
           type="button"

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { Card, CardHeader, CardTitle } from "@/components/dashboard/premium";
 import {
   contractsApi,
@@ -20,6 +20,10 @@ import {
 import { safeFormat } from "@/lib/formatters";
 
 import { SYMBOLS as DEFAULT_SYMBOLS } from "@/shared/constants/symbols";
+import { useEntitlements } from "@/hooks/useEntitlements";
+import { Lock } from "lucide-react";
+import { Button } from "@neuroquant/ui";
+
 const cleanWsUrl = getWsBaseUrl();
 
 function toPercent(value: unknown): string {
@@ -34,6 +38,9 @@ function toPercent(value: unknown): string {
 }
 
 export default function BacktestLabPage(): JSX.Element {
+  const { subscription, loading: subLoading } = useEntitlements();
+  const hasPro = subscription?.plan?.name === "Pro" || subscription?.plan?.name === "Institutional";
+
   const [strategyName, setStrategyName] =
     useState<BacktestRunRequest["strategy_name"]>("ml_alpha");
   const [symbolsInput, setSymbolsInput] = useState<string>(
@@ -216,6 +223,10 @@ export default function BacktestLabPage(): JSX.Element {
   }, [job?.job_id, running]);
 
   async function onRunBacktest(): Promise<void> {
+    if (!hasPro) {
+      setError("Pro subscription required to run backtests.");
+      return;
+    }
     if (symbols.length === 0) {
       setError("Provide at least one symbol.");
       return;
@@ -256,15 +267,37 @@ export default function BacktestLabPage(): JSX.Element {
     }
   }
 
+  if (subLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        Loading entitlements...
+      </div>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(1000px_500px_at_0%_0%,rgba(0,212,245,0.12),transparent_45%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.10),transparent_45%),var(--nq-bg-base)] p-4 text-[var(--nq-text-primary)] sm:p-6">
+    <main className="min-h-screen bg-[radial-gradient(1000px_500px_at_0%_0%,rgba(0,212,245,0.12),transparent_45%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.10),transparent_45%),var(--nq-bg-base)] p-4 text-[var(--nq-text-primary)] sm:p-6 relative">
+      {!hasPro && (
+        <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center">
+          <div className="bg-[var(--ds-surface-1)]/90 border border-white/10 rounded-xl p-8 max-w-md shadow-2xl">
+            <Lock className="w-12 h-12 text-[var(--nq-accent)] mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">Pro Feature</h2>
+            <p className="text-[var(--nq-text-secondary)] mb-6 text-sm">
+              Research-grade backtesting requires a Pro subscription. Upgrade to access walk-forward and Monte Carlo simulations.
+            </p>
+            <Link href="/payments">
+              <Button className="w-full">Upgrade to Pro</Button>
+            </Link>
+          </div>
+        </div>
+      )}
       <motion.section
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
         className="mb-6 grid gap-4 xl:grid-cols-[1.2fr_0.8fr]"
       >
-        <Card glow className="relative overflow-hidden px-6 py-6 sm:px-8">
+        <Card className="relative overflow-hidden px-6 py-6 sm:px-8">
           <div className="absolute inset-0 bg-[radial-gradient(1000px_420px_at_0%_0%,rgba(0,212,245,0.16),transparent_45%),radial-gradient(800px_360px_at_100%_0%,rgba(139,92,246,0.14),transparent_45%)]" />
           <div className="relative space-y-4">
             <div className="flex flex-wrap items-center gap-2">

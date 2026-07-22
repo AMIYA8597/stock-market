@@ -2,16 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { Camera, KeyRound, MapPin, User2 } from "lucide-react";
-import { Avatar } from "@/components/ui/Avatar";
-import { Button } from "@/components/ui/Button";
+import { Avatar } from "@neuroquant/ui";
+import { Button } from "@neuroquant/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
+} from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
 import { usersApi } from "@/lib/api-client";
 import { useToastStore } from "@/stores/toast-store";
 

@@ -11,14 +11,15 @@ from app.api.v1 import (
     blog,
     explain,
     health,
+    intelligence,
     journal,
     market,
-    market_data,
     models,
     notifications,
+    ohlcv,
     paper_trading,
     payments,
-    # ai,  # AI module disabled (missing)
+    ai,
     portfolio,
     predictions,
     regime,
@@ -42,7 +43,7 @@ router.include_router(blog.router)
 router.include_router(notifications.router)
 router.include_router(payments.router)
 
-router.include_router(market_data.router, prefix="/global", tags=["market-data"])
+
 router.include_router(market.router)
 router.include_router(websocket_url.router)
 
@@ -56,10 +57,12 @@ router.include_router(trading.router)
 router.include_router(screener.router)
 router.include_router(alerts.router)
 router.include_router(models.router)
+router.include_router(intelligence.router)
+router.include_router(ohlcv.router)
 router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])
 router.include_router(journal.router)
 
-# router.include_router(ai.router)  # Disabled due to missing module
+router.include_router(ai.router)
 
 @router.get("/version", tags=["system"])
 async def get_version() -> dict[str, str]:

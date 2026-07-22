@@ -10,7 +10,7 @@ const tabs = [
   { href: "/research/correlation-graph", label: "Correlation" },
   { href: "/research/factor-exposure", label: "Factor Exposure" },
   { href: "/research/model-performance", label: "Model Performance" },
-  { href: "/research/explainability/RELIANCE.NS", label: "Explainability" },
+  { href: "/research/explainability", label: "Explainability" },
 ];
 
 export default function ResearchLayout({ children }: { children: ReactNode }): JSX.Element {

@@ -85,7 +85,7 @@ class YFinanceSource(MarketDataSource):
                 logger.info(f"Direct HTTP v8 API fallback succeeded for {symbol}")
             except Exception as e:
                 logger.error(f"Direct HTTP v8 fallback failed for {symbol}: {e}")
-                return []
+                raise DataSourceError(f"yfinance completely failed for {symbol}: {e}")
 
         frame = frame.reset_index()
         datetime_col = "Datetime" if "Datetime" in frame.columns else ("Date" if "Date" in frame.columns else "time")

@@ -320,6 +320,20 @@ class Settings(BaseSettings):
         description="Number of days ahead to forecast"
     )
 
+    # ─── Live Data ────────────────────────────────────────────────────────
+    LIVE_DATA_PROVIDER: str = Field(
+        default="yfinance",
+        description="Default live data provider"
+    )
+    LIVE_DATA_YFINANCE_RATE_LIMIT: int = Field(
+        default=5,
+        description="Requests per minute for yfinance (if applicable)"
+    )
+    LIVE_DATA_ALPHA_VANTAGE_RATE_LIMIT: int = Field(
+        default=5,
+        description="Requests per minute for Alpha Vantage"
+    )
+
     # ─── Feature Engineering ──────────────────────────────────────────────
     FEATURE_NORMALIZATION_METHOD: str = Field(
         default="robust",
@@ -428,6 +442,14 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
         default=30,
         description="Password reset token validity window in minutes"
+    )
+    RAZORPAY_KEY_ID: str = Field(
+        default="rzp_test_replace_me",
+        description="Razorpay API Key ID"
+    )
+    RAZORPAY_KEY_SECRET: str = Field(
+        default="replace_me",
+        description="Razorpay API Key Secret"
     )
 
     # ─── WebSocket ────────────────────────────────────────────────────────

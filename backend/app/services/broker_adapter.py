@@ -64,7 +64,7 @@ class BrokerAdapter:
                 )
 
                 # Fetch order detail
-                order_id = str(order.id) if hasattr(order, "id") else "MOCK_PAPER_ID"
+                order_id = str(order.id) if hasattr(order, "id") else "PAPER_ORDER_ID"
                 status = str(order.status) if hasattr(order, "status") else "FILLED"
                 price_filled = float(order.price) if hasattr(order, "price") else (limit_price or 0.0)
 

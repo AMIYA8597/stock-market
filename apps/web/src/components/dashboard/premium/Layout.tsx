@@ -15,8 +15,8 @@ import {
   Sun,
   UserCircle2,
 } from "lucide-react";
-import { Avatar } from "@/components/ui/Avatar";
-import { Badge } from "@/components/ui/Badge";
+import { Avatar } from "@neuroquant/ui";
+import { Badge } from "@neuroquant/ui";
 import {
   Dropdown,
   DropdownContent,
@@ -24,10 +24,10 @@ import {
   DropdownLabel,
   DropdownSeparator,
   DropdownTrigger,
-} from "@/components/ui/Dropdown";
-import { Drawer } from "@/components/ui/Drawer";
-import { Input } from "@/components/ui/Input";
-import { Tooltip } from "@/components/ui/Tooltip";
+} from "@neuroquant/ui";
+import { Drawer } from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
+import { Tooltip } from "@neuroquant/ui";
 import { NotificationMenu } from "@/modules/notifications/NotificationMenu";
 import { ToastViewport } from "@/modules/notifications/ToastViewport";
 import { CommandPalette } from "@/components/layout/command-palette";
@@ -197,8 +197,7 @@ export function Layout({ children }: LayoutProps): JSX.Element {
                 size="sm"
                 className="hidden md:inline-flex"
                 onClick={openCommandPalette}
-                leftIcon={<Command className="h-4 w-4" />}
-              >
+                >
                 Command
               </Button>
 

@@ -26,6 +26,56 @@ from app.schemas.portfolio import (
 router = APIRouter(tags=["portfolio"])
 
 
+
+@router.get(
+    "",
+    summary="List portfolios for user",
+)
+async def list_portfolios(
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+):
+    holdings = await get_holdings(current_user=current_user, db=db)
+    
+    return [
+        {
+            "id": 1,
+            "user_id": current_user.get("sub") if current_user else "test-user-id",
+            "name": "Main Portfolio",
+            "description": "Primary trading portfolio",
+            "initial_capital": 100000.0,
+            "total_value": float(holdings.portfolio_value),
+            "cash_balance": float(holdings.cash_balance),
+            "holdings": [h.model_dump() for h in holdings.holdings],
+            "created_at": holdings.timestamp.isoformat(),
+            "updated_at": holdings.timestamp.isoformat(),
+        }
+    ]
+
+@router.get(
+    "/{portfolio_id}",
+    summary="Get portfolio by ID",
+)
+async def get_portfolio(
+    portfolio_id: int,
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+):
+    holdings = await get_holdings(current_user=current_user, db=db)
+    
+    return {
+        "id": portfolio_id,
+        "user_id": current_user.get("sub") if current_user else "test-user-id",
+        "name": "Main Portfolio",
+        "description": "Primary trading portfolio",
+        "initial_capital": 100000.0,
+        "total_value": float(holdings.portfolio_value),
+        "cash_balance": float(holdings.cash_balance),
+        "holdings": [h.model_dump() for h in holdings.holdings],
+        "created_at": holdings.timestamp.isoformat(),
+        "updated_at": holdings.timestamp.isoformat(),
+    }
+
 @router.get(
     "/holdings",
     response_model=HoldingsResponse,
@@ -33,88 +83,114 @@ router = APIRouter(tags=["portfolio"])
 )
 async def get_holdings(
     current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
 ) -> HoldingsResponse:
-    """Return a holdings snapshot for the authenticated user (backed by MongoDB if configured)."""
+    """Return a holdings snapshot for the authenticated user."""
     try:
-        from app.core.config import get_settings
-        settings = get_settings()
+        from app.models.portfolio import PortfolioHolding
+        from app.models.asset import Symbol
+        from app.models.payment import PaymentTransaction
+        from app.models.transactions import Transaction
+        from sqlalchemy import select, and_, func
+        from app.services.market_data_service import MarketDataService
+        import uuid
 
-        # Resolve user ID (fallback to test-user-id if unauthenticated)
-        user_id = current_user.get("sub") if current_user else "test-user-id"
-
-        if settings.MONGODB_URL:
-            from app.database.mongodb import get_live_price, get_mongo_db, mongo_get_portfolio
-            if get_mongo_db() is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
-                )
-
-            portfolio = await mongo_get_portfolio(user_id)
-            if portfolio is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
-                )
-            cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
-            mongo_holdings = portfolio.get("holdings", [])
-
-            holdings = []
-            total_invested = Decimal("0.0")
-            total_current_value = Decimal("0.0")
-
-            for h in mongo_holdings:
-                symbol = h["symbol"].upper()
-                qty = Decimal(str(h["quantity"]))
-                avg_p = Decimal(str(h["avg_price"]))
-
-                # Fetch live price
-                curr_p_val = await get_live_price(symbol)
-                if curr_p_val is None:
-                    curr_p = avg_p if avg_p > 0 else Decimal("0.0")
-                else:
-                    curr_p = Decimal(str(curr_p_val))
-
-                unrealized_pnl = (curr_p - avg_p) * qty
-                unrealized_pnl_pct = (curr_p - avg_p) / avg_p if avg_p > 0 else Decimal("0.0")
-
-                holdings.append(
-                    HoldingData(
-                        symbol=symbol,
-                        quantity=qty,
-                        avg_price=avg_p,
-                        current_price=curr_p,
-                        unrealized_pnl=unrealized_pnl.quantize(Decimal("0.01")),
-                        unrealized_pnl_pct=unrealized_pnl_pct.quantize(Decimal("0.0001")),
-                        in_position_days=h.get("in_position_days", 1),
-                    )
-                )
-                total_invested += avg_p * qty
-                total_current_value += curr_p * qty
-
-            total_unrealized_pnl = total_current_value - total_invested
-            total_unrealized_pnl_pct = total_unrealized_pnl / total_invested if total_invested > 0 else Decimal("0.0")
-            portfolio_value = total_current_value + cash_balance
-
+        user_id_str = current_user.get("sub") if current_user else "test-user-id"
+        
+        def _empty_holdings(cb: Decimal = Decimal("0.00")) -> HoldingsResponse:
             return HoldingsResponse(
-                holdings=holdings,
-                total_invested=total_invested.quantize(Decimal("0.01")),
-                total_current_value=total_current_value.quantize(Decimal("0.01")),
-                total_unrealized_pnl=total_unrealized_pnl.quantize(Decimal("0.01")),
-                total_unrealized_pnl_pct=total_unrealized_pnl_pct.quantize(Decimal("0.0001")),
-                cash_balance=cash_balance.quantize(Decimal("0.01")),
-                portfolio_value=portfolio_value.quantize(Decimal("0.01")),
+                holdings=[],
+                total_invested=Decimal("0.00"),
+                total_current_value=Decimal("0.00"),
+                total_unrealized_pnl=Decimal("0.00"),
+                total_unrealized_pnl_pct=Decimal("0.0000"),
+                cash_balance=cb,
+                portfolio_value=cb,
                 timestamp=datetime.now(UTC),
             )
 
+        try:
+            uid = uuid.UUID(user_id_str)
+        except ValueError:
+            return _empty_holdings()
+            
+        deposits_res = await db.execute(
+            select(func.coalesce(func.sum(PaymentTransaction.amount), 0))
+            .where(and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded"))
+        )
+        total_deposits = Decimal(str(deposits_res.scalar_one()))
+        
+        buys_res = await db.execute(
+            select(func.coalesce(func.sum(Transaction.net_amount), 0))
+            .where(and_(Transaction.user_id == uid, Transaction.type == "BUY"))
+        )
+        total_buys = Decimal(str(buys_res.scalar_one()))
+        
+        sells_res = await db.execute(
+            select(func.coalesce(func.sum(Transaction.net_amount), 0))
+            .where(and_(Transaction.user_id == uid, Transaction.type == "SELL"))
+        )
+        total_sells = Decimal(str(sells_res.scalar_one()))
+        
+        cash_balance = (total_deposits - total_buys + total_sells).quantize(Decimal("0.01"))
+        
+        stmt = (
+            select(PortfolioHolding, Symbol.ticker)
+            .join(Symbol, PortfolioHolding.symbol_id == Symbol.id)
+            .where(PortfolioHolding.user_id == uid)
+        )
+        res = await db.execute(stmt)
+        rows = res.all()
+        
+        if not rows:
+            return _empty_holdings(cash_balance)
+            
+        holdings = []
+        total_invested = Decimal("0.0")
+        total_current_value = Decimal("0.0")
+        
+        for holding_row, ticker in rows:
+            qty = holding_row.quantity
+            avg_p = holding_row.avg_buy_price
+            
+            try:
+                quote = await MarketDataService.get_quote(ticker)
+                curr_p_val = quote.get("price")
+                curr_p = Decimal(str(curr_p_val)) if curr_p_val else avg_p
+            except Exception:
+                curr_p = avg_p
+                
+            unrealized_pnl = (curr_p - avg_p) * qty
+            unrealized_pnl_pct = (curr_p - avg_p) / avg_p if avg_p > 0 else Decimal("0.0")
+            
+            days_held = max(1, (datetime.now(UTC) - holding_row.updated_at.replace(tzinfo=UTC)).days)
+            
+            holdings.append(
+                HoldingData(
+                    symbol=ticker.upper(),
+                    quantity=qty,
+                    avg_price=avg_p.quantize(Decimal("0.01")),
+                    current_price=curr_p.quantize(Decimal("0.01")),
+                    unrealized_pnl=unrealized_pnl.quantize(Decimal("0.01")),
+                    unrealized_pnl_pct=unrealized_pnl_pct.quantize(Decimal("0.0001")),
+                    in_position_days=days_held,
+                )
+            )
+            total_invested += avg_p * qty
+            total_current_value += curr_p * qty
+            
+        total_unrealized_pnl = total_current_value - total_invested
+        total_unrealized_pnl_pct = total_unrealized_pnl / total_invested if total_invested > 0 else Decimal("0.0")
+        portfolio_value = total_current_value + cash_balance
+
         return HoldingsResponse(
-            holdings=[],
-            total_invested=Decimal("0.00"),
-            total_current_value=Decimal("0.00"),
-            total_unrealized_pnl=Decimal("0.00"),
-            total_unrealized_pnl_pct=Decimal("0.0000"),
-            cash_balance=Decimal("0.00"),
-            portfolio_value=Decimal("0.00"),
+            holdings=holdings,
+            total_invested=total_invested.quantize(Decimal("0.01")),
+            total_current_value=total_current_value.quantize(Decimal("0.01")),
+            total_unrealized_pnl=total_unrealized_pnl.quantize(Decimal("0.01")),
+            total_unrealized_pnl_pct=total_unrealized_pnl_pct.quantize(Decimal("0.0001")),
+            cash_balance=cash_balance,
+            portfolio_value=portfolio_value.quantize(Decimal("0.01")),
             timestamp=datetime.now(UTC),
         )
     except HTTPException:
@@ -137,13 +213,18 @@ async def get_holdings(
 async def post_transaction(
     request: TransactionRequest,
     current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
 ) -> TransactionResponse:
-    """Record a transaction and update cash/holdings inside MongoDB if configured."""
+    """Record a transaction and update cash/holdings inside SQLAlchemy."""
     try:
-        from app.core.config import get_settings
-        settings = get_settings()
+        from app.models.portfolio import PortfolioHolding
+        from app.models.asset import Symbol
+        from app.models.payment import PaymentTransaction
+        from app.models.transactions import Transaction
+        from sqlalchemy import select, and_, func
+        import uuid
 
-        user_id = current_user.get("sub") if current_user else "test-user-id"
+        user_id_str = current_user.get("sub") if current_user else "test-user-id"
         tx_type = request.type.upper()
 
         if tx_type not in {"BUY", "SELL"}:
@@ -155,7 +236,22 @@ async def post_transaction(
                 ).dict(),
             )
 
-        gross = request.quantity * request.price
+        try:
+            uid = uuid.UUID(user_id_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=401,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.UNAUTHORIZED,
+                    message="Invalid user ID format.",
+                ).dict(),
+            )
+
+        symbol_ticker = request.symbol.upper().strip()
+        qty = Decimal(str(request.quantity))
+        price = Decimal(str(request.price))
+
+        gross = qty * price
         brokerage = request.brokerage or Decimal("0")
         stt = request.stt or Decimal("0")
 
@@ -164,124 +260,118 @@ async def post_transaction(
         else:
             net_amount = gross - brokerage - stt
 
-        if settings.MONGODB_URL:
-            from app.database.mongodb import (
-                get_mongo_db,
-                mongo_add_transaction,
-                mongo_get_portfolio,
-                mongo_save_portfolio,
+        # Resolve symbol_id
+        symbol_res = await db.execute(select(Symbol).where(Symbol.ticker == symbol_ticker))
+        symbol_row = symbol_res.scalar_one_or_none()
+        if symbol_row is None:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message=f"Symbol {symbol_ticker} not found in database.",
+                ).dict(),
             )
-            if get_mongo_db() is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
-                )
+        symbol_id = symbol_row.id
 
-            # Fetch and lock/update portfolio in Mongo
-            portfolio = await mongo_get_portfolio(user_id)
-            if portfolio is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"message": "Portfolio service temporarily unavailable. Database connection failed."},
-                )
-            cash_balance = Decimal(str(portfolio.get("cash_balance", 1000000.0)))
-            holdings = portfolio.get("holdings", [])
+        # Lock holding record
+        holding_res = await db.execute(
+            select(PortfolioHolding)
+            .where(and_(PortfolioHolding.user_id == uid, PortfolioHolding.symbol_id == symbol_id))
+            .with_for_update()
+        )
+        holding = holding_res.scalar_one_or_none()
 
-            symbol = request.symbol.upper().strip()
-            qty = Decimal(str(request.quantity))
-            price = Decimal(str(request.price))
-
-            if tx_type == "BUY":
-                if cash_balance < net_amount:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=ErrorResponse.create(
-                            code=ErrorCode.VALIDATION_ERROR,
-                            message=f"Insufficient cash balance. Required: {net_amount}, Available: {cash_balance}",
-                        ).dict(),
-                    )
-                new_cash = cash_balance - net_amount
-
-                # Update holding
-                found = False
-                for h in holdings:
-                    if h["symbol"].upper() == symbol:
-                        h_qty = Decimal(str(h["quantity"]))
-                        h_avg = Decimal(str(h["avg_price"]))
-
-                        new_qty = h_qty + qty
-                        new_avg = (h_qty * h_avg + qty * price) / new_qty
-
-                        h["quantity"] = float(new_qty)
-                        h["avg_price"] = float(new_avg)
-                        found = True
-                        break
-                if not found:
-                    holdings.append({
-                        "symbol": symbol,
-                        "quantity": float(qty),
-                        "avg_price": float(price),
-                        "in_position_days": 1
-                    })
-            else:  # SELL
-                # Check holding
-                found_h = None
-                for h in holdings:
-                    if h["symbol"].upper() == symbol:
-                        found_h = h
-                        break
-                if not found_h or Decimal(str(found_h["quantity"])) < qty:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=ErrorResponse.create(
-                            code=ErrorCode.VALIDATION_ERROR,
-                            message=f"Insufficient holdings of {symbol} to sell.",
-                        ).dict(),
-                    )
-                new_cash = cash_balance + net_amount
-
-                h_qty = Decimal(str(found_h["quantity"]))
-                new_qty = h_qty - qty
-                if new_qty <= 0:
-                    holdings.remove(found_h)
-                else:
-                    found_h["quantity"] = float(new_qty)
-
-            # Save transaction & portfolio in Mongo
-            res_save = await mongo_save_portfolio(user_id, float(new_cash), holdings)
-            if res_save is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"message": "Failed to update portfolio holdings. Database connection failed."},
-                )
-            tx = await mongo_add_transaction(user_id, symbol, tx_type, float(qty), float(price), float(net_amount))
-            if tx is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail={"message": "Failed to record transaction. Database connection failed."},
-                )
-
-            return TransactionResponse(
-                transaction_id=str(tx["transaction_id"]),
-                symbol=symbol,
-                type=tx_type,
-                quantity=qty,
-                price=price,
-                net_amount=net_amount.quantize(Decimal("0.01")),
-                timestamp=tx["timestamp"],
-                portfolio_updated=True,
+        if tx_type == "BUY":
+            deposits_res = await db.execute(
+                select(func.coalesce(func.sum(PaymentTransaction.amount), 0))
+                .where(and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded"))
             )
+            total_deposits = Decimal(str(deposits_res.scalar_one()))
+            buys_res = await db.execute(
+                select(func.coalesce(func.sum(Transaction.net_amount), 0))
+                .where(and_(Transaction.user_id == uid, Transaction.type == "BUY"))
+            )
+            total_buys = Decimal(str(buys_res.scalar_one()))
+            sells_res = await db.execute(
+                select(func.coalesce(func.sum(Transaction.net_amount), 0))
+                .where(and_(Transaction.user_id == uid, Transaction.type == "SELL"))
+            )
+            total_sells = Decimal(str(sells_res.scalar_one()))
+            
+            cash_balance = total_deposits - total_buys + total_sells
+            
+            if cash_balance < net_amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail=ErrorResponse.create(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=f"Insufficient cash balance. Required: {net_amount}, Available: {cash_balance}",
+                    ).dict(),
+                )
 
-        raise HTTPException(
-            status_code=503,
-            detail=ErrorResponse.create(
-                code=ErrorCode.SERVICE_UNAVAILABLE,
-                message="Portfolio trading requires MongoDB local storage to be configured.",
-            ).dict(),
+            if holding is None:
+                holding = PortfolioHolding(
+                    user_id=uid,
+                    symbol_id=symbol_id,
+                    quantity=qty,
+                    avg_buy_price=price,
+                    realized_pnl=Decimal("0.00")
+                )
+                db.add(holding)
+            else:
+                old_qty = holding.quantity
+                old_avg = holding.avg_buy_price
+                new_qty = old_qty + qty
+                new_avg = ((old_qty * old_avg) + (qty * price)) / new_qty
+                holding.quantity = new_qty
+                holding.avg_buy_price = new_avg
+
+        else:  # SELL
+            if holding is None or holding.quantity < qty:
+                raise HTTPException(
+                    status_code=400,
+                    detail=ErrorResponse.create(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=f"Insufficient holdings of {symbol_ticker} to sell.",
+                    ).dict(),
+                )
+            
+            realized_profit = (price - holding.avg_buy_price) * qty
+            holding.quantity -= qty
+            holding.realized_pnl += realized_profit
+            
+            if holding.quantity <= 0:
+                await db.delete(holding)
+
+        # Record transaction
+        tx = Transaction(
+            user_id=uid,
+            symbol_id=symbol_id,
+            type=tx_type,
+            quantity=qty,
+            price=price,
+            brokerage=brokerage,
+            stt=stt,
+            net_amount=net_amount
+        )
+        db.add(tx)
+        
+        await db.commit()
+
+        return TransactionResponse(
+            transaction_id=str(tx.id),
+            symbol=symbol_ticker,
+            type=tx_type,
+            quantity=qty,
+            price=price,
+            net_amount=net_amount.quantize(Decimal("0.01")),
+            timestamp=datetime.now(UTC),
+            portfolio_updated=True,
         )
     except HTTPException:
         raise
     except Exception as exc:
+        await db.rollback()
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(
@@ -298,37 +388,133 @@ async def post_transaction(
 )
 async def get_performance(
     current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
 ) -> PerformanceResponse:
-    """Return deterministic portfolio performance series and summary metrics."""
+    """Return time-series portfolio performance based on live data and current holdings."""
     try:
-        _ = current_user
-
+        from app.services.market_data_service import MarketDataService
+        
+        holdings_res = await get_holdings(current_user=current_user, db=db)
         now = datetime.now(UTC)
         points: list[PerformancePoint] = []
-        base_port = Decimal("1000000.00")
-        base_bench = Decimal("1000000.00")
+        
+        # Determine base portfolio values for the last 10 days
+        # We will fetch 1mo history for each holding
+        histories = {}
+        for h in holdings_res.holdings:
+            try:
+                hist = await MarketDataService.get_history(h.symbol, interval="1d", period="1mo")
+                histories[h.symbol] = hist
+            except Exception:
+                pass
+                
+        try:
+            bench_hist = await MarketDataService.get_history("^NSEI", interval="1d", period="1mo")
+        except Exception:
+            bench_hist = []
 
-        for day in range(10):
-            date = now - timedelta(days=(9 - day))
-            port_value = base_port + Decimal(day * 1750)
-            bench_value = base_bench + Decimal(day * 1325)
+        # Find the last 10 valid market dates from the benchmark
+        # Extract dates as strings to match
+        bench_dates = []
+        bench_prices = {}
+        for b in bench_hist:
+            d = b.get("timestamp") or b.get("time")
+            if d:
+                # Parse timestamp safely
+                try:
+                    if isinstance(d, (int, float)):
+                        dt = datetime.fromtimestamp(d, tz=UTC)
+                    else:
+                        dt = datetime.fromisoformat(str(d).replace('Z', '+00:00'))
+                    date_str = dt.strftime("%Y-%m-%d")
+                    bench_dates.append((dt, date_str, float(b.get("close", 0))))
+                    bench_prices[date_str] = float(b.get("close", 0))
+                except Exception:
+                    pass
+                
+        bench_dates.sort(key=lambda x: x[0])
+        last_10 = bench_dates[-10:] if bench_dates else []
+        
+        if not last_10:
+            # Fallback to generated dates if benchmark fails
+            for day in range(10):
+                d = now - timedelta(days=(9 - day))
+                date_str = d.strftime("%Y-%m-%d")
+                last_10.append((d, date_str, 100000.0))
+        
+        # Build price maps for each symbol
+        sym_prices = {}
+        for sym, hist in histories.items():
+            sym_prices[sym] = {}
+            for b in hist:
+                d = b.get("timestamp") or b.get("time")
+                if d:
+                    try:
+                        if isinstance(d, (int, float)):
+                            dt = datetime.fromtimestamp(d, tz=UTC)
+                        else:
+                            dt = datetime.fromisoformat(str(d).replace('Z', '+00:00'))
+                        date_str = dt.strftime("%Y-%m-%d")
+                        sym_prices[sym][date_str] = float(b.get("close", 0))
+                    except Exception:
+                        pass
+
+        cash = float(holdings_res.cash_balance)
+        base_bench = Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
+        
+        # Calculate daily values
+        for i, (dt, date_str, bench_val) in enumerate(last_10):
+            port_val = cash
+            for h in holdings_res.holdings:
+                # get price for date, fallback to avg price if not found
+                price = sym_prices.get(h.symbol, {}).get(date_str)
+                if not price:
+                    # find closest previous price
+                    prev_prices = [p for d_str, p in sym_prices.get(h.symbol, {}).items() if d_str <= date_str]
+                    if prev_prices:
+                        price = prev_prices[-1]
+                    else:
+                        price = float(h.avg_price)
+                        
+                port_val += float(h.quantity) * price
+                
+            port_val_dec = Decimal(str(port_val)).quantize(Decimal("0.01"))
+            bench_val_dec = Decimal(str(bench_val)).quantize(Decimal("0.01"))
+            
+            # compute returns
+            d_ret = Decimal("0.0")
+            b_ret = Decimal("0.0")
+            if i > 0:
+                prev_p = points[-1].portfolio_value
+                if prev_p > 0:
+                    d_ret = (port_val_dec - prev_p) / prev_p
+                prev_b = points[-1].benchmark_value
+                if prev_b > 0:
+                    b_ret = (bench_val_dec - prev_b) / prev_b
+                    
             points.append(
                 PerformancePoint(
-                    date=date,
-                    portfolio_value=port_value,
-                    benchmark_value=bench_value,
-                    daily_return=Decimal("0.0017"),
-                    benchmark_return=Decimal("0.0013"),
+                    date=dt,
+                    portfolio_value=port_val_dec,
+                    benchmark_value=bench_val_dec,
+                    daily_return=d_ret.quantize(Decimal("0.0001")),
+                    benchmark_return=b_ret.quantize(Decimal("0.0001")),
                 )
             )
 
-        total_return = (points[-1].portfolio_value / points[0].portfolio_value) - Decimal("1")
-        benchmark_return = (points[-1].benchmark_value / points[0].benchmark_value) - Decimal("1")
+        if points:
+            start_p = points[0].portfolio_value
+            start_b = points[0].benchmark_value
+            total_return = (points[-1].portfolio_value / start_p) - Decimal("1") if start_p > 0 else Decimal("0")
+            benchmark_return = (points[-1].benchmark_value / start_b) - Decimal("1") if start_b > 0 else Decimal("0")
+        else:
+            total_return = Decimal("0")
+            benchmark_return = Decimal("0")
 
         return PerformanceResponse(
             series=points,
-            start_date=points[0].date,
-            end_date=points[-1].date,
+            start_date=points[0].date if points else now,
+            end_date=points[-1].date if points else now,
             total_return=total_return.quantize(Decimal("0.0001")),
             benchmark_return=benchmark_return.quantize(Decimal("0.0001")),
             excess_return=(total_return - benchmark_return).quantize(Decimal("0.0001")),
@@ -338,7 +524,7 @@ async def get_performance(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message="Failed to fetch performance data.",
+                message=f"Failed to fetch performance data: {str(exc)}",
             ).dict(),
         ) from exc
 
@@ -489,27 +675,10 @@ async def post_optimize(
         if missing_tickers:
             universe = [t for t in universe if t not in missing_tickers]
             if not universe:
-                # No valid tickers with historical data; return placeholder optimization result.
-                placeholder_frontier = [
-                    EfficientFrontierPoint(
-                        expected_return=Decimal("0.0"),
-                        expected_volatility=Decimal("0.0"),
-                        sharpe_ratio=Decimal("0.0"),
-                        weights={},
-                    )
-                    for _ in range(100)
-                ]
-                return OptimizationResponse(
-                    method=request.method,
-                    weights=[],
-                    expected_return=Decimal("0.0"),
-                    expected_volatility=Decimal("0.0"),
-                    sharpe_ratio=Decimal("0.0"),
-                    efficient_frontier=placeholder_frontier,
-                    hrp_dendrogram=None,
-                    bl_posterior_returns=None,
-                    excluded_tickers=excluded_tickers,
-                    timestamp=datetime.now(UTC),
+                # No valid tickers with historical data; return error.
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Insufficient historical data to optimize portfolio."
                 )
 
         # Build aligned matrices

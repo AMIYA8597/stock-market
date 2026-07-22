@@ -179,6 +179,18 @@ async def execute_backtest_job(job_id: UUID) -> None:
         excluded_tickers.extend([{"ticker": t, "reason": "no price data"} for t in missing_data_tickers])
         universe = [t for t in universe if t in tickers_with_data]
 
+    if not universe:
+        async with async_session_factory() as session:
+            stmt = select(BacktestJob).where(BacktestJob.id == job_id)
+            db_res = await session.execute(stmt)
+            job = db_res.scalar_one_or_none()
+            if job:
+                job.status = "FAILED"
+                job.results = {"error": "None of the requested symbols have historical data for the selected period."}
+                await session.commit()
+        BACKTEST_PROGRESS[job_str] = 100
+        return
+
     # Reconstruct aligned matrices
     T = len(dates)
     N = len(universe)
@@ -192,12 +204,17 @@ async def execute_backtest_job(job_id: UUID) -> None:
             s = signals_dict.get((d, ticker))
             k = kelly_dict.get((d, ticker))
 
-            if p is None:
-                raise HTTPException(status_code=400, detail=f"Missing price data for ticker {ticker} on date {d}")
-            if s is None:
-                raise HTTPException(status_code=400, detail=f"Missing signal data for ticker {ticker} on date {d}")
-            if k is None:
-                raise HTTPException(status_code=400, detail=f"Missing kelly data for ticker {ticker} on date {d}")
+            if p is None or s is None or k is None:
+                async with async_session_factory() as session:
+                    stmt = select(BacktestJob).where(BacktestJob.id == job_id)
+                    db_res = await session.execute(stmt)
+                    job = db_res.scalar_one_or_none()
+                    if job:
+                        job.status = "FAILED"
+                        job.results = {"error": f"Missing data for ticker {ticker} on date {d}"}
+                        await session.commit()
+                BACKTEST_PROGRESS[job_str] = 100
+                return
 
             prices_mat[i, j] = p
             signals_mat[i, j] = s

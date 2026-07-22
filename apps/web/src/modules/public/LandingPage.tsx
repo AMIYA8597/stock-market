@@ -24,19 +24,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/dashboard/premium";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { cn } from "@/lib/utils";
 
 const metrics = [
-  { label: "Active users", value: "24.6K", delta: "+12.4%", icon: Users },
-  {
-    label: "Prediction accuracy",
-    value: "91.8%",
-    delta: "+3.1%",
-    icon: TrendingUp,
-  },
-  { label: "Live signals", value: "17", delta: "+4 today", icon: CircuitBoard },
-  { label: "Latency", value: "42ms", delta: "-11ms", icon: RefreshCw },
+  { label: "Active users", value: "--", delta: "Growing community", icon: Users },
+  { label: "Prediction accuracy", value: "--", delta: "Backtest verified", icon: TrendingUp },
+  { label: "Live signals", value: "--", delta: "Generated daily", icon: CircuitBoard },
+  { label: "Latency", value: "--", delta: "Inference time", icon: RefreshCw },
 ];
 
 const features = [
@@ -66,26 +61,7 @@ const features = [
   },
 ];
 
-const testimonials = [
-  {
-    quote:
-      "It feels like the product team, quant desk, and risk team finally agreed on one interface language.",
-    name: "Priya Mehta",
-    role: "Head of Quant, Arclight Capital",
-  },
-  {
-    quote:
-      "The interface has the clarity of Linear and the polish of Stripe, but tuned for live markets.",
-    name: "Jonathan Cruz",
-    role: "CTO, Selene Funds",
-  },
-  {
-    quote:
-      "Every surface feels intentional. The system reads as production-ready, not like a demo.",
-    name: "Aarav Kapoor",
-    role: "Lead PM, Orion Trading",
-  },
-];
+const testimonials: any[] = [];
 
 const steps = [
   {
@@ -105,22 +81,7 @@ const steps = [
   },
 ];
 
-const marketCards = [
-  {
-    symbol: "NIFTY 50",
-    value: "22,118",
-    change: "+1.4%",
-    tone: "bull" as const,
-  },
-  { symbol: "NASDAQ", value: "17,920", change: "+2.2%", tone: "bull" as const },
-  { symbol: "BTC", value: "$68,420", change: "+4.8%", tone: "bull" as const },
-  {
-    symbol: "USD/INR",
-    value: "83.12",
-    change: "-0.3%",
-    tone: "neutral" as const,
-  },
-];
+const marketCards: any[] = [];
 
 function MiniMetric({
   label,
@@ -171,8 +132,7 @@ export function LandingPage(): JSX.Element {
               <Link href="/register">
                 <Button
                   size="lg"
-                  rightIcon={<ArrowRight className="h-4 w-4" />}
-                >
+                  >
                   Start free trial
                 </Button>
               </Link>
@@ -237,7 +197,7 @@ export function LandingPage(): JSX.Element {
             transition={{ duration: 0.45, delay: 0.12 }}
             className="relative"
           >
-            <Card interactive glow className="relative overflow-hidden p-0">
+            <Card className="relative overflow-hidden p-0">
               <div className="absolute inset-0 bg-[radial-gradient(1100px_600px_at_10%_0%,rgba(0,212,245,0.16),transparent_45%),radial-gradient(900px_500px_at_100%_0%,rgba(139,92,246,0.14),transparent_45%)]" />
               <div className="relative p-6">
                 <div className="flex items-center justify-between gap-4">
@@ -339,7 +299,7 @@ export function LandingPage(): JSX.Element {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35, delay: index * 0.05 }}
                 >
-                  <Card interactive className="h-full">
+                  <Card className="h-full">
                     <CardHeader className="mb-4">
                       <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.03))] p-3 text-[var(--nq-accent)]">
                         <Icon className="h-5 w-5" />
@@ -457,7 +417,7 @@ export function LandingPage(): JSX.Element {
 
       <section className="px-4 pb-20 sm:px-6 lg:px-8 lg:pb-24">
         <div className="mx-auto max-w-[1600px]">
-          <Card glow className="overflow-hidden">
+          <Card className="overflow-hidden">
             <div className="grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
@@ -474,7 +434,7 @@ export function LandingPage(): JSX.Element {
                 </p>
                 <div className="mt-7 flex flex-wrap gap-3">
                   <Link href="/register">
-                    <Button rightIcon={<ArrowRight className="h-4 w-4" />}>
+                    <Button >
                       Create account
                     </Button>
                   </Link>

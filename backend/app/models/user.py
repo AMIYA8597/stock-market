@@ -64,6 +64,11 @@ class User(Base):
         nullable=True,
         doc="User full name for display",
     )
+    totp_secret: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        doc="Base32 TOTP secret for 2FA",
+    )
     role: Mapped[str] = mapped_column(
         String(24),
         default="USER",

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "../lib/utils";
 
-interface SparklineProps {
+export interface SparklineProps {
   data: number[];
   width?: number;
   height?: number;
