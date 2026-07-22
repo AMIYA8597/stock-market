@@ -59,13 +59,15 @@ async def main():
                     if old_price is None or price_val != old_price:
                         last_prices[symbol] = price_val
                         payload = {
+                            "type": "tick",
                             "symbol": symbol.upper(),
                             "price": price_val,
+                            "change_pct": 0.0, # Approximate, client can use last known
                             "timestamp": datetime.now(UTC).isoformat(),
-                            "channel": "signals.updates"
+                            "source": "yfinance",
                         }
                         # Publish price updates to Redis channel
-                        await redis.publish("signals.updates", json.dumps(payload))
+                        await redis.publish("prices.ticks", json.dumps(payload))
                         logger.info(f"Broadcast update: {symbol} -> {price_val}")
             except Exception as e:
                 logger.error(f"Error checking tick for {symbol}: {e}")

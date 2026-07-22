@@ -126,13 +126,17 @@ async def run_price_ticker(redis: Redis) -> None:
                 except Exception as sig_err:
                     logger.warning(f"Failed to compute live signal for tick {normalized_symbol}: {sig_err}")
 
+                # Yield control back to the event loop to prevent starving HTTP requests
+                await asyncio.sleep(0.1)
+
         except Exception as e:
             logger.warning(f"Error in run_price_ticker loop: {e}", exc_info=True)
 
         try:
             from app.services.data_ingestion.scheduler import is_market_hours
-            sleep_time = 3 if is_market_hours() else 10
+            sleep_time = 30 if is_market_hours() else 60
         except Exception:
-            sleep_time = 10
+            sleep_time = 60
 
         await asyncio.sleep(sleep_time)
+

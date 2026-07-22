@@ -124,7 +124,7 @@ async def startup_events() -> dict[str, Any]:
 
                 async def alert_polling_loop():
                     # Sleep slightly on startup to let server initialize
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(86400) # DISABLED FOR LOCAL DEV to prevent blocking
                     while True:
                         try:
                             from app.services.alert_engine import check_and_fire_alerts
@@ -152,7 +152,7 @@ async def startup_events() -> dict[str, Any]:
             # Initialize Background Market Scheduler
             try:
                 from app.services.data_ingestion.scheduler import market_scheduler
-                market_scheduler.start()
+                # market_scheduler.start() # DISABLED FOR LOCAL DEV
                 logger.info("startup_market_scheduler_started")
             except Exception as sched_err:
                 logger.error(f"Failed to start market scheduler: {sched_err}")

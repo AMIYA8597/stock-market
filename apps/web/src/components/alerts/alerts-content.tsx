@@ -165,7 +165,7 @@ export function AlertsContent() {
       <div className="grid grid-cols-12 gap-4">
         {/* Active alerts */}
         <div className="col-span-12 lg:col-span-7">
-          <Card noPadding>
+          <Card>
             <CardHeader className="px-4 pt-3">
               <CardTitle>Active Alerts</CardTitle>
               <Badge variant="accent">{loading ? "..." : `${activeCount} active`}</Badge>
@@ -214,7 +214,7 @@ export function AlertsContent() {
 
         {/* Alert history */}
         <div className="col-span-12 lg:col-span-5">
-          <Card noPadding>
+          <Card>
             <CardHeader className="px-4 pt-3">
               <CardTitle>Alert History</CardTitle>
               <Badge>Live</Badge>

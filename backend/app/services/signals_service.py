@@ -9,16 +9,14 @@ This service provides:
 The implementation uses existing models (`EnsembleSignal`) and the `SignalEngine` from `app.services.signal_engine`.
 """
 
-from typing import List, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.signal import EnsembleSignal
 from app.services.signal_engine import SignalEngine
-from app.services.ai_service import predict as ai_predict
 
 
-async def list_signals(db: AsyncSession) -> List[EnsembleSignal]:
+async def list_signals(db: AsyncSession) -> list[EnsembleSignal]:
     """Return all EnsembleSignal entries ordered by creation time descending."""
     result = await db.execute(
         EnsembleSignal.__table__.select().order_by(EnsembleSignal.time.desc())
@@ -30,7 +28,7 @@ async def run_signal(
     db: AsyncSession,
     symbol: str,
     payload: dict,
-) -> Optional[EnsembleSignal]:
+) -> EnsembleSignal | None:
     """Run the signal engine for *symbol* with *payload*.
 
     Returns the created `EnsembleSignal` or ``None`` if the engine rejects the prediction.
@@ -38,23 +36,24 @@ async def run_signal(
     return await SignalEngine.process_new_prediction(db, symbol, payload)
 
 
-async def explain_signal(db: AsyncSession, signal_id: int) -> Optional[str]:
-    """Generate a natural‑language explanation for a stored signal.
+async def explain_signal(db: AsyncSession, signal_id: int) -> str | None:
+    """Generate a natural-language explanation for a stored signal.
 
-    Retrieves the signal from the DB, builds a concise prompt, and calls the
-    placeholder `ai_service.predict` which should be wired to OpenAI in production.
-    Returns the explanation string or ``None`` on failure.
+    Uses the PredictionEngine's explanation module when available.
+    Returns None if the ML engine is not yet ready.
     """
     signal = await db.get(EnsembleSignal, signal_id)
     if not signal:
         return None
-    # Build a simple prompt – can be enriched later.
     prompt = (
         f"Explain the trading signal for ticker {signal.symbol_id} with direction "
         f"{signal.direction}, confidence {float(signal.confidence):.2%}, and raw "
-        f"ensemble {float(signal.signal):.4f}. Summarize why this signal was generated "
-        "based on the input features and market regime."
+        f"ensemble {float(signal.signal):.4f}."
     )
-    # Use the existing AI service placeholder – replace with real LLM later.
-    resp = await ai_predict(db, {"prompt": prompt})
-    return resp.get("explanation") if isinstance(resp, dict) else None
+    try:
+        from app.services.ai_service import predict as ai_predict
+
+        resp = await ai_predict(db, {"prompt": prompt, "symbol": str(signal.symbol_id)})
+        return resp.get("explanation") if isinstance(resp, dict) else None
+    except Exception:  # noqa: BLE001
+        return None

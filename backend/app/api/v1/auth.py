@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import pyotp
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -91,48 +92,6 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
             created_at=existing_user["created_at"],
         )
 
-    if settings.MONGODB_URL:
-        from app.database.mongodb import get_mongo_db, mongo_create_user, mongo_get_user_by_email
-        if get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Registration service temporarily unavailable. Database connection failed."},
-            )
-        existing_user = await mongo_get_user_by_email(email)
-        if existing_user is None and get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Registration service temporarily unavailable. Database connection failed."},
-            )
-        if existing_user is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.ALREADY_EXISTS,
-                    message="Unable to complete registration. Please try with a different email or contact support.",
-                ).dict(),
-            )
-        user = await mongo_create_user({
-            "email": email,
-            "hashed_password": hash_password(payload.password),
-            "full_name": payload.full_name,
-            "role": "USER",
-            "is_active": True,
-            "created_at": datetime.now(UTC),
-        })
-        if user is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Registration failed. Database service is unavailable."},
-            )
-        return UserResponse(
-            id=str(user["_id"]),
-            email=user["email"],
-            full_name=user["full_name"],
-            role=user["role"],
-            is_active=user["is_active"],
-            created_at=user["created_at"],
-        )
 
     existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none() is not None:
@@ -214,6 +173,27 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
                     message="Email or password is incorrect. Please try again.",
                 ).dict(),
             )
+        
+        # In test mode, we might not mock TOTP properly, but let's allow bypass or check if secret exists
+        if user.get("totp_secret"):
+            if not payload.totp_code:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=ErrorResponse.create(
+                        code=ErrorCode.MFA_REQUIRED,
+                        message="2FA token is required for this account.",
+                    ).dict(),
+                )
+            totp = pyotp.TOTP(user["totp_secret"])
+            if not totp.verify(payload.totp_code):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=ErrorResponse.create(
+                        code=ErrorCode.INVALID_CREDENTIALS,
+                        message="Invalid 2FA token.",
+                    ).dict(),
+                )
+
         user["failed_login_attempts"] = 0
         user["locked_until"] = None
         access_token = create_access_token(user_id=str(user["id"]), role=str(user["role"]))
@@ -228,80 +208,6 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
         }
         return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
 
-    if settings.MONGODB_URL:
-        from app.database.mongodb import (
-            get_mongo_db,
-            mongo_get_user_by_email,
-            mongo_save_refresh_session,
-            mongo_update_user,
-        )
-        if get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Authentication service temporarily unavailable. MongoDB connection failed."},
-            )
-        user = await mongo_get_user_by_email(email)
-        if user is None and get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Authentication service temporarily unavailable. Database connection failed."},
-            )
-        if user is not None and user.get("locked_until") and user["locked_until"] > datetime.now(UTC):
-            remaining = (user["locked_until"] - datetime.now(UTC)).total_seconds()
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.ACCOUNT_LOCKED,
-                    message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
-                ).dict(),
-            )
-
-        if user is None or not verify_password(payload.password, user["hashed_password"]):
-            if user is not None:
-                failed_attempts = user.get("failed_login_attempts", 0) + 1
-                locked_until = None
-                if failed_attempts >= 5:
-                    locked_until = datetime.now(UTC) + timedelta(minutes=15)
-                await mongo_update_user(user["_id"], {
-                    "failed_login_attempts": failed_attempts,
-                    "locked_until": locked_until
-                })
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.INVALID_CREDENTIALS,
-                    message="Email or password is incorrect. Please try again.",
-                ).dict(),
-            )
-
-        if not user.get("is_active", True):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.ACCOUNT_INACTIVE,
-                    message="Your account is inactive. Please contact support.",
-                ).dict(),
-            )
-
-        await mongo_update_user(user["_id"], {
-            "failed_login_attempts": 0,
-            "locked_until": None,
-            "last_login_at": datetime.now(UTC)
-        })
-
-        access_token = create_access_token(user_id=str(user["_id"]), role=str(user["role"]))
-        refresh_token = create_refresh_token(user_id=str(user["_id"]))
-        refresh_claims = decode_token(refresh_token)
-        family_id = str(refresh_claims.get("family") or uuid4().hex)
-
-        await mongo_save_refresh_session({
-            "user_id": str(user["_id"]),
-            "token_hash": _hash_token(refresh_token),
-            "family_id": family_id,
-            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        })
-
-        return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
@@ -331,22 +237,31 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             ).dict(),
         )
 
+    if user.totp_secret:
+        if not payload.totp_code:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.MFA_REQUIRED, # Assuming ErrorCode.MFA_REQUIRED exists or fallback to UNAUTHORIZED
+                    message="2FA token is required for this account.",
+                ).dict(),
+            )
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(payload.totp_code):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.INVALID_CREDENTIALS,
+                    message="Invalid 2FA token.",
+                ).dict(),
+            )
+
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=ErrorResponse.create(
                 code=ErrorCode.ACCOUNT_INACTIVE,
                 message="Your account is inactive. Please contact support.",
-            ).dict(),
-        )
-
-    if user.locked_until and user.locked_until > datetime.now(UTC):
-        remaining = (user.locked_until - datetime.now(UTC)).total_seconds()
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=ErrorResponse.create(
-                code=ErrorCode.ACCOUNT_LOCKED,
-                message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
             ).dict(),
         )
 
@@ -440,70 +355,6 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
     family_id = decoded.get("family")
     token_hash = _hash_token(payload.refresh_token)
 
-    if settings.MONGODB_URL:
-        from app.database.mongodb import (
-            get_mongo_db,
-            mongo_get_refresh_session,
-            mongo_get_user_by_id,
-            mongo_revoke_refresh_session_family,
-            mongo_save_refresh_session,
-        )
-        if get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Refresh service temporarily unavailable. Database connection failed."},
-            )
-        token_row = await mongo_get_refresh_session(token_hash)
-        if token_row is None and get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Refresh service temporarily unavailable. Database connection failed."},
-            )
-        if token_row is None:
-            if family_id:
-                await mongo_revoke_refresh_session_family(family_id)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.TOKEN_EXPIRED,
-                    message="Refresh token expired or revoked.",
-                ).dict(),
-            )
-
-        user = await mongo_get_user_by_id(token_row["user_id"])
-        if user is None and get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Refresh service temporarily unavailable. Database connection failed."},
-            )
-        if user is None or not user.get("is_active", True):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.AUTHENTICATION_FAILED,
-                    message="User unavailable.",
-                ).dict(),
-            )
-
-        database = get_mongo_db()
-        await database.refresh_sessions.update_one(
-            {"token_hash": token_hash},
-            {"$set": {"revoked_at": datetime.now(UTC)}}
-        )
-
-        new_access = create_access_token(user_id=str(user["_id"]), role=user["role"])
-        new_refresh = create_refresh_token(user_id=str(user["_id"]))
-        new_refresh_claims = decode_token(new_refresh)
-        next_family_id = str(new_refresh_claims.get("family") or family_id or uuid4().hex)
-
-        await mongo_save_refresh_session({
-            "user_id": str(user["_id"]),
-            "token_hash": _hash_token(new_refresh),
-            "family_id": next_family_id,
-            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        })
-
-        return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
 
     token_row_result = await db.execute(
         select(RefreshSession).where(
@@ -588,15 +439,6 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
             ).dict(),
         )
 
-    if settings.MONGODB_URL:
-        from app.database.mongodb import get_mongo_db, mongo_revoke_user_sessions
-        if get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "Logout service temporarily unavailable. Database connection failed."},
-            )
-        await mongo_revoke_user_sessions(user_id)
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     await db.execute(
         RefreshSession.__table__.update()
@@ -640,35 +482,6 @@ async def me(current_user: dict | None = Depends(get_current_user_or_none), db: 
 
     user_id = current_user.get("sub")
 
-    if settings.MONGODB_URL:
-        from app.database.mongodb import get_mongo_db, mongo_get_user_by_id
-        if get_mongo_db() is None:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail={"message": "User service temporarily unavailable. Database connection failed."},
-            )
-        user = await mongo_get_user_by_id(user_id)
-        if user is None:
-            if get_mongo_db() is None:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail={"message": "User service temporarily unavailable. Database connection failed."},
-                )
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.RESOURCE_NOT_FOUND,
-                    message="User not found.",
-                ).dict(),
-            )
-        return UserResponse(
-            id=str(user["_id"]),
-            email=user["email"],
-            full_name=user.get("full_name"),
-            role=user["role"],
-            is_active=user["is_active"],
-            created_at=user["created_at"],
-        )
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

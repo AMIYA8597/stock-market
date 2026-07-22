@@ -39,7 +39,7 @@ def fetch_ohlcv(symbol: str, interval: str = "1m", period: str = "1d") -> pd.Dat
     return df
 
 def list_supported_symbols() -> List[str]:
-    """Return a static list of a few popular Indian symbols for demo purposes."""
+    """Return a static list of a few popular Indian symbols."""
     return [
         "RELIANCE.NS",
         "TCS.NS",

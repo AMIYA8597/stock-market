@@ -2,25 +2,26 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { MoreHorizontal, Search } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { DataTable, type Column } from "@/components/ui/DataTable";
+import { Badge } from "@neuroquant/ui";
+import { DataTable, type Column } from "@neuroquant/ui";
 import {
   Dropdown,
   DropdownContent,
   DropdownItem,
   DropdownTrigger,
-} from "@/components/ui/Dropdown";
-import { Input } from "@/components/ui/Input";
+} from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/Card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+} from "@neuroquant/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@neuroquant/ui";
 import { adminApi } from "@/lib/api-client";
 import { useToastStore } from "@/stores/toast-store";
+import { useAdminUsersQuery, useAdminContentQuery } from "@/hooks/queries/useAdmin";
 
 interface AdminUser {
   id: string;
@@ -30,107 +31,40 @@ interface AdminUser {
   status: "Active" | "Invited" | "Suspended";
 }
 
-const seedUsers: AdminUser[] = [
-  {
-    id: "U-1021",
-    name: "Aarav Kapoor",
-    email: "aarav@orion.ai",
-    role: "Owner",
-    status: "Active",
-  },
-  {
-    id: "U-1022",
-    name: "Nina Shah",
-    email: "nina@orion.ai",
-    role: "Admin",
-    status: "Active",
-  },
-  {
-    id: "U-1023",
-    name: "Samar Das",
-    email: "samar@orion.ai",
-    role: "Analyst",
-    status: "Invited",
-  },
-  {
-    id: "U-1024",
-    name: "Riya Menon",
-    email: "riya@orion.ai",
-    role: "Analyst",
-    status: "Suspended",
-  },
-];
+const seedUsers: AdminUser[] = [];
 
-const seedContentRows = [
-  {
-    id: "BLOG-208",
-    title: "AI Macro Playbook",
-    status: "Published",
-    author: "Research Team",
-    updatedAt: "2026-03-22",
-  },
-  {
-    id: "BLOG-209",
-    title: "Regime Shift Primer",
-    status: "Draft",
-    author: "Editorial",
-    updatedAt: "2026-03-19",
-  },
-  {
-    id: "ANN-044",
-    title: "Platform Maintenance Window",
-    status: "Scheduled",
-    author: "Ops",
-    updatedAt: "2026-03-17",
-  },
-];
+const seedContentRows: any[] = [];
 
 export function AdminPanelPage(): JSX.Element {
   const pushToast = useToastStore((state) => state.pushToast);
   const [query, setQuery] = useState("");
-  const [users, setUsers] = useState<AdminUser[]>(seedUsers);
-  const [contentRows, setContentRows] = useState(seedContentRows);
 
-  useEffect(() => {
-    let mounted = true;
+  const { data: apiUsers = [] } = useAdminUsersQuery();
+  const { data: content = { posts: [] } } = useAdminContentQuery();
 
-    Promise.all([adminApi.listUsers(), adminApi.getContent()])
-      .then(([apiUsers, content]) => {
-        if (!mounted) {
-          return;
-        }
+  const users = useMemo(
+    () =>
+      apiUsers.map((item) => ({
+        id: item.id,
+        name: item.full_name ?? item.email,
+        email: item.email,
+        role: item.role === "ADMIN" ? ("Admin" as const) : ("Analyst" as const),
+        status: item.is_active ? ("Active" as const) : ("Suspended" as const),
+      })),
+    [apiUsers]
+  );
 
-        setUsers(
-          apiUsers.map((item) => ({
-            id: item.id,
-            name: item.full_name ?? item.email,
-            email: item.email,
-            role: item.role === "ADMIN" ? "Admin" : "Analyst",
-            status: item.is_active ? "Active" : "Suspended",
-          })),
-        );
-
-        setContentRows(
-          content.posts.map((post) => ({
-            id: post.id,
-            title: post.title,
-            status: post.status === "published" ? "Published" : "Draft",
-            author: "Editorial",
-            updatedAt: "recent",
-          })),
-        );
-      })
-      .catch(() => {
-        if (!mounted) {
-          return;
-        }
-        pushToast({ tone: "error", title: "Unable to load admin data" });
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [pushToast]);
+  const contentRows = useMemo(
+    () =>
+      content.posts.map((post) => ({
+        id: post.id,
+        title: post.title,
+        status: post.status === "published" ? "Published" : "Draft",
+        author: "Editorial",
+        updatedAt: "recent",
+      })),
+    [content.posts]
+  );
 
   const filtered = useMemo(
     () =>

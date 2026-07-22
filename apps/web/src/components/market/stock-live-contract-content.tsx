@@ -21,7 +21,7 @@ import {
   type SimpleBarPoint,
   LightweightCandlestickChart,
 } from "@/components/charts";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@neuroquant/ui";
 import { type PriceBar } from "@/utils/chartFormatters";
 import type { ModelEnsemble, Prediction, Quote } from "@neuroquant/types";
 import type { SignalResponse } from "@/types/intelligence";

@@ -17,7 +17,7 @@ export default function CorrelationGraphPage(): JSX.Element {
   const [timelineStep, setTimelineStep] = useState<number>(100);
   const [systemicRiskMode, setSystemicRiskMode] = useState<boolean>(false);
   const [graph, setGraph] = useState<CorrelationGraphResponse | null>(null);
-  const [selectedTicker, setSelectedTicker] = useState<string>("RELIANCE.NS");
+  const [selectedTicker, setSelectedTicker] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);

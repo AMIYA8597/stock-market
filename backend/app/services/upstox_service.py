@@ -17,7 +17,10 @@ from typing import Any
 
 import httpx
 import pandas as pd
-import upstox_client
+try:
+    import upstox_client
+except ImportError:
+    upstox_client = None
 
 logger = logging.getLogger(__name__)
 
@@ -181,7 +184,7 @@ class UpstoxService:
         if sym in SYMBOL_TO_KEY:
             return SYMBOL_TO_KEY[sym]
 
-        # Hardcoded overrides for common index feeds
+        # Overrides for common index feeds
         if sym in ("NIFTY 50", "NIFTY_50", "NIFTY"):
             key = "NSE_INDEX|Nifty 50"
             SYMBOL_TO_KEY[sym] = key

@@ -1,8 +1,8 @@
 # backend/app/api/v1/predictions.py
-"""Predictions endpoint – provides SARIMAX based forecasts.
-
-Replaces the fake linear forecast with real model output.
-"""
+"""Predictions endpoint
+    Returns AI model predictions for a single symbol.
+    Provides forecast trajectories, support/resistance levels, and signals.
+    """
 
 from __future__ import annotations
 

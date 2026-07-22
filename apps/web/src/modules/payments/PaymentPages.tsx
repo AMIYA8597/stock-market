@@ -2,40 +2,28 @@
 
 import { useEffect, useState } from "react";
 import { Check, CreditCard, ShieldCheck } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Badge } from "@neuroquant/ui";
+import { Button } from "@neuroquant/ui";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
   CardDescription,
-} from "@/components/ui/Card";
-import { Input } from "@/components/ui/Input";
-import { DataTable, type Column } from "@/components/ui/DataTable";
+} from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
+import { DataTable, type Column } from "@neuroquant/ui";
 import { useToastStore } from "@/stores/toast-store";
 import { paymentsApi } from "@/lib/api-client";
 
-const tiers = [
-  {
-    name: "Starter",
-    price: "$49",
-    description: "Solo and small teams",
-    features: ["3 workspaces", "Basic analytics", "Email support"],
-  },
-  {
-    name: "Growth",
-    price: "$149",
-    description: "Scaling investment teams",
-    features: ["10 workspaces", "Advanced dashboards", "Priority support"],
-  },
-  {
-    name: "Enterprise",
-    price: "Custom",
-    description: "Compliance-ready deployments",
-    features: ["Unlimited seats", "SAML + RBAC", "Dedicated success manager"],
-  },
-];
+// Pricing is now fully dynamic and fetched from the backend. 
+interface PlanItem {
+  id: string;
+  name: string;
+  price_inr: string;
+  description: string;
+  features: string[];
+}
 
 interface TxItem {
   id: string;
@@ -45,38 +33,18 @@ interface TxItem {
   status: "Success" | "Pending" | "Failed";
 }
 
-const txRows: TxItem[] = [
-  {
-    id: "INV-3901",
-    date: "2026-03-24",
-    amount: "$149.00",
-    method: "Visa **** 4832",
-    status: "Success",
-  },
-  {
-    id: "INV-3892",
-    date: "2026-02-24",
-    amount: "$149.00",
-    method: "Visa **** 4832",
-    status: "Success",
-  },
-  {
-    id: "INV-3883",
-    date: "2026-01-24",
-    amount: "$149.00",
-    method: "Visa **** 4832",
-    status: "Pending",
-  },
-  {
-    id: "INV-3874",
-    date: "2025-12-24",
-    amount: "$149.00",
-    method: "Visa **** 4832",
-    status: "Failed",
-  },
-];
-
 export function PricingPage(): JSX.Element {
+  const [plans, setPlans] = useState<PlanItem[]>([]);
+  const pushToast = useToastStore((state) => state.pushToast);
+
+  useEffect(() => {
+    paymentsApi.getPlans().then((res: any) => {
+      setPlans(res.items);
+    }).catch(() => {
+      pushToast({ tone: "error", title: "Error", message: "Failed to load pricing plans" });
+    });
+  }, [pushToast]);
+
   return (
     <section className="space-y-5">
       <h1 className="text-3xl font-semibold">Pricing</h1>
@@ -84,21 +52,21 @@ export function PricingPage(): JSX.Element {
         Choose a plan designed for your team size and operational maturity.
       </p>
       <div className="grid gap-4 md:grid-cols-3">
-        {tiers.map((tier) => (
-          <Card key={tier.name} className="bg-[var(--ds-surface-1)]/90">
+        {plans.map((tier) => (
+          <Card key={tier.name} className="bg-[var(--ds-surface-1)]/90 flex flex-col">
             <CardHeader>
               <CardTitle>{tier.name}</CardTitle>
               <CardDescription>{tier.description}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col">
               <p className="text-3xl font-semibold">
-                {tier.price}
+                ₹{tier.price_inr}
                 <span className="text-sm text-[var(--ds-text-secondary)]">
                   /month
                 </span>
               </p>
-              <ul className="mt-4 space-y-2 text-sm text-[var(--ds-text-secondary)]">
-                {tier.features.map((feature) => (
+              <ul className="mt-4 space-y-2 text-sm text-[var(--ds-text-secondary)] flex-1">
+                {tier.features.map((feature: string) => (
                   <li key={feature} className="flex items-center gap-2">
                     <Check className="h-4 w-4 text-[var(--ds-color-success-500)]" />
                     {feature}
@@ -117,83 +85,71 @@ export function PricingPage(): JSX.Element {
 export function CheckoutPage(): JSX.Element {
   const pushToast = useToastStore((state) => state.pushToast);
   const [loading, setLoading] = useState(false);
-  const [intentId, setIntentId] = useState<string | null>(null);
+  const [amount, setAmount] = useState<string>("499");
+
+  const handleCheckout = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const intent = await paymentsApi.createIntent({
+        amount: parseFloat(amount),
+        method: "RAZORPAY",
+        currency: "INR",
+        description: "Wallet Top-up",
+      });
+
+      // Normally here you'd open Razorpay Checkout:
+      // const options = {
+      //   key: intent.razorpay_key_id,
+      //   amount: parseFloat(intent.amount) * 100,
+      //   currency: intent.currency,
+      //   order_id: intent.provider_ref,
+      //   handler: async (response) => {
+      //      await paymentsApi.confirmIntent(intent.intent_id, response.razorpay_payment_id, ...);
+      //   }
+      // }
+      // const rzp = new (window as any).Razorpay(options);
+      // rzp.open();
+      
+      // Removed mock success state to ensure truthful system state
+      pushToast({
+        tone: "error",
+        title: "Payment Gateway Offline",
+        message: "Razorpay SDK not loaded in this environment.",
+      });
+    } catch {
+      pushToast({
+        tone: "error",
+        title: "Payment failed",
+        message: "Please retry the checkout.",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Card className="mx-auto max-w-xl bg-[var(--ds-surface-1)]/90">
       <CardHeader>
-        <CardTitle>Secure Checkout</CardTitle>
+        <CardTitle>Top Up Wallet</CardTitle>
         <CardDescription>
-          Encrypted payment processing with role-based billing controls.
+          Add funds to your wallet using Razorpay.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          className="space-y-3"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            try {
-              setLoading(true);
-              const intent = await paymentsApi.createIntent({
-                amount: 149,
-                method: "CARD",
-                currency: "INR",
-                description: "Growth subscription",
-              });
-              setIntentId(intent.intent_id);
-              await paymentsApi.confirmIntent(intent.intent_id, "123456");
-              pushToast({
-                tone: "success",
-                title: "Payment successful",
-                message: "Your plan has been upgraded to Growth.",
-              });
-            } catch {
-              pushToast({
-                tone: "error",
-                title: "Payment failed",
-                message: "Please retry the checkout.",
-              });
-            } finally {
-              setLoading(false);
-            }
-          }}
-        >
+        <form className="space-y-3" onSubmit={handleCheckout}>
           <div>
             <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
-              Cardholder
+              Amount (INR)
             </label>
-            <Input required placeholder="Full name" />
+            <Input required type="number" min="100" value={amount} onChange={(e) => setAmount(e.target.value)} />
           </div>
-          <div>
-            <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
-              Card number
-            </label>
-            <Input required placeholder="4242 4242 4242 4242" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
-                Expiry
-              </label>
-              <Input required placeholder="MM/YY" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
-                CVV
-              </label>
-              <Input required placeholder="123" />
-            </div>
-          </div>
+          
           <Button className="w-full" isLoading={loading} type="submit">
-            <CreditCard className="mr-1 h-4 w-4" /> Complete payment
+            <CreditCard className="mr-1 h-4 w-4" /> Pay with Razorpay
           </Button>
-          {intentId ? (
-            <p className="text-center text-xs text-[var(--ds-text-muted)]">
-              Intent: {intentId}
-            </p>
-          ) : null}
-          <p className="flex items-center justify-center gap-1 text-xs text-[var(--ds-text-muted)]">
-            <ShieldCheck className="h-3.5 w-3.5" /> PCI compliant payment flow
+          <p className="flex items-center justify-center gap-1 mt-3 text-xs text-[var(--ds-text-muted)]">
+            <ShieldCheck className="h-3.5 w-3.5" /> TEST MODE: No real money will be charged
           </p>
         </form>
       </CardContent>
@@ -202,27 +158,21 @@ export function CheckoutPage(): JSX.Element {
 }
 
 export function TransactionsPage(): JSX.Element {
-  const [rows, setRows] = useState<TxItem[]>(txRows);
+  const [rows, setRows] = useState<TxItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
-    paymentsApi
-      .history(20)
-      .then((response) => {
+    paymentsApi.history(20)
+      .then((response: any) => {
         if (!mounted) return;
         setRows(
-          response.items.map((item) => ({
-            id: item.intent_id,
+          (response.items || []).map((item: any) => ({
+            id: item.id.toString().slice(0, 8),
             date: item.created_at.slice(0, 10),
-            amount: item.amount,
-            method: item.method,
-            status:
-              item.status.toLowerCase() === "succeeded"
-                ? "Success"
-                : item.status.toLowerCase() === "failed"
-                  ? "Failed"
-                  : "Pending",
-          })),
+            amount: item.amount.toString(),
+            method: item.type === "credit" ? "Credit" : "Debit",
+            status: "Success",
+          }))
         );
       })
       .catch(() => {
@@ -234,10 +184,10 @@ export function TransactionsPage(): JSX.Element {
   }, []);
 
   const columns: Column<TxItem>[] = [
-    { key: "id", label: "Invoice" },
+    { key: "id", label: "Ref" },
     { key: "date", label: "Date" },
     { key: "amount", label: "Amount", align: "right" },
-    { key: "method", label: "Method" },
+    { key: "method", label: "Type" },
     {
       key: "status",
       label: "Status",
@@ -260,9 +210,9 @@ export function TransactionsPage(): JSX.Element {
   return (
     <Card className="bg-[var(--ds-surface-1)]/90">
       <CardHeader>
-        <CardTitle>Transaction History</CardTitle>
+        <CardTitle>Wallet Ledger</CardTitle>
         <CardDescription>
-          Track payment status with clear success, pending, and failure states.
+          Track payment credits and subscription debits.
         </CardDescription>
       </CardHeader>
       <CardContent>

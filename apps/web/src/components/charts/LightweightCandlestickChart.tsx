@@ -7,7 +7,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { MousePointer, MoveRight, Minus, Layers, Trash2 } from "lucide-react";
-import { detectPatterns } from "@/lib/patternDetector";
+// Patterns now fetched from backend via /api/v1/market/patterns/{symbol}
 import { computeIndicators, type Candle } from "@/utils/indicators";
 import {
   type PriceBar,
@@ -24,8 +24,12 @@ import {
   calculateVolumeProfile,
   calculateMarketProfile,
 } from "@/utils/chartFormatters";
+import { getApiBaseUrl } from "@/lib/runtime-config";
 
-import { useChartInstance, type LiveChartApi } from "./tradingview/useChartInstance";
+import {
+  useChartInstance,
+  type LiveChartApi,
+} from "./tradingview/useChartInstance";
 import { drawIndicators } from "./tradingview/indicatorsRenderer";
 import { drawSMC } from "./tradingview/smcRenderer";
 import { drawSubPanes } from "./tradingview/subpaneRenderer";
@@ -86,14 +90,28 @@ function sanitizeSeriesData<T extends { time: unknown }>(data: T[]): T[] {
 
   // Create a sorted copy by timestamp ascending to satisfy lightweight-charts requirements
   const sorted = [...data].sort((a, b) => {
-    const timeA = a.time as string | number | { year: number; month: number; day: number };
-    const timeB = b.time as string | number | { year: number; month: number; day: number };
-    const tA = typeof timeA === "object" && timeA !== null
-      ? Math.floor(new Date(`${timeA.year}-${timeA.month}-${timeA.day}`).getTime() / 1000)
-      : Number(timeA);
-    const tB = typeof timeB === "object" && timeB !== null
-      ? Math.floor(new Date(`${timeB.year}-${timeB.month}-${timeB.day}`).getTime() / 1000)
-      : Number(timeB);
+    const timeA = a.time as
+      | string
+      | number
+      | { year: number; month: number; day: number };
+    const timeB = b.time as
+      | string
+      | number
+      | { year: number; month: number; day: number };
+    const tA =
+      typeof timeA === "object" && timeA !== null
+        ? Math.floor(
+            new Date(`${timeA.year}-${timeA.month}-${timeA.day}`).getTime() /
+              1000,
+          )
+        : Number(timeA);
+    const tB =
+      typeof timeB === "object" && timeB !== null
+        ? Math.floor(
+            new Date(`${timeB.year}-${timeB.month}-${timeB.day}`).getTime() /
+              1000,
+          )
+        : Number(timeB);
     return tA - tB;
   });
 
@@ -102,10 +120,18 @@ function sanitizeSeriesData<T extends { time: unknown }>(data: T[]): T[] {
   for (let i = 0; i < sorted.length; i++) {
     const item = sorted[i];
     if (!item) continue;
-    const itemTime = item.time as string | number | { year: number; month: number; day: number };
-    let time = typeof itemTime === "object" && itemTime !== null
-      ? Math.floor(new Date(`${itemTime.year}-${itemTime.month}-${itemTime.day}`).getTime() / 1000)
-      : Number(itemTime);
+    const itemTime = item.time as
+      | string
+      | number
+      | { year: number; month: number; day: number };
+    let time =
+      typeof itemTime === "object" && itemTime !== null
+        ? Math.floor(
+            new Date(
+              `${itemTime.year}-${itemTime.month}-${itemTime.day}`,
+            ).getTime() / 1000,
+          )
+        : Number(itemTime);
 
     if (time <= lastTimeValue) {
       time = lastTimeValue + 1;
@@ -127,7 +153,7 @@ interface Drawing {
 
 export function LightweightCandlestickChart({
   bars,
-  height = 340,
+  height,
   chartStyle = "candlestick",
   indicators = {},
   predictions = [],
@@ -143,10 +169,18 @@ export function LightweightCandlestickChart({
     timestamp: string;
   } | null>(null);
 
-  const [activeTool, setActiveTool] = useState<"cursor" | "trendline" | "horizontal" | "fibonacci">("cursor");
+  const [activeTool, setActiveTool] = useState<
+    "cursor" | "trendline" | "horizontal" | "fibonacci"
+  >("cursor");
   const [drawings, setDrawings] = useState<Drawing[]>([]);
-  const [tempStartPoint, setTempStartPoint] = useState<{ time: number; price: number } | null>(null);
-  const [tempEndPoint, setTempEndPoint] = useState<{ time: number; price: number } | null>(null);
+  const [tempStartPoint, setTempStartPoint] = useState<{
+    time: number;
+    price: number;
+  } | null>(null);
+  const [tempEndPoint, setTempEndPoint] = useState<{
+    time: number;
+    price: number;
+  } | null>(null);
   const [renderTrigger, setRenderTrigger] = useState(0);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,33 +207,13 @@ export function LightweightCandlestickChart({
   const latestLogicalRangeRef = useRef<any>(null);
 
   // Support & Resistance Zones State and Fetcher
-  const [zones, setZones] = useState<{ type: string; min: number; max: number; avg: number; mode: string }[]>([]);
+  const [zones, setZones] = useState<
+    { type: string; min: number; max: number; avg: number; mode: string }[]
+  >([]);
 
-  useEffect(() => {
-    if (!symbol) return;
-    let active = true;
-    async function fetchZones() {
-      try {
-        const res = await fetch(`/api/zones/${encodeURIComponent(symbol)}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (active) {
-            const allZones = [
-              ...(data.classical_zones || []).map((z: any) => ({ ...z, mode: "Classical" })),
-              ...(data.deep_learning_zones || []).map((z: any) => ({ ...z, mode: "DL" })),
-            ];
-            setZones(allZones);
-          }
-        }
-      } catch (e) {
-        console.error("Failed to fetch S/R zones for chart", e);
-      }
-    }
-    void fetchZones();
-    return () => {
-      active = false;
-    };
-  }, [symbol]);
+  // Patterns State and Fetcher
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [patternMarkers, setPatternMarkers] = useState<any[]>([]);
 
   const {
     ema9 = false,
@@ -219,6 +233,64 @@ export function LightweightCandlestickChart({
     atr = false,
     smc = false,
   } = indicators;
+
+  useEffect(() => {
+    if (!symbol) return;
+    let active = true;
+    async function fetchZones() {
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(
+          `${baseUrl}/api/zones/${encodeURIComponent(symbol)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            const allZones = [
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ...(data.classical_zones || []).map((z: any) => ({
+                ...z,
+                mode: "Classical",
+              })),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              ...(data.deep_learning_zones || []).map((z: any) => ({
+                ...z,
+                mode: "DL",
+              })),
+            ];
+            setZones(allZones);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch S/R zones for chart", e);
+      }
+    }
+    void fetchZones();
+
+    // Fetch Patterns
+    async function fetchPatterns() {
+      if (!patterns) return;
+      try {
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(
+          `${baseUrl}/api/v1/market/patterns/${encodeURIComponent(symbol)}`,
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            setPatternMarkers(data.markers || []);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch patterns for chart", e);
+      }
+    }
+    void fetchPatterns();
+
+    return () => {
+      active = false;
+    };
+  }, [symbol, patterns]);
 
   const activeSubPanes = [rsi, macd, atr].filter(Boolean).length;
   const { chart: mainChart } = useChartInstance({
@@ -311,7 +383,9 @@ export function LightweightCandlestickChart({
     };
     mainChart.timeScale().subscribeVisibleLogicalRangeChange(handleRangeChange);
     return () => {
-      mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(handleRangeChange);
+      mainChart
+        .timeScale()
+        .unsubscribeVisibleLogicalRangeChange(handleRangeChange);
     };
   }, [mainChart]);
 
@@ -323,7 +397,12 @@ export function LightweightCandlestickChart({
   };
 
   useEffect(() => {
-    if (!mainChart || !(mainChart as LiveChartApi).isAlive || !mainContainerRef.current) return;
+    if (
+      !mainChart ||
+      !(mainChart as LiveChartApi).isAlive ||
+      !mainContainerRef.current
+    )
+      return;
 
     if (bars.length === 0) {
       return () => {
@@ -332,7 +411,9 @@ export function LightweightCandlestickChart({
     }
 
     const firstBarTime = bars[0]?.timestamp || "";
-    const configChanged = symbol !== lastSymbolRef.current || firstBarTime !== lastFirstBarTimeRef.current;
+    const configChanged =
+      symbol !== lastSymbolRef.current ||
+      firstBarTime !== lastFirstBarTimeRef.current;
     lastSymbolRef.current = symbol;
     lastFirstBarTimeRef.current = firstBarTime;
 
@@ -349,14 +430,18 @@ export function LightweightCandlestickChart({
     const closes = bars.map((bar) => bar.close);
     const times = bars.map((bar) => toUtcTimestamp(bar.timestamp));
 
+    console.log(
+      `[HOP 8 setData] chartStyle=${chartStyle}, bars in=${bars.length}, first=${bars[0]?.timestamp}, last=${bars[bars.length - 1]?.timestamp}`,
+    );
+
     // Prepare calculations for indicators
-    const candleData: Candle[] = bars.map(b => ({
+    const candleData: Candle[] = bars.map((b) => ({
       time: toUtcTimestamp(b.timestamp),
       open: b.open,
       high: b.high,
       low: b.low,
       close: b.close,
-      volume: b.volume
+      volume: b.volume,
     }));
 
     const indResults = computeIndicators(candleData, {
@@ -366,22 +451,32 @@ export function LightweightCandlestickChart({
       atr,
       superTrend,
       ichimoku,
-      smc
+      smc,
     });
 
     // Detect patterns and build markers
-    const baseMarkers = patterns ? detectPatterns(bars) : [];
-    const smcMarkers = (smc && indResults.smc)
-      ? indResults.smc.marketStructure.map(ms => ({
-          time: ms.time as UTCTimestamp,
-          position: (ms.direction === "bullish" ? "aboveBar" : "belowBar") as "aboveBar" | "belowBar" | "inBar",
-          color: ms.type === "CHoCH" ? "#F50057" : "#FFEB3B",
-          shape: (ms.direction === "bullish" ? "arrowUp" : "arrowDown") as "arrowUp" | "arrowDown" | "circle" | "square",
-          text: `${ms.type} (${Math.round(ms.level)})`
-        }))
-      : [];
+    const baseMarkers = patterns ? patternMarkers : [];
+    const smcMarkers =
+      smc && indResults.smc
+        ? indResults.smc.marketStructure.map((ms) => ({
+            time: ms.time as UTCTimestamp,
+            position: (ms.direction === "bullish" ? "aboveBar" : "belowBar") as
+              | "aboveBar"
+              | "belowBar"
+              | "inBar",
+            color: ms.type === "CHoCH" ? "#F50057" : "#FFEB3B",
+            shape: (ms.direction === "bullish" ? "arrowUp" : "arrowDown") as
+              | "arrowUp"
+              | "arrowDown"
+              | "circle"
+              | "square",
+            text: `${ms.type} (${Math.round(ms.level)})`,
+          }))
+        : [];
 
-    const finalMarkers = [...baseMarkers, ...smcMarkers].sort((a, b) => Number(a.time) - Number(b.time));
+    const finalMarkers = [...baseMarkers, ...smcMarkers].sort(
+      (a, b) => Number(a.time) - Number(b.time),
+    );
 
     // Create Main Series Based on Selected Chart Style
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -389,7 +484,14 @@ export function LightweightCandlestickChart({
 
     if (chartStyle === "line") {
       mainSeries = mainChart.addLineSeries({ color: "#00E676", lineWidth: 2 });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({ time: toUtcTimestamp(bar.timestamp), value: bar.close }))));
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            value: bar.close,
+          })),
+        ),
+      );
     } else if (chartStyle === "area") {
       mainSeries = mainChart.addAreaSeries({
         topColor: "rgba(0, 230, 118, 0.3)",
@@ -397,16 +499,32 @@ export function LightweightCandlestickChart({
         lineColor: "#00E676",
         lineWidth: 2,
       });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({ time: toUtcTimestamp(bar.timestamp), value: bar.close }))));
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            value: bar.close,
+          })),
+        ),
+      );
     } else if (chartStyle === "ohlc-bar") {
-      mainSeries = mainChart.addBarSeries({ upColor: "#00E676", downColor: "#FF3B5C", openVisible: true, thinBars: false });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
-        time: toUtcTimestamp(bar.timestamp),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      }))));
+      mainSeries = mainChart.addBarSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        openVisible: true,
+        thinBars: false,
+      });
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+          })),
+        ),
+      );
     } else if (chartStyle === "baseline") {
       const firstClose = bars[0]?.close ?? 0;
       mainSeries = mainChart.addBaselineSeries({
@@ -419,9 +537,22 @@ export function LightweightCandlestickChart({
         bottomLineColor: "#FF3B5C",
         lineWidth: 2,
       });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({ time: toUtcTimestamp(bar.timestamp), value: bar.close }))));
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            value: bar.close,
+          })),
+        ),
+      );
     } else if (chartStyle === "heikin-ashi") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
       mainSeries.setData(sanitizeSeriesData(buildHeikinAshi(bars)));
     } else if (chartStyle === "hollow-candlestick") {
       mainSeries = mainChart.addCandlestickSeries({
@@ -434,13 +565,17 @@ export function LightweightCandlestickChart({
         borderVisible: true,
         wickVisible: true,
       });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
-        time: toUtcTimestamp(bar.timestamp),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      }))));
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+          })),
+        ),
+      );
     } else if (chartStyle === "volume") {
       mainSeries = mainChart.addAreaSeries({
         topColor: "rgba(0, 212, 245, 0.4)",
@@ -448,27 +583,68 @@ export function LightweightCandlestickChart({
         lineColor: "#00D4F5",
         lineWidth: 2,
       });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({ time: toUtcTimestamp(bar.timestamp), value: bar.volume }))));
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            value: bar.volume,
+          })),
+        ),
+      );
     } else if (chartStyle === "renko") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
       mainSeries.setData(sanitizeSeriesData(buildRenko(bars)));
     } else if (chartStyle === "point-figure") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickVisible: false, borderVisible: true });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickVisible: false,
+        borderVisible: true,
+      });
       mainSeries.setData(sanitizeSeriesData(buildPointAndFigure(bars)));
     } else if (chartStyle === "kagi") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickVisible: false, borderVisible: true });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickVisible: false,
+        borderVisible: true,
+      });
       mainSeries.setData(sanitizeSeriesData(buildKagi(bars)));
     } else if (chartStyle === "range-bar") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
       mainSeries.setData(sanitizeSeriesData(buildRangeBars(bars)));
     } else if (chartStyle === "three-line-break") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickVisible: false, borderVisible: true });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickVisible: false,
+        borderVisible: true,
+      });
       mainSeries.setData(sanitizeSeriesData(buildThreeLineBreak(bars)));
     } else if (chartStyle === "equivolume") {
-      mainSeries = mainChart.addCandlestickSeries({ borderVisible: true, wickVisible: true });
-      const avgVolume = bars.reduce((sum, bar) => sum + bar.volume, 0) / (bars.length || 1);
+      mainSeries = mainChart.addCandlestickSeries({
+        borderVisible: true,
+        wickVisible: true,
+      });
+      const avgVolume =
+        bars.reduce((sum, bar) => sum + bar.volume, 0) / (bars.length || 1);
       const equivData = bars.map((bar) => {
-        const ratio = Math.max(0.2, Math.min(1.0, bar.volume / (avgVolume || 1)));
+        const ratio = Math.max(
+          0.2,
+          Math.min(1.0, bar.volume / (avgVolume || 1)),
+        );
         const upColor = `rgba(0, 230, 118, ${ratio})`;
         const downColor = `rgba(255, 59, 92, ${ratio})`;
         const color = bar.close >= bar.open ? upColor : downColor;
@@ -485,34 +661,102 @@ export function LightweightCandlestickChart({
       });
       mainSeries.setData(sanitizeSeriesData(equivData));
     } else if (chartStyle === "tick") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
       mainSeries.setData(sanitizeSeriesData(buildTickChart(bars)));
     } else if (chartStyle === "volume-profile") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
-        time: toUtcTimestamp(bar.timestamp),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      }))));
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+          })),
+        ),
+      );
       const levels = calculateVolumeProfile(bars);
-      mainSeries.createPriceLine({ price: levels.poc, color: "#FF9800", lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: "POC" });
-      mainSeries.createPriceLine({ price: levels.vah, color: "#E040FB", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "VAH" });
-      mainSeries.createPriceLine({ price: levels.val, color: "#00E5FF", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "VAL" });
+      mainSeries.createPriceLine({
+        price: levels.poc,
+        color: "#FF9800",
+        lineWidth: 2,
+        lineStyle: 0,
+        axisLabelVisible: true,
+        title: "POC",
+      });
+      mainSeries.createPriceLine({
+        price: levels.vah,
+        color: "#E040FB",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: "VAH",
+      });
+      mainSeries.createPriceLine({
+        price: levels.val,
+        color: "#00E5FF",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: "VAL",
+      });
     } else if (chartStyle === "market-profile") {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
-        time: toUtcTimestamp(bar.timestamp),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      }))));
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+          })),
+        ),
+      );
       const levels = calculateMarketProfile(bars);
-      mainSeries.createPriceLine({ price: levels.poc, color: "#FF5722", lineWidth: 2, lineStyle: 0, axisLabelVisible: true, title: "TPO POC" });
-      mainSeries.createPriceLine({ price: levels.vah, color: "#9C27B0", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "TPO VAH" });
-      mainSeries.createPriceLine({ price: levels.val, color: "#00E676", lineWidth: 1, lineStyle: 2, axisLabelVisible: true, title: "TPO VAL" });
+      mainSeries.createPriceLine({
+        price: levels.poc,
+        color: "#FF5722",
+        lineWidth: 2,
+        lineStyle: 0,
+        axisLabelVisible: true,
+        title: "TPO POC",
+      });
+      mainSeries.createPriceLine({
+        price: levels.vah,
+        color: "#9C27B0",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: "TPO VAH",
+      });
+      mainSeries.createPriceLine({
+        price: levels.val,
+        color: "#00E676",
+        lineWidth: 1,
+        lineStyle: 2,
+        axisLabelVisible: true,
+        title: "TPO VAL",
+      });
     } else if (chartStyle === "spread") {
       mainSeries = mainChart.addAreaSeries({
         topColor: "rgba(236, 72, 153, 0.3)",
@@ -531,16 +775,33 @@ export function LightweightCandlestickChart({
         lineColor: "#00D4F5",
         lineWidth: 3,
       });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({ time: toUtcTimestamp(bar.timestamp), value: bar.close }))));
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            value: bar.close,
+          })),
+        ),
+      );
     } else {
-      mainSeries = mainChart.addCandlestickSeries({ upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false });
-      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
-        time: toUtcTimestamp(bar.timestamp),
-        open: bar.open,
-        high: bar.high,
-        low: bar.low,
-        close: bar.close,
-      }))));
+      mainSeries = mainChart.addCandlestickSeries({
+        upColor: "#00E676",
+        downColor: "#FF3B5C",
+        wickUpColor: "#00E676",
+        wickDownColor: "#FF3B5C",
+        borderVisible: false,
+      });
+      mainSeries.setData(
+        sanitizeSeriesData(
+          bars.map((bar) => ({
+            time: toUtcTimestamp(bar.timestamp),
+            open: bar.open,
+            high: bar.high,
+            low: bar.low,
+            close: bar.close,
+          })),
+        ),
+      );
     }
 
     if (mainSeries) {
@@ -554,24 +815,26 @@ export function LightweightCandlestickChart({
       if (zones.length > 0) {
         zones.forEach((zone) => {
           const isSupport = zone.type === "support";
-          const color = isSupport ? "rgba(0, 230, 118, 0.45)" : "rgba(255, 59, 92, 0.45)";
-          
+          const color = isSupport
+            ? "rgba(0, 230, 118, 0.45)"
+            : "rgba(255, 59, 92, 0.45)";
+
           mainSeries.createPriceLine({
             price: zone.min,
             color: color,
             lineWidth: 1,
             lineStyle: 2,
             axisLabelVisible: true,
-            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MIN`
+            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MIN`,
           });
-          
+
           mainSeries.createPriceLine({
             price: zone.max,
             color: color,
             lineWidth: 1,
             lineStyle: 2,
             axisLabelVisible: true,
-            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MAX`
+            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MAX`,
           });
 
           mainSeries.createPriceLine({
@@ -580,7 +843,7 @@ export function LightweightCandlestickChart({
             lineWidth: 2,
             lineStyle: 0,
             axisLabelVisible: true,
-            title: `${zone.mode} ${zone.type === "support" ? "Support" : "Resistance"}`
+            title: `${zone.mode} ${zone.type === "support" ? "Support" : "Resistance"}`,
           });
         });
       }
@@ -601,14 +864,32 @@ export function LightweightCandlestickChart({
     const volumeData: HistogramData[] = bars.map((bar) => ({
       time: toUtcTimestamp(bar.timestamp),
       value: bar.volume,
-      color: bar.close >= bar.open ? "rgba(0,230,118,0.3)" : "rgba(255,59,92,0.3)",
+      color:
+        bar.close >= bar.open ? "rgba(0,230,118,0.3)" : "rgba(255,59,92,0.3)",
     }));
     volumeSeries.setData(sanitizeSeriesData(volumeData));
 
     // Draw Advanced Indicators & SMC overlays
-    drawIndicators(mainChart, {
-      ema9, ema21, ema50, ema200, sma20, sma50, sma100, bollingerBands, superTrend, ichimoku, vwap
-    }, closes, times, indResults, addedSeries);
+    drawIndicators(
+      mainChart,
+      {
+        ema9,
+        ema21,
+        ema50,
+        ema200,
+        sma20,
+        sma50,
+        sma100,
+        bollingerBands,
+        superTrend,
+        ichimoku,
+        vwap,
+      },
+      closes,
+      times,
+      indResults,
+      addedSeries,
+    );
 
     drawSMC(mainChart, indResults, bars, addedSeries);
 
@@ -626,7 +907,7 @@ export function LightweightCandlestickChart({
       macdChartRef,
       atr,
       atrContainerRef.current,
-      atrChartRef
+      atrChartRef,
     );
 
     // Draw AI Forecast Projection lines
@@ -645,7 +926,9 @@ export function LightweightCandlestickChart({
         addedSeries.push(predLineSeries);
 
         const sortedPredictions = [...predictions].sort(
-          (a, b) => new Date(a.target_date).getTime() - new Date(b.target_date).getTime()
+          (a, b) =>
+            new Date(a.target_date).getTime() -
+            new Date(b.target_date).getTime(),
         );
 
         const lineData = [
@@ -666,7 +949,10 @@ export function LightweightCandlestickChart({
         }
         predLineSeries.setData(uniqueLineData);
 
-        const hasBounds = sortedPredictions.every((p) => p.prediction_low !== undefined && p.prediction_high !== undefined);
+        const hasBounds = sortedPredictions.every(
+          (p) =>
+            p.prediction_low !== undefined && p.prediction_high !== undefined,
+        );
         if (hasBounds) {
           const upperSeries = mainChart.addLineSeries({
             color: "rgba(0, 212, 245, 0.4)",
@@ -751,20 +1037,29 @@ export function LightweightCandlestickChart({
     if (configChanged || !latestLogicalRangeRef.current) {
       mainChart.timeScale().fitContent();
     } else {
-      mainChart.timeScale().setVisibleLogicalRange(latestLogicalRangeRef.current);
+      mainChart
+        .timeScale()
+        .setVisibleLogicalRange(latestLogicalRangeRef.current);
     }
 
     // Set up watermark (TradingView/Zerodha style)
     mainChart.applyOptions({
       watermark: {
         visible: true,
-        fontSize: Math.min(48, Math.floor(mainContainerRef.current?.clientWidth ? mainContainerRef.current.clientWidth / 12 : 48)),
+        fontSize: Math.min(
+          48,
+          Math.floor(
+            mainContainerRef.current?.clientWidth
+              ? mainContainerRef.current.clientWidth / 12
+              : 48,
+          ),
+        ),
         fontFamily: "var(--font-jetbrains), monospace",
         color: "rgba(255, 255, 255, 0.025)",
         text: cleanSymbol,
         horzAlign: "center",
         vertAlign: "center",
-      }
+      },
     });
 
     // Initialize legend with latest bar
@@ -803,7 +1098,9 @@ export function LightweightCandlestickChart({
       }
 
       const time = param.time;
-      const matchingBar = bars.find(b => toUtcTimestamp(b.timestamp) === time);
+      const matchingBar = bars.find(
+        (b) => toUtcTimestamp(b.timestamp) === time,
+      );
       if (matchingBar) {
         setLegend({
           open: matchingBar.open,
@@ -824,7 +1121,11 @@ export function LightweightCandlestickChart({
       if (!mainContainerRef.current) return;
       const width = mainContainerRef.current.clientWidth;
       subCharts.forEach((ch) => {
-        try { ch.applyOptions({ width }); } catch { /* ignore */ }
+        try {
+          ch.applyOptions({ width });
+        } catch {
+          /* ignore */
+        }
       });
     });
     observer.observe(mainContainerRef.current);
@@ -867,7 +1168,7 @@ export function LightweightCandlestickChart({
     atr,
     smc,
     cleanSymbol,
-    symbol
+    symbol,
   ]);
 
   const formatVolume = (val: number): string => {
@@ -877,15 +1178,66 @@ export function LightweightCandlestickChart({
   };
 
   return (
-    <div className="flex flex-col gap-1.5 h-full w-full relative">
+    <div className="flex flex-col gap-1.5 h-full w-full relative overflow-y-auto ds-scrollable">
       {legend && (
         <div className="absolute top-2 left-12 z-[99] pointer-events-none flex flex-wrap gap-x-2 gap-y-0.5 rounded bg-[rgba(10,14,24,0.72)] backdrop-blur-sm border border-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[10px] font-mono text-[var(--nq-text-secondary)] shadow-md select-none">
-          <span className="font-semibold text-[var(--nq-text-primary)] mr-1.5">{cleanSymbol}</span>
-          <span>O:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.open.toFixed(2)}</span></span>
-          <span className="ml-1.5">H:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.high.toFixed(2)}</span></span>
-          <span className="ml-1.5">L:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.low.toFixed(2)}</span></span>
-          <span className="ml-1.5">C:<span className={legend.close >= legend.open ? "text-[#00e676] ml-0.5" : "text-[#ff3b5c] ml-0.5"}>{legend.close.toFixed(2)}</span></span>
-          <span className="ml-1.5">V:<span className="text-[var(--nq-accent-cyan)] ml-0.5">{formatVolume(legend.volume)}</span></span>
+          <span className="font-semibold text-[var(--nq-text-primary)] mr-1.5">
+            {cleanSymbol}
+          </span>
+          <span>
+            O:
+            <span
+              className={
+                legend.close >= legend.open
+                  ? "text-[#00e676] ml-0.5"
+                  : "text-[#ff3b5c] ml-0.5"
+              }
+            >
+              {legend.open.toFixed(2)}
+            </span>
+          </span>
+          <span className="ml-1.5">
+            H:
+            <span
+              className={
+                legend.close >= legend.open
+                  ? "text-[#00e676] ml-0.5"
+                  : "text-[#ff3b5c] ml-0.5"
+              }
+            >
+              {legend.high.toFixed(2)}
+            </span>
+          </span>
+          <span className="ml-1.5">
+            L:
+            <span
+              className={
+                legend.close >= legend.open
+                  ? "text-[#00e676] ml-0.5"
+                  : "text-[#ff3b5c] ml-0.5"
+              }
+            >
+              {legend.low.toFixed(2)}
+            </span>
+          </span>
+          <span className="ml-1.5">
+            C:
+            <span
+              className={
+                legend.close >= legend.open
+                  ? "text-[#00e676] ml-0.5"
+                  : "text-[#ff3b5c] ml-0.5"
+              }
+            >
+              {legend.close.toFixed(2)}
+            </span>
+          </span>
+          <span className="ml-1.5">
+            V:
+            <span className="text-[var(--nq-accent-cyan)] ml-0.5">
+              {formatVolume(legend.volume)}
+            </span>
+          </span>
         </div>
       )}
 
@@ -895,12 +1247,22 @@ export function LightweightCandlestickChart({
 
         {/* Floating Drawing Toolbar */}
         <div className="absolute left-2 top-10 z-[30] flex flex-col gap-1 rounded border border-[var(--nq-border)] bg-[rgba(14,17,23,0.85)] p-1 shadow-2xl backdrop-blur-md">
-          {([
-            { tool: "cursor", icon: MousePointer, tooltip: "Crosshair / Zoom" },
-            { tool: "trendline", icon: MoveRight, tooltip: "Trend Line" },
-            { tool: "horizontal", icon: Minus, tooltip: "Horizontal Line" },
-            { tool: "fibonacci", icon: Layers, tooltip: "Fibonacci Retracement" },
-          ] as const).map(({ tool, icon: Icon, tooltip }) => (
+          {(
+            [
+              {
+                tool: "cursor",
+                icon: MousePointer,
+                tooltip: "Crosshair / Zoom",
+              },
+              { tool: "trendline", icon: MoveRight, tooltip: "Trend Line" },
+              { tool: "horizontal", icon: Minus, tooltip: "Horizontal Line" },
+              {
+                tool: "fibonacci",
+                icon: Layers,
+                tooltip: "Fibonacci Retracement",
+              },
+            ] as const
+          ).map(({ tool, icon: Icon, tooltip }) => (
             <button
               key={tool}
               type="button"
@@ -991,7 +1353,15 @@ export function LightweightCandlestickChart({
               return (
                 <g key={drawing.id}>
                   {/* Diagonal connector line */}
-                  <line x1={c1.x} y1={c1.y} x2={c2.x} y2={c2.y} stroke="rgba(255,255,255,0.15)" strokeWidth="1" strokeDasharray="3 3" />
+                  <line
+                    x1={c1.x}
+                    y1={c1.y}
+                    x2={c2.x}
+                    y2={c2.y}
+                    stroke="rgba(255,255,255,0.15)"
+                    strokeWidth="1"
+                    strokeDasharray="3 3"
+                  />
                   {levels.map((lvl) => {
                     const price = p2.price + diff * lvl;
                     const y = mainSeriesRef.current?.priceToCoordinate(price);
@@ -999,8 +1369,23 @@ export function LightweightCandlestickChart({
                     const color = levelColor(lvl);
                     return (
                       <g key={lvl}>
-                        <line x1="0" y1={y} x2="100%" y2={y} stroke={color} strokeWidth="1" opacity="0.6" />
-                        <text x="50" y={y - 3} fill={color} fontSize="8" fontFamily="monospace" opacity="0.8">
+                        <line
+                          x1="0"
+                          y1={y}
+                          x2="100%"
+                          y2={y}
+                          stroke={color}
+                          strokeWidth="1"
+                          opacity="0.6"
+                        />
+                        <text
+                          x="50"
+                          y={y - 3}
+                          fill={color}
+                          fontSize="8"
+                          fontFamily="monospace"
+                          opacity="0.8"
+                        >
                           {lvl.toFixed(3)} - ₹{price.toFixed(2)}
                         </text>
                       </g>
@@ -1015,59 +1400,99 @@ export function LightweightCandlestickChart({
           {/* 2. Active Preview Drawing */}
           {activeTool !== "cursor" && tempStartPoint && tempEndPoint && (
             <g>
-              {activeTool === "trendline" && (() => {
-                const c1 = getCoordinates(tempStartPoint);
-                const c2 = getCoordinates(tempEndPoint);
-                if (!c1 || !c2) return null;
-                return (
-                  <line
-                    x1={c1.x}
-                    y1={c1.y}
-                    x2={c2.x}
-                    y2={c2.y}
-                    stroke="var(--nq-accent-cyan)"
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
-                    opacity="0.8"
-                  />
-                );
-              })()}
-              {activeTool === "fibonacci" && (() => {
-                const c1 = getCoordinates(tempStartPoint);
-                const c2 = getCoordinates(tempEndPoint);
-                if (!c1 || !c2) return null;
+              {activeTool === "trendline" &&
+                (() => {
+                  const c1 = getCoordinates(tempStartPoint);
+                  const c2 = getCoordinates(tempEndPoint);
+                  if (!c1 || !c2) return null;
+                  return (
+                    <line
+                      x1={c1.x}
+                      y1={c1.y}
+                      x2={c2.x}
+                      y2={c2.y}
+                      stroke="var(--nq-accent-cyan)"
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                      opacity="0.8"
+                    />
+                  );
+                })()}
+              {activeTool === "fibonacci" &&
+                (() => {
+                  const c1 = getCoordinates(tempStartPoint);
+                  const c2 = getCoordinates(tempEndPoint);
+                  if (!c1 || !c2) return null;
 
-                const levels = [1.0, 0.786, 0.618, 0.5, 0.382, 0.236, 0.0];
-                const diff = tempStartPoint.price - tempEndPoint.price;
+                  const levels = [1.0, 0.786, 0.618, 0.5, 0.382, 0.236, 0.0];
+                  const diff = tempStartPoint.price - tempEndPoint.price;
 
-                return (
-                  <g>
-                    <line x1={c1.x} y1={c1.y} x2={c2.x} y2={c2.y} stroke="rgba(255,255,255,0.2)" strokeWidth="1" strokeDasharray="3 3" />
-                    {levels.map((lvl) => {
-                      const price = tempEndPoint.price + diff * lvl;
-                      const y = mainSeriesRef.current?.priceToCoordinate(price);
-                      if (y === undefined || y === null) return null;
-                      const color = levelColor(lvl);
-                      return (
-                        <g key={lvl}>
-                          <line x1="0" y1={y} x2="100%" y2={y} stroke={color} strokeWidth="1" opacity="0.8" />
-                          <text x="50" y={y - 3} fill={color} fontSize="8" fontFamily="monospace">
-                            {lvl.toFixed(3)} - ₹{price.toFixed(2)}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </g>
-                );
-              })()}
+                  return (
+                    <g>
+                      <line
+                        x1={c1.x}
+                        y1={c1.y}
+                        x2={c2.x}
+                        y2={c2.y}
+                        stroke="rgba(255,255,255,0.2)"
+                        strokeWidth="1"
+                        strokeDasharray="3 3"
+                      />
+                      {levels.map((lvl) => {
+                        const price = tempEndPoint.price + diff * lvl;
+                        const y =
+                          mainSeriesRef.current?.priceToCoordinate(price);
+                        if (y === undefined || y === null) return null;
+                        const color = levelColor(lvl);
+                        return (
+                          <g key={lvl}>
+                            <line
+                              x1="0"
+                              y1={y}
+                              x2="100%"
+                              y2={y}
+                              stroke={color}
+                              strokeWidth="1"
+                              opacity="0.8"
+                            />
+                            <text
+                              x="50"
+                              y={y - 3}
+                              fill={color}
+                              fontSize="8"
+                              fontFamily="monospace"
+                            >
+                              {lvl.toFixed(3)} - ₹{price.toFixed(2)}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </g>
+                  );
+                })()}
             </g>
           )}
         </svg>
       </div>
 
-      {rsi && <div ref={rsiContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}
-      {macd && <div ref={macdContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}
-      {atr && <div ref={atrContainerRef} className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1" />}
+      {rsi && (
+        <div
+          ref={rsiContainerRef}
+          className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1"
+        />
+      )}
+      {macd && (
+        <div
+          ref={macdContainerRef}
+          className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1"
+        />
+      )}
+      {atr && (
+        <div
+          ref={atrContainerRef}
+          className="w-full h-[110px] relative border-t border-[rgba(255,255,255,0.08)] mt-1"
+        />
+      )}
     </div>
   );
 }

@@ -13,94 +13,95 @@ license = {text = "MIT"}
 
 dependencies = [
     # Web Framework
-    "fastapi==0.104.1",
+    "fastapi>=0.104.1",
     "uvicorn[standard]==0.24.0",
-    "pydantic==2.5.0",
-    "pydantic-settings==2.1.0",
-    
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
     # Database
-    "sqlalchemy==2.0.23",
-    "asyncpg==0.29.0",
-    "alembic==1.13.1",
-    "psycopg2-binary==2.9.9",
-    
+    "sqlalchemy>=2.0.23",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.1",
+    "psycopg2-binary>=2.9.9",
+    "aiosqlite",
+    "argon2-cffi",
     # Redis & Caching
-    "redis==5.0.1",
-    
+    "redis>=5.0.1",
     # Async & Concurrency
-    "aiohttp==3.9.1",
-    "httpx==0.25.2",
-    
+    "aiohttp>=3.9.1",
+    "httpx>=0.25.2",
     # ML & Scientific Computing
-    "numpy==1.26.3",
-    "pandas==2.1.4",
-    "scipy==1.11.4",
+    "numpy>=1.26.3",
+    "pandas>=2.1.4",
+    "pandas-ta",
+    "scipy>=1.11.4",
     "scikit-learn>=1.3.2",
     "torch>=2.2.0",
     "pytorch-lightning>=2.2.0",
-    "pyg>=2.4.0",
-    
+    "torch-geometric>=2.4.0",
     # Specialized Models
-    "xgboost==2.0.3",
-    "statsmodels==0.14.0",
-    "hmmlearn==0.3.0",
-    
+    "xgboost>=2.0.3",
+    "lightgbm>=4.0.0",
+    "statsmodels>=0.14.0",
+    "hmmlearn>=0.3.0",
     # Data Sources
-    "yfinance==0.2.32",
-    "alpha-vantage==2.3.1",
-    "fred-api==3.2.0",
-    "newsapi==1.1.0",
-    
+    "yfinance>=1.5.1",
+    "alpha_vantage>=2.3.1",
+    "ccxt>=4.1.48",
+    "pandas-datareader>=0.10.0",
+    "upstox-python-sdk",
+    "smartapi-python",
     # Explainability
-    "shap==0.43.0",
-    "lime==0.2.0",
-    
+    "shap>=0.43.0",
+    "lime>=0.2.0",
     # Feature Engineering & Optimization
-    "ta==0.11.0",
-    "cvxpy==1.4.1",
-    
+    "ta>=0.11.0",
+    "cvxpy>=1.4.1",
     # Time Series
-    "prophet==1.1.5",
-    "statsmodels==0.14.0",
-    
+    "prophet>=1.1.5",
+    "statsmodels>=0.14.0",
     # Security
-    "python-jose==3.3.0",
-    "passlib==1.7.4",
-    "cryptography==41.0.7",
-    
+    "python-jose>=3.3.0",
+    "passlib>=1.7.4",
+    "cryptography>=41.0.7",
+    "pyotp>=2.9.0",
+    "email-validator>=2.1.0",
+    "razorpay>=1.4.1",
+    "setuptools",
     # Celery & Task Queue
-    "celery==5.3.4",
-    
+    "celery>=5.3.4",
     # Monitoring & Logging
-    "structlog==23.3.0",
-    "python-json-logger==2.0.7",
-    "prometheus-client==0.19.0",
+    "structlog>=23.3.0",
+    "loguru",
+    "slowapi",
+    "python-json-logger>=2.0.7",
+    "prometheus-client>=0.19.0",
     "sentry-sdk[fastapi]==2.24.1",
-    
     # Utilities
-    "python-dotenv==1.0.0",
-    "typer==0.9.0",
-    "requests==2.31.0",
+    "python-dotenv>=1.0.0",
+    "typer>=0.9.0",
+    "requests>=2.31.0",
+    "pyjwt>=2.13.0",
+    "transformers>=5.14.1",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest==7.4.3",
-    "pytest-asyncio==0.21.1",
-    "trio==0.26.2",
-    "pytest-cov==4.1.0",
-    "mypy==1.7.1",
-    "ruff==0.1.11",
-    "black==23.12.1",
-    "isort==5.13.2",
-    "pre-commit==3.5.0",
-    "jupyter==1.0.0",
-    "notebook==7.0.6",
-    "jupyterlab==4.0.9",
-    "matplotlib==3.8.2",
-    "seaborn==0.13.0",
-    "plotly==5.18.0",
-    "hypothesis==6.92.2",
+    "pytest>=7.4.3",
+    "pytest-asyncio>=0.21.1",
+    "trio>=0.26.2",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.7.1",
+    "ruff>=0.1.11",
+    "black>=23.12.1",
+    "isort>=5.13.2",
+    "pre-commit>=3.5.0",
+    "jupyter>=1.0.0",
+    "notebook>=7.0.6",
+    "jupyterlab>=4.0.9",
+    "matplotlib>=3.8.2",
+    "seaborn>=0.13.0",
+    "plotly>=5.18.0",
+    "hypothesis>=6.92.2",
 ]
 
 [tool.setuptools]

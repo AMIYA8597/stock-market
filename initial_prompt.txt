@@ -1,0 +1,259 @@
+<USER_REQUEST>
+# SECTION A — PROJECT CONTEXT (read before writing any code)
+
+**Repo:** `stock-market` (product name: **NeuroQuant**) — pnpm/turbo monorepo.
+
+```
+apps/web/          Next.js 14 App Router, React 18, TS, TanStack Query, Zustand,
+                   Tailwind, lightweight-charts v4, react-financial-charts, d3, three
+packages/ui        @neuroquant/ui  (Radix-based design system, builds to ./dist)
+packages/types     @neuroquant/types
+packages/config
+backend/           FastAPI (Py 3.12), SQLAlchemy + Alembic, Redis, Celery,
+                   WebSockets, MongoDB (motor), sqlite dev.db
+backend/app/services/data_ingestion/   yfinance | nse | stooq | alpha_vantage | coingecko | fred
+backend/app/providers/                 angel_one_provider.py, upstox_service.py
+backend/research/backtesting/          engine, walk_forward, monte_carlo, cost_model, statistical_tests
+backend/pipelines/                     data / training / inference / retraining_trigger
+```
+
+**Goal of this phase:** turn this scaffold into a **truthfully working, responsive, live Indian-market application** with real NSE data, working candlestick charts, real algorithmic + ML buy/sell signals, real backtests, and a working payments/subscription module — using **100% free services only**.
+
+### Absolute rules (violating any one of these = failed task)
+
+1. **No mock, demo, seeded, random, or hardcoded market data in any live code path.** If real data is unavailable, render an honest empty/error state. Never invent a number.
+2. **Free-only stack.** No paid APIs, no paid model endpoints, no paid infra. Broker keys (Angel One / Upstox) stay optional and env-gated; the app must be fully usable without them.
+3. **No fabricated accuracy.** Every metric shown in the UI must be traceable to a stored walk-forward backtest row. Never hardcode "64% accuracy" style values. Report the true number even if it is 52%.
+4. **Nothing ships broken.** After each phase: `pnpm --filter @neuroquant/web build` → 0 TS errors; `pnpm -w build` (packages) → success; `pytest` → green; `ruff check` → clean.
+5. **Paper trading only.** No live order routing. Simulated fills at real live prices.
+6. **Mobile-first responsive.** Every page must work at 360px, 768px, 1024px, 1440px, 1920px. No horizontal scroll, no clipped charts, no unreachable buttons.
+
+---
+
+# SECTION B — CONFIRMED DEFECTS FOUND IN THIS REPO (fix every one)
+
+## B1. Demo/hardcoded data still rendering in the UI
+
+| # | File | Defect |
+|---|---|---|
+| 1 | `apps/web/src/modules/dashboard/DashboardOverview.tsx` | **The entire `/dashboard` page is fake.** Hardcoded consts: `kpis`, `equitySeries`, `allocationSeries`, `modelSignals`, `regimeScores`, `activityFeed`, `openPositions`, `newsFeed`. This is the main "demo data" the user sees. Rewrite to consume real API endpoints. |
+| 2 | `apps/web/src/modules/payments/PaymentPages.tsx` | Hardcoded `tiers` priced in **USD ($49/$149/Enterprise)** and a fake invoice table `txRows` (`INV-3901`, `Visa **** 4832`, statuses). Must become real INR plans + real transaction history from `/payments/history`. |
+| 3 | `apps/web/src/components/portfolio/portfolio-content.tsx` | Hardcoded `HOLDINGS` array (RELIANCE 2847.65, TCS 3842.30, …). **This component is orphaned — imported by nothing.** Delete it. |
+| 4 | `apps/web/src/components/market/stock-live-contract-content.tsx` | Used by `markets/stocks/[symbol]` — audit for hardcoded fallbacks. |
+| 5 | `apps/web/src/modules/admin/AdminPanelPage.tsx`, `modules/blog/BlogPages.tsx`, `modules/notifications/NotificationCenterPage.tsx`, `modules/public/LandingPage.tsx` | Hardcoded literal arrays throughout. Landing-page marketing copy may stay static; **any number that looks like market/user/financial data must come from the API or be removed.** |
+| 6 | `apps/web/src/components/research/research-content.tsx`, `components/backtesting/backtesting-content.tsx`, `components/screener/screener-content.tsx`, `components/alerts/alerts-content.tsx` | Duplicate "content" components; several are orphaned. Determine which are routed, delete the rest, de-fake the survivors. |
+| 7 | `apps/web/src/app/(app)/portfolio/optimizer/page.tsx`, `research/factor-exposure/page.tsx`, `research/correlation-graph/page.tsx`, `backtest-lab/page.tsx` | Hardcoded symbol/weight/factor arrays. |
+| 8 | `apps/web/src/components/charts/LightweightCandlestickChart.tsx:261,272` | `Math.random()` used to generate element ids — replace with a stable counter/`useId` (React key instability causes re-render/redraw bugs). |
+
+## B2. Backend fake/stub logic
+
+| # | File | Defect |
+|---|---|---|
+| 9 | `backend/app/services/ai_service.py` | Entire service is a stub — "No actual training", returns dummy prediction/confidence/explanation. Replace with real inference from Phase 5 models, or return `503 model_not_trained`. |
+| 10 | `backend/app/services/ml_engine/orchestrator.py` | Fake "ensemble" using a `_symbol_seed` hash of the ticker string plus hand-written linear formulas to fabricate TFT/HMM/GNN/LSTM output. **Delete.** |
+| 11 | `backend/app/api/v1/models.py` | Returns hardcoded `directional_accuracy=0.6400`, fake drift KS/ADWIN stats, fake ensemble weight history. Must read real metrics from DB or 503. |
+| 12 | `backend/app/api/v1/explain.py` (~line 176+) | Fabricates "multi-head attention weights" by shifting mean absolute log-returns. Replace with real SHAP values from tree models. |
+| 13 | `backend/app/research/backtesting/{engine,analytics}.py` | Explicit stubs ("dummy Sharpe", "dummy Sortino", "dummy Calmar", "placeholder backtest"). **Duplicate of the real implementation in `backend/research/backtesting/`.** Delete the `app/research/backtesting` copy, repoint all imports to `backend/research/backtesting/` (which has walk_forward, monte_carlo, cost_model, statistical_tests). |
+| 14 | `backend/app/services/prediction/` (arima_predictor, prophet_predictor, random_forest_predictor, base, predictor_factory) | Dead — imported by nothing. Either wire into the real pipeline or delete. |
+| 15 | `backend/app/research/feature_engineering/price_volatility_stub.py` | Empty placeholder classes shadowing the real builders in `backend/research/feature_engineering/`. Delete. |
+| 16 | `backend/app/services/market_data_service.py:517` | "30 hardcoded NIFTY 50 symbol roots" — replace with a single shared universe source (see B4 #22). |
+| 17 | `backend/app/services/email_service.py` | Stub that logs instead of sending. Wire to free SMTP (Gmail app-password / Brevo free tier) behind env flag, else queue+log honestly. |
+
+## B3. Why live data & charts don't appear (root causes — verified)
+
+| # | Location | Root cause |
+|---|---|---|
+| 18 | `backend/app/websocket/router.py:212` | **The `/ws/alerts` WebSocket endpoint is commented out**, but the frontend actively connects to it from `hooks/useSignalAlerts.ts:60` and `modules/notifications/ToastViewport.tsx:36`. Result: permanent reconnect loop, zero alerts, console errors. **Re-enable it.** |
+| 19 | `backend/app/api/v1/router.py:45-46` | `market_data.router` is mounted at `/global` **and** `market.router` at root — two near-identical route sets (`/quote/{symbol}`, `/history/{symbol}`, `/indices`, `/movers`, `/heatmap`, `/search`, `/economic-calendar`) with **different response models** (`HistoryResponse` vs `list[…]`). The frontend calls `/market/history/{symbol}`; contract drift here is a primary cause of blank charts. **Collapse to ONE canonical market router and one response contract.** |
+| 20 | `apps/web/src/components/charts/tradingview/useChartInstance.ts` | `createChart` runs in a `useEffect` with `autoSize: true` — fails silently when the container has 0 height at mount, and `lightweight-charts` must never be evaluated during SSR. Fix: `next/dynamic` with `ssr:false`, guaranteed container height, `ResizeObserver`, and full `chart.remove()` cleanup on unmount. |
+| 21 | `apps/web/src/components/charts/LightweightCandlestickChart.tsx` | Bars must be passed as **seconds** `UTCTimestamp` (not ms), **strictly ascending**, **de-duplicated by time**. Verify `utils/chartFormatters.ts::toUtcTimestamp` and the API→bar mapping. Any unsorted/duplicate/NaN bar makes v4 throw and render nothing. |
+| 22 | `apps/web/src/shared/constants/symbols.ts` vs `backend/app/core/watchlist.py` vs `market_data_service.py` | **Three separate symbol universes** that drift (`.NS` suffix inconsistency between `RELIANCE` and `RELIANCE.NS` is a live bug — `research/page.tsx` links to `RELIANCE.NS` while other pages use `RELIANCE`). Create ONE canonical universe served by the backend at `/api/v1/market/universe`, with a single normalization function used everywhere. |
+| 23 | `apps/web/src/components/terminal/*` | The full trading terminal (TerminalLayout, ChartSection, Watchlist, SignalPanel, 7 pane tabs) renders **only** at `(app)/page.tsx`. There is **no `/terminal` route** and the sidebar likely doesn't link to it. Add a proper `/terminal` route and navigation entry. |
+| 24 | `backend/app/websocket/price_ticker.py` | Polls `MarketDataService.get_quote` for every watchlist symbol every 10s with no rate limiting → NSE will block you. Add a token-bucket limiter, Redis caching, staggered fetches, and market-hours gating. |
+| 25 | Persistence sprawl | The backend simultaneously uses SQLAlchemy/Alembic, **MongoDB (motor)**, Redis, and a checked-in `dev.db` SQLite file. `payments.py` writes to Mongo while `models/payment.py` defines a SQL table. **Pick PostgreSQL (or SQLite for local) as the single source of truth**, migrate payment/wallet/portfolio storage to it, keep Redis for cache/pubsub only, and remove the Mongo dependency. Delete `dev.db` from version control. |
+
+## B4. Repo hygiene defects
+
+| # | Item |
+|---|---|
+| 26 | `.env` **and** `backend/.env` are committed to the repository (6.7 KB of variables). Purge them from the working tree, add to `.gitignore`, rotate anything that looks like a credential, and keep only `.env.example` with documented placeholder values and free-tier defaults. |
+| 27 | Junk at repo root to remove: `prompt.txt`, `new-prompt.txt`, `new-prompt.md`, `new-new-new-new-prompt.txt`, `git_diff.txt`, `curl_output.txt`, `cleanup_unused_modules.ps1`, `scratch/`, `unused_backup/`, `node_modules/` (committed), `tsconfig.tsbuildinfo`. |
+| 28 | Two lockfiles present (`package-lock.json` + `pnpm-lock.yaml`) — keep pnpm only. |
+| 29 | `backend/app/api/v1/router.py:62` — `ai.router` commented out with "Disabled due to missing module". Resolve properly. |
+| 30 | Duplicate config: `backend/app/config.py` vs `backend/app/core/config.py` vs `backend/app/config/`. Consolidate to one settings module. |
+
+---
+
+# SECTION C — FREE DATA & SERVICE STACK (the only stack you may use)
+
+## C1. Market data (Indian equities)
+
+Wire into `backend/app/services/data_ingestion/provider_manager.py` as an ordered failover chain with health checks:
+
+| Priority | Source | Covers | Constraints to respect |
+|---|---|---|---|
+| 1 | **yfinance** (`RELIANCE.NS`, `^NSEI`) | OHLCV 1m→1mo, quotes, fundamentals | Free, no key. Intraday delayed ~15 min. 1m data limited to ~7 days, 15m to ~60 days. |
+| 2 | **NSE India public JSON endpoints** (`nse_source.py`) | Live quotes, option chain, indices, gainers/losers, pre-open | Free, no key. **Requires** browser-like `User-Agent`, cookie warm-up hit to `nseindia.com` first, session reuse, ≤1 req/sec, exponential backoff on 401/403. |
+| 3 | **Stooq** | EOD history CSV fallback | Free, no key. |
+| 4 | **Alpha Vantage** free tier | Last-resort quotes/history | **25 requests/day** — cache aggressively, never in a hot path. |
+| 5 | **Angel One SmartAPI** or **Upstox API** *(optional, env-gated)* | True tick-level real-time via WebSocket | Free with a free account. App must run fine without it. |
+| — | **CoinGecko** free tier | Crypto pages | Free, no key (rate-limited). |
+| — | **FRED** | Macro series | Free key. |
+| — | **Frankfurter / exchangerate.host** | Forex page | Free, no key. |
+
+**Mandatory caching (Redis):** quotes 10s · intraday candles 60s · daily candles 24h · fundamentals 24h · indices 30s. Cache-aside pattern, stale-while-revalidate, and a `X-Data-Source` + `as_of` timestamp on every market response so the UI can show provenance.
+
+## C2. News & sentiment (free)
+
+Google News RSS + Moneycontrol/Economic Times RSS → parse with `feedparser` → score with **FinBERT (`ProsusAI/finbert`) run locally via `transformers` on CPU**, or VADER as a lighter fallback. No paid news APIs.
+
+## C3. AI/ML (free, local)
+
+`scikit-learn`, `xgboost`, `lightgbm`, `statsmodels`, `arch` (GARCH), `hmmlearn` (regimes), `shap` (explainability), `optuna` (tuning), `pandas-ta` (indicators). Optional `torch` CPU for a small LSTM **only if it beats XGBoost in walk-forward**. All already present in `backend/requirements.txt`.
+
+## C4. Payments (free test mode)
+
+**Razorpay** (Indian, INR, UPI/cards/netbanking) in **Test Mode** — test API keys are free forever and require no company registration for sandbox use. Stripe test mode as a secondary/international option. The repo already has a Stripe-style webhook verifier in `payments.py:461` — extend it. **Never go live**; the app is an educational project.
+
+## C5. Infra (free)
+
+Local Docker Compose (Postgres + Redis) for dev; free hosting tiers (Render/Railway free Postgres+Redis, Vercel free for Next.js) for deployment. Celery + Redis for jobs — no paid queue.
+
+---
+
+# SECTION D — EXECUTION PLAN (do the phases in order; do not skip acceptance gates)
+
+## PHASE 0 — Baseline & safety net
+1. Create branch `phase-repair`. Commit a `BASELINE.md` recording: current build status, `tsc --noEmit` error count, `ruff` error count, `pytest` pass/fail count.
+2. Purge committed secrets and junk (defects #26–#28). Fix `.gitignore`.
+3. Get `pnpm install` → `pnpm -w build` → `pnpm --filter @neuroquant/web build` working, and `uvicorn app.main:app --reload` booting with **zero required paid env vars**.
+**Gate:** app boots front and back on a clean clone with only `.env.example` copied.
+
+## PHASE 1 — Kill the fakes (defects #1–#17, #29, #30)
+1. Delete every dead/fake module listed in B2 and every orphaned demo component in B1.
+2. Consolidate duplicate backtesting packages and config modules; repoint all imports.
+3. For each endpoint that previously returned fabricated numbers, return real data or a typed `503 {"code":"MODEL_NOT_TRAINED"}`.
+4. Produce `PHASE1_FIXLOG.md` listing every file deleted/changed with the reason.
+**Gate:** `grep -rniE "mock|demo|dummy|fake|placeholder|hardcoded|_symbol_seed" backend/app apps/web/src` returns **zero hits in live code paths** (test fixtures excepted, and they must live under `tests/`). Attach the grep output.
+
+## PHASE 2 — One canonical data layer (defects #16, #19, #22, #24, #25)
+1. Collapse `market.py` + `market_data.py` into a single versioned market API with one response contract per resource. Update `apps/web/src/lib/api-client.ts` and `contracts-api.ts` to match exactly; add Zod schemas so contract drift fails loudly at runtime.
+2. Single symbol universe: `/api/v1/market/universe` returning NIFTY 50 (extensible to NIFTY 500) with canonical symbol, display name, exchange, and yfinance ticker. One `normalizeSymbol()` in the frontend, one in the backend.
+3. Implement the provider failover chain + Redis cache + `/api/v1/market/providers/health`.
+4. Celery backfill job: 5 years daily + 60 days 15m OHLCV into the `ohlcv` table for the universe. Idempotent and resumable.
+5. Real market-status service: IST hours 09:15–15:30, Mon–Fri, plus the current-year NSE holiday list. Return `market_open`, `next_open`, `next_close`.
+6. Single database: migrate Mongo-backed payment/wallet state to SQLAlchemy models + Alembic migration; Redis stays cache/pubsub only.
+**Gate:** `GET /api/v1/market/quote/RELIANCE` and `/api/v1/market/history/RELIANCE?interval=1d&range=1y` both return real data with `source` and `as_of`; killing the network yields a typed error, never a fabricated price.
+
+## PHASE 3 — WebSockets that actually work (defects #18, #23, #24)
+1. Re-enable `/ws/alerts`; verify `/ws/prices`, `/ws/signals`, `/ws/backtest-progress`, `/ws/live/{symbol}` all connect from the frontend hooks that reference them.
+2. Standardize the WS message envelope: `{type, symbol, payload, ts, source}`. Implement subscribe/unsubscribe, heartbeat ping/pong, exponential-backoff reconnect (already partially in `usePriceFeed.ts` — finish it), and clean teardown.
+3. Rate-limited, market-hours-aware `price_ticker` loop. Off-hours: emit last close with `market_closed: true` instead of stopping silently.
+**Gate:** open the app, watch the Network→WS tab: all four sockets connect, receive real frames, and reconnect cleanly after a backend restart. Zero console errors.
+
+## PHASE 4 — Charts fixed and fully featured (defects #8, #20, #21, #23)
+1. Fix the chart lifecycle: dynamic import with `ssr:false`, container with explicit min-height, `ResizeObserver` for responsive resize, one chart instance per mount, `chart.remove()` on unmount, no `Math.random()` keys.
+2. Fix the data contract: seconds-based `UTCTimestamp`, ascending sort, de-dup by time, drop NaN/null bars, guard empty arrays with a skeleton then an empty state.
+3. Standardize on **lightweight-charts v4** for all price charts. Remove `react-financial-charts` and `three`/`@react-three/*` if unused (large bundle for no benefit). Keep d3 for heatmap/correlation/frontier only.
+4. Chart feature set required on the terminal and on `markets/stocks/[symbol]`:
+   - Types: candlestick, hollow candle, Heikin-Ashi, OHLC bar, line, area, baseline, Renko, Kagi, Point & Figure, Range bar, Three-Line-Break, volume-profile *(the builders already exist in `utils/chartFormatters.ts` — wire and test each one)*
+   - Timeframes: 1m, 5m, 15m, 30m, 1h, 1d, 1wk, 1mo (disable, with a tooltip, any the current provider cannot supply)
+   - Overlays: SMA/EMA (9/21/50/100/200), Bollinger, VWAP, Supertrend, Ichimoku, Parabolic SAR, pivot levels
+   - Sub-panes: Volume, RSI, MACD, Stochastic, ATR, ADX, OBV, MFI
+   - Markers: buy/sell signals, detected candlestick patterns, pattern log panel
+   - Crosshair OHLC+volume tooltip, legend, fullscreen, theme sync (dark/light), PNG export
+5. **Move candlestick pattern detection to the backend** (`lib/patternDetector.ts` → `backend/app/services/pattern_service.py`) so charts, signals, and backtests all use identical logic. Implement: Doji (all variants), Hammer, Inverted Hammer, Hanging Man, Shooting Star, Bullish/Bearish Engulfing, Piercing Line, Dark Cloud Cover, Morning/Evening Star, Three White Soldiers, Three Black Crows, Harami (+Cross), Tweezer Top/Bottom, Marubozu — each with a formal rule and a unit test on a known bar sequence.
+**Gate:** load `/terminal` and `/markets/stocks/RELIANCE` → candles paint in <2s, every chart type switches without error, every indicator toggles, live ticks update the last bar during market hours, zero console errors, no memory growth after 20 symbol switches.
+
+## PHASE 5 — Signal engine (classical algorithms, server-side)
+Implement in `backend/app/services/signal_engine.py` + `research/feature_engineering/`, vectorized with pandas/numpy/pandas-ta, all computed from stored OHLCV:
+- **Trend:** SMA/EMA/WMA crossovers (incl. Golden/Death cross), MACD (+histogram divergence), ADX/DMI, Supertrend, Ichimoku, PSAR
+- **Momentum:** RSI (+ bullish/bearish divergence), Stochastic (%K/%D), ROC, CCI, Williams %R
+- **Volatility:** Bollinger (+ squeeze/expansion), ATR, Keltner, Donchian breakout
+- **Volume:** OBV, VWAP + anchored VWAP, MFI, A/D line, volume-spike z-score
+- **Structure:** pivot points (classic/Fibonacci/Camarilla), rolling support/resistance (`sr_service.py`), 52-week high/low proximity, gap detection
+- **Composite:** weighted family voting → `STRONG_BUY | BUY | NEUTRAL | SELL | STRONG_SELL`, 0–100 confidence, **per-indicator contribution breakdown** (feeds the explainability UI), ATR-based stop-loss and R-multiple targets, position-size suggestion from account risk %.
+- Persist to `signal` table, broadcast over `/ws/signals`, drive `SignalPanel`, `useSignalFeed`, `useSignalAlerts`, and the alerts/notifications pages.
+- **Alert engine:** user-defined rules (price cross, % move, RSI/MACD threshold, signal flip, pattern detected, volume spike) → WebSocket + stored notification + optional email.
+**Gate:** `/api/v1/signals/RELIANCE` returns a real composite signal with a reason list; markers appear on the chart; indicator math is unit-tested against reference values (e.g. Wilder's RSI on a known series).
+
+## PHASE 6 — ML prediction (real, free, local)
+1. **Feature store** (`pipelines/data_pipeline.py`): lagged returns (1/2/3/5/10/20d), rolling mean/std/skew/kurt, all Phase-5 indicators, calendar features, regime label, sector-relative strength, optional FinBERT sentiment score. Persist to `feature_vectors`. **Strict anti-leakage:** features at time *t* use only data ≤ *t*; all rolling windows shifted; no scaler fitted on test data.
+2. **Models:**
+   - Mandatory baselines for honest comparison: naive persistence, ARIMA/SARIMA (statsmodels)
+   - **XGBoost + LightGBM classifiers** → next-day and next-15m direction probability (primary; extends the existing `data/models/xgboost_backtest_*.json` artifacts)
+   - **GARCH(1,1)** (`arch`) → volatility forecast, feeding stop-loss width and the prediction cone on the chart
+   - **HMM** (`hmmlearn`, 3 states) → bull/bear/sideways regime, powering `research/regime-analysis` and gating signal aggressiveness
+   - Optional LSTM/GRU (torch CPU) — **ship only if it beats XGBoost in walk-forward**
+3. **Training pipeline:** expanding-window time-series CV, Optuna tuning, class-imbalance handling, artifacts + metrics versioned to disk and DB. `retraining_trigger.py` → weekly retrain + drift detection (PSI/KS **computed**, never hardcoded).
+4. **Inference:** `/api/v1/predictions/{symbol}` → direction probability, expected move range from GARCH, current regime, model version, training date, honest confidence. No trained model → typed 503.
+5. **Explainability:** real SHAP values for the tree models → `research/explainability/[symbol]` and the fixed `explain.py`.
+6. **Fusion rule:** final recommendation = classical composite ⊕ ML probability ⊕ regime gate. Document the exact formula and weights in `SIGNALS.md`.
+**Gate:** `/model-monitor` and `/research/model-performance` display only DB-sourced walk-forward metrics; SHAP waterfall renders for a trained symbol; no page anywhere displays an invented metric.
+
+## PHASE 7 — Backtesting & paper trading (proof, not promises)
+1. Use `backend/research/backtesting/` (engine, walk_forward, monte_carlo, cost_model, statistical_tests). Event-driven, no look-ahead, next-bar execution.
+2. **Realistic Indian cost model:** discount-broker brokerage (₹20 or 0.03% per executed order, whichever lower), STT, exchange transaction charges, SEBI turnover fee, GST 18% on charges, stamp duty, plus a slippage model (bps scaled by ATR and volume).
+3. **Walk-forward validation** is the only source of displayed accuracy. Report: CAGR, Sharpe, Sortino, Calmar, max drawdown + duration, win rate, profit factor, expectancy, turnover, directional accuracy vs both baselines, Monte Carlo confidence bands, and a significance test vs buy-and-hold.
+4. Wire `backtest-lab`: choose symbol/strategy/params/date range → Celery job → live progress over `/ws/backtest-progress` → results page with equity curve, drawdown chart, trade log table, monthly-returns heatmap, metric cards. All real.
+5. Paper trading: fused signals auto-generate paper orders at live prices via `services/paper_trading.py`; portfolio, orders, transactions, and funds pages reflect real simulated P&L with realistic costs.
+**Gate:** run a backtest on RELIANCE from the UI end-to-end; equity curve and trade log are real; paper P&L moves with live prices.
+
+## PHASE 8 — Payments & subscription module (currently missing/fake — defect #2)
+1. **Data model (SQL, not Mongo):** `plans`, `subscriptions`, `payment_intents`, `payment_transactions`, `wallet_ledger` (double-entry: every credit/debit is an immutable row; balance is derived, never stored as a mutable field).
+2. **Plans in INR** (replace the fake USD tiers): e.g. Free (delayed data, 5 watchlist symbols, 1 backtest/day), Pro ₹499/mo (full universe, unlimited backtests, ML predictions, alerts), Institutional ₹1999/mo (API access, bulk backtests). Plans seeded in the DB, served by `/api/v1/payments/plans` — **no hardcoded plan array in React**.
+3. **Razorpay Test Mode integration:** `POST /payments/intents` creates a Razorpay order → frontend opens Razorpay Checkout → `POST /payments/confirm` verifies `razorpay_signature` server-side with HMAC-SHA256 → `POST /payments/webhooks/razorpay` verifies the webhook signature and is the **authoritative** state transition (extend the existing verifier at `payments.py:461`). Idempotency-Key on intent creation is already in `api-client.ts` — enforce it server-side with a unique constraint.
+4. **Entitlements middleware:** a FastAPI dependency that gates premium endpoints by active subscription; frontend `useEntitlements()` hook that hides/locks premium UI with an upgrade CTA. Never trust the client.
+5. **UI:** rewrite `PaymentPages.tsx` — real INR pricing cards from the API, checkout page with Razorpay Checkout, wallet balance from the ledger, **real** invoice/transaction history from `/payments/history`, subscription management (upgrade/downgrade/cancel), and downloadable invoice (jsPDF, free).
+6. **Safety:** test keys only; a persistent "TEST MODE — no real money" banner; refunds/failures/webhook-replay handled; every state change written to an audit log.
+**Gate:** complete a full test-mode purchase with Razorpay test cards → subscription activates → premium features unlock → transaction appears in real history → replaying the webhook does not double-credit.
+
+## PHASE 9 — Responsive UI, design system, and full-page sweep
+1. **Consolidate the design system.** `packages/ui` (`@neuroquant/ui`) and `apps/web/src/components/ui/*` are duplicate component sets; `components/dashboard/premium/*` is a third. Pick `packages/ui` as canonical, migrate all imports, delete the duplicates. Verify `packages/ui` actually builds to `dist/` before the web app imports it (currently a build-order hazard).
+2. **Responsive contract for every page** — verify at 360 / 414 / 768 / 1024 / 1440 / 1920 px:
+   - Tables → horizontally scrollable with a sticky first column on mobile, or card layout below `md`
+   - Charts → `ResizeObserver`-driven, min-height 280px mobile / 420px desktop, touch pan/pinch enabled
+   - Terminal multi-pane layout → collapses to a tabbed single-pane view below `lg`
+   - Sidebar → off-canvas drawer with overlay below `lg`; bottom nav bar on mobile for the 5 primary routes
+   - Command palette, modals, drawers → full-screen sheets on mobile, focus-trapped, ESC/backdrop close
+   - No fixed pixel widths, no `overflow-x` on `body`, min 44×44px touch targets
+3. **Page-by-page sweep** — for each of these routes, remove demo data, wire real endpoints, add loading skeleton + error boundary + empty state, and verify responsiveness:
+   `/` (terminal) · `/terminal` (new route) · `/dashboard` · `/markets` · `/markets/stocks` · `/markets/stocks/[symbol]` · `/markets/crypto` · `/markets/crypto/[coin]` · `/markets/forex` · `/screener` · `/portfolio` · `/portfolio/orders` · `/portfolio/funds` · `/portfolio/optimizer` · `/transactions` · `/alerts` · `/notifications` · `/backtest-lab` · `/backtest-lab/results/[jobId]` · `/backtesting` (merge into backtest-lab or delete) · `/research` + all 5 sub-pages · `/model-monitor` · `/pricing` · `/checkout` · `/profile` · `/settings` · `/admin` · `/blog` · `/login` · `/register` · `/forgot-password` · `/component-showcase` (dev-only, exclude from prod build).
+4. **Accessibility:** semantic landmarks, keyboard navigation everywhere, visible focus rings, `aria-label` on icon buttons, ≥4.5:1 contrast in both themes, `prefers-reduced-motion` respected (the app uses framer-motion heavily).
+5. **Theme:** verify `theme-sync.tsx` + `tokens.css` produce a consistent dark/light experience; charts must re-theme without remounting.
+**Gate:** every route in the list above renders real data or an honest empty state, at every breakpoint, with zero console errors and zero hydration warnings.
+
+## PHASE 10 — Hardening, tests, docs, delivery
+1. **Security:** JWT auth flow end-to-end (register/login/refresh/forgot-password), CSRF for cookie flows, rate limiting per user/IP, input validation via Pydantic v2 + Zod, no secrets in the bundle, security headers verified, SQL injection impossible (parameterized only), CORS locked to known origins.
+2. **Performance budgets:** cached API p95 < 300 ms; chart first paint < 2 s; Lighthouse mobile performance ≥ 85, accessibility ≥ 95; JS bundle for the terminal route < 400 KB gzipped (drop `three`/`react-financial-charts` if unused); no memory leak after 30 min of live streaming.
+3. **Tests:** backend unit tests for every indicator, pattern, cost-model, and fusion rule; integration tests for each provider (network-marked); contract tests asserting frontend Zod schemas match backend response models; frontend smoke tests for chart mount/unmount, WS reconnect, and payment flow; `pytest` and `tsc --noEmit` green in CI.
+4. **Observability:** structured JSON logs with request IDs (`request_id_middleware.py` exists — finish it), a `/health` deep check covering DB/Redis/providers, and a provider-failure counter.
+5. **Docs to write/update:**
+   - `README.md` — clone → run in under 10 minutes with **zero paid keys**
+   - `ARCHITECTURE.md` — system diagram, data flow, module map
+   - `SIGNALS.md` — every indicator formula, every model, the exact fusion rule
+   - `API.md` — full endpoint contract
+   - `LIMITATIONS.md` — **mandatory honesty file**: data is ~15 min delayed without a broker key; predictions are probabilistic, not guarantees; realistic directional accuracy for daily equity direction is in the 52–58% range and anything claiming 90% is fabricated or leaking future data; this is an educational paper-trading system and **not investment advice**.
+   - `PHASE_REPORTS/` — one report per phase with the acceptance evidence.
+
+**FINAL ACCEPTANCE:** fresh clone → `cp .env.example .env` → `docker-compose up` → working, responsive application with live NSE data, rendering charts, real algorithmic + ML signals, real walk-forward backtests, working test-mode payments, zero demo data, zero paid services, zero fabricated numbers.
+
+---
+
+# SECTION E — HOW YOU MUST WORK
+
+- Execute **one phase at a time**. After each, output: (a) files added/changed/deleted, (b) root cause for each fix, (c) the command output proving the acceptance gate passed. Then wait for "continue".
+- **Never** replace missing real data with synthetic data to make a screen look full. An empty state is a correct answer.
+- Prefer **repairing** existing modules over rewriting, to preserve the monorepo structure — except where this prompt explicitly says delete.
+- Any schema change requires an Alembic migration.
+- If a free provider is rate-limited or down during development, degrade gracefully and log it; do not substitute fake values.
+- If you believe a requirement in this prompt is technically impossible or would require a paid service, **say so explicitly in your phase report** rather than faking a workaround.
+
+**BEGIN WITH PHASE 0 NOW.**
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-07-21T05:08:58+05:30.
+</ADDITIONAL_METADATA>
+<USER_SETTINGS_CHANGE>
+The user changed setting `Model Selection` from None to GPT-OSS 120B (Medium). No need to comment on this change if the user doesn't ask about it. If reporting what model you are, please use a human readable name instead of the exact string.
+</USER_SETTINGS_CHANGE>

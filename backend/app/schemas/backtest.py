@@ -30,7 +30,7 @@ class BacktestRequest(BaseModel):
     universe: list[str] = Field(..., min_length=1, max_length=500, description="list of symbols")
     date_from: date
     date_to: date
-    initial_capital: Decimal = Field(..., gt=0, decimal_places=2)
+    initial_capital: Decimal = Field(..., gt=0)
     walk_forward: WalkForwardConfig | None = None
     monte_carlo: MonteCarloConfig | None = None
 
@@ -57,39 +57,39 @@ class BacktestStatusResponse(BaseModel):
 
 class BacktestMetrics(BaseModel):
     """Core backtest performance metrics."""
-    total_return: Decimal = Field(..., decimal_places=4)
-    cagr: Decimal = Field(..., decimal_places=4)
-    sharpe: Decimal = Field(..., decimal_places=4)
-    sharpe_ratio: Decimal = Field(..., decimal_places=4)
-    sortino_ratio: Decimal = Field(..., decimal_places=4)
-    calmar_ratio: Decimal = Field(..., decimal_places=4)
-    omega_ratio: Decimal = Field(..., decimal_places=4)
-    max_drawdown: Decimal = Field(..., decimal_places=4)
+    total_return: Decimal = Field(...)
+    cagr: Decimal = Field(...)
+    sharpe: Decimal = Field(...)
+    sharpe_ratio: Decimal = Field(...)
+    sortino_ratio: Decimal = Field(...)
+    calmar_ratio: Decimal = Field(...)
+    omega_ratio: Decimal = Field(...)
+    max_drawdown: Decimal = Field(...)
     max_drawdown_duration_days: int
-    win_rate: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    profit_factor: Decimal = Field(..., decimal_places=4)
-    avg_win: Decimal = Field(..., decimal_places=4)
-    avg_loss: Decimal = Field(..., decimal_places=4)
-    payoff_ratio: Decimal = Field(..., decimal_places=4)
+    win_rate: Decimal = Field(..., ge=0, le=1)
+    profit_factor: Decimal = Field(...)
+    avg_win: Decimal = Field(...)
+    avg_loss: Decimal = Field(...)
+    payoff_ratio: Decimal = Field(...)
     num_trades: int
-    gross_profit: Decimal = Field(..., decimal_places=2)
-    gross_loss: Decimal = Field(..., decimal_places=2)
-    tail_ratio: Decimal = Field(..., decimal_places=4)
-    serenity_ratio: Decimal = Field(..., decimal_places=4)
-    deflated_sharpe: Decimal = Field(..., decimal_places=4)
+    gross_profit: Decimal = Field(...)
+    gross_loss: Decimal = Field(...)
+    tail_ratio: Decimal = Field(...)
+    serenity_ratio: Decimal = Field(...)
+    deflated_sharpe: Decimal = Field(...)
 
 
 class EquityCurvePoint(BaseModel):
     """Single point in equity curve."""
     date: date
-    portfolio_value: Decimal = Field(..., decimal_places=2)
-    benchmark_value: Decimal | None = Field(None, decimal_places=2)
+    portfolio_value: Decimal = Field(...)
+    benchmark_value: Decimal | None = Field(None)
 
 
 class DrawdownPoint(BaseModel):
     """Single drawdown data point."""
     date: date
-    drawdown_pct: Decimal = Field(..., decimal_places=4)
+    drawdown_pct: Decimal = Field(...)
 
 
 class TradeLogEntry(BaseModel):
@@ -97,36 +97,36 @@ class TradeLogEntry(BaseModel):
     date: date
     symbol: str
     direction: str = Field(..., description="BUY|SELL")
-    quantity: Decimal = Field(..., gt=0, decimal_places=8)
-    price: Decimal = Field(..., gt=0, decimal_places=8)
-    pnl: Decimal = Field(..., decimal_places=2)
-    cum_pnl: Decimal = Field(..., decimal_places=2)
-    commission: Decimal = Field(..., decimal_places=2)
+    quantity: Decimal = Field(..., gt=0)
+    price: Decimal = Field(..., gt=0)
+    pnl: Decimal = Field(...)
+    cum_pnl: Decimal = Field(...)
+    commission: Decimal = Field(...)
 
 
 class WalkForwardMetrics(BaseModel):
     """Walk-forward analysis results."""
     fold_sharpes: list[Decimal] = Field(..., description="Sharpe per fold")
-    mean_sharpe: Decimal = Field(..., decimal_places=4)
-    std_sharpe: Decimal = Field(..., decimal_places=4)
-    t_statistic: Decimal = Field(..., decimal_places=4)
-    p_value: Decimal = Field(..., ge=0, le=1, decimal_places=6)
+    mean_sharpe: Decimal = Field(...)
+    std_sharpe: Decimal = Field(...)
+    t_statistic: Decimal = Field(...)
+    p_value: Decimal = Field(..., ge=0, le=1)
 
 
 class MonteCarloResults(BaseModel):
     """Monte Carlo simulation results."""
     percentiles: dict[str, Decimal] = Field(..., description="p5, p25, p50, p75, p95")
-    prob_of_ruin_10pct: Decimal = Field(..., ge=0, le=1, decimal_places=4)
-    prob_of_ruin_25pct: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+    prob_of_ruin_10pct: Decimal = Field(..., ge=0, le=1)
+    prob_of_ruin_25pct: Decimal = Field(..., ge=0, le=1)
     fan_paths_sample: list[list[Decimal]] = Field(..., description="100 sample paths")
 
 
 class StatisticalTests(BaseModel):
     """Statistical significance tests."""
-    dm_test_statistic: Decimal = Field(..., decimal_places=6)
-    dm_test_p_value: Decimal = Field(..., ge=0, le=1, decimal_places=6)
+    dm_test_statistic: Decimal = Field(...)
+    dm_test_p_value: Decimal = Field(..., ge=0, le=1)
     dm_test_vs_benchmark: str = Field(default="ARIMA")
-    sharpe_se: Decimal = Field(..., decimal_places=6, description="Sharpe standard error")
+    sharpe_se: Decimal = Field(..., description="Sharpe standard error")
     min_backtest_length_days: int
     multiple_testing_correction: str = "Bonferroni"
 
@@ -138,7 +138,7 @@ class BacktestResultsResponse(BaseModel):
     universe: list[str]
     date_from: date
     date_to: date
-    initial_capital: Decimal = Field(..., decimal_places=2)
+    initial_capital: Decimal = Field(...)
 
     metrics: BacktestMetrics
     equity_curve: list[EquityCurvePoint]
