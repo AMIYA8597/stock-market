@@ -1,0 +1,60 @@
+# Example environment variables for py-ppm-clone
+
+# Provider selection
+LLM_PROVIDER=openai  # openai | gemini
+
+# OpenAI
+# OPENAI_API_KEY=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
+# OPENAI_MODEL=gpt-3.5-turbo
+OPENAI_API_KEY=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
+OPENAI_MODEL=gpt-3.5-turbo
+# OPENAI_API_KEY=sk-your-openai-api-key
+# OPENAI_MODEL=gpt-3.5-turbo
+DEEPSEEK_API_KEY=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
+OPENAI_MODEL=gpt-3.5-turbo
+
+# Google Gemini
+GOOGLE_API_KEY=AIzaSyDd097tlmQDyStVEe7xheDcqKr5t0BArSE
+GEMINI_MODEL=gemini-1.5-pro-latest
+# GOOGLE_API_KEY=your-gemini-api-key
+# GEMINI_MODEL=gemini-1.5-pro-latest
+
+# Fine-tuned (optional)
+FLAN_T5_MODEL_NAME=google/flan-t5-large
+HF_DEVICE=cpu  # cpu|cuda|mps
+FLAN_T5_MAX_NEW_TOKENS=512
+FLAN_T5_TEMPERATURE=0.0
+
+# Filtering mode (heuristic|model). Use 'model' if FLAN_T5 is available
+FILTERING_MODE=heuristic
+
+# MongoDB
+MONGODB_URI=mongodb+srv://projectllm:projectllm@cluster0.7gwxgv5.mongodb.net/
+# MONGODB_URI=mongodb://localhost:27017/
+MONGODB_DB_NAME=pharmacovigilance_llm
+MONGODB_COLLECTION_USERS=users
+MONGODB_COLLECTION_EXTRACTIONS=extractions
+MONGODB_COLLECTION_MODELS=models
+MONGODB_COLLECTION_TRAINING_DATA=training_data
+MONGODB_COLLECTION_RESULTS=results
+
+# Auth
+JWT_SECRET_KEY=change-this-in-production
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# Server
+BACKEND_HOST=localhost
+BACKEND_PORT=8000
+FRONTEND_HOST=localhost
+FRONTEND_PORT=3000
+API_PREFIX=/api/v1
+CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
+
+# Evaluation & Prompting
+MAX_DEMONSTRATIONS=5
+BEAM_SIZE=3
+
+# Logging
+LOG_LEVEL=INFO
+LOG_FILE=./logs/app.log

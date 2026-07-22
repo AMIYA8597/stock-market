@@ -17,10 +17,10 @@ from app.services.data_ingestion.base import DataSourceError, Interval, MarketDa
 from app.services.data_ingestion.coingecko_source import CoinGeckoSource
 from app.services.data_ingestion.fred_source import FREDSource
 from app.services.data_ingestion.nse_source import NSESource
+from app.services.data_ingestion.nse_intraday_source import NSEIntradaySource
 from app.services.data_ingestion.stooq_source import StooqSource
 from app.services.data_ingestion.yfinance_source import YFinanceSource
-from app.config.live_data import settings as live_data_settings
-
+from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 
@@ -44,19 +44,25 @@ class DataIngestionOrchestrator:
             "fred": FREDSource(),
             "alpha_vantage": AlphaVantageSource(),
             "nse": NSESource(),
+            "nse_intraday": NSEIntradaySource(),
             "stooq": StooqSource(),
         }
 
     def _select_sources(self, task: IngestionTask) -> list[MarketDataSource]:
         # Dynamically select source(s) based on configured live data provider
-        provider = live_data_settings.provider.lower()
+        provider = get_settings().LIVE_DATA_PROVIDER.lower()
         if provider == "yfinance":
             if task.asset_type == "CRYPTO":
                 return [self._sources["coingecko"], self._sources["yfinance"]]
             if task.asset_type == "MACRO":
                 return [self._sources["fred"]]
             if task.symbol.endswith(".NS") or task.symbol in {"^NSEI", "^BSESN"}:
-                return [self._sources["yfinance"], self._sources["stooq"]]
+                if task.interval != "1d":
+                    return [self._sources["yfinance"], self._sources["nse_intraday"]]
+                return [self._sources["yfinance"], self._sources["stooq"], self._sources["nse"]]
+            
+            if task.interval != "1d":
+                return [self._sources["yfinance"]]
             return [self._sources["yfinance"], self._sources["stooq"]]
         elif provider == "alpha_vantage":
             # Use Alpha Vantage as primary source for all asset types

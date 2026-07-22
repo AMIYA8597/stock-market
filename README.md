@@ -1,73 +1,67 @@
-# NeuroQuant — Local Run & Test Guide
+# NeuroQuant
 
-This repository contains the NeuroQuant monorepo ( + backend). These instructions show how to get a working local dev environment and run the unified test gate that validates both  and backend.
+NeuroQuant is an AI-powered stock market intelligence system built with a modern stack: Next.js 14 App Router, React 18, TailwindCSS, and FastAPI. It integrates real-time free market data, interactive financial charts, predictive modeling, and paper trading capabilities into a high-performance single-page application dashboard.
 
-Prerequisites
-- Node.js 20+, pnpm 8+ (or as specified in `package.json`)
-- Python 3.12+ (or your preferred py3 virtualenv)
-- Docker (for optional services)
-- git
+## Key Features
+- **Real-time Free Data**: Connects exclusively to free market data sources (Yahoo Finance, NSE) — no paid keys required.
+- **Predictive AI Models**: Uses statistical and ML models (HMM, TFT) located in `backend/research/` to generate trading signals and regimes.
+- **Portfolio & Paper Trading**: Manage watchlists, track active simulated positions, and execute virtual trades based on ML signals.
+- **Responsive Web Dashboard**: Clean hierarchy and dark mode Radix/Tailwind components via `@neuroquant/ui`. 
+- **Graceful Degradation**: Truthful representation of data. If models haven't converged or the market is closed, the UI accurately reflects the empty state instead of faking data.
 
-Quick start (development)
-1. Install node dependencies (root):
+## Monorepo Structure
+- `apps/web/`: Next.js 14 App Router frontend.
+- `packages/ui/`: Radix-based design system and UI components.
+- `packages/types/`: Shared TypeScript definitions.
+- `backend/`: FastAPI backend with SQLAlchemy (SQLite/Postgres), Redis, and WebSockets.
+  - `backend/app/`: Core FastAPI server, routers, WebSocket tickers.
+  - `backend/research/`: ML pipelines, backtesting engine, statistical tests.
 
+## Requirements
+- Node.js 20+, pnpm 8+
+- Python 3.12+ (or your preferred Python 3 environment)
+- Redis server (for WebSocket PubSub and task queue caching)
+
+## Quick Start (Local Development)
+
+### 1. Frontend Setup
 ```bash
+# Install dependencies from the monorepo root
 pnpm install
-```
 
-2. Create Python virtualenv and activate (recommended):
-
-On macOS / Linux:
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-On Windows (PowerShell):
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-3. Copy the example env and tweak if needed:
-```bash
-cp .env.example .env
-# or on Windows PowerShell:
-Copy-Item .env.example .env
-```
-
-4. Run  in dev:
-```bash
+# Start the Next.js development server
 pnpm --filter @neuroquant/web dev
 ```
 
-5. Run backend (local dev):
+### 2. Backend Setup
 ```bash
 cd backend
-# Install lightweight dev deps for local testing
-python -m pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
+
+# Install requirements
+pip install -r requirements.txt
+
+# Start the FastAPI backend
+python -m uvicorn app.main:app --reload --port 8000
 ```
 
-Unified validation (what CI should run locally)
-- Run the repo-level test (this builds the  and executes backend pytest):
+### 3. Environment Variables
+Copy `.env.example` to `.env` in both the root and `backend/` directories.
+```bash
+cp .env.example .env
+```
+Broker keys (Razorpay, Upstox, AngelOne) are strictly optional. The application is designed to function comprehensively without them.
 
+## Testing & Validation
+To run the unified test gate that validates the frontend build and backend tests:
 ```bash
 pnpm test
 ```
-
-Notes and troubleshooting
-- `pnpm test` runs `pnpm --filter @neuroquant/web build` then runs `pytest` in `backend/`.
-- On Windows, building some Python packages (pandas, numpy) may require Visual Studio Build Tools. To avoid heavy installs, the repository test gate only installs the lightweight test runtime packages (`pytest`, `aiosqlite`) before running tests.
-- If CI or GitHub shows push errors, check branch protection rules and required status checks on the repository settings. Locally, `git push --dry-run` will tell you if a push will be accepted.
-
-Files changed in this update
-- `scripts/setup.sh` — updated to install `backend/requirements.txt` instead of nonexistent `services/*` paths.
-- `.github/workflows/deploy.yml` — removed references to `services/gateway` and build only the `backend` image.
-- `package.json` — added `test:full` and made `test` run it.
-
-If you want, I can:
-- Commit these changes and push them on your behalf (I will show commands),
-- Update CI to run the `pnpm test` root gate, or
-- Harden the `setup.sh` script for cross-platform behavior.
-
-Would you like me to commit the current edits and push, or continue with `setup.sh` cross-platform improvements now?
+The backend tests run using `pytest` inside the `backend/` directory:
+```bash
+cd backend
+pytest tests/ -v
+```

@@ -71,8 +71,6 @@ def _build_response_object(result: dict) -> SignalResponse:
                 "top_features": ens.get("xgboost", {}).get("top_features", []),
             },
             "technical": ens.get("technical", {}),
-            "pattern":   ens.get("pattern", {}),
-            "momentum":  ens.get("momentum", {}),
             "regime":    ens.get("regime", {}),
         },
         model_weights={k: Decimal(str(round(v, 4))) for k, v in ens.get("model_weights", {}).items()},

@@ -14,19 +14,19 @@ import {
   TrendingUp,
   Workflow,
 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
-import { RangeSlider } from "@/components/ui/RangeSlider";
-import { Select } from "@/components/ui/Select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
+import { Badge } from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
+import { RangeSlider } from "@neuroquant/ui";
+import { Select } from "@neuroquant/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@neuroquant/ui";
 import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, StatCard } from "@/components/dashboard/premium";
-import { Table, TableCell, TableHead, TableRow } from "@/components/ui/Table";
+import { Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
 
 const kpiCards = [
-  { title: "Users", value: "24.6K", delta: "+12.4%", trend: "up" as const, icon: LayoutDashboard },
-  { title: "Revenue", value: "$3.42M", delta: "+9.8%", trend: "up" as const, icon: TrendingUp },
-  { title: "Activity", value: "1,284", delta: "+4.1%", trend: "up" as const, icon: Bell },
-  { title: "Latency", value: "42ms", delta: "-11ms", trend: "down" as const, icon: ChartNoAxesCombined },
+  { title: "Users", value: "24.6K", trend: 12.4, icon: LayoutDashboard },
+  { title: "Revenue", value: "$3.42M", trend: 9.8, icon: TrendingUp },
+  { title: "Activity", value: "1,284", trend: 4.1, icon: Bell },
+  { title: "Latency", value: "42ms", trend: -11, icon: ChartNoAxesCombined },
 ];
 
 const rows = [
@@ -42,7 +42,7 @@ export default function ComponentShowcasePage(): JSX.Element {
     <main className="relative min-h-screen overflow-hidden px-4 py-8 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-[1600px] space-y-8">
         <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
-          <Card glow className="relative overflow-hidden">
+          <Card className="relative overflow-hidden">
             <div className="absolute inset-0 bg-[radial-gradient(1100px_520px_at_0%_0%,rgba(0,212,245,0.16),transparent_45%),radial-gradient(800px_420px_at_100%_0%,rgba(139,92,246,0.14),transparent_45%)]" />
             <div className="relative grid gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
               <div className="space-y-5">
@@ -54,9 +54,9 @@ export default function ComponentShowcasePage(): JSX.Element {
                   This page is built to verify the new card-based visual language, spacing scale, responsive layout behavior, and component polish locally.
                 </p>
                 <div className="flex flex-wrap gap-3">
-                  <Button rightIcon={<ArrowRight className="h-4 w-4" />}>Primary action</Button>
+                  <Button>Primary action <ArrowRight className="ml-2 h-4 w-4" /></Button>
                   <Button variant="secondary">Secondary action</Button>
-                  <Button variant="ghost" leftIcon={<Eye className="h-4 w-4" />}>Preview mode</Button>
+                  <Button variant="ghost"><Eye className="mr-2 h-4 w-4" />Preview mode</Button>
                 </div>
               </div>
 
@@ -79,7 +79,7 @@ export default function ComponentShowcasePage(): JSX.Element {
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {kpiCards.map((item) => (
-            <StatCard key={item.title} title={item.title} value={item.value} delta={item.delta} trend={item.trend} icon={item.icon} />
+            <StatCard key={item.title} title={item.title} value={item.value} trend={item.trend} icon={item.icon} />
           ))}
         </section>
 
@@ -102,9 +102,9 @@ export default function ComponentShowcasePage(): JSX.Element {
               </div>
 
               <div className="grid gap-3 sm:grid-cols-3">
-                <Button leftIcon={<Sparkles className="h-4 w-4" />}>Primary</Button>
-                <Button variant="secondary" leftIcon={<Workflow className="h-4 w-4" />}>Secondary</Button>
-                <Button variant="ghost" leftIcon={<Lock className="h-4 w-4" />}>Ghost</Button>
+                <Button ><Sparkles className="h-4 w-4" /> Primary</Button>
+                <Button variant="secondary" ><Workflow className="h-4 w-4" /> Secondary</Button>
+                <Button variant="ghost" ><Lock className="h-4 w-4" /> Ghost</Button>
               </div>
 
               <div className="space-y-3 rounded-[1.25rem] border border-white/10 bg-white/5 p-4">

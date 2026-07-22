@@ -178,20 +178,40 @@ services:
     restart: unless-stopped
   
   # ═══════════════════════════════════════════════════════════════════════
-  # Gateway (API Gateway / FastAPI)
+  # Backend (FastAPI)
   # ═══════════════════════════════════════════════════════════════════════
-  gateway:
+  backend:
     build:
-      context: ./services/gateway
+      context: ./backend
       dockerfile: Dockerfile
-    container_name: ${PROJECT_NAME:-stock-market-project}-gateway-1
+    container_name: ${PROJECT_NAME:-stock-market-project}-backend-1
     ports:
       - "8000:8000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+      - POSTGRES_URL=postgresql+asyncpg://${POSTGRES_USER:-neuroquant}:${POSTGRES_PASSWORD:-neuroquant}@postgres:5432/${POSTGRES_DB:-neuroquant}
+      - REDIS_URL=redis://redis:6379/0
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       - postgres
       - redis
+    networks:
+      - neuroquant
+    restart: unless-stopped
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Frontend (Next.js)
+  # ═══════════════════════════════════════════════════════════════════════
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: ${PROJECT_NAME:-stock-market-project}-frontend-1
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    depends_on:
+      - backend
     networks:
       - neuroquant
     restart: unless-stopped

@@ -13,10 +13,14 @@ export function formatPrice(value: number, currency: string = "₹"): string {
 
 /** Format a number as compact: 1.2M, 3.4B etc */
 export function formatCompact(value: number): string {
-  if (Math.abs(value) >= 1e12) return numeral(value).format("0.00a").toUpperCase();
-  if (Math.abs(value) >= 1e9) return numeral(value).format("0.00a").toUpperCase();
-  if (Math.abs(value) >= 1e6) return numeral(value).format("0.00a").toUpperCase();
-  if (Math.abs(value) >= 1e3) return numeral(value).format("0.00a").toUpperCase();
+  if (Math.abs(value) >= 1e12)
+    return numeral(value).format("0.00a").toUpperCase();
+  if (Math.abs(value) >= 1e9)
+    return numeral(value).format("0.00a").toUpperCase();
+  if (Math.abs(value) >= 1e6)
+    return numeral(value).format("0.00a").toUpperCase();
+  if (Math.abs(value) >= 1e3)
+    return numeral(value).format("0.00a").toUpperCase();
   return numeral(value).format("0,0.00");
 }
 

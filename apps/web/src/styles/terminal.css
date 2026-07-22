@@ -1,11 +1,12 @@
 .terminal-root {
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--bg-base);
   color: var(--text-primary);
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .terminal-root {
     min-width: var(--desktop-min-width);
   }
@@ -18,7 +19,7 @@
   height: 100%;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .terminal-grid {
     display: grid;
     grid-template-columns: var(--terminal-sidebar-width) minmax(0, 1fr) var(--terminal-signal-width);
@@ -32,7 +33,7 @@
   background: var(--bg-surface);
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .terminal-topbar {
     grid-column: 1 / span 3;
   }
@@ -44,7 +45,7 @@
   flex: 1 1 0%;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .terminal-pane {
     flex: none;
   }
@@ -61,4 +62,77 @@
 
 .terminal-pane--center {
   background: var(--bg-base);
+}
+
+/* Premium UI Enhancements - Phase 12 */
+.glass-panel {
+  background: rgba(18, 18, 23, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 0 4px 24px -4px rgba(0, 0, 0, 0.5);
+}
+
+.glow-hover:hover {
+  box-shadow: 0 0 15px rgba(0, 212, 245, 0.15);
+  border-color: rgba(0, 212, 245, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pulse-green {
+  animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.pulse-red {
+  animation: pulse-red 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-green {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+  }
+  50% {
+    box-shadow: 0 0 8px 1px rgba(16, 185, 129, 0.3);
+  }
+}
+
+@keyframes pulse-red {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+  50% {
+    box-shadow: 0 0 8px 1px rgba(239, 68, 68, 0.3);
+  }
+}
+
+/* Custom modern scrollbar for panels */
+.ds-scrollable::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+.ds-scrollable::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
+}
+.ds-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+.ds-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

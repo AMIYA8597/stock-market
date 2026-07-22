@@ -5,7 +5,7 @@ import { cn } from "../lib/utils";
 
 type Regime = "bull" | "bear" | "sideways";
 
-interface RegimeBadgeProps {
+export interface RegimeBadgeProps {
   regime: Regime;
   confidence?: number;
   animated?: boolean;

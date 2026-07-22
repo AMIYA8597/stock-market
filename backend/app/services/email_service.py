@@ -7,14 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.email_job import EmailJob
 
-# Optional email background task – use a no‑op placeholder if Celery/RQ is not installed
+# Optional email background task – use a local logger if Celery/RQ is not installed
 try:
     from tasks.email_tasks import send_email_task  # type: ignore
 except ModuleNotFoundError:
-    def send_email_task(*_args, **_kwargs):
-        """Fallback stub – logs that email sending is disabled in this environment."""
-        import logging
-        logging.getLogger(__name__).warning("send_email_task called but tasks module is missing; email not sent.")
+    class OfflineLogTask:
+        def delay(self, job_id, to_email, template, payload):
+            import logging
+            logging.getLogger(__name__).info(f"Offline mode: simulated sending email to {to_email} with template {template}")
+    send_email_task = OfflineLogTask()
 
 
 TEMPLATES: dict[str, str] = {

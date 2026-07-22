@@ -8,6 +8,7 @@ import { systemApi } from "@/lib/api-client";
 import { useUIStore } from "@/stores/ui-store";
 import type { SignalResponse } from "@/types/intelligence";
 import { useTradingStore } from "@/stores/tradingStore";
+import { useTradingModeQuery, useTriggerKillSwitchMutation } from "@/hooks/queries/useTrading";
 
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 
@@ -73,7 +74,11 @@ export default function TopBar({
   refreshing,
   signalStreamStatus,
 }: TopBarProps): JSX.Element {
-  const { tradingMode, connectionStatus, triggerKillSwitch, fetchStatus } = useTradingStore();
+  const { tradingMode } = useTradingStore();
+  const { data: tradingData, refetch: fetchStatus } = useTradingModeQuery();
+  const { mutateAsync: triggerKillSwitch } = useTriggerKillSwitchMutation();
+  const connectionStatus = tradingData?.connection_status ?? "disconnected";
+  
   const { status: priceFeedStatus } = usePriceFeed(["^NSEI"]);
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
   const [indices, setIndices] = useState<MarketIndex[]>([]);

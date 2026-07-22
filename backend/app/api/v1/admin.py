@@ -1,9 +1,11 @@
+"""Admin endpoints."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.blog import BlogPost
@@ -40,27 +42,6 @@ class UpdateRoleRequest(BaseModel):
 async def list_users(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> list[AdminUserItem]:
     _require_admin(current_user)
 
-    from app.core.config import get_settings
-    settings = get_settings()
-
-    if settings.MONGODB_URL:
-        from app.database.mongodb import get_mongo_db
-        database = get_mongo_db()
-        if database is not None:
-            cursor = database.users.find().sort("created_at", -1).limit(200)
-            rows = await cursor.to_list(length=200)
-            return [
-                AdminUserItem(
-                    id=str(row["_id"]),
-                    email=row["email"],
-                    full_name=row.get("full_name"),
-                    role=row["role"],
-                    is_active=row["is_active"],
-                )
-                for row in rows
-            ]
-        return []
-
     result = await db.execute(select(User).order_by(User.created_at.desc()).limit(200))
     rows = result.scalars().all()
     return [
@@ -83,31 +64,13 @@ async def update_user_role(
     db: AsyncSession = Depends(get_db),
 ) -> AdminUserItem:
     _require_admin(current_user)
+    
+    try:
+        uid = uuid.UUID(user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid ID")
 
-    from app.core.config import get_settings
-    settings = get_settings()
-
-    if settings.MONGODB_URL:
-        from app.database.mongodb import mongo_get_user_by_id, mongo_update_user
-        user = await mongo_get_user_by_id(user_id)
-        if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.RESOURCE_NOT_FOUND,
-                    message="User not found.",
-                ).dict(),
-            )
-        await mongo_update_user(user_id, {"role": payload.role})
-        return AdminUserItem(
-            id=user_id,
-            email=user["email"],
-            full_name=user.get("full_name"),
-            role=payload.role,
-            is_active=user["is_active"],
-        )
-
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
@@ -119,6 +82,9 @@ async def update_user_role(
         )
 
     user.role = payload.role
+    await db.commit()
+    await db.refresh(user)
+
     return AdminUserItem(
         id=str(user.id),
         email=user.email,
@@ -131,28 +97,6 @@ async def update_user_role(
 @router.get("/content")
 async def content_control(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, list[dict[str, str]]]:
     _require_admin(current_user)
-
-    from app.core.config import get_settings
-    settings = get_settings()
-
-    if settings.MONGODB_URL:
-        from app.database.mongodb import get_mongo_db
-        database = get_mongo_db()
-        if database is not None:
-            cursor = database.blog_posts.find().sort("updated_at", -1).limit(100)
-            posts = await cursor.to_list(length=100)
-            return {
-                "posts": [
-                    {
-                        "id": str(post["_id"]),
-                        "slug": post["slug"],
-                        "title": post["title"],
-                        "status": post["status"],
-                    }
-                    for post in posts
-                ]
-            }
-        return {"posts": []}
 
     post_result = await db.execute(select(BlogPost).order_by(BlogPost.updated_at.desc()).limit(100))
     posts = post_result.scalars().all()
@@ -167,4 +111,3 @@ async def content_control(current_user: dict = Depends(get_current_user), db: As
             for post in posts
         ]
     }
-

@@ -208,16 +208,15 @@ async def ws_signals(websocket: WebSocket):
         await manager.disconnect(websocket, channel)
 
 
-# Removed dead ws_alerts route (managed via signals)
-# @router.websocket("/alerts")
-# async def ws_alerts(websocket: WebSocket):
-#     manager = get_connection_manager()
-#     await manager.connect(websocket, "signals:alerts")
-#     try:
-#         while True:
-#             await websocket.receive_text()
-#     except WebSocketDisconnect:
-#         await manager.disconnect(websocket, "signals:alerts")
+@router.websocket("/alerts")
+async def ws_alerts(websocket: WebSocket):
+    manager = get_connection_manager()
+    await manager.connect(websocket, "signals:alerts")
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket, "signals:alerts")
 
 
 @router.websocket("/backtest-progress")

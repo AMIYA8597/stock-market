@@ -277,3 +277,4 @@ async def get_db_health() -> dict[str, bool]:
         health["healthy"] = False
 
     return health
+
