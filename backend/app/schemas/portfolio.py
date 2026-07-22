@@ -13,23 +13,23 @@ from pydantic import BaseModel, Field
 class HoldingData(BaseModel):
     """Single holding in portfolio."""
     symbol: str
-    quantity: Decimal = Field(..., gt=0, decimal_places=8)
-    avg_price: Decimal = Field(..., gt=0, decimal_places=8)
-    current_price: Decimal = Field(..., gt=0, decimal_places=8)
-    unrealized_pnl: Decimal = Field(..., decimal_places=2)
-    unrealized_pnl_pct: Decimal = Field(..., decimal_places=4)
+    quantity: Decimal = Field(..., gt=0)
+    avg_price: Decimal = Field(..., gt=0)
+    current_price: Decimal = Field(..., gt=0)
+    unrealized_pnl: Decimal = Field(...)
+    unrealized_pnl_pct: Decimal = Field(...)
     in_position_days: int
 
 
 class HoldingsResponse(BaseModel):
     """GET /portfolio/holdings response."""
     holdings: list[HoldingData]
-    total_invested: Decimal = Field(..., decimal_places=2)
-    total_current_value: Decimal = Field(..., decimal_places=2)
-    total_unrealized_pnl: Decimal = Field(..., decimal_places=2)
-    total_unrealized_pnl_pct: Decimal = Field(..., decimal_places=4)
-    cash_balance: Decimal = Field(..., decimal_places=2)
-    portfolio_value: Decimal = Field(..., decimal_places=2)
+    total_invested: Decimal = Field(...)
+    total_current_value: Decimal = Field(...)
+    total_unrealized_pnl: Decimal = Field(...)
+    total_unrealized_pnl_pct: Decimal = Field(...)
+    cash_balance: Decimal = Field(...)
+    portfolio_value: Decimal = Field(...)
     timestamp: datetime
 
 
@@ -41,10 +41,10 @@ class TransactionRequest(BaseModel):
     """POST /portfolio/transaction request body."""
     symbol: str
     type: str = Field(..., description="BUY|SELL")
-    quantity: Decimal = Field(..., gt=0, decimal_places=8)
-    price: Decimal = Field(..., gt=0, decimal_places=8)
-    brokerage: Decimal | None = Field(default=0, ge=0, decimal_places=4)
-    stt: Decimal | None = Field(default=0, ge=0, decimal_places=4)
+    quantity: Decimal = Field(..., gt=0)
+    price: Decimal = Field(..., gt=0)
+    brokerage: Decimal | None = Field(default=0, ge=0)
+    stt: Decimal | None = Field(default=0, ge=0)
 
 
 class TransactionResponse(BaseModel):
@@ -52,9 +52,9 @@ class TransactionResponse(BaseModel):
     transaction_id: str
     symbol: str
     type: str
-    quantity: Decimal = Field(..., decimal_places=8)
-    price: Decimal = Field(..., decimal_places=8)
-    net_amount: Decimal = Field(..., decimal_places=2)
+    quantity: Decimal = Field(...)
+    price: Decimal = Field(...)
+    net_amount: Decimal = Field(...)
     timestamp: datetime
     portfolio_updated: bool
 
@@ -66,10 +66,10 @@ class TransactionResponse(BaseModel):
 class PerformancePoint(BaseModel):
     """Single point in performance time-series."""
     date: datetime
-    portfolio_value: Decimal = Field(..., decimal_places=2)
-    benchmark_value: Decimal = Field(..., decimal_places=2)
-    daily_return: Decimal = Field(..., decimal_places=6)
-    benchmark_return: Decimal = Field(..., decimal_places=6)
+    portfolio_value: Decimal = Field(...)
+    benchmark_value: Decimal = Field(...)
+    daily_return: Decimal = Field(...)
+    benchmark_return: Decimal = Field(...)
 
 
 class PerformanceResponse(BaseModel):
@@ -77,9 +77,9 @@ class PerformanceResponse(BaseModel):
     series: list[PerformancePoint]
     start_date: datetime
     end_date: datetime
-    total_return: Decimal = Field(..., decimal_places=4)
-    benchmark_return: Decimal = Field(..., decimal_places=4)
-    excess_return: Decimal = Field(..., decimal_places=4)
+    total_return: Decimal = Field(...)
+    benchmark_return: Decimal = Field(...)
+    excess_return: Decimal = Field(...)
 
 
 # ─────────────────────────────────────────────────────────────━━
@@ -88,18 +88,18 @@ class PerformanceResponse(BaseModel):
 
 class RiskMetricsResponse(BaseModel):
     """GET /portfolio/risk-metrics response."""
-    sharpe_ratio: Decimal = Field(..., decimal_places=4)
-    sortino_ratio: Decimal = Field(..., decimal_places=4)
-    beta: Decimal = Field(..., decimal_places=4)
-    alpha: Decimal = Field(..., decimal_places=4)
-    max_drawdown: Decimal = Field(..., decimal_places=4)
-    var_95: Decimal = Field(..., decimal_places=4, description="Value at Risk 95%")
-    cvar_95: Decimal = Field(..., decimal_places=4, description="Conditional VaR 95% (Expected Shortfall)")
-    treynor_ratio: Decimal = Field(..., decimal_places=4)
-    information_ratio: Decimal = Field(..., decimal_places=4)
-    calmar_ratio: Decimal = Field(..., decimal_places=4)
-    portfolio_volatility: Decimal = Field(..., gt=0, decimal_places=4)
-    benchmark_volatility: Decimal = Field(..., gt=0, decimal_places=4)
+    sharpe_ratio: Decimal = Field(...)
+    sortino_ratio: Decimal = Field(...)
+    beta: Decimal = Field(...)
+    alpha: Decimal = Field(...)
+    max_drawdown: Decimal = Field(...)
+    var_95: Decimal = Field(..., description="Value at Risk 95%")
+    cvar_95: Decimal = Field(..., description="Conditional VaR 95% (Expected Shortfall)")
+    treynor_ratio: Decimal = Field(...)
+    information_ratio: Decimal = Field(...)
+    calmar_ratio: Decimal = Field(...)
+    portfolio_volatility: Decimal = Field(..., gt=0)
+    benchmark_volatility: Decimal = Field(..., gt=0)
 
 
 # ─────────────────────────────────────────────────────────────━━
@@ -108,11 +108,11 @@ class RiskMetricsResponse(BaseModel):
 
 class OptimizationConstraints(BaseModel):
     """Portfolio optimization constraints."""
-    max_weight: Decimal = Field(default=Decimal("0.20"), ge=0, le=1, decimal_places=4)
-    min_weight: Decimal = Field(default=Decimal("0.0"), ge=0, le=1, decimal_places=4)
+    max_weight: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
+    min_weight: Decimal = Field(default=Decimal("0.0"), ge=0, le=1)
     sector_limits: dict[str, Decimal] | None = None
-    max_turnover: Decimal | None = Field(None, ge=0, decimal_places=4)
-    leverage_limit: Decimal = Field(default=Decimal("1.0"), ge=1, decimal_places=2)
+    max_turnover: Decimal | None = Field(None, ge=0)
+    leverage_limit: Decimal = Field(default=Decimal("1.0"), ge=1)
 
 
 class OptimizationRequest(BaseModel):
@@ -126,14 +126,14 @@ class OptimizationRequest(BaseModel):
 class OptimizedWeight(BaseModel):
     """Single optimized weight."""
     symbol: str
-    weight: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+    weight: Decimal = Field(..., ge=0, le=1)
 
 
 class EfficientFrontierPoint(BaseModel):
     """Single point on efficient frontier."""
-    expected_return: Decimal = Field(..., decimal_places=4)
-    expected_volatility: Decimal = Field(..., decimal_places=4)
-    sharpe_ratio: Decimal = Field(..., decimal_places=4)
+    expected_return: Decimal = Field(...)
+    expected_volatility: Decimal = Field(...)
+    sharpe_ratio: Decimal = Field(...)
     weights: dict[str, Decimal]
 
 
@@ -142,7 +142,7 @@ class HRPDendrogramNode(BaseModel):
     symbols: list[str]
     left: Optional['HRPDendrogramNode'] = None
     right: Optional['HRPDendrogramNode'] = None
-    distance: Decimal = Field(..., decimal_places=6)
+    distance: Decimal = Field(...)
 
 
 HRPDendrogramNode.model_rebuild()
@@ -152,9 +152,9 @@ class OptimizationResponse(BaseModel):
     """POST /portfolio/optimize response."""
     method: str
     weights: list[OptimizedWeight]
-    expected_return: Decimal = Field(..., decimal_places=4)
-    expected_volatility: Decimal = Field(..., decimal_places=4)
-    sharpe_ratio: Decimal = Field(..., decimal_places=4)
+    expected_return: Decimal = Field(...)
+    expected_volatility: Decimal = Field(...)
+    sharpe_ratio: Decimal = Field(...)
     efficient_frontier: list[EfficientFrontierPoint] | None = None
     hrp_dendrogram: dict | None = None
     bl_posterior_returns: dict[str, Decimal] | None = None

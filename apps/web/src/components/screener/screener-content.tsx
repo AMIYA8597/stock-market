@@ -229,7 +229,7 @@ export function ScreenerContent() {
 
         {/* Results table */}
         <div className="col-span-12 lg:col-span-9">
-          <Card noPadding>
+          <Card>
             <CardHeader className="px-4 pt-3">
               <CardTitle>{loading ? "Loading..." : `${total} stocks found`}</CardTitle>
               <Badge variant="accent">Live</Badge>

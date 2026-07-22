@@ -210,9 +210,9 @@ market_data_service_module.MarketDataService.get_history = mock_get_history
 market_data_service_module.MarketDataService.get_ticker_history_df = mock_get_ticker_history_df
 market_data_service_module.MarketDataService.get_ticker_info = mock_get_ticker_info
 
-import app.database.mongodb as mongodb_module
+mongodb_module = None
 
-mongodb_module.get_mongo_db = mock_get_mongo_db
+pass
 
 
 

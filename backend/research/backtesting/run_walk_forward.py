@@ -238,8 +238,7 @@ Out-of-sample walk-forward backtest results over a 150-day testing window across
 - The ensemble out-performs any single model due to dynamic weighting scaling based on regime classification (HMM-GARCH) and recent performance tracking.
 """
 
-    # Save report to conversation directory
-    report_path = Path("C:/Users/USER/.gemini/antigravity/brain/982a2b64-7623-46a5-8604-d50148c6ffdd/walk_forward_backtest_report.md")
+    report_path = MODEL_DIR / "walk_forward_backtest_report.md"
     with open(report_path, "w") as f:
         f.write(report_content)
     logger.info(f"Saved walk-forward backtest report to {report_path}")

@@ -5,8 +5,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+import logging
 
 from fastapi import APIRouter, HTTPException, Query
+
+logger = logging.getLogger(__name__)
 
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.market import (
@@ -27,6 +30,7 @@ from app.schemas.market import (
     SignalData,
 )
 from app.services.market_data_service import MarketDataService
+from app.services.pattern_service import detect_patterns
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -143,33 +147,53 @@ async def get_history(
         bars_data = await MarketDataService.get_history(symbol, interval, effective_period)
         if not bars_data:
             raise HTTPException(
-                status_code=404,
-                detail=f"No market data available for {symbol}"
+                status_code=503,
+                detail={
+                    "code": "LIVE_DATA_UNAVAILABLE",
+                    "message": f"Live data temporarily unavailable for {symbol}",
+                    "symbol": symbol,
+                    "interval": interval,
+                    "retry_after": 60
+                }
             )
 
         bars = []
+        total_bars = len(bars_data)
+        dropped_bars = 0
         for b in bars_data:
             time_str = b["time"]
             try:
-                if "T" in time_str:
-                    time_val = int(datetime.fromisoformat(time_str.replace("Z", "+00:00")).timestamp())
-                else:
-                    time_val = int(datetime.strptime(time_str, "%Y-%m-%d").replace(tzinfo=UTC).timestamp())
-            except Exception:
-                time_val = int(datetime.now(UTC).timestamp())
-
-            # Convert timestamp to ISO string for frontend compatibility
-            iso_time = datetime.fromtimestamp(time_val, tz=UTC).isoformat()
-            bars.append(
-                OHLCVBar(
-                    timestamp=iso_time,
-                    open=round(Decimal(str(b["open"])), 8),
-                    high=round(Decimal(str(b["high"])), 8),
-                    low=round(Decimal(str(b["low"])), 8),
-                    close=round(Decimal(str(b["close"])), 8),
-                    volume=round(Decimal(str(b["volume"])), 4),
+                # yfinance returns pandas Timestamp isoformat or str
+                from dateutil import parser as dt_parser
+                dt_obj = dt_parser.parse(time_str)
+                if dt_obj.tzinfo is None:
+                    dt_obj = dt_obj.replace(tzinfo=UTC)
+                time_val = int(dt_obj.timestamp())
+                
+                iso_time = datetime.fromtimestamp(time_val, tz=UTC).isoformat()
+                bars.append(
+                    OHLCVBar(
+                        timestamp=iso_time,
+                        open=b.get("open", 0.0),
+                        high=b.get("high", 0.0),
+                        low=b.get("low", 0.0),
+                        close=b.get("close", 0.0),
+                        volume=b.get("volume", 0.0)
+                    )
                 )
+            except Exception as e:
+                dropped_bars += 1
+                logger.warning(f"Failed to parse timestamp {time_str}: {e}. Dropping bar.")
+
+        if total_bars > 0 and dropped_bars / total_bars > 0.05:
+            raise HTTPException(
+                status_code=502,
+                detail=f"Bad Gateway: Too many malformed data points ({dropped_bars}/{total_bars} dropped)."
             )
+
+        print(f"[HOP 3 API return] {symbol} @ {interval}: count_out={len(bars)}, first={bars[0].timestamp if bars else 'None'}, last={bars[-1].timestamp if bars else 'None'}")
+
+
 
         # bars_data may be a HistoryList (carries .source) or a plain list.
         # Guard against None just in case the service returns it despite the
@@ -365,3 +389,32 @@ async def get_ohlcv(
         return bars
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/universe")
+async def get_market_universe() -> dict[str, list[str]]:
+    """Return the list of core symbols supported by the platform."""
+    from app.services.market_data_service import MarketDataService
+    return {"universe": MarketDataService.NSE_NIFTY50}
+
+@router.get("/status")
+async def get_market_status() -> dict:
+    """Return the real IST market hours status."""
+    import zoneinfo
+    
+    ist = zoneinfo.ZoneInfo("Asia/Kolkata")
+    now = datetime.now(ist)
+    
+    is_open = False
+    # Market hours: Monday (0) to Friday (4), 9:15 AM to 3:30 PM
+    if now.weekday() < 5:
+        market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+        market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+        if market_open <= now <= market_close:
+            is_open = True
+            
+    return {
+        "is_open": is_open,
+        "current_time": now.isoformat(),
+        "market_timezone": "Asia/Kolkata",
+        "regular_market_hours": "09:15-15:30"
+    }

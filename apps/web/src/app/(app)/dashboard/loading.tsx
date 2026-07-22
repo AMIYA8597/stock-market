@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/Skeleton";
+import { Skeleton } from "@neuroquant/ui";
 
 export default function DashboardLoading(): JSX.Element {
   return (

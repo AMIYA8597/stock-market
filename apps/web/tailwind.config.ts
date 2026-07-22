@@ -4,10 +4,7 @@ import preset from "@neuroquant/config/tailwind.preset";
 const config: Config = {
   darkMode: ["class"],
   presets: [preset],
-  content: [
-    "./src/**/*.{ts,tsx}",
-    "../../packages/ui/src/**/*.{ts,tsx}",
-  ],
+  content: ["./src/**/*.{ts,tsx}", "../../packages/ui/src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
@@ -47,14 +44,16 @@ const config: Config = {
         mono: ["var(--font-berkeley)", "ui-monospace", "monospace"],
       },
       screens: {
-        terminal: "1280px",
+        terminal: "1024px",
       },
       gridTemplateColumns: {
-        terminal: "var(--terminal-sidebar-width) minmax(0, 1fr) var(--terminal-signal-width)",
+        terminal:
+          "var(--terminal-sidebar-width) minmax(0, 1fr) var(--terminal-signal-width)",
       },
       gridTemplateRows: {
         terminal: "var(--terminal-topbar-height) minmax(0, 1fr)",
-        "terminal-with-banner": "var(--terminal-topbar-height) auto minmax(0, 1fr)",
+        "terminal-with-banner":
+          "var(--terminal-topbar-height) auto minmax(0, 1fr)",
       },
       minWidth: {
         terminal: "var(--desktop-min-width)",

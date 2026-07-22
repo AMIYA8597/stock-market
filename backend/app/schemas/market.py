@@ -29,14 +29,14 @@ class QuoteResponse(BaseModel):
     """GET /market/quote/{symbol} response."""
     ticker: str
     name: str
-    price: Decimal = Field(..., decimal_places=8)
-    change: Decimal = Field(..., decimal_places=8)
-    change_pct: Decimal = Field(..., decimal_places=4)
-    volume: Decimal = Field(..., decimal_places=4)
-    market_cap: Decimal | None = Field(None, decimal_places=2)
-    pe_ratio: Decimal | None = Field(None, decimal_places=4)
-    week_52_high: Decimal | None = Field(None, decimal_places=8)
-    week_52_low: Decimal | None = Field(None, decimal_places=8)
+    price: Decimal = Field(...)
+    change: Decimal = Field(...)
+    change_pct: Decimal = Field(...)
+    volume: Decimal = Field(...)
+    market_cap: Decimal | None = Field(None)
+    pe_ratio: Decimal | None = Field(None)
+    week_52_high: Decimal | None = Field(None)
+    week_52_low: Decimal | None = Field(None)
     regime: RegimeData
     signal: SignalData
     timestamp: datetime
@@ -47,11 +47,11 @@ class QuoteResponse(BaseModel):
 class OHLCVBar(BaseModel):
     """Single OHLCV candle."""
     timestamp: str
-    open: Decimal = Field(..., decimal_places=8)
-    high: Decimal = Field(..., decimal_places=8)
-    low: Decimal = Field(..., decimal_places=8)
-    close: Decimal = Field(..., decimal_places=8)
-    volume: Decimal = Field(..., decimal_places=4)
+    open: Decimal = Field(...)
+    high: Decimal = Field(...)
+    low: Decimal = Field(...)
+    close: Decimal = Field(...)
+    volume: Decimal = Field(...)
 
 
 class HistoryResponse(BaseModel):
@@ -67,9 +67,9 @@ class IndexData(BaseModel):
     """Single index in indices response."""
     name: str
     ticker: str
-    value: Decimal = Field(..., decimal_places=8)
-    change: Decimal = Field(..., decimal_places=8)
-    change_pct: Decimal = Field(..., decimal_places=4)
+    value: Decimal = Field(...)
+    change: Decimal = Field(...)
+    change_pct: Decimal = Field(...)
     regime_state: str = Field(..., description="bull|bear|sideways|crisis")
     timestamp: datetime
 
@@ -84,9 +84,9 @@ class MoverData(BaseModel):
     ticker: str
     name: str
     exchange: str
-    price: Decimal = Field(..., decimal_places=8)
-    change_pct: Decimal = Field(..., decimal_places=4)
-    volume: Decimal = Field(..., decimal_places=4)
+    price: Decimal = Field(...)
+    change_pct: Decimal = Field(...)
+    volume: Decimal = Field(...)
     signal_direction: str
     signal_confidence: float
     rank: int
@@ -104,8 +104,8 @@ class SectorNode(BaseModel):
     """Sector treemap node."""
     ticker: str
     name: str
-    value: Decimal = Field(..., decimal_places=4)
-    metric_value: Decimal = Field(..., decimal_places=4)
+    value: Decimal = Field(...)
+    metric_value: Decimal = Field(...)
     exchange: str
 
 

@@ -45,7 +45,7 @@ export default function OptionChainTab({ currentPrice }: OptionChainTabProps): J
   };
 
   return (
-    <div className="min-w-[500px] overflow-x-auto">
+    <div className="min-w-[500px] overflow-x-auto glass-panel glow-hover rounded-md transition-all duration-300">
       <table className="w-full text-left text-[10px] font-mono">
         <thead>
           <tr className="border-b border-[var(--nq-border)] text-[var(--nq-text-muted)] uppercase tracking-wider text-[8px]">
