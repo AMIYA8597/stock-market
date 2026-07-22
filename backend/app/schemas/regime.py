@@ -12,9 +12,9 @@ class RegimeCurrentResponse(BaseModel):
     state_index: int = Field(..., ge=0, le=3)
     probs: list[Decimal] = Field(..., description="[P(bull), P(bear), P(sideways), P(crisis)]")
     transition_matrix: list[list[Decimal]] = Field(..., description="4x4 A matrix")
-    cond_vol_1d: Decimal = Field(..., gt=0, decimal_places=6, description="conditional volatility 1-day")
-    cond_vol_5d: Decimal = Field(..., gt=0, decimal_places=6)
-    cond_vol_21d: Decimal = Field(..., gt=0, decimal_places=6)
+    cond_vol_1d: Decimal = Field(..., gt=0, description="conditional volatility 1-day")
+    cond_vol_5d: Decimal = Field(..., gt=0)
+    cond_vol_21d: Decimal = Field(..., gt=0)
     days_in_state: int
     last_transition_date: datetime
     timestamp: datetime
@@ -26,7 +26,7 @@ class RegimeHistoryPoint(BaseModel):
     state: str
     state_index: int
     probs: list[Decimal]
-    cond_vol: Decimal = Field(..., gt=0, decimal_places=6)
+    cond_vol: Decimal = Field(..., gt=0)
     cond_vol_5d: Decimal | None = None
     cond_vol_21d: Decimal | None = None
 
@@ -44,14 +44,14 @@ class RegimeStatistics(BaseModel):
     """Per-state statistics."""
     state: str
     state_index: int
-    avg_duration_days: Decimal = Field(..., decimal_places=2)
-    frequency_pct: Decimal = Field(..., decimal_places=2)
-    avg_daily_return: Decimal = Field(..., decimal_places=6)
-    avg_volatility: Decimal = Field(..., gt=0, decimal_places=6)
-    min_volatility: Decimal = Field(..., gt=0, decimal_places=6)
-    max_volatility: Decimal = Field(..., gt=0, decimal_places=6)
-    best_daily_return: Decimal = Field(..., decimal_places=6)
-    worst_daily_return: Decimal = Field(..., decimal_places=6)
+    avg_duration_days: Decimal = Field(...)
+    frequency_pct: Decimal = Field(...)
+    avg_daily_return: Decimal = Field(...)
+    avg_volatility: Decimal = Field(..., gt=0)
+    min_volatility: Decimal = Field(..., gt=0)
+    max_volatility: Decimal = Field(..., gt=0)
+    best_daily_return: Decimal = Field(...)
+    worst_daily_return: Decimal = Field(...)
 
 
 class RegimeStatisticsResponse(BaseModel):
@@ -59,4 +59,4 @@ class RegimeStatisticsResponse(BaseModel):
     period_days: int = Field(..., description="analysis period")
     statistics: list[RegimeStatistics] = Field(..., description="one per state")
     most_common_state: str
-    mean_duration_all_states: Decimal = Field(..., decimal_places=2)
+    mean_duration_all_states: Decimal = Field(...)

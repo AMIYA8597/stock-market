@@ -3,7 +3,7 @@
 import * as React from "react";
 import { cn } from "../lib/utils";
 
-interface EmptyStateProps {
+export interface EmptyStateProps {
   icon?: React.ReactNode;
   title: string;
   description?: string;
@@ -28,7 +28,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
   );
 }
 
-interface ErrorStateProps {
+export interface ErrorStateProps {
   title?: string;
   message: string;
   onRetry?: () => void;
@@ -62,7 +62,7 @@ export function ErrorState({
   );
 }
 
-interface LoadingStateProps {
+export interface LoadingStateProps {
   message?: string;
   className?: string;
 }

@@ -1,39 +1,53 @@
-"use client";
-
-import * as React from "react";
+import React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "../lib/utils";
 
 const badgeVariants = cva(
-  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
+  "inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide transition-colors focus:outline-none",
   {
     variants: {
       variant: {
-        default: "bg-nq-bg-elevated text-nq-text-secondary border border-nq-border",
-        accent: "bg-nq-accent-muted text-nq-accent border border-nq-accent/20",
-        bull: "bg-nq-bull-bg text-nq-bull border border-nq-bull/20",
-        bear: "bg-nq-bear-bg text-nq-bear border border-nq-bear/20",
-        warning: "bg-nq-warning-muted text-nq-warning border border-nq-warning/20",
-        severity1: "bg-nq-bg-elevated text-nq-text-secondary",
-        severity2: "bg-blue-500/10 text-blue-400",
-        severity3: "bg-nq-warning-muted text-nq-warning",
-        severity4: "bg-orange-500/10 text-orange-400",
-        severity5: "bg-nq-bear-bg text-nq-bear",
+        default:
+          "border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-2)] text-[var(--ds-text-primary)]",
+        secondary:
+          "border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-3)] text-[var(--ds-text-secondary)]",
+        buy: "border border-transparent bg-[rgba(20,184,109,0.2)] text-[var(--ds-color-success-500)]",
+        sell: "border border-transparent bg-[rgba(221,53,93,0.2)] text-[var(--ds-color-danger-500)]",
+        neutral:
+          "border border-transparent bg-[rgba(210,139,16,0.18)] text-[var(--ds-color-warning-500)]",
+        bull: "border border-transparent bg-[rgba(20,184,109,0.18)] text-[var(--ds-color-success-500)]",
+        bear: "border border-transparent bg-[rgba(221,53,93,0.18)] text-[var(--ds-color-danger-500)]",
+        sideways:
+          "border border-transparent bg-[rgba(210,139,16,0.16)] text-[var(--ds-color-warning-500)]",
+        crisis:
+          "border border-transparent bg-[var(--regime-crisis)] text-red-300",
+        outline:
+          "border border-[var(--ds-border-strong)] text-[var(--ds-text-primary)]",
+        accent:
+          "border border-transparent bg-[var(--ds-color-accent-500)] bg-opacity-20 text-[var(--ds-color-accent-500)]",
+        warning:
+          "border border-transparent bg-[rgba(210,139,16,0.18)] text-[var(--ds-color-warning-500)]",
+        severity1: "border border-transparent bg-red-500/20 text-red-500",
+        severity2: "border border-transparent bg-orange-500/20 text-orange-500",
+        severity3: "border border-transparent bg-yellow-500/20 text-yellow-500",
+        severity4: "border border-transparent bg-blue-500/20 text-blue-500",
+        severity5: "border border-transparent bg-gray-500/20 text-gray-400",
       },
     },
     defaultVariants: {
       variant: "default",
     },
-  }
+  },
 );
 
 export interface BadgeProps
-  extends React.HTMLAttributes<HTMLSpanElement>,
+  extends
+    React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <span className={cn(badgeVariants({ variant }), className)} {...props} />
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
   );
 }
 

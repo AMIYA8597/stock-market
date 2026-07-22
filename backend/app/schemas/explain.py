@@ -12,9 +12,9 @@ from pydantic import BaseModel, Field
 class SHAPContribution(BaseModel):
     """Single feature's SHAP contribution."""
     name: str = Field(..., description="feature name")
-    shap_value: Decimal = Field(..., decimal_places=6)
-    feature_value: Decimal = Field(..., decimal_places=8)
-    percentile_rank: Decimal = Field(..., ge=0.0, le=100.0, decimal_places=2)
+    shap_value: Decimal = Field(...)
+    feature_value: Decimal = Field(...)
+    percentile_rank: Decimal = Field(..., ge=0.0, le=100.0)
 
 
 class SHAPResponse(BaseModel):
@@ -22,8 +22,8 @@ class SHAPResponse(BaseModel):
     symbol: str
     model: str = Field(..., description="tft|lstm_attn|xgboost")
     feature_contributions: list[SHAPContribution]
-    base_value: Decimal = Field(..., decimal_places=6, description="expected model output")
-    output_value: Decimal = Field(..., decimal_places=6, description="actual prediction")
+    base_value: Decimal = Field(..., description="expected model output")
+    output_value: Decimal = Field(..., description="actual prediction")
     waterfall_ready: bool = True
     timestamp: datetime
 
@@ -35,7 +35,7 @@ class SHAPResponse(BaseModel):
 class AttentionTimestep(BaseModel):
     """Single important timestep."""
     date: datetime
-    weight: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=6)
+    weight: Decimal = Field(..., ge=0.0, le=1.0)
 
 
 class AttentionResponse(BaseModel):
@@ -57,18 +57,18 @@ class AttentionResponse(BaseModel):
 class FeatureChange(BaseModel):
     """Feature value change in counterfactual."""
     name: str
-    original_value: Decimal = Field(..., decimal_places=8)
-    counterfactual_value: Decimal = Field(..., decimal_places=8)
-    change_pct: Decimal = Field(..., decimal_places=2)
+    original_value: Decimal = Field(...)
+    counterfactual_value: Decimal = Field(...)
+    change_pct: Decimal = Field(...)
 
 
 class CounterfactualInstance(BaseModel):
     """Single counterfactual explanation."""
     cf_id: str
     changed_features: list[FeatureChange]
-    resulting_signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
-    resulting_confidence: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4)
-    proximity_score: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4, description="distance to original")
+    resulting_signal: Decimal = Field(..., ge=-1.0, le=1.0)
+    resulting_confidence: Decimal = Field(..., ge=0.0, le=1.0)
+    proximity_score: Decimal = Field(..., ge=0.0, le=1.0, description="distance to original")
 
 
 class CounterfactualRequest(BaseModel):
@@ -82,6 +82,6 @@ class CounterfactualResponse(BaseModel):
     symbol: str
     target_direction: str
     counterfactuals: list[CounterfactualInstance]
-    original_signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
-    original_confidence: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4)
+    original_signal: Decimal = Field(..., ge=-1.0, le=1.0)
+    original_confidence: Decimal = Field(..., ge=0.0, le=1.0)
     timestamp: datetime

@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Calendar, Tag } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Card, CardContent } from "@neuroquant/ui";
+import { Badge } from "@neuroquant/ui";
 import { blogApi } from '@/lib/api-client';
 
 interface BlogCardPost {
@@ -15,29 +15,7 @@ interface BlogCardPost {
   tags: string[];
 }
 
-const seedPosts: BlogCardPost[] = [
-  {
-    slug: 'ai-macro-regime-playbook',
-    title: 'Building an AI Macro Regime Playbook',
-    excerpt: 'How we combine signal clustering, factor timing, and portfolio risk overlays for resilient strategies.',
-    date: 'Mar 18, 2026',
-    tags: ['AI', 'Macro', 'Risk'],
-  },
-  {
-    slug: 'model-drift-in-production',
-    title: 'Detecting Model Drift in Production Trading',
-    excerpt: 'A practical architecture for low-latency drift detection and policy-based mitigation.',
-    date: 'Mar 12, 2026',
-    tags: ['MLOps', 'Monitoring'],
-  },
-  {
-    slug: 'feature-store-for-quants',
-    title: 'Designing a Feature Store for Quant Teams',
-    excerpt: 'A framework for making features reproducible, debuggable, and strategy-safe at scale.',
-    date: 'Mar 2, 2026',
-    tags: ['Data', 'Research'],
-  },
-];
+const seedPosts: BlogCardPost[] = [];
 
 function toBlogDateLabel(value: string | null | undefined): string {
   if (!value) {
@@ -166,9 +144,7 @@ export function BlogArticlePage({ slug }: { slug: string }): JSX.Element {
     <article className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
       <h1 className="text-[var(--ds-heading-2)] font-semibold">{title}</h1>
       <p className="mt-4 text-base leading-7 text-[var(--ds-text-secondary)]">{content}</p>
-      <p className="mt-4 text-base leading-7 text-[var(--ds-text-secondary)]">
-        At scale, consistency beats novelty. A durable process links data quality, feature reliability, model governance, and execution discipline. This stack is where modern SaaS UX directly compounds research outcomes.
-      </p>
+
     </article>
   );
 }

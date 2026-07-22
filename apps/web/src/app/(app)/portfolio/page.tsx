@@ -139,23 +139,10 @@ export default function PortfolioPage(): JSX.Element {
     return values.map((value) => 8 + ((value - min) / range) * 84);
   }, [performance]);
 
-  // Mock active positions data matching professional derivatives/MIS interface
+  // Mock active positions data removed - replace with live endpoint in future
   const positions = useMemo(() => {
-    return [
-      { symbol: "RELIANCE.NS", product: "MIS", qty: 25, avgPrice: 2420.50, realized: 450, isIntraday: true },
-      { symbol: "NIFTY26JUN22000CE", product: "NRML", qty: 150, avgPrice: 120.40, realized: -1200, isIntraday: false },
-      { symbol: "BTC-USD", product: "MIS", qty: 0.15, avgPrice: 67200.00, realized: 0, isIntraday: true },
-    ].map(pos => {
-      const livePrice = ticks.get(pos.symbol.toUpperCase())?.price ?? (pos.symbol === "BTC-USD" ? 67850 : 2435.50);
-      const unrealized = pos.qty > 0 ? (livePrice - pos.avgPrice) * pos.qty : 0;
-      return {
-        ...pos,
-        ltp: livePrice,
-        unrealized,
-        totalPnl: pos.realized + unrealized,
-      };
-    });
-  }, [ticks]);
+    return [] as any[];
+  }, []);
 
   // Handle new journal log submission
   const handleSubmitJournal = async (e: React.FormEvent) => {

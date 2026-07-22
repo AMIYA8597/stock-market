@@ -66,7 +66,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
   return (
     <div className="grid h-full grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 p-1 font-sans">
       {/* Section 1: Confidence Gauge */}
-      <div className="flex flex-col items-center justify-center rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 min-h-[160px]">
+      <div className="flex flex-col items-center justify-center rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-3 min-h-[160px]">
         <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-semibold mb-2">
           Ensemble Confidence
         </p>
@@ -113,7 +113,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
       </div>
 
       {/* Section 2: Five-Model Score Bars */}
-      <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 font-mono text-[9px] flex flex-col justify-between">
+      <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-3 font-mono text-[9px] flex flex-col justify-between" style={{ animationDelay: '50ms' }}>
         <div>
           <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-sans font-semibold mb-2">
             Model Layer Consensus
@@ -178,7 +178,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
       </div>
 
       {/* Section 3: Indicator Pills */}
-      <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 flex flex-col justify-between font-mono text-[9px]">
+      <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-3 flex flex-col justify-between font-mono text-[9px]" style={{ animationDelay: '100ms' }}>
         <div>
           <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-sans font-semibold mb-2">
             Technical Oscillators
@@ -233,7 +233,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
       </div>
 
       {/* Section 4: Pattern Chips */}
-      <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 flex flex-col justify-between min-h-[120px]">
+      <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-3 flex flex-col justify-between min-h-[120px]" style={{ animationDelay: '150ms' }}>
         <div>
           <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-semibold mb-2">
             Detected Candlestick Patterns
@@ -261,7 +261,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
       </div>
 
       {/* Section 5: Detailed Layer Outputs Table */}
-      <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 xl:col-span-2 flex flex-col justify-between">
+      <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-3 xl:col-span-2 flex flex-col justify-between" style={{ animationDelay: '200ms' }}>
         <div>
           <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-semibold mb-2">
             Detailed Layer Outputs
@@ -314,7 +314,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
       </div>
 
       {/* Section 6: Forecast Table */}
-      <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 sm:col-span-2 xl:col-span-3">
+      <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-3 sm:col-span-2 xl:col-span-3" style={{ animationDelay: '250ms' }}>
         <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-semibold mb-2">
           Multi-Horizon SARIMAX Price Projection
         </p>

@@ -67,15 +67,15 @@ class ScreenerResult(BaseModel):
     name: str
     exchange: str
     asset_type: str
-    price: Decimal = Field(..., decimal_places=8)
-    change_pct: Decimal = Field(..., decimal_places=4)
+    price: Decimal = Field(...)
+    change_pct: Decimal = Field(...)
     pe_ratio: Decimal | None = None
     rsi: Decimal | None = None
     signal_direction: str
-    signal_confidence: Decimal = Field(..., ge=0, le=1, decimal_places=4)
+    signal_confidence: Decimal = Field(..., ge=0, le=1)
     regime_state: str
-    momentum_21d: Decimal = Field(..., decimal_places=4)
-    volume_ratio: Decimal = Field(..., decimal_places=4)
+    momentum_21d: Decimal = Field(...)
+    volume_ratio: Decimal = Field(...)
 
 
 class ScreenerRunResponse(BaseModel):

@@ -35,7 +35,7 @@ export interface AlertEvent {
   message: string;
   severity: 1 | 2 | 3 | 4 | 5;
   symbol: string;
-  type: 'price' | 'technical' | 'ml' | 'sentiment' | 'anomaly' | 'news';
+  type: "price" | "technical" | "ml" | "sentiment" | "anomaly" | "news";
   triggeredAt: number;
 }
 
@@ -49,8 +49,8 @@ export interface AnomalyEvent {
 
 export interface RegimeData {
   symbol: string;
-  oldRegime: 'bull' | 'bear' | 'sideways';
-  newRegime: 'bull' | 'bear' | 'sideways';
+  oldRegime: "bull" | "bear" | "sideways";
+  newRegime: "bull" | "bear" | "sideways";
   confidence: number;
   timestamp: number;
 }
@@ -69,7 +69,17 @@ export interface PortfolioUpdate {
 }
 
 export interface WebSocketMessage {
-  type: 'tick' | 'prediction_update' | 'alert_triggered' | 'regime_change' | 'anomaly_detected' | 'portfolio_update' | 'heartbeat' | 'subscribe' | 'unsubscribe' | 'pong';
+  type:
+    | "tick"
+    | "prediction_update"
+    | "alert_triggered"
+    | "regime_change"
+    | "anomaly_detected"
+    | "portfolio_update"
+    | "heartbeat"
+    | "subscribe"
+    | "unsubscribe"
+    | "pong";
   symbol?: string;
   price?: number;
   volume?: number;
@@ -124,7 +134,7 @@ export interface StatCardData {
   change?: number;
   changePct?: number;
   icon?: string;
-  trend?: 'up' | 'down' | 'neutral';
+  trend?: "up" | "down" | "neutral";
 }
 
-export type ConnectionStatus = 'connected' | 'reconnecting' | 'disconnected';
+export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
