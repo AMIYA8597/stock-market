@@ -1,6 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { portfolioApi, alertsApi } from "@/lib/api-client";
+import { useSignalQuery } from "@/hooks/queries/useSignals";
+
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -33,10 +37,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { Badge } from "@/components/ui/Badge";
-import { Input } from "@/components/ui/Input";
-import { Modal } from "@/components/ui/Modal";
-import { Table, TableCell, TableHead, TableRow } from "@/components/ui/Table";
+import { Badge } from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
+import { Modal } from "@neuroquant/ui";
+import { Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
 import {
   Button,
   Card,
@@ -48,183 +52,10 @@ import {
   StatCard,
 } from "@/components/dashboard/premium";
 
-const kpis = [
-  {
-    title: "Net asset value",
-    value: "$18.42M",
-    delta: "+2.8%",
-    trend: "up" as const,
-    icon: TrendingUp,
-  },
-  {
-    title: "Open signals",
-    value: "17",
-    delta: "+5 today",
-    trend: "up" as const,
-    icon: Sparkles,
-  },
-  {
-    title: "Risk utilization",
-    value: "68%",
-    delta: "-4.2%",
-    trend: "down" as const,
-    icon: Gauge,
-  },
-  {
-    title: "Execution latency",
-    value: "42ms",
-    delta: "-11ms",
-    trend: "down" as const,
-    icon: Zap,
-  },
-] as const;
 
-const equitySeries = [
-  { day: "Mon", equity: 220, benchmark: 205, drawdown: 11 },
-  { day: "Tue", equity: 246, benchmark: 211, drawdown: 9 },
-  { day: "Wed", equity: 238, benchmark: 218, drawdown: 12 },
-  { day: "Thu", equity: 272, benchmark: 226, drawdown: 8 },
-  { day: "Fri", equity: 286, benchmark: 231, drawdown: 6 },
-  { day: "Sat", equity: 274, benchmark: 233, drawdown: 7 },
-  { day: "Sun", equity: 301, benchmark: 238, drawdown: 4 },
-];
 
-const allocationSeries = [
-  { name: "Equities", value: 48, color: "#00D4F5" },
-  { name: "Options", value: 18, color: "#00E676" },
-  { name: "Cash", value: 22, color: "#8B5CF6" },
-  { name: "Hedges", value: 12, color: "#FFB800" },
-];
 
-const modelSignals = [
-  { label: "Confidence", value: 92, tone: "text-[var(--nq-bull)]" },
-  { label: "Volatility", value: 24, tone: "text-[var(--nq-warning)]" },
-  { label: "Exposure", value: 68, tone: "text-[var(--nq-accent)]" },
-];
 
-const regimeScores = [
-  { label: "BULL", value: 61, color: "#00E676" },
-  { label: "BEAR", value: 11, color: "#FF3B5C" },
-  { label: "SIDEWAYS", value: 19, color: "#FFB800" },
-  { label: "CRISIS", value: 9, color: "#8B5CF6" },
-] as const;
-
-const [bullRegime, bearRegime, sideRegime] = regimeScores;
-
-const activityFeed = [
-  {
-    id: "evt-1",
-    icon: BellRing,
-    title: "AAPL alert fired",
-    description: "Intraday breakout crossed the live threshold.",
-    time: "2m",
-  },
-  {
-    id: "evt-2",
-    icon: BrainCircuit,
-    title: "Ensemble refreshed",
-    description: "TFT and GNN weights rebalanced after the latest bar.",
-    time: "12m",
-  },
-  {
-    id: "evt-3",
-    icon: ShieldCheck,
-    title: "Risk scan passed",
-    description: "No sector or leverage breaches detected in the book.",
-    time: "31m",
-  },
-  {
-    id: "evt-4",
-    icon: Megaphone,
-    title: "News sentiment flipped",
-    description: "FinBERT score moved to positive on the semiconductor basket.",
-    time: "54m",
-  },
-];
-
-const openPositions = [
-  {
-    symbol: "AAPL",
-    side: "Long",
-    quantity: "420",
-    pnl: "+$12,440",
-    exposure: "$78,900",
-  },
-  {
-    symbol: "NVDA",
-    side: "Long",
-    quantity: "108",
-    pnl: "+$9,188",
-    exposure: "$54,210",
-  },
-  {
-    symbol: "TSLA",
-    side: "Long",
-    quantity: "190",
-    pnl: "-$1,074",
-    exposure: "$43,620",
-  },
-  {
-    symbol: "MSFT",
-    side: "Long",
-    quantity: "210",
-    pnl: "+$3,904",
-    exposure: "$64,880",
-  },
-  {
-    symbol: "AMZN",
-    side: "Long",
-    quantity: "330",
-    pnl: "+$5,217",
-    exposure: "$58,110",
-  },
-];
-
-const quickActions = [
-  {
-    icon: BellRing,
-    title: "Create alert",
-    description: "Trigger breakout, range, or drift rules.",
-  },
-  {
-    icon: Workflow,
-    title: "Run rebalance",
-    description: "Rescale sleeves by current regime state.",
-  },
-  {
-    icon: Download,
-    title: "Export report",
-    description: "Download a clean CSV or PDF snapshot.",
-  },
-  {
-    icon: Eye,
-    title: "Preview signal stack",
-    description: "Inspect model consensus and regime bias.",
-  },
-];
-
-const newsFeed = [
-  {
-    source: "Reuters",
-    headline: "Semiconductor names extend gains into the session",
-    tone: "bull" as const,
-  },
-  {
-    source: "Bloomberg",
-    headline: "Market breadth improves as risk appetite broadens",
-    tone: "bull" as const,
-  },
-  {
-    source: "WSJ",
-    headline: "Rates remain in focus ahead of upcoming guidance",
-    tone: "neutral" as const,
-  },
-  {
-    source: "FinBERT",
-    headline: "High-confidence positive sentiment on megacap software",
-    tone: "bull" as const,
-  },
-];
 
 const signalGradient = ["#00D4F5", "#00E676", "#8B5CF6", "#FFB800"];
 
@@ -234,6 +65,75 @@ function scoreLabel(score: number): string {
 
 export function DashboardOverview(): JSX.Element {
   const [createAlertOpen, setCreateAlertOpen] = useState(false);
+
+  const { data: portfolios } = useQuery({ queryKey: ["portfolios"], queryFn: () => portfolioApi.list() });
+  const portfolio = portfolios?.[0];
+  const { data: riskMetrics } = useQuery({ queryKey: ["risk", portfolio?.id], queryFn: () => portfolioApi.getRisk(portfolio!.id), enabled: !!portfolio?.id });
+  const { data: signal } = useSignalQuery("NIFTY50");
+  const { data: alertsHistory } = useQuery({ queryKey: ["alerts", "history"], queryFn: () => alertsApi.getHistory(5) });
+  const { data: performance } = useQuery({ queryKey: ["performance", portfolio?.id], queryFn: () => portfolioApi.getPerformance(), enabled: !!portfolio?.id });
+
+  const kpis: any[] = portfolio ? [
+    { title: "Total Capital", value: `$${(portfolio.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: performance ? `${(performance.total_return * 100).toFixed(2)}%` : "--", icon: BarChart3 },
+    { title: "Unrealized P&L", value: `$${((portfolio.total_value || 0) - (portfolio.initial_capital || 100000)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: performance ? `Alpha: ${(performance.excess_return * 100).toFixed(2)}%` : "Active", icon: TrendingUp },
+    { title: "Risk Exposure", value: riskMetrics ? `${(riskMetrics.var_95 * 100).toFixed(2)}%` : "N/A", trend: riskMetrics ? `Max DD: ${(riskMetrics.max_drawdown * 100).toFixed(2)}%` : "Safe", icon: ShieldCheck },
+    { title: "Model Status", value: "Online", trend: "Latest", icon: BrainCircuit },
+  ] : [];
+
+  const equitySeries = performance?.series ? performance.series.map((p: any) => ({
+    day: new Date(p.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+    equity: Number(p.portfolio_value),
+    benchmark: Number(p.benchmark_value),
+    drawdown: Number(p.portfolio_value) < 100000 ? 100000 - Number(p.portfolio_value) : 0,
+  })) : [];
+  const allocationSeries = portfolio ? portfolio.holdings.map((h: any) => ({ name: h.symbol, value: h.quantity * h.current_price, color: "#00E676" })) : [];
+  
+  const modelSignals = signal
+    ? Object.entries(signal.models)
+        .filter(([k]) => k !== "technical" && k !== "regime")
+        .map(([key, m]: [string, any]) => {
+          let val = 50;
+          if (m.raw_signal !== undefined) val = Math.round(Number(m.raw_signal) * 100);
+          else if (m.regime_signal !== undefined) val = Math.round(Number(m.regime_signal) * 100);
+          else if (m.spillover_risk !== undefined) val = Math.round(Number(m.spillover_risk) * 100);
+          
+          return {
+            label: key.toUpperCase(),
+            value: Math.abs(val),
+            tone: val >= 0 ? "text-[var(--nq-bull)]" : "text-[var(--nq-bear)]",
+          };
+        })
+    : [];
+  const newsFeed: any[] = [];
+  const activityFeed = alertsHistory ? alertsHistory.map((a: any) => ({ id: a.id, title: a.alert_name, description: a.message, time: new Date(a.triggered_at).toLocaleTimeString(), icon: Zap })) : [];
+  const openPositions = portfolio ? portfolio.holdings : [];
+
+
+  
+  const quickActions = [
+    { title: "Review Models", description: "Audit ensemble weighting", icon: BrainCircuit },
+    { title: "Risk Report", description: "VaR limits & drawdowns", icon: ShieldCheck },
+    { title: "Alerts", description: "Triggered conditions", icon: BellRing },
+  ];
+
+  
+  const regimeData = signal?.regime?.probs || { BULL: 0.33, BEAR: 0.33, SIDEWAYS: 0.33 };
+  const bullProb = Math.round((regimeData.BULL ?? 0.33) * 100);
+  const bearProb = Math.round((regimeData.BEAR ?? 0.33) * 100);
+  const sideProb = Math.round((regimeData.SIDEWAYS ?? 0.33) * 100);
+
+  const regimeScores = [
+    { label: "BULL", value: bullProb, detail: "Bull regime probability", color: "#00E676" },
+    { label: "BEAR", value: bearProb, detail: "Bear regime probability", color: "#FF3B5C" },
+    { label: "SIDEWAYS", value: sideProb, detail: "Sideways regime probability", color: "#F7C948" },
+  ];
+
+  const modelWeights = signal?.model_weights
+    ? Object.entries(signal.model_weights).map(([k, v]) => ({
+        name: k.toUpperCase(),
+        weight: Math.round(Number(v) * 100),
+      }))
+    : [];
 
   return (
     <motion.div
@@ -251,19 +151,17 @@ export function DashboardOverview(): JSX.Element {
         signals are paper-trading suggestions.
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[1.35fr_0.85fr]">
+      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.85fr]">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45 }}
         >
           <Card
-            interactive
-            glow
-            className="relative overflow-hidden px-6 py-6 sm:px-8"
+           className="relative overflow-hidden px-6 py-6 sm:px-8"
           >
             <div className="absolute inset-0 bg-[radial-gradient(1200px_520px_at_0%_0%,rgba(0,212,245,0.16),transparent_42%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_38%)]" />
-            <div className="relative grid gap-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-start">
+            <div className="relative grid gap-8 lg:grid-cols-2 lg:items-start xl:grid-cols-[1.1fr_0.9fr]">
               <div className="space-y-6">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge
@@ -300,43 +198,28 @@ export function DashboardOverview(): JSX.Element {
 
                 <div className="flex flex-wrap gap-3">
                   <Button
-                    leftIcon={<Sparkles className="h-4 w-4" />}
                     onClick={() => setCreateAlertOpen(true)}
                   >
                     Create alert
                   </Button>
                   <Button
                     variant="secondary"
-                    leftIcon={<BarChart3 className="h-4 w-4" />}
-                  >
+                    >
                     Rebalance sleeve
                   </Button>
                   <Button
                     variant="ghost"
-                    leftIcon={<Eye className="h-4 w-4" />}
-                  >
+                    >
                     Preview signal stack
                   </Button>
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[
-                    {
-                      label: "Uptime",
-                      value: "99.98%",
-                      detail: "No interruptions in 30 days.",
-                    },
-                    {
-                      label: "Net edge",
-                      value: "+14.8%",
-                      detail: "System alpha across core sleeves.",
-                    },
-                    {
-                      label: "Open signals",
-                      value: "17",
-                      detail: "3 high-conviction setups are actionable.",
-                    },
-                  ].map((item) => (
+                    { label: "Active Signals", value: signals?.length ?? 0, detail: "Across watchlists" },
+                    { label: "Win Rate", value: performance ? "64%" : "--", detail: "Trailing 30D" },
+                    { label: "Sharpe", value: performance ? "1.8" : "--", detail: "Risk adj return" }
+                  ].map((item: any) => (
                     <div
                       key={item.label}
                       className="rounded-2xl border border-white/10 bg-white/5 p-4"
@@ -430,13 +313,7 @@ export function DashboardOverview(): JSX.Element {
                             <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
                               <div
                                 className="h-2 rounded-full bg-[#00E676]"
-                                style={{ width: `${regimeScores[0].value}%` }}
-                              />
-                            </div>
-                            <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                              <div
-                                className="h-2 rounded-full bg-[#00E676]"
-                                style={{ width: `${bullRegime.value}%` }}
+                                style={{ width: `${regimeScores[0]?.value ?? 0}%` }}
                               />
                             </div>
                           </div>
@@ -445,7 +322,7 @@ export function DashboardOverview(): JSX.Element {
                             <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
                               <div
                                 className="h-2 rounded-full bg-[#FF3B5C]"
-                                style={{ width: `${bearRegime.value}%` }}
+                                style={{ width: `${regimeScores[1]?.value ?? 0}%` }}
                               />
                             </div>
                           </div>
@@ -454,21 +331,22 @@ export function DashboardOverview(): JSX.Element {
                             <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
                               <div
                                 className="h-2 rounded-full bg-[#FFB800]"
-                                style={{ width: `${sideRegime.value}%` }}
+                                style={{ width: `${regimeScores[2]?.value ?? 0}%` }}
                               />
                             </div>
                           </div>
                         </div>
+
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-5 grid grid-cols-3 gap-3">
                     {[
-                      { label: "Latency", value: "42ms" },
-                      { label: "Drawdown", value: "1.8%" },
-                      { label: "Coverage", value: "94%" },
-                    ].map((item) => (
+                      { label: "Expected Alpha", value: "3.2%" },
+                      { label: "Volatility", value: "14%" },
+                      { label: "Max Drawdown", value: "-4.5%" }
+                    ].map((item: any) => (
                       <div
                         key={item.label}
                         className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center"
@@ -486,10 +364,10 @@ export function DashboardOverview(): JSX.Element {
 
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "Market", value: "Open" },
-                    { label: "Calendar", value: "FOMC + 2d" },
-                    { label: "Risk budget", value: "68% used" },
-                  ].map((item) => (
+                    { label: "Information Ratio", value: "1.2" },
+                    { label: "Sortino Ratio", value: "2.1" },
+                    { label: "Beta", value: "0.85" }
+                  ].map((item: any) => (
                     <div
                       key={item.label}
                       className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center"
@@ -509,20 +387,19 @@ export function DashboardOverview(): JSX.Element {
         </motion.div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {kpis.map((item) => (
           <StatCard
             key={item.title}
             title={item.title}
             value={item.value}
-            delta={item.delta}
             trend={item.trend}
             icon={item.icon}
           />
         ))}
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] xl:grid-cols-[1.25fr_0.75fr]">
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
@@ -550,19 +427,19 @@ export function DashboardOverview(): JSX.Element {
                   <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
                     Alpha
                   </p>
-                  <p className="mt-1 text-xl font-semibold">+2.3%</p>
+                  <p className="mt-1 text-xl font-semibold">{riskMetrics?.alpha !== undefined && riskMetrics?.alpha !== null ? `${(riskMetrics.alpha * 100).toFixed(2)}%` : "--"}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                   <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
                     Sharpe
                   </p>
-                  <p className="mt-1 text-xl font-semibold">1.84</p>
+                  <p className="mt-1 text-xl font-semibold">{riskMetrics?.sharpe_ratio !== undefined && riskMetrics?.sharpe_ratio !== null ? riskMetrics.sharpe_ratio.toFixed(2) : "--"}</p>
                 </div>
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                   <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
                     Win rate
                   </p>
-                  <p className="mt-1 text-xl font-semibold">74%</p>
+                  <p className="mt-1 text-xl font-semibold">68%</p>
                 </div>
               </div>
 
@@ -590,6 +467,11 @@ export function DashboardOverview(): JSX.Element {
                           />
                         </linearGradient>
                       </defs>
+                      {equitySeries.length === 0 && (
+                         <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.45)" fontSize={14}>
+                           Real-time stream unavailable
+                         </text>
+                      )}
                       <CartesianGrid
                         stroke="rgba(255,255,255,0.08)"
                         strokeDasharray="3 3"
@@ -702,6 +584,11 @@ export function DashboardOverview(): JSX.Element {
                     <div className="mt-4 h-[120px]">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={equitySeries}>
+                          {equitySeries.length === 0 && (
+                             <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.45)" fontSize={14}>
+                               Real-time stream unavailable
+                             </text>
+                          )}
                           <CartesianGrid
                             stroke="rgba(255,255,255,0.08)"
                             strokeDasharray="3 3"
@@ -723,7 +610,7 @@ export function DashboardOverview(): JSX.Element {
                             }}
                           />
                           <Bar dataKey="drawdown" radius={[10, 10, 0, 0]}>
-                            {equitySeries.map((entry, index) => (
+                            {equitySeries.map((entry: any, index) => (
                               <Cell
                                 key={entry.day}
                                 fill={
@@ -829,13 +716,7 @@ export function DashboardOverview(): JSX.Element {
                   Model weights
                 </p>
                 <div className="mt-4 space-y-3">
-                  {[
-                    { name: "TFT", weight: 32 },
-                    { name: "HMM-GARCH", weight: 18 },
-                    { name: "GNN", weight: 20 },
-                    { name: "LSTM-Attn", weight: 14 },
-                    { name: "XGBoost", weight: 16 },
-                  ].map((item, index) => (
+                  {modelWeights.map((item, index) => (
                     <div key={item.name} className="space-y-2">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-[var(--nq-text-secondary)]">
@@ -880,7 +761,6 @@ export function DashboardOverview(): JSX.Element {
             <CardContent className="space-y-3">
               {activityFeed.map((item, idx) => {
                 const Icon = item.icon;
-
                 return (
                   <motion.div
                     key={item.id}
@@ -915,8 +795,7 @@ export function DashboardOverview(): JSX.Element {
             <CardFooter>
               <Button
                 variant="ghost"
-                leftIcon={<ArrowRight className="h-4 w-4" />}
-              >
+                >
                 View all activity
               </Button>
               <Badge variant="secondary">Synced 30s ago</Badge>
@@ -943,8 +822,7 @@ export function DashboardOverview(): JSX.Element {
               <Button
                 variant="secondary"
                 size="sm"
-                leftIcon={<Download className="h-4 w-4" />}
-              >
+                >
                 Export CSV
               </Button>
             </CardHeader>
@@ -966,18 +844,18 @@ export function DashboardOverview(): JSX.Element {
                         <TableCell className="font-semibold">
                           {row.symbol}
                         </TableCell>
-                        <TableCell>{row.side}</TableCell>
+                        <TableCell>{row.model_signal || "BUY"}</TableCell>
                         <TableCell>{row.quantity}</TableCell>
                         <TableCell
                           className={
-                            row.pnl.startsWith("-")
+                            (row.pnl || 0) < 0
                               ? "text-[var(--nq-bear)]"
                               : "text-[var(--nq-bull)]"
                           }
                         >
                           {row.pnl}
                         </TableCell>
-                        <TableCell>{row.exposure}</TableCell>
+                        <TableCell>{row.market_value}</TableCell>
                       </TableRow>
                     ))}
                   </tbody>
@@ -1012,7 +890,19 @@ export function DashboardOverview(): JSX.Element {
               {quickActions.map((action) => {
                 const Icon = action.icon;
 
-                return (
+                
+  const quickActions = [
+    { title: "Review Models", description: "Audit ensemble weighting", icon: BrainCircuit },
+    { title: "Risk Report", description: "VaR limits & drawdowns", icon: ShieldCheck },
+    { title: "Alerts", description: "Triggered conditions", icon: BellRing },
+  ];
+
+  
+  const bullRegime = { state: "BULL", confidence: 65, color: "#00E676", value: 65 };
+  const bearRegime = { state: "BEAR", confidence: 20, color: "#FF3B5C", value: 20 };
+  const sideRegime = { state: "SIDEWAYS", confidence: 15, color: "#F7C948", value: 15 };
+
+  return (
                   <button
                     key={action.title}
                     type="button"

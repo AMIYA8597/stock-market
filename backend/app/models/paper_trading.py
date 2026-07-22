@@ -40,6 +40,12 @@ class PaperWallet(Base):
         nullable=False,
         doc="Cash balance available to trade",
     )
+    locked_margin: Mapped[Decimal] = mapped_column(
+        Numeric(20, 4),
+        default=Decimal("0.00"),
+        nullable=False,
+        doc="Margin locked for open positions",
+    )
     realized_pnl: Mapped[Decimal] = mapped_column(
         Numeric(20, 4),
         default=Decimal("0.00"),

@@ -20,17 +20,13 @@ router = APIRouter(prefix="/journal", tags=["journal"])
 
 async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UUID:
     """Resolve current user's UUID from token or database."""
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    if not current_user or "sub" not in current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
-        return uuid.UUID(str(user_id))
+        return uuid.UUID(str(current_user["sub"]))
     except ValueError:
-        # Fallback to the first user in the database
-        result = await db.execute(select(User.id).limit(1))
-        first_user_id = result.scalar_one_or_none()
-        if first_user_id:
-            return first_user_id
-        # Hardcoded fallback UUID (non-numeric to prevent SQLite coercion to integer)
-        return uuid.UUID("d3b07384-d113-4956-a5d8-4f24d1e89bd9")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
 
 
 @router.get("", response_model=list[JournalResponse])

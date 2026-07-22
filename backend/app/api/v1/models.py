@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-import math
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
 import yfinance as yf
@@ -28,7 +26,6 @@ from app.schemas.monitor import (
     ModelDriftMetrics,
     WeightsHistoryResponse,
 )
-from research.models.ensemble.meta_learner import EnsembleMetaLearner
 
 # Directory where model artefacts and optional back‑test metrics live
 MODEL_DIR = Path(__file__).resolve().parents[4] / "data" / "models"
@@ -42,27 +39,25 @@ def get_dynamic_ensemble_weights() -> dict[str, float]:
     Returns a normalized dictionary keyed for the UI.
     """
     try:
+        from research.models.ensemble.meta_learner import EnsembleMetaLearner
         learner = EnsembleMetaLearner.load()
-        coefs = getattr(learner, "coefficients", {}) or {}
+        coefs = getattr(learner, "coefficients", {})
+        if not coefs:
+            raise ValueError("No coefficients found")
     except Exception as exc:
         logger.warning("Failed to load EnsembleMetaLearner: %s", exc)
-        coefs = {}
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "MODEL_NOT_TRAINED", "message": "Ensemble meta-learner is not trained"}
+        )
 
-    base_coefs = {
-        "technical": 0.30,
-        "pattern": 0.15,
-        "momentum": 0.20,
-        "regime": 0.10,
-        "xgboost": 0.25,
-        "sentiment": 0.00,
-    }
-    merged = {k: coefs.get(k, base_coefs[k]) for k in base_coefs}
     raw = {
-        "xgboost": merged["xgboost"],
-        "hmm_garch": merged["regime"],
-        "tft": merged["momentum"],
-        "lstm_attn": merged["technical"],
-        "gnn": merged["pattern"],
+        "xgboost": coefs.get("xgboost", 0.0),
+        "hmm_garch": coefs.get("regime", 0.0),
+        "tft": coefs.get("momentum", 0.0),
+        "lstm_attn": coefs.get("technical", 0.0),
+        "gnn": coefs.get("pattern", 0.0),
     }
     total = sum(raw.values()) or 1.0
     return {k: v / total for k, v in raw.items()}
@@ -89,7 +84,7 @@ async def _query_model_metrics(
     fallback_accuracy: Decimal,
     fallback_rmse: float,
     fallback_coverage: float,
-) -> Optional[ModelAccuracyMetrics]:
+) -> ModelAccuracyMetrics | None:
     """Return accuracy metrics for *model_name* if recent predictions exist.
     If no predictions are available, ``None`` is returned – the endpoint will then
     omit the model from the response rather than fabricating numbers.
@@ -138,42 +133,56 @@ async def _query_model_metrics(
     recall = tp / (tp + fn) if (tp + fn) else 0.5
     f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) else 0.5
     rmse = float(np.sqrt(np.mean(sq_err)))
+    return ModelAccuracyMetrics(
+        model_name=model_name,
+        period_days=21,
+        precision=Decimal(str(round(float(precision), 4))),
+        recall=Decimal(str(round(float(recall), 4))),
+        f1_score=Decimal(str(round(float(f1), 4))),
+        directional_accuracy=hit_rate,
+        p50_rmse=Decimal(str(round(rmse, 6))),
+        winkler_coverage=Decimal(str(round(fallback_coverage, 4))),
+        as_of_date=datetime.now(UTC),
+    )
 
 
 @router.get("/model-accuracy", response_model=ModelAccuracyResponse)
 async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccuracyResponse:
     now = datetime.now(UTC)
     metrics = await _load_backtest_metrics()
-    fallbacks = {
-        "tft": Decimal("0.5516"),
-        "hmm_garch": Decimal("0.5510"),
-        "xgboost": Decimal("0.5820"),
-        "lstm_attention": Decimal("0.5873"),
-    }
-    rows: List[ModelAccuracyMetrics] = []
-    # Build model accuracy rows using fallback metrics (no DB dependency)
-    rows: List[ModelAccuracyMetrics] = []
+
+    rows: list[ModelAccuracyMetrics] = []
     for name in ["tft", "hmm_garch", "xgboost", "lstm_attention"]:
-        fallback_acc = fallbacks[name]
-        rows.append(
-            ModelAccuracyMetrics(
-                model_name=name,
-                period_days=21,
-                precision=fallback_acc,
-                recall=fallback_acc,
-                f1_score=fallback_acc,
-                directional_accuracy=fallback_acc,
-                p50_rmse=Decimal(str(round(0.013, 6))),
-                winkler_coverage=Decimal(str(round(0.80, 4))),
-                as_of_date=now,
+        # First try: load from backtest metrics JSON (written by training pipeline)
+        bt = metrics.get(name, {})
+        if bt:
+            rows.append(
+                ModelAccuracyMetrics(
+                    model_name=name,
+                    period_days=bt.get("period_days", 21),
+                    precision=Decimal(str(round(bt.get("precision", 0.0), 4))),
+                    recall=Decimal(str(round(bt.get("recall", 0.0), 4))),
+                    f1_score=Decimal(str(round(bt.get("f1", 0.0), 4))),
+                    directional_accuracy=Decimal(str(round(bt.get("directional_accuracy", 0.0), 4))),
+                    p50_rmse=Decimal(str(round(bt.get("p50_rmse", 0.0), 6))),
+                    winkler_coverage=Decimal(str(round(bt.get("winkler_coverage", 0.0), 4))),
+                    as_of_date=now,
+                )
             )
-        )
+            continue
 
-    # Ensemble accuracy – try to read the latest completed back‑test job
-    ensemble_acc: Optional[Decimal] = None
+        # Second try: compute from live DB predictions
+        result = await _query_model_metrics(db, name, Decimal("0"), 0.0, 0.0)
+        if result is not None:
+            rows.append(result)
+        # If neither source available: omit model from response (do NOT fabricate numbers)
+
+    # Ensemble accuracy from latest completed backtest job
+    ensemble_acc: Decimal | None = None
     try:
-        from app.models.backtest import BacktestJob
+        from sqlalchemy import select  # noqa: PLC0415
 
+        from app.models.backtest import BacktestJob  # noqa: PLC0415
         stmt = select(BacktestJob).where(
             BacktestJob.strategy_name == "ml_alpha",
             BacktestJob.status.in_(["DONE", "COMPLETED"]),
@@ -181,11 +190,9 @@ async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccurac
         res = await db.execute(stmt)
         job = res.scalar_one_or_none()
         if job and job.results:
-            ensemble_acc = Decimal(
-                str(round(job.results.get("metrics", {}).get("win_rate", 0.0), 4))
-            )
-    except Exception as exc:
-        logger.warning("Failed to fetch ensemble back‑test job: %s", exc)
+            ensemble_acc = Decimal(str(round(job.results.get("metrics", {}).get("win_rate", 0.0), 4)))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to fetch ensemble back-test job: %s", exc)
 
     return ModelAccuracyResponse(
         models=rows,
@@ -232,62 +239,27 @@ async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftRespon
         cur_dist = _dist(current)
         base_dist = _dist(baseline)
     else:
-        # Fallback – use NSE index returns
-        try:
-            ticker = yf.Ticker("^NSEI")
-            df = ticker.history(period="126d", interval="1d")
-            if df.empty or len(df) < 42:
-                raise ValueError("Insufficient index data")
-            closes = df["Close"].astype(float).values
-            returns = np.diff(np.log(closes))
-            mid = len(returns) // 2
-            baseline, current = returns[:mid], returns[mid:]
-            ks_res = ks_2samp(baseline, current)
-            ks_stat, ks_p = float(ks_res.statistic), float(ks_res.pvalue)
-            drift = ks_p < 0.05
-            adwin_p = ks_p
-            cur_dist = DriftDistribution(
-                mean=Decimal(str(round(float(np.mean(current)), 6))),
-                std=Decimal(str(round(float(np.std(current)), 6))),
-                p25=Decimal(str(round(float(np.percentile(current, 25)), 6))),
-                p50=Decimal(str(round(float(np.percentile(current, 50)), 6))),
-                p75=Decimal(str(round(float(np.percentile(current, 75)), 6))),
-                min=Decimal(str(round(float(np.min(current)), 6))),
-                max=Decimal(str(round(float(np.max(current)), 6))),
-            )
-            base_dist = DriftDistribution(
-                mean=Decimal(str(round(float(np.mean(baseline)), 6))),
-                std=Decimal(str(round(float(np.std(baseline)), 6))),
-                p25=Decimal(str(round(float(np.percentile(baseline, 25)), 6))),
-                p50=Decimal(str(round(float(np.percentile(baseline, 50)), 6))),
-                p75=Decimal(str(round(float(np.percentile(baseline, 75)), 6))),
-                min=Decimal(str(round(float(np.min(baseline)), 6))),
-                max=Decimal(str(round(float(np.max(baseline)), 6))),
-            )
-        except Exception as exc:
-            logger.warning("Index fallback failed: %s", exc)
-            ks_stat = 0.05
-            ks_p = 0.50
-            drift = False
-            adwin_p = 0.50
-            cur_dist = DriftDistribution(
-                mean=Decimal("0.0002"), std=Decimal("0.012"), p25=Decimal("-0.006"),
-                p50=Decimal("0.0002"), p75=Decimal("0.006"), min=Decimal("-0.04"), max=Decimal("0.04"),
-            )
-            base_dist = DriftDistribution(
-                mean=Decimal("0.0001"), std=Decimal("0.011"), p25=Decimal("-0.005"),
-                p50=Decimal("0.0001"), p75=Decimal("0.005"), min=Decimal("-0.038"), max=Decimal("0.038"),
-            )
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "MODEL_NOT_TRAINED", "message": "Insufficient prediction history to calculate drift"}
+        )
 
     # Last retraining timestamp derived from XGBoost artefact
     xgb_path = MODEL_DIR / "xgboost_RELIANCE.NS.pkl"
     if xgb_path.is_file():
         try:
             last_retrain = datetime.fromtimestamp(xgb_path.stat().st_mtime, UTC)
-        except Exception:
-            last_retrain = now - timedelta(days=7)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail={"code": "MODEL_NOT_TRAINED", "message": "Could not determine last retrain time"}
+            ) from exc
     else:
-        last_retrain = now - timedelta(days=14)
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "MODEL_NOT_TRAINED", "message": "Models not trained"}
+        )
     days_since = (now - last_retrain).days
 
     rows = [
@@ -309,32 +281,20 @@ async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftRespon
 
 @router.get("/ensemble-weights-history", response_model=WeightsHistoryResponse)
 async def get_weights_history() -> WeightsHistoryResponse:
+    """Return ensemble weight history from DB or current snapshot.
+
+    If historical weight snapshots are not yet stored in the DB, returns only
+    today's weights as a single-point series. Never fabricates historical data.
+    """
     end = datetime.now(UTC)
     start = end - timedelta(days=30)
-    data: List[EnsembleWeightPoint] = []
     weights = get_dynamic_ensemble_weights()
-    for i in range(31):
-        ts = start + timedelta(days=i)
-        fluc_xgb = 0.02 * math.sin(i * 0.4)
-        fluc_tft = 0.015 * math.cos(i * 0.3)
-        fluc_garch = 0.01 * math.sin(i * 0.2)
-        fluc_gnn = 0.01 * math.cos(i * 0.5)
-        fluc_lstm = -(fluc_xgb + fluc_tft + fluc_garch + fluc_gnn)
-        pt = EnsembleWeightPoint(
-            date=ts,
-            tft=Decimal(str(max(0.01, round(weights["tft"] + fluc_tft, 4)))),
-            hmm_garch=Decimal(str(max(0.01, round(weights["hmm_garch"] + fluc_garch, 4)))),
-            gnn=Decimal(str(max(0.01, round(weights["gnn"] + fluc_gnn, 4)))),
-            lstm_attn=Decimal(str(max(0.01, round(weights["lstm_attn"] + fluc_lstm, 4)))),
-            xgboost=Decimal(str(max(0.01, round(weights["xgboost"] + fluc_xgb, 4)))),
-        )
-        # Normalise to exactly 1.0
-        vals = [pt.tft, pt.hmm_garch, pt.gnn, pt.lstm_attn, pt.xgboost]
-        total = sum(vals)
-        pt.tft = Decimal(str(round(pt.tft / total, 4)))
-        pt.hmm_garch = Decimal(str(round(pt.hmm_garch / total, 4)))
-        pt.gnn = Decimal(str(round(pt.gnn / total, 4)))
-        pt.lstm_attn = Decimal(str(round(pt.lstm_attn / total, 4)))
-        pt.xgboost = Decimal(str(round(1.0 - (pt.tft + pt.hmm_garch + pt.gnn + pt.lstm_attn), 4)))
-        data.append(pt)
-    return WeightsHistoryResponse(period_days=252, data=data, start_date=start, end_date=end)
+    today_pt = EnsembleWeightPoint(
+        date=end,
+        tft=Decimal(str(round(weights.get("tft", 0.0), 4))),
+        hmm_garch=Decimal(str(round(weights.get("hmm_garch", 0.0), 4))),
+        gnn=Decimal(str(round(weights.get("gnn", 0.0), 4))),
+        lstm_attn=Decimal(str(round(weights.get("lstm_attn", 0.0), 4))),
+        xgboost=Decimal(str(round(weights.get("xgboost", 0.0), 4))),
+    )
+    return WeightsHistoryResponse(period_days=30, data=[today_pt], start_date=start, end_date=end)

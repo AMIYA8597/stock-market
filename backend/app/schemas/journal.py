@@ -14,9 +14,9 @@ class JournalCreate(BaseModel):
     notes: str = Field(..., max_length=1024, description="Trade analysis or notes")
     tags: str | None = Field(default=None, max_length=255, description="Comma-separated strategy tags")
     rating: int | None = Field(default=None, ge=1, le=5, description="Star rating (1 to 5)")
-    entry_price: Decimal | None = Field(default=None, ge=0, decimal_places=8)
-    exit_price: Decimal | None = Field(default=None, ge=0, decimal_places=8)
-    quantity: Decimal | None = Field(default=None, ge=0, decimal_places=8)
+    entry_price: Decimal | None = Field(default=None, ge=0)
+    exit_price: Decimal | None = Field(default=None, ge=0)
+    quantity: Decimal | None = Field(default=None, ge=0)
     direction: str | None = Field(default=None, max_length=8, description="LONG or SHORT")
 
 
@@ -27,9 +27,9 @@ class JournalUpdate(BaseModel):
     notes: str | None = Field(default=None, max_length=1024)
     tags: str | None = Field(default=None, max_length=255)
     rating: int | None = Field(default=None, ge=1, le=5)
-    entry_price: Decimal | None = Field(default=None, ge=0, decimal_places=8)
-    exit_price: Decimal | None = Field(default=None, ge=0, decimal_places=8)
-    quantity: Decimal | None = Field(default=None, ge=0, decimal_places=8)
+    entry_price: Decimal | None = Field(default=None, ge=0)
+    exit_price: Decimal | None = Field(default=None, ge=0)
+    quantity: Decimal | None = Field(default=None, ge=0)
     direction: str | None = Field(default=None, max_length=8)
 
 

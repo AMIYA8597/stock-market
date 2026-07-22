@@ -1,7 +1,7 @@
 "use client";
 
 import { Bell, CheckCheck, Clock3 } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import {
   Dropdown,
   DropdownContent,
@@ -9,7 +9,7 @@ import {
   DropdownLabel,
   DropdownSeparator,
   DropdownTrigger,
-} from "@/components/ui/Dropdown";
+} from "@neuroquant/ui";
 import { useSignalAlerts } from "@/hooks/useSignalAlerts";
 import { safeFormat } from "@/lib/formatters";
 

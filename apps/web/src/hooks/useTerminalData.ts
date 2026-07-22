@@ -227,3 +227,5 @@ export const useTerminalData = (): TerminalDataState => {
     [symbols, selectedSymbol, selectedSignal, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, refresh]
   );
 };
+
+

@@ -4,16 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 
 import { marketApi } from "@/lib/api-client";
 import { safeFormat } from "@/lib/formatters";
-import type { OHLCVBar } from "@neuroquant/types";
+import type { OHLCVBar, Interval } from "@neuroquant/types";
 import type { SignalResponse, ForecastPoint } from "@/types/intelligence";
+import dynamic from "next/dynamic";
 import {
-  LightweightCandlestickChart,
   SimpleLineAreaChart,
   type LineAreaPoint,
   SimpleBarChart,
   type SimpleBarPoint,
 } from "@/components/charts";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { useHistoryQuery } from "@/hooks/queries/useMarketData";
+import { useQuery } from "@tanstack/react-query";
+
+const LightweightCandlestickChart = dynamic(
+  () => import("@/components/charts").then((mod) => mod.LightweightCandlestickChart),
+  { ssr: false }
+);
 
 import SignalsTab from "./panes/SignalsTab";
 import OptionChainTab from "./panes/OptionChainTab";
@@ -61,21 +68,7 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   }, []);
 
   const [bars, setBars] = useState<OHLCVBar[]>([]);
-  const [timeframe, setTimeframe] = useState<
-    | "1m"
-    | "3m"
-    | "5m"
-    | "10m"
-    | "15m"
-    | "30m"
-    | "45m"
-    | "1h"
-    | "2h"
-    | "4h"
-    | "1d"
-    | "1w"
-    | "1mo"
-  >("1d");
+  const [timeframe, setTimeframe] = useState<Interval>("1d");
   const [subTab, setSubTab] = useState<
     | "indicators"
     | "signals"
@@ -92,6 +85,37 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historySource, setHistorySource] = useState<string | null>(null);
   const [forecastError, setForecastError] = useState<string | null>(null);
+
+  // 1. Fetch History using React Query
+  const { data: historyData, error: queryError, isLoading: queryLoading } = useHistoryQuery(activeSymbol || "", timeframe);
+
+  // 2. Fetch Forecast using React Query
+  const { data: forecastData, error: qForecastError } = useQuery({
+    queryKey: ["forecast", signal?.symbol],
+    queryFn: async () => {
+      if (!signal?.symbol) return [];
+      const response = await fetch("/api/v1/predictions/forecast", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ symbol: signal.symbol, horizons: [1, 3, 5, 10, 21] }),
+      });
+      if (!response.ok) throw new Error(`Failed with status ${response.status}`);
+      const data = await response.json();
+      return (data.forecast || []).map((pt: any) => ({
+        target_date: pt.target_date,
+        horizon_days: pt.horizon_days,
+        predicted_price: pt.predicted_price,
+        predicted_direction: pt.change_pct >= 0 ? "BUY" : "SELL",
+        confidence: data.confidence ?? 0.5,
+        prediction_low: pt.prediction_low,
+        prediction_high: pt.prediction_high,
+        change_pct: pt.change_pct,
+      }));
+    },
+    enabled: !!signal?.symbol,
+  });
+
+  const isLoading = queryLoading;
 
   // Live Price Feed Integration for real-time chart updates
   const { ticks } = usePriceFeed(activeSymbol ? [activeSymbol] : []);
@@ -203,95 +227,46 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   const confidence = signal ? safeFormat(Number(signal.ensemble.confidence) * 100, 1) : "--";
 
   useEffect(() => {
-    let mounted = true;
+    if (forecastData) {
+      setPredictions(forecastData);
+      setForecastError(null);
+    }
+  }, [forecastData]);
 
-    async function loadHistoryAndForecast(): Promise<void> {
-      if (!activeSymbol) {
+  useEffect(() => {
+    if (qForecastError) {
+      setPredictions([]);
+      setForecastError(qForecastError instanceof Error ? qForecastError.message : "Unable to load forecast.");
+    }
+  }, [qForecastError]);
+
+  useEffect(() => {
+    if (!activeSymbol) {
+      setBars([]);
+      setHistoryError(null);
+      setHistorySource(null);
+      return;
+    }
+    
+    if (historyData) {
+      if (historyData.bars && historyData.bars.length > 0) {
+        setBars(historyData.bars.slice(-300));
+        setHistoryError(null);
+        setHistorySource(historyData.source ?? "yfinance");
+      } else {
+        setHistoryError(`No ${timeframe} history returned for ${activeSymbol}.`);
+        setHistorySource(null);
         setBars([]);
-        setPredictions([]);
-        return;
-      }
-
-      // 1. Fetch History
-      let loadedBars: OHLCVBar[] = [];
-      try {
-        const history = await marketApi.getHistory(activeSymbol, timeframe);
-        if (history.bars && history.bars.length > 0) {
-          loadedBars = history.bars.slice(-300);
-          if (mounted) {
-            setHistoryError(null);
-            setHistorySource(history.source ?? "yfinance");
-          }
-        } else if (mounted) {
-          setHistoryError(`No ${timeframe} history returned for ${activeSymbol}.`);
-          if (mounted) {
-            setHistorySource(null);
-          }
-        }
-      } catch (error) {
-        if (mounted) {
-          setHistoryError(error instanceof Error ? error.message : "Unable to load market history.");
-          setHistorySource(null);
-        }
-      }
-
-      if (mounted) {
-        setBars(loadedBars);
-      }
-
-      // 2. Fetch Forecast (only when we have a signal)
-      if (!signal?.symbol) return;
-      try {
-        const fetchUrl = "/api/v1/predictions/forecast";
-        const response = await fetch(fetchUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            symbol: signal.symbol,
-            horizons: [1, 3, 5, 10, 21],
-          }),
-        });
-        if (response.ok) {
-          const data = await response.json();
-          const forecastData: ForecastPoint[] = (data.forecast || []).map((pt: {
-            target_date: string;
-            horizon_days: number;
-            predicted_price: number;
-            prediction_low: number;
-            prediction_high: number;
-            change_pct: number;
-          }) => ({
-            target_date: pt.target_date,
-            horizon_days: pt.horizon_days,
-            predicted_price: pt.predicted_price,
-            predicted_direction: pt.change_pct >= 0 ? "BUY" : "SELL",
-            confidence: data.confidence ?? 0.5,
-            prediction_low: pt.prediction_low,
-            prediction_high: pt.prediction_high,
-            change_pct: pt.change_pct,
-          }));
-          if (mounted) {
-            setPredictions(forecastData);
-            setForecastError(null);
-          }
-        } else {
-          throw new Error(`Failed with status ${response.status}`);
-        }
-      } catch (error) {
-        if (mounted) {
-          setPredictions([]);
-          setForecastError(error instanceof Error ? error.message : "Unable to load forecast data.");
-        }
       }
     }
+  }, [historyData, activeSymbol, timeframe]);
 
-    void loadHistoryAndForecast();
-    return () => {
-      mounted = false;
-    };
-  }, [activeSymbol, timeframe, signal?.symbol]);
+  useEffect(() => {
+    if (queryError) {
+      setHistoryError(queryError instanceof Error ? queryError.message : "Unable to load market history.");
+      setHistorySource(null);
+    }
+  }, [queryError]);
 
   const indicatorSeries = useMemo<LineAreaPoint[]>(() => {
     if (bars.length === 0) {
@@ -322,7 +297,7 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   return (
     <section className="flex h-full min-h-0 flex-col bg-[var(--nq-bg-primary)]">
       {/* Chart Header */}
-      <div className="mb-0 flex shrink-0 items-center justify-between border-b border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">
+      <div className="mb-0 flex shrink-0 flex-col md:flex-row flex-wrap md:items-center justify-between border-b border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2 gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h2 className="font-mono text-sm font-bold text-[var(--nq-text-primary)]">{displaySymbol}</h2>
@@ -561,37 +536,40 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
               )}
             </div>
             <div className="relative min-h-0 flex-1">
-              {bars.length > 0 ? (
+              {isLoading ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="h-8 w-8 rounded-full border-2 border-[var(--nq-accent-cyan)] border-t-transparent animate-spin" />
+                  <span className="text-xs text-[var(--nq-text-secondary)]">Loading {activeSymbol} {timeframe}...</span>
+                </div>
+              ) : historyError ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-[rgba(255,59,92,0.1)] border border-[rgba(255,59,92,0.3)] flex items-center justify-center">
+                    <span className="text-[#FF3B5C] text-lg">!</span>
+                  </div>
+                  <span className="text-xs text-[#FF3B5C] text-center max-w-[200px]">{historyError}</span>
+                </div>
+              ) : !activeSymbol ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-[rgba(0,212,245,0.08)] border border-[rgba(0,212,245,0.2)] flex items-center justify-center">
+                    <span className="text-[var(--nq-accent-cyan)] text-lg">📈</span>
+                  </div>
+                  <span className="text-xs text-[var(--nq-text-secondary)]">Select a symbol from the watchlist to load chart data</span>
+                </div>
+              ) : bars.length === 0 ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+                  <div className="h-12 w-12 rounded-full bg-[rgba(255,255,255,0.05)] border border-[var(--nq-border)] flex items-center justify-center">
+                    <span className="text-[var(--nq-text-secondary)] text-lg">∅</span>
+                  </div>
+                  <span className="text-xs text-[var(--nq-text-secondary)] text-center max-w-[200px]">No {timeframe} data available for {activeSymbol}</span>
+                </div>
+              ) : (
                 <LightweightCandlestickChart
                   bars={bars}
                   chartStyle={chartStyle}
                   indicators={activeIndicators}
                   predictions={predictions}
-                  symbol={activeSymbol ?? undefined}
+                  symbol={activeSymbol}
                 />
-              ) : (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-                  {historyError ? (
-                    <>
-                      <div className="h-12 w-12 rounded-full bg-[rgba(255,59,92,0.1)] border border-[rgba(255,59,92,0.3)] flex items-center justify-center">
-                        <span className="text-[#FF3B5C] text-lg">!</span>
-                      </div>
-                      <span className="text-xs text-[#FF3B5C] text-center max-w-[200px]">{historyError}</span>
-                    </>
-                  ) : activeSymbol ? (
-                    <>
-                      <div className="h-8 w-8 rounded-full border-2 border-[var(--nq-accent-cyan)] border-t-transparent animate-spin" />
-                      <span className="text-xs text-[var(--nq-text-secondary)]">Loading {activeSymbol}...</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="h-12 w-12 rounded-full bg-[rgba(0,212,245,0.08)] border border-[rgba(0,212,245,0.2)] flex items-center justify-center">
-                        <span className="text-[var(--nq-accent-cyan)] text-lg">📈</span>
-                      </div>
-                      <span className="text-xs text-[var(--nq-text-secondary)]">Select a symbol from the watchlist to load chart data</span>
-                    </>
-                  )}
-                </div>
               )}
             </div>
             {(historyError || forecastError) && bars.length > 0 ? (
@@ -612,7 +590,7 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
         </div>
 
         {/* BOTTOM PANEL - sub-tabs */}
-        <div className="flex flex-col shrink-0 border border-[var(--nq-border)] bg-[var(--nq-bg-card)] rounded mx-3 mb-3" style={{ height: "260px" }}>
+        <div className="flex flex-col shrink-0 border border-[var(--nq-border)] bg-[var(--nq-bg-card)] rounded mx-3 mb-3 h-64 lg:h-[280px]">
           <div className="flex shrink-0 items-center gap-1 border-b border-[var(--nq-border)] px-2 pt-1 pb-1 overflow-x-auto ds-scrollable">
             {(
               [

@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { MailCheck, ShieldCheck } from 'lucide-react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { Input } from '@/components/ui/Input';
-import { Button } from '@/components/ui/Button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@neuroquant/ui";
+import { Input } from "@neuroquant/ui";
+import { Button } from "@neuroquant/ui";
 import { authApi } from '@/lib/api-client';
 import { useToastStore } from '@/stores/toast-store';
 

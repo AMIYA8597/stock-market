@@ -1,78 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { BellRing, Filter, MessagesSquare } from "lucide-react";
-import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Badge } from "@neuroquant/ui";
+import { Button } from "@neuroquant/ui";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/Card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/Tabs";
-import { notificationsApi } from "@/lib/api-client";
-import { useToastStore } from "@/stores/toast-store";
-
-const seedRows = [
-  {
-    id: "N-883",
-    title: "AAPL target reached",
-    detail: "Take-profit condition met at $218.2",
-    tone: "buy",
-    time: "2m ago",
-  },
-  {
-    id: "N-884",
-    title: "Model drift warning",
-    detail: "momentum-v4 confidence dropped by 8.2%",
-    tone: "neutral",
-    time: "10m ago",
-  },
-  {
-    id: "N-885",
-    title: "Order failed",
-    detail: "Insufficient margin for NIFTY option spread",
-    tone: "sell",
-    time: "31m ago",
-  },
-];
+} from "@neuroquant/ui";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@neuroquant/ui";
+import { useNotificationsQuery } from "@/hooks/queries/useNotifications";
 
 export function NotificationCenterPage(): JSX.Element {
-  const pushToast = useToastStore((state) => state.pushToast);
-  const [rows, setRows] = useState(seedRows);
+  const { data } = useNotificationsQuery();
 
-  useEffect(() => {
-    let mounted = true;
-    notificationsApi
-      .list()
-      .then((data) => {
-        if (!mounted) return;
-        setRows(
-          data.items.map((item) => ({
-            id: item.id,
-            title: item.title,
-            detail: item.message,
-            tone:
-              item.level === "error"
-                ? "sell"
-                : item.level === "warning"
-                  ? "neutral"
-                  : "buy",
-            time: new Date(item.created_at).toLocaleTimeString(),
-          })),
-        );
-      })
-      .catch(() => {
-        if (!mounted) return;
-        pushToast({ tone: "error", title: "Notifications unavailable" });
-      });
-
-    return () => {
-      mounted = false;
-    };
-  }, [pushToast]);
+  const rows = useMemo(() => {
+    if (!data?.items) return [];
+    return data.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      detail: item.message,
+      tone:
+        item.level === "error"
+          ? "sell"
+          : item.level === "warning"
+            ? "neutral"
+            : "buy",
+      time: new Date(item.created_at).toLocaleTimeString(),
+    }));
+  }, [data]);
 
   return (
     <Card className="bg-[var(--ds-surface-1)]/90">

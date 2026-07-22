@@ -6,7 +6,7 @@ import {
   contractsApi,
   type BacktestResultsResponse,
 } from "@/lib/contracts-api";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { ChartCard } from "@/components/charts";
 import { safeFormat } from "@/lib/formatters";
 

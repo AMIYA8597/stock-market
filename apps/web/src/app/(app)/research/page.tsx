@@ -9,7 +9,7 @@ const links = [
   { href: "/research/correlation-graph", label: "Correlation Graph" },
   { href: "/research/factor-exposure", label: "Factor Exposure" },
   { href: "/research/model-performance", label: "Model Performance" },
-  { href: "/research/explainability/RELIANCE.NS", label: "Explainability" },
+  { href: "/research/explainability", label: "Explainability" },
 ];
 
 function pct(value: number | undefined): string {

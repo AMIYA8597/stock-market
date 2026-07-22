@@ -44,7 +44,7 @@ const config: Config = {
         mono: ["var(--font-berkeley)", "ui-monospace", "monospace"],
       },
       screens: {
-        terminal: "1280px",
+        terminal: "1024px",
       },
       gridTemplateColumns: {
         terminal:

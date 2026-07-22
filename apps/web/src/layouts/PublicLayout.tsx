@@ -68,7 +68,7 @@ export function PublicLayout({ children }: { children: React.ReactNode }): JSX.E
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
             <Link href="/register">
-              <Button size="sm" rightIcon={<ArrowRight className="h-4 w-4" />}>Start free</Button>
+              <Button size="sm" >Start free <ArrowRight className="h-4 w-4" /></Button>
             </Link>
           </div>
 

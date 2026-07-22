@@ -9,6 +9,7 @@ import { marketApi, tradingApi, predictionsApi } from "@/lib/api-client";
 import { useTradingStore } from "@/stores/tradingStore";
 import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
+import { useAuditLogsQuery } from "@/hooks/queries/useTrading";
 import type { Quote } from "@neuroquant/types";
 
 interface SignalPanelProps {
@@ -36,7 +37,9 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   const [quoteLoading, setQuoteLoading] = useState<boolean>(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const { orders, addOrder, clearOrders } = useOrderHistory();
-  const { tradingMode, setTradingMode, auditLogs, fetchAuditLogs } = useTradingStore();
+  const { tradingMode, setTradingMode } = useTradingStore();
+  const { data: auditLogsData, refetch: fetchAuditLogs } = useAuditLogsQuery();
+  const auditLogs = auditLogsData?.logs ?? [];
   const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
   const [typedPhrase, setTypedPhrase] = useState<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -845,7 +848,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       <div className="mt-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3">
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Live Audit Log Console</p>
         <div className="h-28 overflow-y-auto rounded bg-black/40 p-2 font-mono text-[9px] leading-relaxed text-[var(--nq-text-secondary)] ds-scrollable border border-[var(--nq-border)]">
-          {auditLogs.map((log, index) => (
+          {auditLogs.map((log: string, index: number) => (
             <div key={index} className="border-b border-[rgba(255,255,255,0.02)] pb-0.5 mb-0.5 last:border-0 last:pb-0">
               {log}
             </div>
