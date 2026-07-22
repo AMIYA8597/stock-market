@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useEffect } from "react";
 import { motion } from "framer-motion";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { Card, CardHeader, CardTitle } from "@/components/dashboard/premium";
 import { contractsApi, type PortfolioOptimizeResponse } from "@/lib/contracts-api";
 import {
@@ -14,7 +14,7 @@ import {
   type DonutSlice,
 } from "@/components/charts";
 
-const DEFAULT_UNIVERSE = "RELIANCE.NS,TCS.NS,INFY.NS,HDFCBANK.NS,ICICIBANK.NS,LT.NS,ITC.NS";
+const DEFAULT_UNIVERSE = "";
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(2)}%`;
@@ -132,7 +132,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
       className="min-h-screen bg-[radial-gradient(1000px_500px_at_0%_0%,rgba(0,212,245,0.12),transparent_45%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.10),transparent_45%),var(--nq-bg-base)] p-4 text-[var(--nq-text-primary)] sm:p-6"
     >
       <section className="mb-6 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card glow className="relative overflow-hidden px-6 py-6 sm:px-8">
+        <Card className="relative overflow-hidden px-6 py-6 sm:px-8">
           <div className="absolute inset-0 bg-[radial-gradient(1000px_420px_at_0%_0%,rgba(0,212,245,0.16),transparent_45%),radial-gradient(800px_360px_at_100%_0%,rgba(139,92,246,0.14),transparent_45%)]" />
           <div className="relative space-y-4">
             <div className="flex flex-wrap items-center gap-2">

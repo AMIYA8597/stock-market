@@ -156,26 +156,26 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
   const totalAssets = cash + unrealizedPnl + (tradingMode === "PAPER" ? paperPnl.total_holdings_value : 0);
 
   return (
-    <div className="flex flex-col gap-3 min-w-[650px] text-xs">
+    <div className="flex flex-col gap-3 w-full text-xs">
       {/* Capital Status Cards */}
-      <div className="grid grid-cols-4 gap-2">
-        <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-2" style={{ animationDelay: '50ms' }}>
           <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold">Available Cash</p>
           <p className="text-xs font-bold font-mono text-[var(--nq-text-primary)]">₹{safeFormat(cash, 2)}</p>
         </div>
-        <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2">
+        <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-2" style={{ animationDelay: '100ms' }}>
           <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold">Unrealized MTM P&L</p>
           <p className={`text-xs font-bold font-mono ${unrealizedPnl >= 0 ? "text-[#00E676]" : "text-[#FF3B5C]"}`}>
             {unrealizedPnl >= 0 ? "+" : ""}₹{safeFormat(unrealizedPnl, 2)}
           </p>
         </div>
-        <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2">
+        <div className="rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-2" style={{ animationDelay: '150ms' }}>
           <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold">Realized P&L</p>
           <p className={`text-xs font-bold font-mono ${realizedPnl >= 0 ? "text-[#00E676]" : "text-[#FF3B5C]"}`}>
             {realizedPnl >= 0 ? "+" : ""}₹{safeFormat(realizedPnl, 2)}
           </p>
         </div>
-        <div className="relative rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2 flex justify-between items-center pr-3">
+        <div className="relative rounded border border-[var(--nq-border)] glass-panel glow-hover fade-in p-2 flex justify-between items-center pr-3" style={{ animationDelay: '200ms' }}>
           <div>
             <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold">Total Account Value</p>
             <p className="text-xs font-bold font-mono text-[var(--nq-text-primary)]">₹{safeFormat(totalAssets, 2)}</p>
@@ -227,7 +227,7 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
       </div>
 
       {/* Tab Panels */}
-      <div className="min-h-[140px] max-h-[220px] overflow-y-auto ds-scrollable pr-1">
+      <div className="min-h-[140px] max-h-[220px] overflow-y-auto overflow-x-auto ds-scrollable pr-1">
         {loading ? (
           <div className="py-8 text-center text-[var(--nq-text-secondary)] animate-pulse">Syncing trading account data...</div>
         ) : (
@@ -457,3 +457,5 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
     </div>
   );
 }
+
+

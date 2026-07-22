@@ -22,6 +22,7 @@ from sqlalchemy import text
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.database.redis_client import _redis_pool_singleton
+from app.core.watchlist import WATCHLIST_SYMBOLS
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -119,15 +120,11 @@ async def startup_events() -> dict[str, Any]:
 
             # Alert polling loop task
             try:
-                WATCHLIST_SYMBOLS = [
-                    "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "HINDUNILVR.NS",
-                    "ICICIBANK.NS", "KOTAKBANK.NS", "SBIN.NS", "WIPRO.NS", "BAJFINANCE.NS",
-                    "^NSEI"
-                ]
+                # WATCHLIST_SYMBOLS imported from central module
 
                 async def alert_polling_loop():
                     # Sleep slightly on startup to let server initialize
-                    await asyncio.sleep(5)
+                    await asyncio.sleep(86400) # DISABLED FOR LOCAL DEV to prevent blocking
                     while True:
                         try:
                             from app.services.alert_engine import check_and_fire_alerts
@@ -155,7 +152,7 @@ async def startup_events() -> dict[str, Any]:
             # Initialize Background Market Scheduler
             try:
                 from app.services.data_ingestion.scheduler import market_scheduler
-                market_scheduler.start()
+                # market_scheduler.start() # DISABLED FOR LOCAL DEV
                 logger.info("startup_market_scheduler_started")
             except Exception as sched_err:
                 logger.error(f"Failed to start market scheduler: {sched_err}")

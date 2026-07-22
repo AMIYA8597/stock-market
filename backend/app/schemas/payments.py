@@ -10,8 +10,8 @@ class PaymentMethod(BaseModel):
     code: str = Field(..., description="UPI|CARD|NETBANKING")
     label: str
     enabled: bool = True
-    min_amount: Decimal = Field(..., gt=0, decimal_places=2)
-    max_amount: Decimal = Field(..., gt=0, decimal_places=2)
+    min_amount: Decimal = Field(..., gt=0)
+    max_amount: Decimal = Field(..., gt=0)
 
 
 class PaymentMethodsResponse(BaseModel):
@@ -20,7 +20,7 @@ class PaymentMethodsResponse(BaseModel):
 
 
 class PaymentIntentRequest(BaseModel):
-    amount: Decimal = Field(..., gt=0, decimal_places=2)
+    amount: Decimal = Field(..., gt=0)
     currency: str = Field(default="INR", min_length=3, max_length=3)
     method: str = Field(..., description="UPI|CARD|NETBANKING")
     description: str = Field(default="Wallet top-up", min_length=1, max_length=120)
@@ -29,7 +29,7 @@ class PaymentIntentRequest(BaseModel):
 class PaymentIntentResponse(BaseModel):
     intent_id: str
     provider_ref: str
-    amount: Decimal = Field(..., decimal_places=2)
+    amount: Decimal = Field(...)
     currency: str
     method: str
     status: str = Field(..., description="requires_confirmation|confirmed|failed")
@@ -45,21 +45,21 @@ class PaymentConfirmResponse(BaseModel):
     payment_id: str
     intent_id: str
     status: str = Field(..., description="succeeded|failed")
-    credited_amount: Decimal = Field(..., decimal_places=2)
-    wallet_balance: Decimal = Field(..., decimal_places=2)
+    credited_amount: Decimal = Field(...)
+    wallet_balance: Decimal = Field(...)
     completed_at: datetime
 
 
 class WalletBalanceResponse(BaseModel):
     currency: str
-    wallet_balance: Decimal = Field(..., decimal_places=2)
+    wallet_balance: Decimal = Field(...)
     updated_at: datetime
 
 
 class PaymentHistoryItem(BaseModel):
     payment_id: str
     intent_id: str
-    amount: Decimal = Field(..., decimal_places=2)
+    amount: Decimal = Field(...)
     currency: str
     method: str
     status: str

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PublicLayout } from "./PublicLayout";
-import { Badge } from "@/components/ui/Badge";
+import { Badge } from "@neuroquant/ui";
 import { Card } from "@/components/dashboard/premium";
 import { ShieldCheck, Sparkles, Workflow } from "lucide-react";
 
@@ -8,7 +8,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }): JSX.Ele
   return (
     <PublicLayout>
       <section className="mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-[1600px] items-center gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:px-8">
-        <Card glow className="relative overflow-hidden p-0">
+        <Card className="relative overflow-hidden p-0">
           <div className="absolute inset-0 bg-[radial-gradient(1000px_520px_at_0%_0%,rgba(0,212,245,0.18),transparent_45%),radial-gradient(800px_420px_at_100%_0%,rgba(139,92,246,0.14),transparent_45%)]" />
           <div className="relative p-8 sm:p-10">
             <Badge variant="bull" className="px-3 py-1.5 text-[10px] uppercase tracking-[0.16em]">

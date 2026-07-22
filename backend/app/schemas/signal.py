@@ -11,46 +11,46 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class TFTSignal(BaseModel):
     """TFT model prediction."""
-    p10_return: Decimal = Field(..., decimal_places=6, description="10th percentile")
-    p50_return: Decimal = Field(..., decimal_places=6, description="median forecast")
-    p90_return: Decimal = Field(..., decimal_places=6, description="90th percentile")
-    raw_signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
+    p10_return: Decimal = Field(..., description="10th percentile")
+    p50_return: Decimal = Field(..., description="median forecast")
+    p90_return: Decimal = Field(..., description="90th percentile")
+    raw_signal: Decimal = Field(..., ge=-1.0, le=1.0)
     horizon_days: int = Field(..., description="1|5|21")
 
 
 class HMMGARCHSignal(BaseModel):
     """HMM-GARCH regime and volatility forecast."""
-    regime_signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
-    vol_forecast_1d: Decimal = Field(..., gt=0, decimal_places=6)
-    vol_forecast_5d: Decimal = Field(..., gt=0, decimal_places=6)
-    vol_forecast_21d: Decimal = Field(..., gt=0, decimal_places=6)
+    regime_signal: Decimal = Field(..., ge=-1.0, le=1.0)
+    vol_forecast_1d: Decimal = Field(..., gt=0)
+    vol_forecast_5d: Decimal = Field(..., gt=0)
+    vol_forecast_21d: Decimal = Field(..., gt=0)
 
 
 class GNNSignal(BaseModel):
     """GNN spillover risk and correlation."""
-    spillover_risk: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4)
-    embedding_norm: Decimal = Field(..., gt=0, decimal_places=6)
+    spillover_risk: Decimal = Field(..., ge=0.0, le=1.0)
+    embedding_norm: Decimal = Field(..., gt=0)
     top_correlated_assets: list[dict] = Field(..., description="[{ticker, correlation}]")
 
 
 class LSTMAttentionSignal(BaseModel):
     """LSTM with attention weights."""
-    raw_signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
+    raw_signal: Decimal = Field(..., ge=-1.0, le=1.0)
     attention_peaks: list[dict] = Field(..., description="[{date, weight}]")
 
 
 class XGBoostSignal(BaseModel):
     """XGBoost classification signal."""
-    raw_signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
+    raw_signal: Decimal = Field(..., ge=-1.0, le=1.0)
     top_features: list[dict] = Field(..., description="[{name, shap_value}]")
 
 
 class EnsembleSignal(BaseModel):
     """Final ensemble signal."""
-    signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
-    confidence: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4)
+    signal: Decimal = Field(..., ge=-1.0, le=1.0)
+    confidence: Decimal = Field(..., ge=0.0, le=1.0)
     direction: str = Field(..., description="STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL")
-    kelly_fraction: Decimal = Field(..., ge=0.0, le=0.25, decimal_places=4)
+    kelly_fraction: Decimal = Field(..., ge=0.0, le=0.25)
 
 
 class SignalResponse(BaseModel):
@@ -88,10 +88,10 @@ class BulkSignalResponse(BaseModel):
 class HistoricalSignal(BaseModel):
     """Single point in signal history."""
     time: datetime
-    signal: Decimal = Field(..., ge=-1.0, le=1.0, decimal_places=4)
-    confidence: Decimal = Field(..., ge=0.0, le=1.0, decimal_places=4)
+    signal: Decimal = Field(..., ge=-1.0, le=1.0)
+    confidence: Decimal = Field(..., ge=0.0, le=1.0)
     direction: str
-    actual_return: Decimal | None = Field(None, decimal_places=6)
+    actual_return: Decimal | None = Field(None)
 
 
 class SignalHistoryResponse(BaseModel):

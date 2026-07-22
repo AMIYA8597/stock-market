@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/dashboard/premium';
-import { Input } from '@/components/ui/Input';
+import { Input } from "@neuroquant/ui";
 import { authApi, setAuthTokens } from '@/lib/api-client';
 import { useToastStore } from '@/stores/toast-store';
 

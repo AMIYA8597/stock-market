@@ -31,16 +31,22 @@ export function useWebSocket({
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     if (isConnecting) return;
 
     setIsConnecting(true);
     try {
-      wsRef.current = new WebSocket(url);
+      let wsUrl = url || process.env.NEXT_PUBLIC_WEBSOCKET_URL;
+      if (!wsUrl) {
+        const resp = await fetch('/api/v1/ws_url');
+        const data = await resp.json();
+        wsUrl = data.ws_url;
+      }
+      wsRef.current = new WebSocket(wsUrl!);
 
       wsRef.current.onopen = () => {
-        console.log('WebSocket connected:', url);
+        console.log('WebSocket connected:', wsUrl);
         setIsConnected(true);
         setIsConnecting(false);
         retryCountRef.current = 0;

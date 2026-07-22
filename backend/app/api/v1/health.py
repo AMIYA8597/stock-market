@@ -3,7 +3,10 @@
 from fastapi import APIRouter
 from sqlalchemy import text
 
+import logging
 from app.core.dependencies import get_db, get_redis
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -119,20 +122,6 @@ async def readiness_check():
     except Exception as e:
         logger.warning(f"SQLite health check failed: {e}")
         db_ok = False
-
-    # 2. Test MongoDB (optional but checked if configured)
-    mongo_ok = True
-    if settings.MONGODB_URL:
-        try:
-            from app.database.mongodb import get_mongo_db
-            mongo_db = get_mongo_db()
-            if mongo_db is not None:
-                await mongo_db.command("ping")
-            else:
-                mongo_ok = False
-        except Exception as e:
-            logger.warning(f"MongoDB health check failed: {e}")
-            mongo_ok = False
 
     # 3. Test Redis connection (optional)
     try:

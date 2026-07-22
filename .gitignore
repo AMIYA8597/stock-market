@@ -1,10 +1,11 @@
+# ───────────────────────────────────────────────────
 # Python
+# ───────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 *.egg-info/
-dist/
 build/
 .eggs/
 *.egg
@@ -12,37 +13,49 @@ build/
 venv/
 env/
 
-# Node
+# ───────────────────────────────────────────────────
+# Node / pnpm
+# ───────────────────────────────────────────────────
 node_modules/
 .next/
 out/
 .turbo/
 *.tsbuildinfo
 
-# Environment
+# ───────────────────────────────────────────────────
+# Environment & Secrets  (NEVER COMMIT THESE)
+# ───────────────────────────────────────────────────
 .env
 .env.local
 .env.production
+.env.staging
 .env.*.local
 .env.key
+backend/.env
+backend/.env.*
+!backend/.env.example
 keys/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
+# ───────────────────────────────────────────────────
+# Database files
+# ───────────────────────────────────────────────────
+*.db
+*.sqlite
+*.sqlite3
+dev.db
+backend/dev.db
+pgdata/
 
-# OS
-.DS_Store
-Thumbs.db
-desktop.ini
+# ───────────────────────────────────────────────────
+# Logs
+# ───────────────────────────────────────────────────
+*.log
+logs/
+backend/logs/
 
-# Docker
-docker-compose.override.yml
-
+# ───────────────────────────────────────────────────
 # ML artifacts
+# ───────────────────────────────────────────────────
 mlruns/
 mlflow-artifacts/
 *.pkl
@@ -51,30 +64,62 @@ mlflow-artifacts/
 *.pt
 *.pth
 !backend/ml/models/.gitkeep
+data/models/
+data/backtest_cache/
 
-# # Logs
-# *.log
-# logs/
+# ───────────────────────────────────────────────────
+# IDE / OS
+# ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
 
-# Coverage
+# ───────────────────────────────────────────────────
+# Docker
+# ───────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ───────────────────────────────────────────────────
+# Coverage & Testing
+# ───────────────────────────────────────────────────
 htmlcov/
 .coverage
 .coverage.*
 coverage.xml
 *.cover
-
-# pytest
 .pytest_cache/
 
-# # Alembic
-# backend/alembic/versions/*.pyc
+# ───────────────────────────────────────────────────
+# Junk / scratch / temp
+# ───────────────────────────────────────────────────
+scratch/
+unused_backup/
+archive/
+*.tmp
+prompt.txt
+new-prompt.txt
+new-prompt.md
+new-new-new-new-prompt.txt
+git_diff.txt
+curl_output.txt
+cleanup_unused_modules.ps1
+package-lock.json
+tsconfig.tsbuildinfo
+DEPLOYMENT_CHECKLIST.sh
 
-# # Reports
-# *.pdf
-# !docs/*.pdf
+# ───────────────────────────────────────────────────
+# Alembic
+# ───────────────────────────────────────────────────
+backend/alembic/versions/*.pyc
 
-# # Database
-# *.db
-# *.sqlite3
-# pgdata/
+# ───────────────────────────────────────────────────
+# Misc
+# ───────────────────────────────────────────────────
 .aider*
+dist/
+.cache/

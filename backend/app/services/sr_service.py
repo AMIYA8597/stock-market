@@ -15,10 +15,17 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from sklearn.cluster import DBSCAN
+
+try:
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    from sklearn.cluster import DBSCAN
+except ImportError:
+    torch = None
+    nn = None
+    optim = None
+    DBSCAN = None
 
 from app.core.config import get_settings
 
@@ -27,7 +34,9 @@ MODEL_DIR = Path("d:/work/stock-market/backend/data/models")
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
-class SRBiLSTM(nn.Module):
+_BaseClass = nn.Module if nn is not None else object
+
+class SRBiLSTM(_BaseClass):
     """Bidirectional LSTM for sequence labeling of support/resistance zones."""
     def __init__(self, input_dim: int = 5, hidden_dim: int = 32, num_classes: int = 3):
         super().__init__()

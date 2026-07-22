@@ -99,8 +99,31 @@ backtest_module.async_session_factory = lambda: InMemorySession(shared_store)
 client = TestClient(app)
 
 
+from datetime import datetime, timezone, timedelta
+from app.models.asset import Symbol
+from app.models.ohlcv import OHLCV
+from app.models.signal import EnsembleSignal
+
 def test_run_status_and_results_flow() -> None:
     """Test complete backtest pipeline synchronously using Starlette TestClient."""
+    
+    # 0. Seed the in-memory db
+    sym1 = Symbol(id=uuid.uuid4(), ticker="AAPL")
+    sym2 = Symbol(id=uuid.uuid4(), ticker="MSFT")
+    shared_store[sym1.id] = sym1
+    shared_store[sym2.id] = sym2
+    
+    dt = datetime(2025, 6, 3, tzinfo=timezone.utc)
+    for i in range(10):
+        d = dt + timedelta(days=i)
+        for s in [sym1, sym2]:
+            price = 100.0 + i
+            # Add OHLCV
+            o = OHLCV(symbol_id=s.id, time=d, interval="1d", open=price, high=price, low=price, close=price, volume=1000)
+            shared_store[(d, s.id, "1d")] = o
+            # Add Signal
+            sig = EnsembleSignal(symbol_id=s.id, time=d, signal=1.0, kelly_fraction=0.1)
+            shared_store[(d, s.id, "sig")] = sig
     # 1. Post a new backtest run
     payload = {
         "strategy_name": "ml_alpha",
@@ -111,7 +134,7 @@ def test_run_status_and_results_flow() -> None:
         },
         "universe": ["AAPL", "MSFT"],
         "date_from": "2025-06-03",
-        "date_to": "2026-06-03",
+        "date_to": "2025-06-12",
         "initial_capital": 1000000.00
     }
 

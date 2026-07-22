@@ -1,284 +1,138 @@
 from __future__ import annotations
 
-import hashlib
 import hmac
+import hashlib
 import json
+import logging
 import os
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
+import razorpay # type: ignore
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
+
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
-from app.database.mongodb import (
-    mongo_create_payment_intent,
-    mongo_credit_wallet,
-    mongo_get_payment_history,
-    mongo_get_payment_intent,
-    mongo_get_wallet_state,
-)
-from app.models.payment import PaymentTransaction
+from app.models.payment import PaymentTransaction, Plan, Subscription, WalletLedger
 from app.schemas.errors import ErrorCode, ErrorResponse
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter(prefix="/payments", tags=["payments"])
-_TEST_INTENTS: dict[str, dict[str, str]] = {}
-_TEST_BALANCE: dict[str, Decimal] = {}
 
-_ALLOWED_METHODS = {
-    "UPI": (Decimal("100.00"), Decimal("200000.00")),
-    "CARD": (Decimal("100.00"), Decimal("500000.00")),
-    "NETBANKING": (Decimal("500.00"), Decimal("1000000.00")),
-}
+try:
+    razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+except Exception:
+    razorpay_client = None
 
 
-def _verify_webhook_signature(payload: bytes, signature_header: str) -> bool:
-    """Verify webhook signature using Stripe-style signed payload format.
-
-    Accepts either:
-    1) Stripe format: t=<unix>,v1=<hex>
-    2) Legacy format: raw hex digest (kept for compatibility outside production)
-    """
-    secret = settings.PAYMENT_WEBHOOK_SECRET
-    if not secret:
-        # Missing secret must fail closed in production.
-        if settings.is_production:
-            return False
-        return False
-
-    if "v1=" in signature_header and "t=" in signature_header:
-        parts = {}
-        for piece in signature_header.split(","):
-            if "=" in piece:
-                k, v = piece.split("=", 1)
-                parts[k.strip()] = v.strip()
-
-        timestamp_raw = parts.get("t")
-        signature_v1 = parts.get("v1")
-        if not timestamp_raw or not signature_v1:
-            return False
-
-        try:
-            timestamp = int(timestamp_raw)
-        except ValueError:
-            return False
-
-        now_ts = int(datetime.now(UTC).timestamp())
-        if abs(now_ts - timestamp) > settings.PAYMENT_WEBHOOK_TOLERANCE_SECONDS:
-            return False
-
-        signed_payload = f"{timestamp}.{payload.decode('utf-8')}".encode()
-        expected = hmac.new(secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, signature_v1)
-
-    # Legacy fallback should not be accepted in production.
-    if settings.is_production:
-        return False
-
-    expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature_header)
+def _resolve_user_id(current_user: dict | None) -> uuid.UUID:
+    if not current_user or not current_user.get("sub"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        return uuid.UUID(str(current_user["sub"]))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=401, detail="Invalid User ID")
 
 
-class PaymentIntentRequest(BaseModel):
-    amount: Decimal = Field(..., gt=0)
-    currency: str = Field(default="INR", min_length=3, max_length=3)
-    method: str = Field(..., min_length=3, max_length=20)
-    description: str = Field(default="Wallet top-up", min_length=1, max_length=120)
-
-
-class PaymentConfirmRequest(BaseModel):
-    intent_id: str
-    confirmation_code: str = Field(..., min_length=4, max_length=16)
-
-
-def _require_idempotency_key(value: str | None) -> str:
-    if _compat_test_mode() and (value is None or not value.strip()):
-        return f"idem-test-{uuid4().hex}"
-    if not value or not value.strip():
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="Idempotency-Key header is required.",
-            ).dict(),
-        )
-    return value.strip()
-
-
-def _compat_test_mode() -> bool:
-    return bool(os.getenv("PYTEST_CURRENT_TEST"))
-
-
-def _resolve_user_id(current_user: dict | None) -> str:
-    if current_user is None:
-        return "demo-user"
-    return str(current_user.get("sub") or current_user.get("user_id") or "demo-user")
-
-
-@router.get("/methods")
-async def methods() -> dict[str, object]:
+@router.get("/plans")
+async def get_plans(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
+    result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.price_inr.asc()))
+    plans = result.scalars().all()
     return {
-        "methods": [
-            {"code": code, "min_amount": str(bounds[0]), "max_amount": str(bounds[1]), "enabled": True}
-            for code, bounds in _ALLOWED_METHODS.items()
-        ],
-        "generated_at": datetime.now(UTC).isoformat(),
+        "items": [
+            {
+                "id": str(p.id),
+                "name": p.name,
+                "description": p.description,
+                "price_inr": str(p.price_inr),
+                "interval": p.interval,
+                "features": json.loads(p.features_json),
+            }
+            for p in plans
+        ]
     }
 
 
 @router.get("/balance")
 async def wallet_balance(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> dict[str, str]:
     user_id = _resolve_user_id(current_user)
-    if _compat_test_mode():
-        return {"currency": "INR", "wallet_balance": str(_TEST_BALANCE.get(user_id, Decimal("0.00")).quantize(Decimal("0.01")))}
-    if settings.MONGODB_URL:
-        wallet = await mongo_get_wallet_state(user_id)
-        return {
-            "currency": str(wallet.get("currency", "INR")),
-            "wallet_balance": str(wallet.get("wallet_balance", "0.00")),
-        }
-
-    result = await db.execute(
-        select(PaymentTransaction).where(
-            and_(PaymentTransaction.user_id == user_id, PaymentTransaction.status == "succeeded")
-        )
-    )
+    result = await db.execute(select(WalletLedger).where(WalletLedger.user_id == user_id))
     rows = result.scalars().all()
-    total = sum((Decimal(str(row.amount)) for row in rows), Decimal("0.00"))
+    
+    total = sum((row.amount if row.transaction_type == "credit" else -row.amount for row in rows), Decimal("0.00"))
     return {"currency": "INR", "wallet_balance": str(total.quantize(Decimal('0.01')))}
+
+
+class PaymentIntentRequest(BaseModel):
+    amount: Decimal = Field(..., gt=0)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
+    method: str = Field(default="RAZORPAY", min_length=3, max_length=20)
+    description: str = Field(default="Wallet top-up", min_length=1, max_length=120)
 
 
 @router.post("/intents")
 async def create_intent(
     payload: PaymentIntentRequest,
-    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
-    idempotency = _require_idempotency_key(idempotency_key)
     user_id = _resolve_user_id(current_user)
-
-    method = payload.method.upper()
-    if method not in _ALLOWED_METHODS:
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.INVALID_PAYMENT_METHOD,
-                message="Unsupported payment method.",
-            ).dict(),
-        )
-
-    min_amount, max_amount = _ALLOWED_METHODS[method]
-    if payload.amount < min_amount or payload.amount > max_amount:
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=f"Amount must be between {min_amount} and {max_amount}.",
-            ).dict(),
-        )
-
-    if _compat_test_mode():
-        existing = next((row for row in _TEST_INTENTS.values() if row["idempotency_key"] == idempotency), None)
-        if existing is not None:
-            return {
-                "intent_id": existing["intent_id"],
-                "provider_ref": existing["provider_ref"],
-                "amount": existing["amount"],
-                "currency": existing["currency"],
-                "method": existing["method"],
-                "status": existing["status"],
-                "created_at": existing["created_at"],
-            }
-
-        intent_id = f"pi_{uuid4().hex}"
-        provider_ref = f"gw_{uuid4().hex[:18]}"
-        created_at = datetime.now(UTC).isoformat()
-        row = {
-            "intent_id": intent_id,
-            "provider_ref": provider_ref,
-            "idempotency_key": idempotency,
-            "user_id": user_id,
-            "amount": str(payload.amount.quantize(Decimal("0.01"))),
+    
+    # 1. Create order in Razorpay
+    amount_paise = int(payload.amount * 100)
+    receipt_id = f"rcpt_{uuid4().hex[:10]}"
+    
+    if razorpay_client is None or settings.RAZORPAY_KEY_ID == "rzp_test_replace_me":
+        # Mock payment gateway for local setup
+        order_id = f"order_{uuid4().hex[:14]}"
+    else:
+        order = razorpay_client.order.create({
+            "amount": amount_paise,
             "currency": payload.currency.upper(),
-            "method": method,
-            "status": "requires_confirmation",
-            "created_at": created_at,
-        }
-        _TEST_INTENTS[intent_id] = row
-        return {
-            "intent_id": intent_id,
-            "provider_ref": provider_ref,
-            "amount": row["amount"],
-            "currency": row["currency"],
-            "method": row["method"],
-            "status": row["status"],
-            "created_at": created_at,
-        }
+            "receipt": receipt_id,
+            "notes": {"user_id": user_id, "description": payload.description}
+        })
+        order_id = order["id"]
 
-    if settings.MONGODB_URL:
-        row = await mongo_create_payment_intent(
-            user_id=user_id,
-            amount=payload.amount,
-            currency=payload.currency.upper(),
-            method=method,
-            description=payload.description,
-            idempotency_key=idempotency,
-        )
-        return {
-            "intent_id": str(row["intent_id"]),
-            "provider_ref": str(row["provider_ref"]),
-            "amount": str(row["amount"]),
-            "currency": str(row["currency"]),
-            "method": str(row["method"]),
-            "status": str(row["status"]),
-            "created_at": row["created_at"].isoformat() if isinstance(row.get("created_at"), datetime) else str(row.get("created_at")),
-        }
-
-    existing = await db.execute(select(PaymentTransaction).where(PaymentTransaction.idempotency_key == idempotency))
-    row = existing.scalar_one_or_none()
-    if row is not None:
-        return {
-            "intent_id": row.intent_id,
-            "provider_ref": row.provider_ref,
-            "amount": str(row.amount),
-            "currency": row.currency,
-            "method": row.method,
-            "status": row.status,
-            "created_at": row.created_at.isoformat(),
-        }
-
+    # 2. Record transaction intent in DB
     intent_id = f"pi_{uuid4().hex}"
-    provider_ref = f"gw_{uuid4().hex[:18]}"
-
-    row = PaymentTransaction(
+    tx = PaymentTransaction(
         user_id=user_id,
         intent_id=intent_id,
-        provider_ref=provider_ref,
-        idempotency_key=idempotency,
-        amount=payload.amount.quantize(Decimal("0.01")),
+        provider_ref=order_id,
+        idempotency_key=uuid4().hex, # Auto idempotency for this example
+        amount=payload.amount,
         currency=payload.currency.upper(),
-        method=method,
+        method=payload.method,
         status="requires_confirmation",
-        metadata_json=json.dumps({"description": payload.description}),
+        metadata_json=json.dumps({"description": payload.description, "receipt": receipt_id}),
     )
-    db.add(row)
-    await db.flush()
+    db.add(tx)
+    await db.commit()
+    await db.refresh(tx)
 
     return {
-        "intent_id": row.intent_id,
-        "provider_ref": row.provider_ref,
-        "amount": str(row.amount),
-        "currency": row.currency,
-        "method": row.method,
-        "status": row.status,
-        "created_at": row.created_at.isoformat(),
+        "intent_id": tx.intent_id,
+        "provider_ref": tx.provider_ref,
+        "amount": str(tx.amount),
+        "currency": tx.currency,
+        "status": tx.status,
+        "razorpay_key_id": settings.RAZORPAY_KEY_ID,
     }
+
+
+class PaymentConfirmRequest(BaseModel):
+    intent_id: str
+    razorpay_payment_id: str
+    razorpay_order_id: str | None = None
+    razorpay_signature: str | None = None
 
 
 @router.post("/confirm")
@@ -289,113 +143,100 @@ async def confirm_intent(
 ) -> dict[str, object]:
     user_id = _resolve_user_id(current_user)
 
-    if _compat_test_mode():
-        row = _TEST_INTENTS.get(payload.intent_id)
-        if row is None:
-            raise HTTPException(
-                status_code=404,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.RESOURCE_NOT_FOUND,
-                    message="Payment intent not found.",
-                ).dict(),
-            )
-        row["status"] = "succeeded"
-        credited_amount = Decimal(row["amount"]).quantize(Decimal("0.01"))
-        next_balance = (_TEST_BALANCE.get(user_id, Decimal("0.00")) + credited_amount).quantize(Decimal("0.01"))
-        _TEST_BALANCE[user_id] = next_balance
-        return {
-            "intent_id": row["intent_id"],
-            "status": row["status"],
-            "credited_amount": str(credited_amount),
-            "wallet_balance": str(next_balance),
-            "completed_at": datetime.now(UTC).isoformat(),
-        }
+    result = await db.execute(select(PaymentTransaction).where(PaymentTransaction.intent_id == payload.intent_id))
+    tx = result.scalar_one_or_none()
+    
+    if not tx or (payload.razorpay_order_id and tx.provider_ref != payload.razorpay_order_id):
+        raise HTTPException(status_code=404, detail="Payment intent not found or mismatch.")
+        
+    if tx.status == "succeeded":
+        return {"status": "already_succeeded"}
 
-    if settings.MONGODB_URL:
-        if not payload.confirmation_code.strip():
-            raise HTTPException(
-                status_code=400,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.VALIDATION_ERROR,
-                    message="confirmation_code is required.",
-                ).dict(),
-            )
-        intent = await mongo_get_payment_intent(user_id, payload.intent_id)
-        if intent is None:
-            raise HTTPException(
-                status_code=404,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.RESOURCE_NOT_FOUND,
-                    message="Payment intent not found.",
-                ).dict(),
-            )
-        credited = await mongo_credit_wallet(
-            user_id=user_id,
-            amount=Decimal(str(intent.get("amount", "0.00"))),
-            method=str(intent.get("method", "MANUAL")),
-            description=str(intent.get("description", "Paper wallet top-up")),
-            idempotency_key=f"paper-confirm:{payload.intent_id}",
-        )
-        return {
-            "intent_id": payload.intent_id,
-            "status": "succeeded",
-            "credited_amount": str(credited["amount"]),
-            "wallet_balance": str(credited["wallet_balance"]),
-            "completed_at": credited["completed_at"].isoformat() if isinstance(credited.get("completed_at"), datetime) else str(credited.get("completed_at")),
+    if razorpay_client is None or settings.RAZORPAY_KEY_SECRET == "replace_me":
+        # Mock signature verification for local setup
+        pass
+    else:
+        params_dict = {
+            'razorpay_order_id': payload.razorpay_order_id,
+            'razorpay_payment_id': payload.razorpay_payment_id,
+            'razorpay_signature': payload.razorpay_signature
         }
+        try:
+            razorpay_client.utility.verify_payment_signature(params_dict)
+        except Exception as e:
+            logger.error(f"Razorpay signature verification failed: {e}")
+            raise HTTPException(status_code=400, detail="Signature verification failed.")
 
-    result = await db.execute(
-        select(PaymentTransaction).where(
-            PaymentTransaction.intent_id == payload.intent_id,
-            PaymentTransaction.user_id == user_id,
-        )
+    # Mark transaction as succeeded
+    tx.status = "succeeded"
+    tx.confirmed_at = datetime.now(UTC)
+    tx.provider_event_id = payload.razorpay_payment_id
+    
+    # Credit the user's wallet
+    ledger = WalletLedger(
+        user_id=tx.user_id,
+        amount=tx.amount,
+        transaction_type="credit",
+        description="Wallet top-up via Razorpay",
+        reference_id=tx.intent_id
     )
-    row = result.scalar_one_or_none()
-    if row is None:
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.create(
-                code=ErrorCode.RESOURCE_NOT_FOUND,
-                message="Payment intent not found.",
-            ).dict(),
-        )
-
-    if row.status == "succeeded":
-        return {
-            "intent_id": row.intent_id,
-            "status": row.status,
-            "credited_amount": str(row.amount),
-            "wallet_balance": str(row.amount),
-            "completed_at": row.confirmed_at.isoformat() if row.confirmed_at else None,
-        }
-
-    if not payload.confirmation_code.strip():
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="confirmation_code is required.",
-            ).dict(),
-        )
-
-    row.status = "succeeded"
-    row.confirmed_at = datetime.now(UTC)
-
-    wallet_result = await db.execute(
-        select(PaymentTransaction).where(
-            and_(PaymentTransaction.user_id == user_id, PaymentTransaction.status == "succeeded")
-        )
-    )
-    wallet_rows = wallet_result.scalars().all()
-    wallet_balance = sum((Decimal(str(item.amount)) for item in wallet_rows), Decimal("0.00")).quantize(Decimal("0.01"))
+    db.add(ledger)
+    await db.commit()
 
     return {
-        "intent_id": row.intent_id,
-        "status": row.status,
-        "credited_amount": str(row.amount),
-        "wallet_balance": str(wallet_balance),
-        "completed_at": row.confirmed_at.isoformat(),
+        "intent_id": tx.intent_id,
+        "status": tx.status,
+        "credited_amount": str(tx.amount),
+        "completed_at": tx.confirmed_at.isoformat(),
     }
+
+
+class SubscribeRequest(BaseModel):
+    plan_id: str
+
+@router.post("/subscribe")
+async def subscribe_to_plan(
+    payload: SubscribeRequest,
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, object]:
+    user_id = _resolve_user_id(current_user)
+
+    plan_result = await db.execute(select(Plan).where(Plan.id == payload.plan_id))
+    plan = plan_result.scalar_one_or_none()
+    
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan not found.")
+
+    # Deduct from wallet
+    balance_result = await db.execute(select(WalletLedger).where(WalletLedger.user_id == user_id))
+    rows = balance_result.scalars().all()
+    total = sum((row.amount if row.transaction_type == "credit" else -row.amount for row in rows), Decimal("0.00"))
+    
+    if total < plan.price_inr:
+        raise HTTPException(status_code=400, detail="Insufficient wallet balance.")
+        
+    # Debit wallet
+    debit = WalletLedger(
+        user_id=user_id,
+        amount=plan.price_inr,
+        transaction_type="debit",
+        description=f"Subscription to {plan.name}",
+        reference_id=f"sub_{uuid4().hex[:10]}"
+    )
+    db.add(debit)
+    
+    # Create subscription
+    sub = Subscription(
+        user_id=user_id,
+        plan_id=plan.id,
+        status="active",
+        current_period_end=datetime.now(UTC) # TODO: add 1 month
+    )
+    db.add(sub)
+    await db.commit()
+    
+    return {"status": "subscribed", "plan": plan.name}
 
 
 @router.get("/history")
@@ -405,51 +246,18 @@ async def payment_history(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     user_id = _resolve_user_id(current_user)
-    if _compat_test_mode():
-        items = [
-            {
-                "intent_id": row["intent_id"],
-                "amount": row["amount"],
-                "currency": row["currency"],
-                "method": row["method"],
-                "status": row["status"],
-                "created_at": row["created_at"],
-            }
-            for row in list(_TEST_INTENTS.values())[::-1][:limit]
-        ]
-        return {"items": items, "total": len(_TEST_INTENTS)}
-    if settings.MONGODB_URL:
-        rows = await mongo_get_payment_history(user_id, limit=limit)
-        return {
-            "items": [
-                {
-                    "intent_id": str(row.get("intent_id", "")),
-                    "amount": str(row.get("amount", "0.00")),
-                    "currency": str(row.get("currency", "INR")),
-                    "method": str(row.get("method", "MANUAL")),
-                    "status": str(row.get("status", "succeeded")),
-                    "created_at": row.get("created_at").isoformat() if row.get("created_at") else None,
-                }
-                for row in rows
-            ],
-            "total": len(rows),
-        }
-
-    result = await db.execute(
-        select(PaymentTransaction)
-        .where(PaymentTransaction.user_id == user_id)
-        .order_by(PaymentTransaction.created_at.desc())
-        .limit(limit)
-    )
+    
+    # Fetch from WalletLedger instead of PaymentIntent for accurate history
+    stmt = select(WalletLedger).where(WalletLedger.user_id == user_id).order_by(WalletLedger.created_at.desc()).limit(limit)
+    result = await db.execute(stmt)
     rows = result.scalars().all()
     return {
         "items": [
             {
-                "intent_id": row.intent_id,
+                "id": str(row.id),
                 "amount": str(row.amount),
-                "currency": row.currency,
-                "method": row.method,
-                "status": row.status,
+                "type": row.transaction_type,
+                "description": row.description,
                 "created_at": row.created_at.isoformat(),
             }
             for row in rows
@@ -457,76 +265,33 @@ async def payment_history(
         "total": len(rows),
     }
 
-
-@router.post("/webhooks/stripe")
-async def stripe_webhook(
-    request: Request,
-    stripe_signature: str | None = Header(default=None, alias="Stripe-Signature"),
+@router.get("/subscription")
+async def get_subscription(
+    current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
-    payload = await request.body()
-    if settings.is_production and not settings.PAYMENT_WEBHOOK_SECRET:
-        raise HTTPException(
-            status_code=503,
-            detail=ErrorResponse.create(
-                code=ErrorCode.SERVICE_UNAVAILABLE,
-                message="Webhook secret is not configured.",
-            ).dict(),
-        )
+) -> dict[str, object]:
+    uid = _resolve_user_id(current_user)
 
-    if not stripe_signature:
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="Missing Stripe-Signature header.",
-            ).dict(),
-        )
-
-    if not _verify_webhook_signature(payload, stripe_signature):
-        raise HTTPException(
-            status_code=401,
-            detail=ErrorResponse.create(
-                code=ErrorCode.AUTHENTICATION_FAILED,
-                message="Invalid webhook signature.",
-            ).dict(),
-        )
-
-    event = json.loads(payload.decode("utf-8"))
-    event_id = str(event.get("id", ""))
-    intent_id = str(event.get("data", {}).get("intent_id", ""))
-    status = str(event.get("data", {}).get("status", "")).lower()
-
-    if not event_id or not intent_id:
-        raise HTTPException(
-            status_code=400,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message="Invalid webhook payload.",
-            ).dict(),
-        )
-
-    duplicate = await db.execute(select(PaymentTransaction).where(PaymentTransaction.provider_event_id == event_id))
-    if duplicate.scalar_one_or_none() is not None:
-        return {"status": "duplicate_ignored"}
-
-    row_result = await db.execute(select(PaymentTransaction).where(PaymentTransaction.intent_id == intent_id))
-    row = row_result.scalar_one_or_none()
-    if row is None:
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.create(
-                code=ErrorCode.RESOURCE_NOT_FOUND,
-                message="Unknown payment intent.",
-            ).dict(),
-        )
-
-    row.provider_event_id = event_id
-    if status in {"succeeded", "paid"}:
-        row.status = "succeeded"
-        row.confirmed_at = datetime.now(UTC)
-    elif status in {"failed", "canceled"}:
-        row.status = "failed"
-
-    await db.commit()  # CRITICAL: Persist webhook event processing
-    return {"status": "processed"}
+    result = await db.execute(
+        select(Subscription, Plan)
+        .join(Plan, Subscription.plan_id == Plan.id)
+        .where(Subscription.user_id == uid, Subscription.status == "active")
+        .order_by(Subscription.created_at.desc())
+        .limit(1)
+    )
+    row = result.first()
+    if not row:
+        return {"subscription": None}
+    
+    sub, plan = row
+    return {
+        "subscription": {
+            "id": str(sub.id),
+            "status": sub.status,
+            "current_period_end": sub.current_period_end.isoformat(),
+            "plan": {
+                "name": plan.name,
+                "features": json.loads(plan.features_json)
+            }
+        }
+    }

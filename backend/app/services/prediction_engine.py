@@ -20,10 +20,9 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import xgboost as xgb
-from sklearn.preprocessing import StandardScaler
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+from app.services.signal_engine import TechnicalSignalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -72,262 +71,8 @@ async def _cache_store(symbol: str, payload: dict[str, Any]) -> None:
         logger.warning(f"Failed to cache prediction for key={key}: {e}")
 
 # ---------------------------------------------------------------------------
-# Layer 1 – Technical Indicator Consensus
+# ML/Predictive Scoring
 # ---------------------------------------------------------------------------
-
-def score_technical(df: pd.DataFrame) -> dict[str, Any]:
-    score = 0.0
-
-    # Safely resolve column names from pandas-ta output
-    RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-    MACD_col = "MACD_12_26_9" if "MACD_12_26_9" in df.columns else [c for c in df.columns if "MACD" in c and "h" not in c and "s" not in c][0]
-    MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-    MACDs_col = "MACDs_12_26_9" if "MACDs_12_26_9" in df.columns else [c for c in df.columns if "MACDs" in c][0]
-    EMA9_col = "EMA_9" if "EMA_9" in df.columns else [c for c in df.columns if "EMA" in c and "9" in c][0]
-    EMA21_col = "EMA_21" if "EMA_21" in df.columns else [c for c in df.columns if "EMA" in c and "21" in c][0]
-    EMA50_col = "EMA_50" if "EMA_50" in df.columns else [c for c in df.columns if "EMA" in c and "50" in c][0]
-    EMA200_col = "EMA_200" if "EMA_200" in df.columns else [c for c in df.columns if "EMA" in c and "200" in c][0]
-    BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-    BBB_col = "BBB_20_2.0_2.0" if "BBB_20_2.0_2.0" in df.columns else ("BBB_20_2.0" if "BBB_20_2.0" in df.columns else [c for c in df.columns if "BBB" in c][0])
-    ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-    VWAP_col = "VWAP_D" if "VWAP_D" in df.columns else [c for c in df.columns if "VWAP" in c][0]
-    ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-    DMP_col = "DMP_14" if "DMP_14" in df.columns else [c for c in df.columns if "DMP" in c][0]
-    DMN_col = "DMN_14" if "DMN_14" in df.columns else [c for c in df.columns if "DMN" in c][0]
-    STOCHk_col = "STOCHk_14_3_3" if "STOCHk_14_3_3" in df.columns else [c for c in df.columns if "STOCHk" in c][0]
-    STOCHd_col = "STOCHd_14_3_3" if "STOCHd_14_3_3" in df.columns else [c for c in df.columns if "STOCHd" in c][0]
-    SUPERTd_col = "SUPERTd_10_3.0" if "SUPERTd_10_3.0" in df.columns else [c for c in df.columns if "SUPERTd" in c][0]
-
-    last_row = df.iloc[-1]
-    prev_row = df.iloc[-2]
-
-    close = float(last_row["close"])
-    rsi_val = float(last_row[RSI_col])
-    macd_hist_val = float(last_row[MACDh_col])
-    macd_val = float(last_row[MACD_col])
-    macds_val = float(last_row[MACDs_col])
-    ema9_val = float(last_row[EMA9_col])
-    ema21_val = float(last_row[EMA21_col])
-    ema50_val = float(last_row[EMA50_col])
-    ema200_val = float(last_row[EMA200_col])
-    bbp_val = float(last_row[BBP_col])
-    bbb_val = float(last_row[BBB_col])
-    adx_val = float(last_row[ADX_col])
-    dmp_val = float(last_row[DMP_col])
-    dmn_val = float(last_row[DMN_col])
-    stochk_val = float(last_row[STOCHk_col])
-    stochd_val = float(last_row[STOCHd_col])
-    supertrend_direction = int(last_row[SUPERTd_col])
-    vwap_val = float(last_row[VWAP_col])
-    atr_val = float(last_row[ATR_col])
-
-    # RSI Scoring
-    if rsi_val < 30:
-        score += 0.25
-    elif rsi_val > 70:
-        score -= 0.25
-    elif 45 < rsi_val < 55:
-        score += 0.05
-
-    # MACD Scoring
-    if macd_hist_val > 0 and macd_hist_val > float(prev_row[MACDh_col]):
-        score += 0.20
-    elif macd_hist_val < 0 and macd_hist_val < float(prev_row[MACDh_col]):
-        score -= 0.20
-
-    if macd_val > macds_val:
-        score += 0.10
-    else:
-        score -= 0.10
-
-    # EMA Stack
-    if close > ema9_val > ema21_val > ema50_val:
-        score += 0.20
-    elif close < ema9_val < ema21_val < ema50_val:
-        score -= 0.20
-
-    if close > ema200_val:
-        score += 0.10
-    else:
-        score -= 0.10
-
-    # Bollinger Bands
-    if bbp_val < 0.05:
-        score += 0.15
-    elif bbp_val > 0.95:
-        score -= 0.15
-    if bbb_val < 10:
-        score += 0.05
-
-    # SuperTrend
-    if supertrend_direction == 1:
-        score += 0.15
-    elif supertrend_direction == -1:
-        score -= 0.15
-
-    # ADX Scoring
-    if adx_val > 25 and dmp_val > dmn_val:
-        score += 0.10
-    elif adx_val > 25 and dmn_val > dmp_val:
-        score -= 0.10
-
-    # VWAP Scoring
-    above_vwap = bool(close > vwap_val)
-    if above_vwap:
-        score += 0.05
-    else:
-        score -= 0.05
-
-    # Stochastic Scoring
-    if stochk_val < 20 and stochd_val < 20:
-        score += 0.10
-    elif stochk_val > 80 and stochd_val > 80:
-        score -= 0.10
-
-    # OBV Trend
-    obv_series = df["OBV"]
-    obv_slope = (obv_series.iloc[-1] - obv_series.iloc[-5]) / (abs(obv_series.iloc[-5]) + 1)
-    if obv_slope > 0:
-        score += 0.05
-    else:
-        score -= 0.05
-
-    normalized_score = float(np.clip(score, -1.0, 1.0))
-
-    # Count successfully computed indicator columns (non-nan on last row)
-    computed_cols = [RSI_col, MACD_col, MACDh_col, MACDs_col, EMA9_col, EMA21_col, EMA50_col, EMA200_col, BBP_col, BBB_col, ATR_col, VWAP_col, ADX_col, STOCHk_col, STOCHd_col, SUPERTd_col]
-    indicators_computed = sum(1 for col in computed_cols if col in df.columns and not pd.isna(last_row[col]))
-
-    return {
-        "score": normalized_score,
-        "rsi": rsi_val,
-        "macd_histogram": macd_hist_val,
-        "bb_position": bbp_val,
-        "bb_bandwidth": bbb_val,
-        "adx": adx_val,
-        "supertrend_direction": supertrend_direction,
-        "above_vwap": above_vwap,
-        "stoch_k": stochk_val,
-        "obv_slope": obv_slope,
-        "ema9": ema9_val,
-        "ema21": ema21_val,
-        "ema50": ema50_val,
-        "ema200": ema200_val,
-        "atr": atr_val,
-        "indicators_computed": indicators_computed,
-    }
-
-# ---------------------------------------------------------------------------
-# Layer 2 – Candlestick Pattern Recognition
-# ---------------------------------------------------------------------------
-
-def score_patterns(df: pd.DataFrame) -> dict[str, Any]:
-    last_row = df.iloc[-1]
-    bullish_patterns = []
-    bearish_patterns = []
-
-    # Count pattern occurrences on the last row (TA-Lib)
-    for col in df.columns:
-        if not col.startswith("CDL_"):
-            continue
-        val = last_row[col]
-        if val == 0 or pd.isna(val):
-            continue
-
-        name = col.replace("CDL_", "")
-
-        # Bullish patterns (value > 0)
-        if val > 0:
-            if name in ["HAMMER", "MORNINGSTAR", "DRAGONFLYDOJI", "INVERTEDHAMMER", "3WHITESOLDIERS", "PIERCING"]:
-                bullish_patterns.append(col)
-            elif name == "ENGULFING":
-                bullish_patterns.append("CDL_BULLISHENGULFING")
-        # Bearish patterns (value < 0)
-        elif val < 0:
-            if name in ["SHOOTINGSTAR", "EVENINGSTAR", "HANGINGMAN", "GRAVESTONEDOJI", "3BLACKCROWS", "DARKCLOUDCOVER"]:
-                bearish_patterns.append(col)
-            elif name == "ENGULFING":
-                bearish_patterns.append("CDL_BEARISHENGULFING")
-
-    # Custom chart formations from ChartPatternDetector
-    custom_patterns = []
-    custom_score = 0.0
-    sr_zones = []
-    pivots = {}
-    volume_profile = {}
-    try:
-        from research.feature_engineering.chart_patterns import ChartPatternDetector
-        detector = ChartPatternDetector(window=5)
-        res = detector.detect_patterns(df)
-        custom_patterns = res["patterns_detected"]
-        custom_score = res["pattern_score"]
-        sr_zones = res["support_resistance_zones"]
-        pivots = res["pivots"]
-        volume_profile = res["volume_profile"]
-    except Exception as e:
-        logger.warning(f"Failed to run custom ChartPatternDetector: {e}")
-
-    # Combine candlestick patterns and custom chart patterns
-    pattern_score = (len(bullish_patterns) - len(bearish_patterns)) / 10.0 + custom_score
-    pattern_score = float(np.clip(pattern_score, -1.0, 1.0))
-
-    return {
-        "pattern_score": pattern_score,
-        "patterns_detected": bullish_patterns + bearish_patterns + custom_patterns,
-        "bullish_count": len(bullish_patterns) + sum(1 for p in custom_patterns if "DOUBLE_BOTTOM" in p or "INVERSE" in p or "FALLING_WEDGE" in p or "ASCENDING" in p or "CUP" in p),
-        "bearish_count": len(bearish_patterns) + sum(1 for p in custom_patterns if "DOUBLE_TOP" in p or "HEAD_AND_SHOULDERS" in p or "RISING_WEDGE" in p or "DESCENDING" in p),
-        "support_resistance_zones": sr_zones,
-        "pivots": pivots,
-        "volume_profile": volume_profile,
-    }
-
-
-# ---------------------------------------------------------------------------
-# Layer 3 – Momentum Factor Scoring
-# ---------------------------------------------------------------------------
-
-def score_momentum(df: pd.DataFrame) -> dict[str, Any]:
-    last_row = df.iloc[-1]
-
-    ret_1d = float(last_row["ret_1d"])
-    ret_5d = float(last_row["ret_5d"])
-    ret_21d = float(last_row["ret_21d"])
-    mom_63d = float(last_row["momentum_63d"])
-    dist_52w_high = float(last_row["dist_52w_high"])
-    dist_52w_low = float(last_row["dist_52w_low"])
-    realized_vol = float(last_row["realized_vol_21d"])
-    yang_zhang = float(last_row["yang_zhang_vol_21d"])
-    ewma_vol = float(last_row["ewma_garch_vol"])
-    drawdown = float(last_row.get("drawdown", 0.0))
-
-    jt_momentum = mom_63d - ret_21d if not np.isnan(mom_63d) and not np.isnan(ret_21d) else 0.0
-    raw_score = np.tanh(jt_momentum * 8 + ret_5d * 5 + ret_1d * 2)
-
-    # Volatility adjustment
-    vol_adj_score = raw_score / (realized_vol * np.sqrt(252) + 1e-6) * 0.15
-    momentum_score = float(np.tanh(vol_adj_score))
-
-    # 52-week proximity signal
-    proximity_score = 0.0
-    if dist_52w_high > -0.05:
-        proximity_score += 0.15
-    if dist_52w_low < 0.10:
-        proximity_score -= 0.15
-
-    final_momentum = float(np.clip(momentum_score + proximity_score * 0.5, -1.0, 1.0))
-
-    return {
-        "momentum_score": final_momentum,
-        "ret_1d": ret_1d,
-        "ret_5d": ret_5d,
-        "ret_21d": ret_21d,
-        "jt_momentum": jt_momentum,
-        "vol_21d": realized_vol,
-        "yang_zhang_vol": yang_zhang,
-        "dist_52w_high": dist_52w_high,
-        "dist_52w_low": dist_52w_low,
-        "drawdown": drawdown,
-    }
 
 # ---------------------------------------------------------------------------
 # Layer 4 – HMM Regime Detection
@@ -410,126 +155,6 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
             "vol_forecast_5d": realized_vol * np.sqrt(5),
             "vol_forecast_21d": realized_vol * np.sqrt(21)
         }
-
-# ---------------------------------------------------------------------------
-# Layer 5 – XGBoost Walk-Forward Directional Classifier
-# ---------------------------------------------------------------------------
-
-def score_xgboost(df: pd.DataFrame, symbol: str = "") -> dict[str, Any]:
-    # Resolve columns dynamically
-    RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-    MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-    BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-    ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-    ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-
-    features = [
-        "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-        "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-        "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-        "dist_52w_high", "dist_52w_low", "drawdown",
-        "range_pct", "close_to_open"
-    ]
-
-    # Target: sign of 5-day forward return
-    df_copy = df.copy()
-
-    # Rename resolved columns to match standard features
-    rename_map = {}
-    if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-    if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-    if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-    if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-    if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
-
-    if rename_map:
-        df_copy = df_copy.rename(columns=rename_map)
-
-    df_copy["target_5d"] = (df_copy["close"].shift(-5) / df_copy["close"] - 1)
-    df_copy["label"] = (df_copy["target_5d"] > 0).astype(int)
-
-    X_train = df_copy[features].iloc[:-6].dropna()
-    y_train = df_copy["label"].iloc[:-6].loc[X_train.index]
-    X_pred  = df_copy[features].iloc[[-1]]
-
-    if X_pred.isnull().any().any():
-        return {
-            "xgb_score": 0.0,
-            "xgb_confidence": 0.5,
-            "xgb_direction": "NEUTRAL",
-            "train_samples": len(X_train),
-            "top_features": []
-        }
-
-    clf = None
-    scaler = None
-    checkpoint_loaded = False
-
-    if symbol:
-        checkpoint_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
-        if checkpoint_path.exists():
-            try:
-                with open(checkpoint_path, "rb") as f:
-                    data = pickle.load(f)
-                scaler = data["scaler"]
-                clf = data["model"]
-                checkpoint_loaded = True
-            except Exception as e:
-                logger.warning(f"Failed to load XGBoost checkpoint for {symbol}: {e}")
-
-    if not checkpoint_loaded:
-        if len(X_train) < 50:
-            return {
-                "xgb_score": 0.0,
-                "xgb_confidence": 0.5,
-                "xgb_direction": "NEUTRAL",
-                "train_samples": len(X_train),
-                "top_features": []
-            }
-
-        scaler = StandardScaler()
-        X_train_s = scaler.fit_transform(X_train)
-
-        clf = xgb.XGBClassifier(
-            n_estimators=100, max_depth=4, learning_rate=0.05,
-            subsample=0.8, colsample_bytree=0.8,
-            use_label_encoder=False, eval_metric="logloss",
-            random_state=42, verbosity=0
-        )
-        clf.fit(X_train_s, y_train)
-
-    X_train_s = scaler.transform(X_train)
-    X_pred_s = scaler.transform(X_pred)
-    prob_up = float(clf.predict_proba(X_pred_s)[0][1])
-    xgb_score = (prob_up - 0.5) * 2.0  # Map [0,1] → [-1,+1]
-
-    direction = "BUY" if prob_up > 0.60 else ("SELL" if prob_up < 0.40 else "NEUTRAL")
-
-    try:
-        from research.explainability.shap_explainer import approximate_tree_shap
-        expl = approximate_tree_shap(
-            feature_matrix=X_train_s,
-            feature_importance=clf.feature_importances_,
-            base_value=float(np.mean(y_train)),
-            feature_names=features
-        )
-        mean_train = np.mean(X_train_s, axis=0)
-        shap_vals_pred = (X_pred_s[0] - mean_train) * clf.feature_importances_
-        sorted_idx = np.argsort(np.abs(shap_vals_pred))[::-1]
-        top_features = [{"name": features[i], "shap_value": float(shap_vals_pred[i])} for i in sorted_idx[:8]]
-    except Exception as e:
-        logger.warning(f"Failed to compute approximate SHAP values: {e}")
-        importances = dict(zip(features, clf.feature_importances_))
-        sorted_imp = sorted(importances.items(), key=lambda kv: kv[1], reverse=True)[:8]
-        top_features = [{"name": k, "shap_value": float(v)} for k, v in sorted_imp]
-
-    return {
-        "xgb_score": float(np.clip(xgb_score, -1.0, 1.0)),
-        "xgb_confidence": float(prob_up if prob_up > 0.5 else (1.0 - prob_up)),
-        "xgb_direction": direction,
-        "train_samples": len(X_train),
-        "top_features": top_features
-    }
 
 # ---------------------------------------------------------------------------
 # Layer 6 – Ensemble Combiner
@@ -665,15 +290,19 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     model_statuses = {}
 
     # --- XGBoost ---
-    from research.models.xgboost_model.classifier import (
-        FeatureMismatchError,
-        XGBoostDirectionalClassifier,
-    )
-    xgb_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
     xgb_score = 0.0
     xgb_confidence = 0.5
     xgb_top_features = []
     xgb_status = "untrained"
+    try:
+        from research.models.xgboost_model.classifier import (
+            FeatureMismatchError,
+            XGBoostDirectionalClassifier,
+        )
+    except ImportError:
+        xgb_status = "unavailable"
+
+    xgb_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
 
     if xgb_path.exists():
         try:
@@ -700,12 +329,16 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     model_statuses["xgboost"] = xgb_status
 
     # --- LSTM-Attention ---
-    from research.models.lstm_attention.classifier import LSTMAttentionClassifier
-    lstm_path = MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
     lstm_score = 0.0
     lstm_confidence = 0.5
     lstm_attn_peaks = []
     lstm_status = "untrained"
+    try:
+        from research.models.lstm_attention.classifier import LSTMAttentionClassifier
+    except ImportError:
+        lstm_status = "unavailable"
+
+    lstm_path = MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
 
     if lstm_path.exists():
         try:
@@ -730,11 +363,14 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     model_statuses["lstm_attention"] = lstm_status
 
     # --- TFT (Quantile LGBM) ---
-    from research.models.tft.quantile_forecaster import QuantileLGBForecaster
     tft_score = 0.0
     tft_confidence = 0.5
     tft_status = "untrained"
     tft_p10, tft_p50, tft_p90 = -0.015, 0.002, 0.015
+    try:
+        from research.models.tft.quantile_forecaster import QuantileLGBForecaster
+    except ImportError:
+        tft_status = "unavailable"
 
     try:
         tft_key = "tft_forecaster"
@@ -776,12 +412,15 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     model_statuses["hmm_garch"] = hmm_status
 
     # --- GNN ---
-    from research.models.gnn.contagion_risk import ContagionRiskAnalyzer
     gnn_score = 0.0
     gnn_confidence = 0.5
     gnn_top_correlated = []
     gnn_status = "untrained"
     gnn_res = None
+    try:
+        from research.models.gnn.contagion_risk import ContagionRiskAnalyzer
+    except ImportError:
+        gnn_status = "unavailable"
 
     try:
         global _INDEX_DATA_CACHE
@@ -814,10 +453,15 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     model_statuses["gnn"] = gnn_status
 
     # --- Online Learner ---
-    from research.models.online_learner import OnlineAdaptiveLearner
-    online_checkpoint = MODEL_DIR / f"online_learner_{symbol.upper()}.pkl"
     online_score = 0.0
     online_prob = 0.5
+    online_status = "untrained"
+    try:
+        from research.models.online_learner import OnlineAdaptiveLearner
+    except ImportError:
+        online_status = "unavailable"
+
+    online_checkpoint = MODEL_DIR / f"online_learner_{symbol.upper()}.pkl"
     if online_checkpoint.exists():
         try:
             learner = OnlineAdaptiveLearner.load(online_checkpoint)
@@ -887,21 +531,13 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
         meta_learner = EnsembleMetaLearner.load(meta_path)
 
         # Calculate subscores exactly as in meta_learner training prep
-        tech_score = score_technical(df)["score"]
+        technical = TechnicalSignalEngine.generate_signal(df)
 
         # Get pattern score
-        patt_score = 0.0
-        try:
-            patt_score = score_patterns(df)["pattern_score"]
-        except Exception:
-            pass
+        patt_score = technical["breakdown"].get("structure", 0.0)
 
         # Get momentum score
-        mom_score = 0.0
-        try:
-            mom_score = score_momentum(df)["momentum_score"]
-        except Exception:
-            pass
+        mom_score = technical["breakdown"].get("momentum", 0.0)
 
         reg_val = 1.0 if regime_info["regime"] == "BULL" else (-1.0 if regime_info["regime"] in ("BEAR", "CRISIS") else 0.0)
 
@@ -911,7 +547,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
         noise_val = (((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0) - 0.1
         sentiment_score = float(np.clip(1.5 * ret_5d + noise_val, -1.0, 1.0))
 
-        scores_list = [tech_score, patt_score, mom_score, reg_val, xgb_score, sentiment_score]
+        scores_list = [technical["score"], patt_score, mom_score, reg_val, xgb_score, sentiment_score]
         prob_up = meta_learner.predict_proba(scores_list)
 
         # Calibrated output metrics
@@ -1004,9 +640,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
         "model_confidences": model_confidences,
         "model_statuses": model_statuses,
 
-        "technical": score_technical(df),
-        "pattern": score_patterns(df),
-        "momentum": score_momentum(df),
+        "technical": technical,
         "regime": {
             "regime": regime_info["regime"],
             "bull_prob": regime_info["bull_prob"],
