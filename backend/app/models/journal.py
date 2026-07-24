@@ -1,5 +1,4 @@
-"""Trade journal model to log manual review notes, emotions, and trade tags.
-"""
+"""Trade journal model to log manual review notes, emotions, and trade tags."""
 
 from __future__ import annotations
 
@@ -96,4 +95,6 @@ class TradeJournal(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<TradeJournal(user_id={self.user_id}, symbol='{self.symbol}', rating={self.rating})>"
+        return (
+            f"<TradeJournal(user_id={self.user_id}, symbol='{self.symbol}', rating={self.rating})>"
+        )

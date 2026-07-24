@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import ARRAY, DateTime, Integer, Numeric
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Numeric
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -54,13 +54,20 @@ class RegimeState(Base):
         primary_key=True,
         doc="Regime timestamp (UTC)",
     )
+    symbol_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("instrument.id"),
+        nullable=True,
+        primary_key=True,
+        doc="Foreign key to symbols (nullable for market-wide regime)",
+    )
     viterbi_state: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         doc="Most likely regime state (0=bull, 1=bear, 2=sideways, 3=crisis)",
     )
     state_probs: Mapped[list[Decimal]] = mapped_column(
-        ARRAY(Numeric(6, 4)),
+        JSON,
         nullable=False,
         doc="State probabilities [P_bull, P_bear, P_sideways, P_crisis]",
     )

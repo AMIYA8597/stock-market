@@ -12,7 +12,9 @@ class JournalCreate(BaseModel):
 
     symbol: str = Field(..., min_length=1, max_length=32, description="Ticker symbol or instrument")
     notes: str = Field(..., max_length=1024, description="Trade analysis or notes")
-    tags: str | None = Field(default=None, max_length=255, description="Comma-separated strategy tags")
+    tags: str | None = Field(
+        default=None, max_length=255, description="Comma-separated strategy tags"
+    )
     rating: int | None = Field(default=None, ge=1, le=5, description="Star rating (1 to 5)")
     entry_price: Decimal | None = Field(default=None, ge=0)
     exit_price: Decimal | None = Field(default=None, ge=0)
@@ -48,6 +50,4 @@ class JournalResponse(BaseModel):
     direction: str | None = None
     created_at: datetime
 
-    model_config = {
-        "from_attributes": True
-    }
+    model_config = {"from_attributes": True}

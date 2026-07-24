@@ -7,3 +7,4 @@ export default function LoadingCryptoPage(): JSX.Element {
     </div>
   );
 }
+

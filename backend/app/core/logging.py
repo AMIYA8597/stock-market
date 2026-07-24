@@ -25,18 +25,9 @@ from app.core.config import get_settings
 settings = get_settings()
 
 # ─── Context Variables ────────────────────────────────────────────────────
-_correlation_id: ContextVar[str] = ContextVar(
-    "correlation_id",
-    default=""
-)
-_user_id: ContextVar[str] = ContextVar(
-    "user_id",
-    default=""
-)
-_request_id: ContextVar[str] = ContextVar(
-    "request_id",
-    default=""
-)
+_correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
+_user_id: ContextVar[str] = ContextVar("user_id", default="")
+_request_id: ContextVar[str] = ContextVar("request_id", default="")
 
 
 def get_correlation_id() -> str:
@@ -181,10 +172,10 @@ def development_renderer(
     level = event_dict.get("level", "INFO").upper()
     color_map = {
         "DEBUG": "\033[36m",  # Cyan
-        "INFO": "\033[32m",   # Green
-        "WARNING": "\033[33m", # Yellow
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
         "ERROR": "\033[31m",  # Red
-        "CRITICAL": "\033[35m", # Magenta
+        "CRITICAL": "\033[35m",  # Magenta
     }
     reset = "\033[0m"
     color = color_map.get(level, "")
@@ -285,6 +276,7 @@ def setup_logging() -> None:
     # Reconfigure stdout/stderr to UTF-8 to prevent cp1252 encoding crashes on Windows
     import sys
     from contextlib import suppress
+
     with suppress(AttributeError, OSError):
         if hasattr(sys.stdout, "reconfigure"):
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")

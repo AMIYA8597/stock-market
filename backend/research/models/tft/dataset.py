@@ -98,8 +98,8 @@ def build_tft_training_tensors(
 
         # Strict windowing: no lookahead
         x_hist.append(f[hist_start:hist_end])  # [t_i, ..., t_i + seq_len)
-        x_fut.append(f[hist_end:fut_end])      # [t_i + seq_len, ..., t_i + seq_len + horizon)
-        y.append(y_src[hist_end:fut_end, 0])   # Returns for future window
+        x_fut.append(f[hist_end:fut_end])  # [t_i + seq_len, ..., t_i + seq_len + horizon)
+        y.append(y_src[hist_end:fut_end, 0])  # Returns for future window
 
     return (
         torch.from_numpy(np.stack(x_hist)),
@@ -108,7 +108,9 @@ def build_tft_training_tensors(
     )
 
 
-def normalize_features(features: np.ndarray, scaler: dict[str, np.ndarray] | None = None) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+def normalize_features(
+    features: np.ndarray, scaler: dict[str, np.ndarray] | None = None
+) -> tuple[np.ndarray, dict[str, np.ndarray]]:
     r"""
     Normalize features using z-score (standardization) per feature dimension.
 
@@ -151,4 +153,3 @@ def normalize_features(features: np.ndarray, scaler: dict[str, np.ndarray] | Non
     normalized = (flat - mu) / sigma
 
     return normalized.reshape(original_shape).astype(np.float32), scaler
-

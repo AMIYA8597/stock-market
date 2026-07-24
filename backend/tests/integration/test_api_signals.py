@@ -31,7 +31,9 @@ def test_regime_endpoints() -> None:
 def test_explain_and_monitor_endpoints() -> None:
     shap = client.get("/api/v1/explain/shap/RELIANCE.NS")
     attn = client.get("/api/v1/explain/attention/RELIANCE.NS", params={"model": "tft"})
-    cfs = client.post("/api/v1/explain/counterfactual/RELIANCE.NS", json={"target_direction": "BUY", "num_cfs": 3})
+    cfs = client.post(
+        "/api/v1/explain/counterfactual/RELIANCE.NS", json={"target_direction": "BUY", "num_cfs": 3}
+    )
     accuracy = client.get("/api/v1/monitor/model-accuracy")
     drift = client.get("/api/v1/monitor/drift")
     weights = client.get("/api/v1/monitor/ensemble-weights-history", params={"days": 252})

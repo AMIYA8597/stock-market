@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Moon, Search, Settings2, Sun } from "lucide-react";
+import { Moon, Search, Settings2, Sun, CreditCard } from "lucide-react";
+import Link from "next/link";
 
 import { contractsApi, type PortfolioHoldingsResponse, type MarketIndex } from "@/lib/contracts-api";
 import { systemApi } from "@/lib/api-client";
@@ -404,6 +405,15 @@ export default function TopBar({
           {themeMode === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
           {themeMode === "dark" ? "Light" : "Dark"}
         </button>
+
+        <Link
+          href="/billing"
+          className="inline-flex items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)]"
+          aria-label="Billing & Payments"
+          title="Billing & Payments"
+        >
+          <CreditCard className="h-3.5 w-3.5" />
+        </Link>
 
         <button
           type="button"

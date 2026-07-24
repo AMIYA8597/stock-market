@@ -200,7 +200,7 @@ class TemporalFusionTransformer(nn.Module):
 
         # 1. Variable selection
         hist_sel, _ = self.vsn(x_hist)  # (batch, T_hist, hidden_dim)
-        fut_sel, _ = self.vsn(x_fut)    # (batch, T_fut, hidden_dim)
+        fut_sel, _ = self.vsn(x_fut)  # (batch, T_fut, hidden_dim)
 
         # 2. LSTM encoder
         enc_out, (h, c) = self.encoder(hist_sel)
@@ -228,4 +228,3 @@ class TemporalFusionTransformer(nn.Module):
         q_pred = self.quantile_head(fused)  # (batch, horizon, n_quantiles)
 
         return q_pred, attn_weights
-

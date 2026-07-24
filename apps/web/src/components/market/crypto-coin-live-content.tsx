@@ -53,6 +53,7 @@ export function CryptoCoinLiveContent({ coin }: CryptoCoinLiveContentProps): JSX
   const [prediction, setPrediction] = useState<Prediction | null>(null);
   const [ensemble, setEnsemble] = useState<ModelEnsemble | null>(null);
   const [signal, setSignal] = useState<SignalResponse | null>(null);
+  const [predictionError, setPredictionError] = useState<boolean>(false);
   const [marketCap, setMarketCap] = useState<number | null>(null);
   const [volume24h, setVolume24h] = useState<number | null>(null);
   const [dominance, setDominance] = useState<number | null>(null);
@@ -96,6 +97,9 @@ export function CryptoCoinLiveContent({ coin }: CryptoCoinLiveContentProps): JSX
       }
       if (predictionRes.status === "fulfilled") {
         setPrediction(predictionRes.value);
+        setPredictionError(false);
+      } else {
+        setPredictionError(true);
       }
       if (ensembleRes.status === "fulfilled") {
         setEnsemble(ensembleRes.value);
@@ -259,11 +263,19 @@ export function CryptoCoinLiveContent({ coin }: CryptoCoinLiveContentProps): JSX
           </div>
           <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4 text-xs">
             <div className="mb-2 font-medium text-[var(--nq-text-secondary)]">Latest Prediction</div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between"><span>Model</span><span>{prediction?.model_name ?? "--"}</span></div>
-              <div className="flex items-center justify-between"><span>Predicted Price</span><span>{formatNumber(prediction?.predicted_price)}</span></div>
-              <div className="flex items-center justify-between"><span>Confidence</span><span>{prediction ? prediction.confidence.toFixed(2) : "--"}</span></div>
-            </div>
+            {predictionError ? (
+              <div className="flex h-full flex-col items-center justify-center space-y-2 py-2">
+                <div className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-3 py-1.5 text-xs text-[#F7C948] text-center font-medium">
+                  Prediction model not yet trained
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex items-center justify-between"><span>Model</span><span>{prediction?.model_name ?? "--"}</span></div>
+                <div className="flex items-center justify-between"><span>Predicted Price</span><span>{formatNumber(prediction?.predicted_price)}</span></div>
+                <div className="flex items-center justify-between"><span>Confidence</span><span>{prediction ? prediction.confidence.toFixed(2) : "--"}</span></div>
+              </div>
+            )}
           </div>
         </aside>
       </section>

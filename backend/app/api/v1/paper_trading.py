@@ -21,7 +21,9 @@ class OrderRequest(BaseModel):
     quantity: float = Field(..., gt=0, description="Order quantity")
     order_type: Literal["MARKET", "LIMIT"] = Field(..., description="Order type")
     limit_price: float | None = Field(None, description="Limit price, required for LIMIT orders")
-    signal_relation: Literal["AGREEMENT", "AGAINST", "INDEPENDENT", "AUTO"] | None = Field("AUTO", description="Relationship of order to active signal. Auto-detected by default.")
+    signal_relation: Literal["AGREEMENT", "AGAINST", "INDEPENDENT", "AUTO"] | None = Field(
+        "AUTO", description="Relationship of order to active signal. Auto-detected by default."
+    )
 
 
 @router.post("/order", summary="Submit a paper trading order")
@@ -30,7 +32,7 @@ async def submit_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         order = await PaperTradingService.place_order(
             db=db,
@@ -55,7 +57,7 @@ async def submit_order(
                 "net_amount": float(order.net_amount),
                 "signal_relation": order.signal_relation,
                 "timestamp": order.timestamp.isoformat(),
-            }
+            },
         }
     except ValueError as val_err:
         raise HTTPException(
@@ -63,7 +65,7 @@ async def submit_order(
             detail=ErrorResponse.create(
                 code=ErrorCode.VALIDATION_ERROR,
                 message=str(val_err),
-            ).dict()
+            ).dict(),
         )
     except Exception as exc:
         raise HTTPException(
@@ -71,7 +73,7 @@ async def submit_order(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Order execution failed: {str(exc)}",
-            ).dict()
+            ).dict(),
         )
 
 
@@ -80,7 +82,7 @@ async def get_positions(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         positions = await PaperTradingService.get_positions(db, user_id)
         return positions
@@ -90,7 +92,7 @@ async def get_positions(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to fetch positions: {str(exc)}",
-            ).dict()
+            ).dict(),
         )
 
 
@@ -99,7 +101,7 @@ async def get_history(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         history = await PaperTradingService.get_history(db, user_id)
         return history
@@ -109,7 +111,7 @@ async def get_history(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to fetch order history: {str(exc)}",
-            ).dict()
+            ).dict(),
         )
 
 
@@ -118,7 +120,7 @@ async def get_pnl(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         pnl_stats = await PaperTradingService.get_pnl(db, user_id)
         return pnl_stats
@@ -128,7 +130,7 @@ async def get_pnl(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to fetch P&L stats: {str(exc)}",
-            ).dict()
+            ).dict(),
         )
 
 
@@ -137,7 +139,7 @@ async def reset_wallet(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         pnl_stats = await PaperTradingService.reset_wallet(db, user_id)
         return {
@@ -151,7 +153,7 @@ async def reset_wallet(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to reset wallet: {str(exc)}",
-            ).dict()
+            ).dict(),
         )
 
 
@@ -162,18 +164,14 @@ async def cancel_order(
 ):
     try:
         from app.services.broker_adapter import BrokerAdapter
+
         res = await BrokerAdapter.cancel_order(order_id, symbol)
-        return {
-            "success": True,
-            "message": "Order cancelled successfully.",
-            "result": res
-        }
+        return {"success": True, "message": "Order cancelled successfully.", "result": res}
     except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to cancel order: {str(exc)}",
-            ).dict()
+            ).dict(),
         )
-
