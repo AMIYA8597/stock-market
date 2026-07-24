@@ -15,7 +15,9 @@ class MonteCarloResult:
     prob_ruin_25pct: float
 
 
-def bootstrap_paths(returns: np.ndarray, n_simulations: int = 10_000, random_seed: int = 42) -> np.ndarray:
+def bootstrap_paths(
+    returns: np.ndarray, n_simulations: int = 10_000, random_seed: int = 42
+) -> np.ndarray:
     """Bootstrap return paths by iid resampling empirical returns."""
     r = np.asarray(returns, dtype=float).reshape(-1)
     rng = np.random.default_rng(random_seed)
@@ -45,7 +47,9 @@ def merton_jump_diffusion_paths(
     return diffusion + jumps
 
 
-def summarize_monte_carlo(daily_returns_paths: np.ndarray, initial_capital: float = 1.0) -> MonteCarloResult:
+def summarize_monte_carlo(
+    daily_returns_paths: np.ndarray, initial_capital: float = 1.0
+) -> MonteCarloResult:
     """Summarize MC path distribution by terminal equity percentiles and ruin odds."""
     r = np.asarray(daily_returns_paths, dtype=float)
     equity_paths = initial_capital * np.cumprod(1.0 + r, axis=1)

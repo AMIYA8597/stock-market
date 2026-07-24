@@ -37,6 +37,10 @@ class MicrostructureBuilder(FeatureBuilder):
         var_q = delta_q.rolling(21, min_periods=10).var()
         data["kyle_lambda"] = cov / var_q.replace(0, np.nan)
 
-        data["corwin_schultz_proxy"] = np.log(data["high"].astype(float) / data["low"].astype(float).replace(0, np.nan)).rolling(2, min_periods=2).mean()
+        data["corwin_schultz_proxy"] = (
+            np.log(data["high"].astype(float) / data["low"].astype(float).replace(0, np.nan))
+            .rolling(2, min_periods=2)
+            .mean()
+        )
 
         return data

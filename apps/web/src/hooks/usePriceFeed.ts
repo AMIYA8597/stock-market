@@ -7,6 +7,7 @@ export interface LivePriceTick {
   symbol: string;
   price: number;
   change_pct: number;
+  volume?: number;
   timestamp: string;
   source?: string;
 }

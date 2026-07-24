@@ -25,7 +25,12 @@ celery_app.conf.update(
     task_track_started=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    task_always_eager=(settings.ENVIRONMENT == "development"),
     beat_schedule={
-        # Phase 2: scheduled data fetch tasks will be registered here
+        # Scheduled data fetch tasks
+        "update-news-sentiment-hourly": {
+            "task": "update_news_sentiment",
+            "schedule": 3600.0, # Every hour
+        },
     },
 )

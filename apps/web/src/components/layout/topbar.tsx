@@ -74,7 +74,10 @@ export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
           )}
         </button>
 
-        <button className="relative flex h-10 w-10 items-center justify-center rounded-[1rem] border border-white/10 bg-white/5 transition hover:bg-white/[0.08]">
+        <button 
+          className="relative flex h-10 w-10 items-center justify-center rounded-[1rem] border border-white/10 bg-white/5 transition hover:bg-white/[0.08]"
+          aria-label="View notifications"
+        >
           <Bell className="h-4.5 w-4.5 text-[var(--nq-text-secondary)]" />
           {alertCount > 0 && (
             <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--nq-bear)] text-[9px] font-bold text-white">
@@ -84,7 +87,10 @@ export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
         </button>
 
         {/* Profile */}
-        <button className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--nq-accent),#65f7d2)] text-sm font-bold text-black shadow-[0_12px_24px_rgba(0,212,245,0.18)]">
+        <button 
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--nq-accent),#65f7d2)] text-sm font-bold text-black shadow-[0_12px_24px_rgba(0,212,245,0.18)]"
+          aria-label="User profile"
+        >
           NQ
         </button>
       </div>

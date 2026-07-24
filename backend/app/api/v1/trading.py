@@ -32,7 +32,9 @@ class OrderSubmitSchema(BaseModel):
     quantity: float = Field(..., description="Number of units to trade")
     order_type: str = Field(..., description="Execution type: 'MARKET' or 'LIMIT'")
     limit_price: float | None = Field(None, description="Price boundary for LIMIT orders")
-    product: str | None = Field("I", description="Product selection: 'I' (Intraday) or 'D' (Delivery)")
+    product: str | None = Field(
+        "I", description="Product selection: 'I' (Intraday) or 'D' (Delivery)"
+    )
 
 
 @router.get("/trading/mode")
@@ -43,21 +45,20 @@ async def get_trading_mode(current_user: Any = Depends(get_current_user_or_none)
         profile_summary = {
             "name": UpstoxService.USER_PROFILE.get("user_name"),
             "email": UpstoxService.USER_PROFILE.get("email"),
-            "broker": "Upstox"
+            "broker": "Upstox",
         }
 
     return {
         "trading_mode": UpstoxService.TRADING_MODE,
         "connection_status": UpstoxService.CONNECTION_STATUS,
         "authenticated": UpstoxService.ACCESS_TOKEN is not None,
-        "profile": profile_summary
+        "profile": profile_summary,
     }
 
 
 @router.post("/trading/mode")
 async def set_trading_mode(
-    payload: ModeUpdateSchema,
-    current_user: Any = Depends(get_current_user_or_none)
+    payload: ModeUpdateSchema, current_user: Any = Depends(get_current_user_or_none)
 ):
     """Toggles trading session mode between PAPER and LIVE."""
     target_mode = payload.mode.upper().strip()
@@ -65,25 +66,29 @@ async def set_trading_mode(
     if target_mode not in ("PAPER", "LIVE"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid mode. Must be 'PAPER' or 'LIVE'."
+            detail="Invalid mode. Must be 'PAPER' or 'LIVE'.",
         )
 
     if target_mode == "LIVE":
         if not UpstoxService.ACCESS_TOKEN:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Authentication Required: Upstox access token is missing or expired. Authenticate first."
+                detail="Authentication Required: Upstox access token is missing or expired. Authenticate first.",
             )
 
     old_mode = UpstoxService.TRADING_MODE
     UpstoxService.TRADING_MODE = target_mode
-    user_id = current_user.get("sub") if (current_user and isinstance(current_user, dict)) else "guest-user"
+    user_id = (
+        str(current_user.id)
+        if (current_user and isinstance(current_user, dict))
+        else "guest-user"
+    )
     UpstoxService.log_audit(f"TRADING MODE SWITCHED: {old_mode} -> {target_mode} by user={user_id}")
 
     return {
         "status": "success",
         "trading_mode": UpstoxService.TRADING_MODE,
-        "message": f"Trading mode successfully updated to {target_mode}."
+        "message": f"Trading mode successfully updated to {target_mode}.",
     }
 
 
@@ -91,41 +96,45 @@ async def set_trading_mode(
 async def submit_order(
     order: OrderSubmitSchema,
     db: AsyncSession = Depends(get_db),
-    current_user: Any = Depends(get_current_user_or_none)
+    current_user: Any = Depends(get_current_user_or_none),
 ):
     """Places a simulated or real trade order depending on active trading mode."""
     try:
         res = await BrokerAdapter.place_order(
             db=db,
-            user_id=str(current_user.get("sub") if (current_user and isinstance(current_user, dict)) else "guest-user"),
+            user_id=str(
+                str(current_user.id)
+                if (current_user and isinstance(current_user, dict))
+                else "guest-user"
+            ),
             symbol=order.symbol,
             side=order.side,
             quantity=order.quantity,
             order_type=order.order_type,
             limit_price=order.limit_price,
-            product=order.product or "I"
+            product=order.product or "I",
         )
         return res
     except ValueError as val_err:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(val_err)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(val_err))
     except Exception as e:
         logger.error(f"Order submission error: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Order submission failed: {str(e)}"
+            detail=f"Order submission failed: {str(e)}",
         )
 
 
 @router.post("/trading/kill-switch")
 async def emergency_kill_switch(
-    db: AsyncSession = Depends(get_db),
-    current_user: Any = Depends(get_current_user_or_none)
+    db: AsyncSession = Depends(get_db), current_user: Any = Depends(get_current_user_or_none)
 ):
     """Emergency Kill Switch: reverts trading mode to PAPER and cancels open orders."""
-    user_id = current_user.get("sub") if (current_user and isinstance(current_user, dict)) else "guest-user"
+    user_id = (
+        str(current_user.id)
+        if (current_user and isinstance(current_user, dict))
+        else "guest-user"
+    )
     old_mode = UpstoxService.TRADING_MODE
     UpstoxService.TRADING_MODE = "PAPER"
 
@@ -167,14 +176,13 @@ async def emergency_kill_switch(
         "status": "success",
         "trading_mode": "PAPER",
         "message": "Emergency Kill Switch Activated: Mode forced to PAPER.",
-        "operations": cancel_info
+        "operations": cancel_info,
     }
 
 
 @router.get("/trading/audit-log")
 async def get_audit_log(
-    limit: int = Query(50, ge=1, le=200),
-    current_user: Any = Depends(get_current_user_or_none)
+    limit: int = Query(50, ge=1, le=200), current_user: Any = Depends(get_current_user_or_none)
 ):
     """Reads the trailing rows of the audit log file d:\\work\\stock-market\\backend\\logs\\trading_audit.log."""
     backend_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -194,11 +202,12 @@ async def get_audit_log(
         logger.error(f"Error reading audit log: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Could not read audit logs: {str(e)}"
+            detail=f"Could not read audit logs: {str(e)}",
         )
 
 
 # ─── Upstox OAuth Authentication Endpoints ─────────────────────────────────
+
 
 @router.get("/auth/upstox/login-url")
 async def get_upstox_login_url(current_user: Any = Depends(get_current_user_or_none)):
@@ -207,17 +216,12 @@ async def get_upstox_login_url(current_user: Any = Depends(get_current_user_or_n
         login_url = UpstoxService.get_login_url()
         return {"login_url": login_url}
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("/auth/upstox/callback")
 async def upstox_oauth_callback(
-    code: str | None = None,
-    error: str | None = None,
-    error_description: str | None = None
+    code: str | None = None, error: str | None = None, error_description: str | None = None
 ):
     """OAuth redirect handler callback from Upstox API code consent dialog."""
     settings = get_settings()
@@ -248,11 +252,11 @@ async def get_upstox_auth_status(current_user: Any = Depends(get_current_user_or
         profile_summary = {
             "name": UpstoxService.USER_PROFILE.get("user_name"),
             "email": UpstoxService.USER_PROFILE.get("email"),
-            "client_id": UpstoxService.USER_PROFILE.get("client_id")
+            "client_id": UpstoxService.USER_PROFILE.get("client_id"),
         }
 
     return {
         "authenticated": UpstoxService.ACCESS_TOKEN is not None,
         "profile": profile_summary,
-        "connection_status": UpstoxService.CONNECTION_STATUS
+        "connection_status": UpstoxService.CONNECTION_STATUS,
     }

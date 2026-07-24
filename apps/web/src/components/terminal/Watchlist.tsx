@@ -10,17 +10,11 @@ interface WatchlistProps {
   signals: SignalResponse[];
   selectedSymbol: string;
   onSelectSymbol: (symbol: string) => void;
+  onAddSymbol?: (symbol: string) => void;
+  onRemoveSymbol?: (symbol: string) => void;
 }
 
-const ALL_SEARCHABLE_TICKERS = [
-  // NSE
-  "RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS",
-  "SBIN.NS", "ITC.NS", "LT.NS", "AXISBANK.NS", "SUNPHARMA.NS",
-  // US
-  "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "NFLX", "AMD", "JPM",
-  // CRYPTO
-  "BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD", "XRP-USD", "ADA-USD", "DOGE-USD"
-];
+
 
 const directionColor = (direction: string): string => {
   if (direction.includes("BUY")) return "text-[var(--accent-green)]";
@@ -122,7 +116,7 @@ function getIsMarketClosed(): boolean {
   return !(isOpenDay && isOpenTime);
 }
 
-export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: WatchlistProps): JSX.Element {
+export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onAddSymbol, onRemoveSymbol }: WatchlistProps): JSX.Element {
   const [isClosed, setIsClosed] = useState<boolean>(getIsMarketClosed());
 
   useEffect(() => {
@@ -137,10 +131,34 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
 
   // 4 custom lists + Market default
   const [wlLists, setWlLists] = useState<string[][]>([
-    ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS"],
-    ["ICICIBANK.NS", "SBIN.NS", "ITC.NS", "LT.NS"],
-    ["AAPL", "MSFT", "GOOGL", "AMZN"],
-    ["BTC-USD", "ETH-USD", "SOL-USD", "BNB-USD"]
+    [
+      "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "SBIN.NS", "INFY.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
+      "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", "TATAMOTORS.NS", "TATASTEEL.NS", "ONGC.NS", "KOTAKBANK.NS", "M&M.NS",
+      "NTPC.NS", "AXISBANK.NS", "ASIANPAINT.NS", "TITAN.NS", "POWERGRID.NS", "WIPRO.NS", "ULTRACEMCO.NS", "BAJAJFINSV.NS", "NESTLEIND.NS", "TECHM.NS",
+      "GRASIM.NS", "JSWSTEEL.NS", "HDFCLIFE.NS", "SBILIFE.NS", "INDUSINDBK.NS", "ADANIENT.NS", "ADANIPORTS.NS", "TCS.NS", "COALINDIA.NS", "CIPLA.NS",
+      "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "DRREDDY.NS", "APOLLOHOSP.NS", "DIVISLAB.NS", "BRITANNIA.NS", "EICHERMOT.NS", "HINDALCO.NS", "UPL.NS", "TATACONSUM.NS"
+    ],
+    [
+      "ZOMATO.NS", "PAYTM.NS", "NYKAA.NS", "POLICYBZR.NS", "DELHIVERY.NS", "TRENT.NS", "BEL.NS", "HAL.NS", "IRFC.NS", "RVNL.NS",
+      "JIOFIN.NS", "VBL.NS", "CHOLAFIN.NS", "TVSMOTOR.NS", "BOSCHLTD.NS", "INDIGO.NS", "TORNTPHARM.NS", "PIIND.NS", "CUMMINSIND.NS", "HAVELLS.NS",
+      "PNB.NS", "BOB.NS", "CANBK.NS", "UNIONBANK.NS", "IDFCFIRSTB.NS", "YESBANK.NS", "BANDHANBNK.NS", "FEDERALBNK.NS", "AUBANK.NS", "ICICIPRULI.NS",
+      "MUTHOOTFIN.NS", "RECLTD.NS", "PFC.NS", "LODHA.NS", "DLF.NS", "GODREJPROP.NS", "OBEROIRLTY.NS", "PRESTIGE.NS", "PHOENIXLTD.NS", "BRIGADE.NS",
+      "MRF.NS", "APOLLOTYRE.NS", "CEATLTD.NS", "BALKRISIND.NS", "TATACHEM.NS", "DEEPAKNTR.NS", "AARTIIND.NS", "ATGL.NS", "AWL.NS", "SUZLON.NS"
+    ],
+    [
+      "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "TSM", "AVGO",
+      "V", "JPM", "WMT", "JNJ", "MA", "PG", "HD", "CVX", "MRK", "ORCL",
+      "ABBV", "COST", "PEP", "BAC", "KO", "NFLX", "TMO", "CSCO", "MCD", "CRM",
+      "ADBE", "AMD", "ABT", "DHR", "DIS", "TMUS", "INTC", "TXN", "VZ", "CMCSA",
+      "QCOM", "PFE", "INTU", "IBM", "AMAT", "NOW", "UBER", "UNP", "AMGN", "CAT"
+    ],
+    [
+      "BTC-USD", "ETH-USD", "USDT-USD", "BNB-USD", "SOL-USD", "XRP-USD", "USDC-USD", "ADA-USD", "AVAX-USD", "DOGE-USD",
+      "TRX-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "TON11419-USD", "WBTC-USD", "SHIB-USD", "LTC-USD", "BCH-USD", "DAI-USD",
+      "UNI7083-USD", "ATOM-USD", "ETC-USD", "XLM-USD", "XMR-USD", "OKB-USD", "ICP-USD", "KAS-USD", "FIL-USD", "INJ-USD",
+      "LDO-USD", "HBAR-USD", "APT21259-USD", "CRO-USD", "VET-USD", "MNT27075-USD", "OP-USD", "ARB11841-USD", "QNT-USD", "MKR-USD",
+      "AAVE-USD", "GRT6719-USD", "ALGO-USD", "STX4847-USD", "BSV-USD", "SNX-USD", "EGLD-USD", "RNDR-USD", "THETA-USD", "SAND-USD"
+    ]
   ]);
 
   const activeSymbols = useMemo(() => {
@@ -224,24 +242,42 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
     }));
   };
 
-  const searchResults = useMemo(() => {
-    if (!searchQuery.trim()) return [];
-    const query = searchQuery.trim().toUpperCase();
-    
-    // Filter predefined search symbols
-    const filtered = ALL_SEARCHABLE_TICKERS.filter(
-      (t) => t.toUpperCase().includes(query) && !activeSymbols.includes(t)
-    );
+  const [searchResults, setSearchResults] = useState<{ ticker: string; name: string }[]>([]);
 
-    // If search query is not empty and not in the list, allow adding it as a custom stock
-    if (query && !ALL_SEARCHABLE_TICKERS.includes(query) && !activeSymbols.includes(query)) {
-      filtered.push(query);
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
     }
-    return filtered.slice(0, 5);
+    const query = searchQuery.trim();
+    
+    const fetchSearch = async () => {
+      try {
+        // Fallback to relative URL if no env var
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        const res = await fetch(`${apiUrl}/api/v1/market/search?q=${encodeURIComponent(query)}`);
+        if (res.ok) {
+          const data = await res.json();
+          const filtered = data.results.filter((r: { ticker: string }) => !activeSymbols.includes(r.ticker));
+          setSearchResults(filtered.slice(0, 8));
+        }
+      } catch (err) {
+        console.error("Search failed", err);
+      }
+    };
+    
+    const timeoutId = setTimeout(fetchSearch, 300);
+    return () => clearTimeout(timeoutId);
   }, [searchQuery, activeSymbols]);
 
   const handleAddSymbol = (symbol: string) => {
     if (activeTab === 4) return; // Cannot add to default Market tab
+    
+    // Call the parent handler
+    if (onAddSymbol) {
+      onAddSymbol(symbol);
+    }
+    
     setWlLists((prev) => {
       const copy = [...prev];
       const currentList = copy[activeTab] || [];
@@ -253,16 +289,23 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
     setSearchQuery("");
   };
 
-  const handleRemoveSymbol = (symbol: string, e: React.MouseEvent) => {
+  const handleRemoveSymbol = (e: React.MouseEvent, symbol: string) => {
     e.stopPropagation();
     if (activeTab === 4) return;
+    
+    // Call the parent handler
+    if (onRemoveSymbol) {
+      onRemoveSymbol(symbol);
+    }
+
     setWlLists((prev) => {
       const copy = [...prev];
       const currentList = copy[activeTab] || [];
-      copy[activeTab] = currentList.filter((s) => s !== symbol);
+      copy[activeTab] = currentList.filter(s => s !== symbol);
       return copy;
     });
   };
+
 
   const handleBuyShortcut = (symbol: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -401,7 +444,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
           {activeTab !== 4 && (
             <button
               type="button"
-              onClick={(e) => handleRemoveSymbol(item.symbol, e)}
+              onClick={(e) => handleRemoveSymbol(e, item.symbol)}
               className="rounded border border-[var(--nq-border)] p-1 text-[var(--nq-text-secondary)] hover:border-[var(--nq-accent-red)] hover:text-[var(--accent-red)] transition-colors bg-[rgba(255,255,255,0.02)]"
               title="Remove from Watchlist"
             >
@@ -509,12 +552,12 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol }: W
             <div className="absolute left-0 right-0 top-full z-[100] mt-1 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-surface)] p-1 shadow-2xl nq-glass">
               {searchResults.map((ticker) => (
                 <button
-                  key={ticker}
+                  key={ticker.ticker}
                   type="button"
-                  onClick={() => handleAddSymbol(ticker)}
+                  onClick={() => handleAddSymbol(ticker.ticker)}
                   className="flex w-full items-center justify-between rounded px-2.5 py-2 text-left text-xs text-[var(--nq-text-primary)] hover:bg-[rgba(255,255,255,0.05)] transition-colors group"
                 >
-                  <span className="font-mono">{ticker}</span>
+                  <span className="font-mono">{ticker.ticker} <span className="text-[10px] text-[var(--nq-text-secondary)] ml-1">{ticker.name}</span></span>
                   <span className="flex items-center gap-1 text-[10px] text-[var(--nq-accent)] font-medium opacity-70 group-hover:opacity-100 transition-opacity">
                     <Plus className="h-3 w-3" /> Add to WL
                   </span>

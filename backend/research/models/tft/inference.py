@@ -108,7 +108,9 @@ class TFTInferenceEngine:
         self._last_attention = attn
         return q_pred, attn
 
-    def batch_predict(self, x_hist: Tensor, x_fut: Tensor, max_batch: int = 128) -> tuple[Tensor, Tensor]:
+    def batch_predict(
+        self, x_hist: Tensor, x_fut: Tensor, max_batch: int = 128
+    ) -> tuple[Tensor, Tensor]:
         r"""
         Batched inference with memory-efficient chunking.
 
@@ -172,4 +174,3 @@ class TFTInferenceEngine:
         """
         # VSN weights are not currently emitted by the model forward pass.
         return None
-

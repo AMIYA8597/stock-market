@@ -16,14 +16,16 @@ import {
   ChevronLeft,
   ChevronRight,
   Brain,
+  Activity,
 } from "lucide-react";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
 
 const navItems = [
-  { label: "Terminal", href: "/", icon: LayoutDashboard },
+  { label: "Terminal", href: "/terminal", icon: LayoutDashboard },
   { label: "Markets", href: "/markets", icon: TrendingUp },
   { label: "Research", href: "/research", icon: BookOpen },
+  { label: "Signals", href: "/signals", icon: Activity },
   { label: "Backtest Lab", href: "/backtest-lab", icon: FlaskConical },
   { label: "Portfolio", href: "/portfolio", icon: Briefcase },
   { label: "Orders", href: "/portfolio/orders", icon: Receipt },
@@ -61,8 +63,8 @@ export function Sidebar() {
       <nav className="flex-1 space-y-1 px-2 py-4">
         {navItems.map((item) => {
           const isActive =
-            item.href === "/"
-              ? pathname === "/"
+            item.href === "/terminal"
+              ? pathname === "/terminal"
               : pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
 

@@ -6,7 +6,9 @@ import numpy as np
 from scipy import stats
 
 
-def quantile_loss(y_true: np.ndarray, y_pred_q: np.ndarray, quantiles: tuple[float, ...] = (0.1, 0.5, 0.9)) -> float:
+def quantile_loss(
+    y_true: np.ndarray, y_pred_q: np.ndarray, quantiles: tuple[float, ...] = (0.1, 0.5, 0.9)
+) -> float:
     r"""
     Compute pinball (quantile) loss.
 
@@ -36,7 +38,9 @@ def quantile_loss(y_true: np.ndarray, y_pred_q: np.ndarray, quantiles: tuple[flo
 
     if yp.ndim == 2:
         if yp.shape[-1] != len(quantiles):
-            raise ValueError(f"Last dimension of y_pred_q ({yp.shape[-1]}) must match number of quantiles ({len(quantiles)})")
+            raise ValueError(
+                f"Last dimension of y_pred_q ({yp.shape[-1]}) must match number of quantiles ({len(quantiles)})"
+            )
     else:
         raise ValueError(f"y_pred_q must be 2D, got shape {yp.shape}")
 
@@ -107,7 +111,9 @@ def winkler_score_coverage(
     below = y < lo
     above = y > hi
 
-    penalty = np.where(below, (2.0 / alpha) * (lo - y), 0.0) + np.where(above, (2.0 / alpha) * (y - hi), 0.0)
+    penalty = np.where(below, (2.0 / alpha) * (lo - y), 0.0) + np.where(
+        above, (2.0 / alpha) * (y - hi), 0.0
+    )
     winkler = float(np.mean(width + penalty))
     coverage = float(np.mean((y >= lo) & (y <= hi)))
 
@@ -218,4 +224,3 @@ def compute_metrics_summary(
         "interval_width_mean": float(np.mean(widths)),
         "interval_width_std": float(np.std(widths)),
     }
-

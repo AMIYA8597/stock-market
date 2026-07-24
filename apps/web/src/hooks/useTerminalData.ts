@@ -1,13 +1,19 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { contractsApi } from "@/lib/contracts-api";
 import { intelligenceApi } from "@/lib/intelligence-api";
+import { watchlistApi } from "@/lib/api-client";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
 import type { SignalResponse } from "@/types/intelligence";
 
-const FALLBACK_SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS"];
+const FALLBACK_SYMBOLS = [
+  "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "BHARTIARTL.NS", 
+  "SBIN.NS", "INFY.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
+  "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", 
+  "TATAMOTORS.NS", "TATASTEEL.NS", "ONGC.NS", "KOTAKBANK.NS", "M&M.NS"
+];
 
 interface TerminalDataState {
   symbols: string[];
@@ -20,6 +26,8 @@ interface TerminalDataState {
   error: string | null;
   setSelectedSymbol: (symbol: string) => void;
   refresh: () => Promise<void>;
+  addWatchlistSymbol: (symbol: string) => Promise<void>;
+  removeWatchlistSymbol: (symbol: string) => Promise<void>;
 }
 
 export const useTerminalData = (): TerminalDataState => {
@@ -35,16 +43,13 @@ export const useTerminalData = (): TerminalDataState => {
 
   const loadSymbols = useCallback(async (): Promise<string[]> => {
     try {
-      const movers = await contractsApi.getMovers("NSE", "momentum");
-      const dynamicSymbols = Array.isArray(movers)
-        ? movers.map((item) => item.ticker.trim().toUpperCase()).filter((item) => item.length > 0).slice(0, 12)
-        : [];
-      if (dynamicSymbols.length > 0) {
-        setSymbols(dynamicSymbols);
-        return dynamicSymbols;
+      const response = await watchlistApi.getWatchlist();
+      if (response.symbols && response.symbols.length > 0) {
+        setSymbols(response.symbols);
+        return response.symbols;
       }
-    } catch {
-      // Fall through to explicit fallback symbols if contract is unavailable.
+    } catch (err) {
+      console.warn("Failed to load user watchlist, falling back to defaults", err);
     }
 
     setSymbols(FALLBACK_SYMBOLS);
@@ -201,7 +206,6 @@ export const useTerminalData = (): TerminalDataState => {
     if (!initializedRef.current) {
       return;
     }
-
     const id = setInterval(() => {
       void refreshAll(true);
     }, 60_000);
@@ -210,6 +214,29 @@ export const useTerminalData = (): TerminalDataState => {
       clearInterval(id);
     };
   }, [refreshAll]);
+
+  const addWatchlistSymbol = useCallback(async (symbol: string) => {
+    try {
+      const res = await watchlistApi.addSymbol(symbol);
+      if (res.symbols && res.symbols.length > 0) {
+        setSymbols(res.symbols);
+      }
+    } catch (e) {
+      console.error("Failed to add symbol", e);
+    }
+  }, []);
+
+  const removeWatchlistSymbol = useCallback(async (symbol: string) => {
+    try {
+      const res = await watchlistApi.removeSymbol(symbol);
+      setSymbols(res.symbols || []);
+      if (selectedSymbol === symbol && res.symbols && res.symbols.length > 0) {
+        setSelectedSymbol(res.symbols[0]!);
+      }
+    } catch (e) {
+      console.error("Failed to remove symbol", e);
+    }
+  }, [selectedSymbol]);
 
   return useMemo(
     () => ({
@@ -222,10 +249,10 @@ export const useTerminalData = (): TerminalDataState => {
       signalStreamStatus,
       error,
       setSelectedSymbol,
-      refresh,
+      refresh: () => refreshAll(false),
+      addWatchlistSymbol,
+      removeWatchlistSymbol,
     }),
-    [symbols, selectedSymbol, selectedSignal, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, refresh]
+    [symbols, selectedSymbol, selectedSignal, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, refreshAll, addWatchlistSymbol, removeWatchlistSymbol]
   );
 };
-
-

@@ -18,7 +18,11 @@ class CrossSectionalBuilder(FeatureBuilder):
             return frame
 
         data = frame.copy()
-        key_cols = [col for col in ["ret_1d", "momentum_21d", "realized_vol_21d", "amihud_21d"] if col in data.columns]
+        key_cols = [
+            col
+            for col in ["ret_1d", "momentum_21d", "realized_vol_21d", "amihud_21d", "dist_52w_high"]
+            if col in data.columns
+        ]
 
         for col in key_cols:
             grouped = data.groupby("time")[col]

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { ThemeSync } from "@/components/common/theme-sync";
+import { GlobalToast } from "@/components/common/global-toast";
 import { Providers } from "@/lib/providers";
 import "./globals.css";
 
@@ -54,6 +55,7 @@ export default function RootLayout({
         <Providers>
           <ThemeSync />
           {children}
+          <GlobalToast />
         </Providers>
       </body>
     </html>

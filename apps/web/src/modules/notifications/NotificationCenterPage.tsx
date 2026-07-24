@@ -13,9 +13,11 @@ import {
 } from "@neuroquant/ui";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@neuroquant/ui";
 import { useNotificationsQuery } from "@/hooks/queries/useNotifications";
+import { useSignalAlerts } from "@/hooks/useSignalAlerts";
 
 export function NotificationCenterPage(): JSX.Element {
   const { data } = useNotificationsQuery();
+  const { alerts } = useSignalAlerts();
 
   const rows = useMemo(() => {
     if (!data?.items) return [];
@@ -84,9 +86,37 @@ export function NotificationCenterPage(): JSX.Element {
           </TabsContent>
           <TabsContent
             value="alerts"
-            className="mt-4 text-sm text-[var(--ds-text-secondary)]"
+            className="mt-4 space-y-2"
           >
-            Signal and risk alerts are shown here.
+            {alerts.length === 0 ? (
+              <div className="text-sm text-[var(--ds-text-secondary)] p-2">
+                No signal alerts yet.
+              </div>
+            ) : null}
+            {alerts.map((alert, i) => (
+              <div
+                key={`${alert.timestamp}-${i}`}
+                className="flex items-start justify-between gap-3 rounded-[var(--ds-radius-lg)] border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-2)] p-3"
+              >
+                <div className="flex items-start gap-2">
+                  <BellRing className="mt-0.5 h-4 w-4 text-nq-accent" />
+                  <div>
+                    <p className="text-sm font-medium">{alert.symbol} - {alert.direction}</p>
+                    <p className="text-xs text-[var(--ds-text-secondary)]">
+                      {alert.message}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <Badge variant={alert.direction.includes("BUY") ? "bull" : "bear"}>
+                    {alert.confidence}% Conf
+                  </Badge>
+                  <p className="mt-1 text-[11px] text-[var(--ds-text-muted)]">
+                    {new Date(alert.timestamp).toLocaleTimeString()}
+                  </p>
+                </div>
+              </div>
+            ))}
           </TabsContent>
           <TabsContent value="messages" className="mt-4">
             <div className="rounded-[var(--ds-radius-lg)] border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-2)] p-5 text-sm text-[var(--ds-text-secondary)] inline-flex items-center gap-2">

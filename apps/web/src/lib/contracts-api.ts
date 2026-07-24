@@ -197,6 +197,15 @@ export interface BacktestResultsResponse {
   equity_curve: Array<{ date: string; portfolio_value: number; benchmark_value: number }>;
   drawdown_series: Array<{ date: string; drawdown_pct: number }>;
   walk_forward?: { fold_sharpes: number[] };
+  trade_log?: Array<{
+    date: string;
+    symbol: string;
+    direction: string;
+    price: number;
+    quantity: number;
+    pnl: number;
+    cum_pnl: number;
+  }>;
 }
 
 export interface BacktestRunRequest {

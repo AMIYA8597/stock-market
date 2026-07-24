@@ -107,6 +107,7 @@ class Base(DeclarativeBase):
 _is_postgres = settings.DATABASE_URL.startswith("postgresql")
 
 if _is_postgres:
+
     @event.listens_for(engine.sync_engine, "connect")
     def receive_connect(dbapi_conn: any, connection_record: any) -> None:
         """Configure PostgreSQL connection on creation.
@@ -133,7 +134,6 @@ if _is_postgres:
         except Exception as e:
             logger.warning("database_connection_configure_error", error=str(e))
 
-
     @event.listens_for(engine.sync_engine, "first_connect")
     def receive_first_connect(dbapi_conn: any, connection_record: any) -> None:
         """Initialize database on first connection.
@@ -159,7 +159,9 @@ if _is_postgres:
         except Exception as e:
             logger.warning("database_timescaledb_init_error", error=str(e))
 else:
-    logger.debug("database_skipping_postgres_listeners (using %s)", settings.DATABASE_URL.split(":")[0])
+    logger.debug(
+        "database_skipping_postgres_listeners (using %s)", settings.DATABASE_URL.split(":")[0]
+    )
 
 
 # ─── Session Dependency ────────────────────────────────────────────────
@@ -277,4 +279,3 @@ async def get_db_health() -> dict[str, bool]:
         health["healthy"] = False
 
     return health
-

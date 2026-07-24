@@ -12,14 +12,16 @@ def test_meta_learner_train_predict() -> None:
     n_samples = 200
 
     # 6 features: ["technical", "pattern", "momentum", "regime", "xgboost", "sentiment"]
-    X = pd.DataFrame({
-        "technical": np.random.uniform(-1, 1, n_samples),
-        "pattern": np.random.uniform(-1, 1, n_samples),
-        "momentum": np.random.uniform(-1, 1, n_samples),
-        "regime": np.random.choice([-1.0, 0.0, 1.0], n_samples),
-        "xgboost": np.random.uniform(-1, 1, n_samples),
-        "sentiment": np.random.uniform(-1, 1, n_samples)
-    })
+    X = pd.DataFrame(
+        {
+            "technical": np.random.uniform(-1, 1, n_samples),
+            "pattern": np.random.uniform(-1, 1, n_samples),
+            "momentum": np.random.uniform(-1, 1, n_samples),
+            "regime": np.random.choice([-1.0, 0.0, 1.0], n_samples),
+            "xgboost": np.random.uniform(-1, 1, n_samples),
+            "sentiment": np.random.uniform(-1, 1, n_samples),
+        }
+    )
     # Target label: correlated with features
     y_prob = 1 / (1 + np.exp(-(X["technical"] * 0.5 + X["xgboost"] * 0.8 + X["sentiment"] * 0.4)))
     y = pd.Series((y_prob > np.random.rand(n_samples)).astype(int))

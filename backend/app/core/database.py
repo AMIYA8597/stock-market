@@ -31,4 +31,3 @@ __all__ = [
     "drop_db",
     "get_db_health",
 ]
-

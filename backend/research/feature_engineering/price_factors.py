@@ -20,11 +20,23 @@ class PriceFactorsBuilder(FeatureBuilder):
         low = data["low"].astype(float)
 
         data["ret_1d"] = np.log(close / close.shift(1))
+        data["ret_2d"] = np.log(close / close.shift(2))
+        data["ret_3d"] = np.log(close / close.shift(3))
         data["ret_5d"] = np.log(close / close.shift(5))
+        data["ret_10d"] = np.log(close / close.shift(10))
+        data["ret_20d"] = np.log(close / close.shift(20))
         data["ret_21d"] = np.log(close / close.shift(21))
+
         data["momentum_21d"] = close.pct_change(21)
         data["momentum_63d"] = close.pct_change(63)
         data["momentum_126d"] = close.pct_change(126)
+
+        # Rolling moments (20d window)
+        rolling_20d_ret = data["ret_1d"].rolling(20, min_periods=10)
+        data["ret_mean_20d"] = rolling_20d_ret.mean()
+        data["ret_std_20d"] = rolling_20d_ret.std()
+        data["ret_skew_20d"] = rolling_20d_ret.skew()
+        data["ret_kurt_20d"] = rolling_20d_ret.kurt()
 
         rolling_252_high = high.rolling(252, min_periods=21).max()
         rolling_252_low = low.rolling(252, min_periods=21).min()
@@ -37,5 +49,9 @@ class PriceFactorsBuilder(FeatureBuilder):
 
         data["range_pct"] = (high - low) / close.replace(0, np.nan)
         data["close_to_open"] = close / data["open"].astype(float).replace(0, np.nan) - 1.0
+
+        # Gap feature: gap from previous close to today's open
+        prev_close = close.shift(1).replace(0, np.nan)
+        data["gap_pct"] = data["open"].astype(float) / prev_close - 1.0
 
         return data

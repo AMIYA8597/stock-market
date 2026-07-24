@@ -113,7 +113,9 @@ def train_tft(
         n_batches = 0
 
         # Shuffle data for better generalization
-        perm = torch.randperm(n, device=device if device.startswith("cuda") else torch.device("cpu"))
+        perm = torch.randperm(
+            n, device=device if device.startswith("cuda") else torch.device("cpu")
+        )
         if device.startswith("cuda"):
             perm = perm.to(device)
 
@@ -147,7 +149,8 @@ def train_tft(
         losses.append(avg_loss)
 
         if (epoch + 1) % max(1, cfg.epochs // 10) == 0:
-            print(f"Epoch {epoch+1}/{cfg.epochs}, Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6e}")
+            print(
+                f"Epoch {epoch + 1}/{cfg.epochs}, Loss: {avg_loss:.6f}, LR: {scheduler.get_last_lr()[0]:.6e}"
+            )
 
     return losses
-
