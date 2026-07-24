@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import os
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -15,6 +14,7 @@ from research.feature_engineering.volatility_factors import VolatilityFactorsBui
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("run_walk_forward")
+
 
 async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     logger.info(f"Running walk-forward backtest for {symbol} over the last {test_days} days...")
@@ -57,11 +57,22 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     df = df.drop(columns=cols_to_drop, errors="ignore")
 
     expected_features = [
-        "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-        "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-        "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-        "dist_52w_high", "dist_52w_low", "drawdown",
-        "range_pct", "close_to_open"
+        "ret_1d",
+        "ret_5d",
+        "ret_21d",
+        "momentum_63d",
+        "RSI_14",
+        "MACDh_12_26_9",
+        "BBP_20_2.0",
+        "ATRr_14",
+        "ADX_14",
+        "realized_vol_21d",
+        "yang_zhang_vol_21d",
+        "dist_52w_high",
+        "dist_52w_low",
+        "drawdown",
+        "range_pct",
+        "close_to_open",
     ]
     df = standardize_df_columns(df, expected_features)
     df = df.replace([np.inf, -np.inf], np.nan).dropna()
@@ -76,18 +87,13 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     kellys = []
 
     # Model tracking arrays
-    model_signals_track = {
-        "tft": [],
-        "hmm_garch": [],
-        "xgboost": [],
-        "lstm_attention": []
-    }
+    model_signals_track = {"tft": [], "hmm_garch": [], "xgboost": [], "lstm_attention": []}
 
     # 3. Simulate day-by-day walk-forward prediction
     for idx in range(start_idx, total_len):
         df_slice = df.iloc[:idx]
-        current_date = df.index[idx-1]
-        current_price = float(df["close"].iloc[idx-1])
+        current_date = df.index[idx - 1]
+        current_price = float(df["close"].iloc[idx - 1])
 
         # Get ensemble signal
         ens = await build_ensemble_signal(symbol, df_slice)
@@ -109,17 +115,21 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
 
     # Calculate next day actual returns
     close_prices = df["close"].iloc[start_idx:total_len].values
-    prev_close_prices = df["close"].iloc[start_idx-1:total_len-1].values
+    prev_close_prices = df["close"].iloc[start_idx - 1 : total_len - 1].values
     actual_returns = (close_prices / prev_close_prices) - 1.0
 
     # 4. Compute performance metrics
     def compute_metrics(sigs, rets):
-        hit = (np.sign(sigs) == np.sign(rets))
+        hit = np.sign(sigs) == np.sign(rets)
         hit_rate = float(np.mean(hit)) if len(hit) > 0 else 0.5
 
         # Sharpe ratio
         daily_pnl = sigs * rets
-        ann_sharpe = float(np.mean(daily_pnl) / (np.std(daily_pnl) + 1e-9) * np.sqrt(252)) if np.std(daily_pnl) > 0 else 0.0
+        ann_sharpe = (
+            float(np.mean(daily_pnl) / (np.std(daily_pnl) + 1e-9) * np.sqrt(252))
+            if np.std(daily_pnl) > 0
+            else 0.0
+        )
         return hit_rate, ann_sharpe
 
     ens_hit, ens_sharpe = compute_metrics(signals, actual_returns)
@@ -127,10 +137,7 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     model_metrics = {}
     for model, sigs in model_signals_track.items():
         m_hit, m_sharpe = compute_metrics(np.array(sigs), actual_returns)
-        model_metrics[model] = {
-            "hit_rate": m_hit,
-            "sharpe": m_sharpe
-        }
+        model_metrics[model] = {"hit_rate": m_hit, "sharpe": m_sharpe}
 
     # Calculate drawdowns
     equity = 100000.0 * np.cumprod(1.0 + signals * actual_returns)
@@ -149,8 +156,9 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
         "equity_curve": equity.tolist(),
         "signals": signals.tolist(),
         "prices": prices.tolist(),
-        "kellys": kellys.tolist()
+        "kellys": kellys.tolist(),
     }
+
 
 async def main():
     logger.info("Initializing Walk-Forward Backtesting Orchestrator...")
@@ -178,15 +186,23 @@ async def main():
         "tft": {"hit_rate": 0.0, "sharpe": 0.0},
         "hmm_garch": {"hit_rate": 0.0, "sharpe": 0.0},
         "xgboost": {"hit_rate": 0.0, "sharpe": 0.0},
-        "lstm_attn": {"hit_rate": 0.0, "sharpe": 0.0}
+        "lstm_attn": {"hit_rate": 0.0, "sharpe": 0.0},
     }
 
-    num_syms = len(results)
+    len(results)
     for model in avg_model_metrics:
         # map key names
         m_key = "lstm_attention" if model == "lstm_attn" else model
-        hit_rates = [r["model_metrics"][m_key]["hit_rate"] for r in results.values() if m_key in r["model_metrics"]]
-        sharpes = [r["model_metrics"][m_key]["sharpe"] for r in results.values() if m_key in r["model_metrics"]]
+        hit_rates = [
+            r["model_metrics"][m_key]["hit_rate"]
+            for r in results.values()
+            if m_key in r["model_metrics"]
+        ]
+        sharpes = [
+            r["model_metrics"][m_key]["sharpe"]
+            for r in results.values()
+            if m_key in r["model_metrics"]
+        ]
         avg_model_metrics[model]["hit_rate"] = float(np.mean(hit_rates)) if hit_rates else 0.50
         avg_model_metrics[model]["sharpe"] = float(np.mean(sharpes)) if sharpes else 0.0
 
@@ -218,10 +234,10 @@ Out-of-sample walk-forward backtest results over a 150-day testing window across
 | Model | Directional Accuracy (Hit Rate) | Sharpe Ratio |
 | :--- | :---: | :---: |
 | **Ensemble** | **{avg_hit:.2%}** | **{avg_sharpe:.4f}** |
-| **XGBoost Classifier** | {avg_model_metrics['xgboost']['hit_rate']:.2%} | {avg_model_metrics['xgboost']['sharpe']:.4f} |
-| **LSTM-Attention** | {avg_model_metrics['lstm_attn']['hit_rate']:.2%} | {avg_model_metrics['lstm_attn']['sharpe']:.4f} |
-| **TFT (Quantile LGBM)** | {avg_model_metrics['tft']['hit_rate']:.2%} | {avg_model_metrics['tft']['sharpe']:.4f} |
-| **HMM-GARCH** | {avg_model_metrics['hmm_garch']['hit_rate']:.2%} | {avg_model_metrics['hmm_garch']['sharpe']:.4f} |
+| **XGBoost Classifier** | {avg_model_metrics["xgboost"]["hit_rate"]:.2%} | {avg_model_metrics["xgboost"]["sharpe"]:.4f} |
+| **LSTM-Attention** | {avg_model_metrics["lstm_attn"]["hit_rate"]:.2%} | {avg_model_metrics["lstm_attn"]["sharpe"]:.4f} |
+| **TFT (Quantile LGBM)** | {avg_model_metrics["tft"]["hit_rate"]:.2%} | {avg_model_metrics["tft"]["sharpe"]:.4f} |
+| **HMM-GARCH** | {avg_model_metrics["hmm_garch"]["hit_rate"]:.2%} | {avg_model_metrics["hmm_garch"]["sharpe"]:.4f} |
 
 ## Individual Symbol Metrics
 
@@ -242,6 +258,7 @@ Out-of-sample walk-forward backtest results over a 150-day testing window across
     with open(report_path, "w") as f:
         f.write(report_content)
     logger.info(f"Saved walk-forward backtest report to {report_path}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

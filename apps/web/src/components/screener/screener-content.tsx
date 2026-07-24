@@ -237,7 +237,8 @@ export function ScreenerContent() {
             {error ? (
               <div className="px-4 pb-4 text-xs text-nq-bear">{error}</div>
             ) : null}
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-nq-border bg-nq-bg-elevated/50">
@@ -280,7 +281,7 @@ export function ScreenerContent() {
                           <span className="font-mono text-[10px] text-nq-text-tertiary">{r.ml_confidence ?? 0}%</span>
                         </div>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className="px-3 py-2.5 text-right">
                         <Button variant="ghost" size="sm" className="h-6 text-[10px]"><Star className="h-3 w-3" /></Button>
                       </td>
                     </tr>
@@ -288,6 +289,52 @@ export function ScreenerContent() {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden divide-y divide-nq-border">
+              {results.map((r) => {
+                const spark = sparkDataFromPrice(r.price, r.change_percent);
+                return (
+                  <div key={r.symbol} className="p-4 hover:bg-nq-bg-card/50 transition-colors">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <Link href={`/markets/stocks/${encodeURIComponent(r.symbol)}`} className="font-mono font-semibold text-base text-nq-text-primary hover:text-nq-accent flex items-center gap-2">
+                          {r.symbol}
+                          <Badge variant={r.ml_signal === "BUY" ? "bull" : r.ml_signal === "SELL" ? "bear" : "default"} className="text-[9px] px-1.5 py-0">
+                            {r.ml_signal ?? "HOLD"}
+                          </Badge>
+                        </Link>
+                        <div className="text-xs text-nq-text-tertiary mt-0.5">{r.sector ?? "-"}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono font-semibold text-nq-text-primary text-sm">{formatPrice(r.price)}</div>
+                        <div className={cn("font-mono font-medium text-xs mt-0.5", getPriceColor(r.change_percent))}>
+                          {getDirectionArrow(r.change_percent)} {formatPercent(r.change_percent)}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between mt-3 gap-2 flex-wrap">
+                      <div className="flex gap-4">
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-nq-text-tertiary uppercase">RSI</span>
+                          <span className="font-mono text-xs text-nq-text-secondary">{r.rsi ?? "-"}</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-nq-text-tertiary uppercase">Conf</span>
+                          <span className="font-mono text-xs text-nq-text-secondary">{r.ml_confidence ?? 0}%</span>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-[10px] text-nq-text-tertiary uppercase">Vol</span>
+                          <span className="font-mono text-xs text-nq-text-secondary">{r.volume > 0 ? formatCompact(r.volume) : "-"}</span>
+                        </div>
+                      </div>
+                      <Sparkline data={spark} width={60} height={20} />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         </div>

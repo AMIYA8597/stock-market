@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -63,6 +64,56 @@ export default function BacktestResultPage(): JSX.Element {
     () => result?.walk_forward?.fold_sharpes ?? [],
     [result],
   );
+
+  const tradeLog = useMemo(() => result?.trade_log ?? [], [result]);
+
+  const monthlyReturns = useMemo(() => {
+    if (!result || result.equity_curve.length === 0) return [];
+
+    const eodByMonth: Record<string, number> = {};
+    for (const pt of result.equity_curve) {
+      const d = new Date(pt.date);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      eodByMonth[`${yyyy}-${mm}`] = pt.portfolio_value;
+    }
+
+    const returns: { year: number; month: number; ret: number }[] = [];
+    const months = Object.keys(eodByMonth).sort();
+
+    let prevValue = result.equity_curve[0]?.portfolio_value ?? 1; // base for first month
+
+    for (let i = 0; i < months.length; i++) {
+      const monthKey = months[i];
+      if (!monthKey) continue;
+      const curr = eodByMonth[monthKey];
+      if (curr === undefined) continue;
+      
+      const [yyyy, mm] = monthKey.split("-").map(Number) as [number, number];
+      returns.push({
+        year: yyyy,
+        month: mm,
+        ret: curr / prevValue - 1,
+      });
+      prevValue = curr;
+    }
+
+    return returns;
+  }, [result]);
+
+  const heatmapByYear = useMemo(() => {
+    const byYear: Record<number, (number | null)[]> = {};
+    for (const r of monthlyReturns) {
+      if (!byYear[r.year]) byYear[r.year] = Array(12).fill(null);
+      const arr = byYear[r.year];
+      if (arr) {
+        arr[r.month - 1] = r.ret;
+      }
+    }
+    return Object.entries(byYear)
+      .map(([y, arr]) => ({ year: Number(y), returns: arr }))
+      .sort((a, b) => b.year - a.year); // newest first
+  }, [monthlyReturns]);
 
   return (
     <main className="min-h-screen bg-[radial-gradient(1000px_500px_at_0%_0%,rgba(0,212,245,0.12),transparent_45%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.10),transparent_45%),var(--nq-bg-base)] p-4 text-[var(--nq-text-primary)] sm:p-6 lg:p-8">
@@ -220,6 +271,89 @@ export default function BacktestResultPage(): JSX.Element {
             </p>
           ) : null}
         </div>
+      </section>
+
+      <section className="mt-6 rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4 overflow-x-auto ds-scrollable">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
+          Monthly Returns Heatmap
+        </h2>
+        <div className="min-w-[600px] text-xs">
+          <div className="grid grid-cols-[60px_repeat(12,1fr)] gap-1 mb-2 font-semibold text-[var(--nq-text-secondary)] text-center">
+            <div className="text-left">Year</div>
+            {["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].map((m) => (
+              <div key={m}>{m}</div>
+            ))}
+          </div>
+          {heatmapByYear.map((row) => (
+            <div key={row.year} className="grid grid-cols-[60px_repeat(12,1fr)] gap-1 mb-1 items-center">
+              <div className="font-semibold text-[var(--nq-text-primary)]">{row.year}</div>
+              {row.returns.map((ret, idx) => {
+                if (ret === null) {
+                  return <div key={idx} className="h-8 rounded bg-[rgba(255,255,255,0.02)]" />;
+                }
+                const isPositive = ret > 0;
+                const alpha = Math.min(0.8, Math.abs(ret) * 5); // scale opacity by return magnitude
+                const bgColor = isPositive ? `rgba(0,230,118,${alpha})` : `rgba(255,59,92,${alpha})`;
+                return (
+                  <div
+                    key={idx}
+                    className="h-8 rounded flex items-center justify-center font-mono text-[10px] text-white"
+                    style={{ backgroundColor: bgColor }}
+                    title={`${row.year}-${String(idx + 1).padStart(2, "0")}: ${pct(ret)}`}
+                  >
+                    {pct(ret)}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          {!loading && heatmapByYear.length === 0 ? (
+            <p className="text-[var(--nq-text-secondary)] mt-2">No monthly returns computed.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="mt-6 rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4 overflow-x-auto ds-scrollable">
+        <h2 className="mb-3 text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
+          Trade Log (Sample)
+        </h2>
+        <table className="w-full text-left text-xs font-mono">
+          <thead className="bg-[var(--nq-bg-card-hover)] text-[var(--nq-text-secondary)]">
+            <tr>
+              <th className="px-3 py-2 font-medium">Date</th>
+              <th className="px-3 py-2 font-medium">Symbol</th>
+              <th className="px-3 py-2 font-medium">Dir</th>
+              <th className="px-3 py-2 font-medium text-right">Price</th>
+              <th className="px-3 py-2 font-medium text-right">Qty</th>
+              <th className="px-3 py-2 font-medium text-right">PnL</th>
+              <th className="px-3 py-2 font-medium text-right">Cum PnL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tradeLog.map((trade: any, idx: number) => (
+              <tr key={`trade-${idx}`} className="border-t border-[var(--nq-border)] hover:bg-[rgba(255,255,255,0.01)] transition-colors">
+                <td className="px-3 py-2">{new Date(trade.date).toLocaleDateString()}</td>
+                <td className="px-3 py-2 text-[var(--nq-text-primary)]">{trade.symbol}</td>
+                <td className={`px-3 py-2 font-bold ${trade.direction === "LONG" ? "text-[var(--nq-bull)]" : "text-[var(--nq-bear)]"}`}>
+                  {trade.direction}
+                </td>
+                <td className="px-3 py-2 text-right">{safeFormat(trade.price, 2)}</td>
+                <td className="px-3 py-2 text-right">{safeFormat(trade.quantity, 2)}</td>
+                <td className={`px-3 py-2 text-right font-bold ${trade.pnl > 0 ? "text-[var(--nq-bull)]" : trade.pnl < 0 ? "text-[var(--nq-bear)]" : "text-[var(--nq-text-secondary)]"}`}>
+                  {trade.pnl > 0 ? "+" : ""}{safeFormat(trade.pnl, 2)}
+                </td>
+                <td className="px-3 py-2 text-right text-[var(--nq-text-primary)]">{safeFormat(trade.cum_pnl, 2)}</td>
+              </tr>
+            ))}
+            {!loading && tradeLog.length === 0 ? (
+              <tr className="border-t border-[var(--nq-border)]">
+                <td colSpan={7} className="px-3 py-4 text-center text-[var(--nq-text-secondary)] italic">
+                  No trades recorded.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
       </section>
     </main>
   );

@@ -135,7 +135,9 @@ class InferenceEngine:
         self._current_inference = inference
         return inference
 
-    def batch_predict(self, symbols_dict: dict[str, np.ndarray], train: bool = False) -> dict[str, HMMGARCHInference]:
+    def batch_predict(
+        self, symbols_dict: dict[str, np.ndarray], train: bool = False
+    ) -> dict[str, HMMGARCHInference]:
         r"""
         Run parallel-ready batch predictions across multiple symbol time series.
 
@@ -231,7 +233,9 @@ class InferenceEngine:
                 diffs = np.diff(np.concatenate(([n_states], states, [n_states])))
                 transitions = np.where(diffs != 0)[0]
                 durations = np.diff(transitions)
-                kth_durations = durations[np.where(states[np.minimum(transitions[:-1], len(states) - 1)] == k)[0]]
+                kth_durations = durations[
+                    np.where(states[np.minimum(transitions[:-1], len(states) - 1)] == k)[0]
+                ]
                 avg_duration = float(np.mean(kth_durations)) if len(kth_durations) > 0 else 1.0
 
                 stats[f"state_{k}"] = {

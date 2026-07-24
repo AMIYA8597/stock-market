@@ -8,8 +8,8 @@ from research.backtesting.analytics import (
     sharpe_ratio,
     sortino_ratio,
 )
-from research.backtesting.cost_model import compute_costs
-from research.backtesting.engine import BacktestResult, run_vectorized_backtest
+from research.backtesting.cost_model import compute_indian_costs
+from research.backtesting.engine import BacktestResult, EventDrivenBacktester
 from research.backtesting.monte_carlo import (
     MonteCarloResult,
     bootstrap_paths,

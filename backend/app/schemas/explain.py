@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field
 # SHAP Explainability
 # ─────────────────────────────────────────────────────────────━━
 
+
 class SHAPContribution(BaseModel):
     """Single feature's SHAP contribution."""
+
     name: str = Field(..., description="feature name")
     shap_value: Decimal = Field(...)
     feature_value: Decimal = Field(...)
@@ -19,6 +21,7 @@ class SHAPContribution(BaseModel):
 
 class SHAPResponse(BaseModel):
     """GET /explain/shap/{symbol} response."""
+
     symbol: str
     model: str = Field(..., description="tft|lstm_attn|xgboost")
     feature_contributions: list[SHAPContribution]
@@ -32,14 +35,17 @@ class SHAPResponse(BaseModel):
 # Attention Weights
 # ─────────────────────────────────────────────────────────────━━
 
+
 class AttentionTimestep(BaseModel):
     """Single important timestep."""
+
     date: datetime
     weight: Decimal = Field(..., ge=0.0, le=1.0)
 
 
 class AttentionResponse(BaseModel):
     """GET /explain/attention/{symbol} response."""
+
     symbol: str
     model: str = Field(..., description="tft|lstm_attn")
     weights: list[list[Decimal]] = Field(..., description="heads × timesteps matrix")
@@ -54,8 +60,10 @@ class AttentionResponse(BaseModel):
 # Counterfactual Explanations
 # ─────────────────────────────────────────────────────────────━━
 
+
 class FeatureChange(BaseModel):
     """Feature value change in counterfactual."""
+
     name: str
     original_value: Decimal = Field(...)
     counterfactual_value: Decimal = Field(...)
@@ -64,6 +72,7 @@ class FeatureChange(BaseModel):
 
 class CounterfactualInstance(BaseModel):
     """Single counterfactual explanation."""
+
     cf_id: str
     changed_features: list[FeatureChange]
     resulting_signal: Decimal = Field(..., ge=-1.0, le=1.0)
@@ -73,12 +82,14 @@ class CounterfactualInstance(BaseModel):
 
 class CounterfactualRequest(BaseModel):
     """POST /explain/counterfactual/{symbol} request body."""
+
     target_direction: str = Field(..., description="BUY|SELL")
     num_cfs: int = Field(default=5, ge=1, le=20)
 
 
 class CounterfactualResponse(BaseModel):
     """POST /explain/counterfactual/{symbol} response."""
+
     symbol: str
     target_direction: str
     counterfactuals: list[CounterfactualInstance]

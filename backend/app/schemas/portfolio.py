@@ -10,8 +10,10 @@ from pydantic import BaseModel, Field
 # Portfolio Holdings
 # ─────────────────────────────────────────────────────────────━━
 
+
 class HoldingData(BaseModel):
     """Single holding in portfolio."""
+
     symbol: str
     quantity: Decimal = Field(..., gt=0)
     avg_price: Decimal = Field(..., gt=0)
@@ -23,6 +25,7 @@ class HoldingData(BaseModel):
 
 class HoldingsResponse(BaseModel):
     """GET /portfolio/holdings response."""
+
     holdings: list[HoldingData]
     total_invested: Decimal = Field(...)
     total_current_value: Decimal = Field(...)
@@ -37,8 +40,10 @@ class HoldingsResponse(BaseModel):
 # Transactions
 # ─────────────────────────────────────────────────────────────━━
 
+
 class TransactionRequest(BaseModel):
     """POST /portfolio/transaction request body."""
+
     symbol: str
     type: str = Field(..., description="BUY|SELL")
     quantity: Decimal = Field(..., gt=0)
@@ -49,6 +54,7 @@ class TransactionRequest(BaseModel):
 
 class TransactionResponse(BaseModel):
     """POST /portfolio/transaction response."""
+
     transaction_id: str
     symbol: str
     type: str
@@ -63,8 +69,10 @@ class TransactionResponse(BaseModel):
 # Portfolio Performance
 # ─────────────────────────────────────────────────────────────━━
 
+
 class PerformancePoint(BaseModel):
     """Single point in performance time-series."""
+
     date: datetime
     portfolio_value: Decimal = Field(...)
     benchmark_value: Decimal = Field(...)
@@ -74,6 +82,7 @@ class PerformancePoint(BaseModel):
 
 class PerformanceResponse(BaseModel):
     """GET /portfolio/performance response."""
+
     series: list[PerformancePoint]
     start_date: datetime
     end_date: datetime
@@ -86,8 +95,10 @@ class PerformanceResponse(BaseModel):
 # Risk Metrics
 # ─────────────────────────────────────────────────────────────━━
 
+
 class RiskMetricsResponse(BaseModel):
     """GET /portfolio/risk-metrics response."""
+
     sharpe_ratio: Decimal = Field(...)
     sortino_ratio: Decimal = Field(...)
     beta: Decimal = Field(...)
@@ -106,8 +117,10 @@ class RiskMetricsResponse(BaseModel):
 # Portfolio Optimization
 # ─────────────────────────────────────────────────────────────━━
 
+
 class OptimizationConstraints(BaseModel):
     """Portfolio optimization constraints."""
+
     max_weight: Decimal = Field(default=Decimal("0.20"), ge=0, le=1)
     min_weight: Decimal = Field(default=Decimal("0.0"), ge=0, le=1)
     sector_limits: dict[str, Decimal] | None = None
@@ -117,6 +130,7 @@ class OptimizationConstraints(BaseModel):
 
 class OptimizationRequest(BaseModel):
     """POST /portfolio/optimize request body."""
+
     universe: list[str] = Field(..., min_length=2, max_length=500)
     method: str = Field(..., description="hrp|black_litterman|cvar|mean_variance")
     constraints: OptimizationConstraints | None = None
@@ -125,12 +139,14 @@ class OptimizationRequest(BaseModel):
 
 class OptimizedWeight(BaseModel):
     """Single optimized weight."""
+
     symbol: str
     weight: Decimal = Field(..., ge=0, le=1)
 
 
 class EfficientFrontierPoint(BaseModel):
     """Single point on efficient frontier."""
+
     expected_return: Decimal = Field(...)
     expected_volatility: Decimal = Field(...)
     sharpe_ratio: Decimal = Field(...)
@@ -139,9 +155,10 @@ class EfficientFrontierPoint(BaseModel):
 
 class HRPDendrogramNode(BaseModel):
     """Single node in HRP dendrogram."""
+
     symbols: list[str]
-    left: Optional['HRPDendrogramNode'] = None
-    right: Optional['HRPDendrogramNode'] = None
+    left: Optional["HRPDendrogramNode"] = None
+    right: Optional["HRPDendrogramNode"] = None
     distance: Decimal = Field(...)
 
 
@@ -150,6 +167,7 @@ HRPDendrogramNode.model_rebuild()
 
 class OptimizationResponse(BaseModel):
     """POST /portfolio/optimize response."""
+
     method: str
     weights: list[OptimizedWeight]
     expected_return: Decimal = Field(...)

@@ -19,7 +19,9 @@ from scripts.model_trainer import run_training
 from scripts.verify_schema import verify_schema
 
 
-async def run_all(years: int, interval: str, batch_size: int, model: str, symbol: str, universe: str, epochs: int) -> int:
+async def run_all(
+    years: int, interval: str, batch_size: int, model: str, symbol: str, universe: str, epochs: int
+) -> int:
     report: dict[str, object] = {"steps": []}
 
     schema_code = await verify_schema()
@@ -55,8 +57,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--interval", type=str, default="1d", help="OHLCV interval")
     parser.add_argument("--batch-size", type=int, default=1000, help="Feature upsert batch size")
     parser.add_argument("--model", type=str, default="all", help="Model selection for training")
-    parser.add_argument("--symbol", type=str, default="NIFTY", help="Ticker for single-symbol models")
-    parser.add_argument("--universe", type=str, default="NSE", help="Universe key for cross-asset models")
+    parser.add_argument(
+        "--symbol", type=str, default="NIFTY", help="Ticker for single-symbol models"
+    )
+    parser.add_argument(
+        "--universe", type=str, default="NSE", help="Universe key for cross-asset models"
+    )
     parser.add_argument("--epochs", type=int, default=20, help="Epochs for trainable deep models")
     return parser.parse_args()
 

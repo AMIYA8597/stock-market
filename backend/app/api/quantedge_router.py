@@ -18,6 +18,7 @@ import logging
 from datetime import datetime
 from typing import Literal
 
+import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -43,6 +44,7 @@ async def get_ohlc(
     """Retrieve historical candle bars (OHLCV) for a given symbol and interval."""
     # Leverage existing market_data history getter logic
     from app.api.v1.market import get_history
+
     try:
         res = await get_history(symbol=symbol, interval=timeframe, period=period)
         return res
@@ -62,7 +64,9 @@ async def get_indicators(
         # Fetch candles
         df = await MarketDataService.get_ticker_history_df(symbol, period, timeframe)
         if df.empty or len(df) < 20:
-            raise HTTPException(status_code=404, detail=f"Insufficient history to compute indicators for {symbol}")
+            raise HTTPException(
+                status_code=404, detail=f"Insufficient history to compute indicators for {symbol}"
+            )
 
         # Compute indicators using pandas-ta
         df.ta.rsi(length=14, append=True)
@@ -86,25 +90,57 @@ async def get_indicators(
         results = []
         for idx, row in df.iterrows():
             dt = idx.to_pydatetime() if hasattr(idx, "to_pydatetime") else idx
-            results.append({
-                "time": dt.isoformat() if hasattr(dt, "isoformat") else str(dt),
-                "close": float(row["close"]),
-                "rsi": float(row.get("RSI_14", 50.0)) if not np.isnan(row.get("RSI_14", np.nan)) else None,
-                "macd": float(row.get("MACD_12_26_9", 0.0)) if not np.isnan(row.get("MACD_12_26_9", np.nan)) else None,
-                "macd_hist": float(row.get("MACDh_12_26_9", 0.0)) if not np.isnan(row.get("MACDh_12_26_9", np.nan)) else None,
-                "ema9": float(row.get("EMA_9", 0.0)) if not np.isnan(row.get("EMA_9", np.nan)) else None,
-                "ema21": float(row.get("EMA_21", 0.0)) if not np.isnan(row.get("EMA_21", np.nan)) else None,
-                "ema50": float(row.get("EMA_50", 0.0)) if not np.isnan(row.get("EMA_50", np.nan)) else None,
-                "ema200": float(row.get("EMA_200", 0.0)) if not np.isnan(row.get("EMA_200", np.nan)) else None,
-                "sma20": float(row.get("SMA_20", 0.0)) if not np.isnan(row.get("SMA_20", np.nan)) else None,
-                "sma50": float(row.get("SMA_50", 0.0)) if not np.isnan(row.get("SMA_50", np.nan)) else None,
-                "sma200": float(row.get("SMA_200", 0.0)) if not np.isnan(row.get("SMA_200", np.nan)) else None,
-                "bb_upper": float(row.get("BBU_20_2.0", 0.0)) if not np.isnan(row.get("BBU_20_2.0", np.nan)) else None,
-                "bb_lower": float(row.get("BBL_20_2.0", 0.0)) if not np.isnan(row.get("BBL_20_2.0", np.nan)) else None,
-                "atr": float(row.get("ATRr_14", 0.0)) if not np.isnan(row.get("ATRr_14", np.nan)) else None,
-                "vwap": float(row.get("VWAP_D", 0.0)) if not np.isnan(row.get("VWAP_D", np.nan)) else None,
-                "adx": float(row.get("ADX_14", 0.0)) if not np.isnan(row.get("ADX_14", np.nan)) else None,
-            })
+            results.append(
+                {
+                    "time": dt.isoformat() if hasattr(dt, "isoformat") else str(dt),
+                    "close": float(row["close"]),
+                    "rsi": float(row.get("RSI_14", 50.0))
+                    if not np.isnan(row.get("RSI_14", np.nan))
+                    else None,
+                    "macd": float(row.get("MACD_12_26_9", 0.0))
+                    if not np.isnan(row.get("MACD_12_26_9", np.nan))
+                    else None,
+                    "macd_hist": float(row.get("MACDh_12_26_9", 0.0))
+                    if not np.isnan(row.get("MACDh_12_26_9", np.nan))
+                    else None,
+                    "ema9": float(row.get("EMA_9", 0.0))
+                    if not np.isnan(row.get("EMA_9", np.nan))
+                    else None,
+                    "ema21": float(row.get("EMA_21", 0.0))
+                    if not np.isnan(row.get("EMA_21", np.nan))
+                    else None,
+                    "ema50": float(row.get("EMA_50", 0.0))
+                    if not np.isnan(row.get("EMA_50", np.nan))
+                    else None,
+                    "ema200": float(row.get("EMA_200", 0.0))
+                    if not np.isnan(row.get("EMA_200", np.nan))
+                    else None,
+                    "sma20": float(row.get("SMA_20", 0.0))
+                    if not np.isnan(row.get("SMA_20", np.nan))
+                    else None,
+                    "sma50": float(row.get("SMA_50", 0.0))
+                    if not np.isnan(row.get("SMA_50", np.nan))
+                    else None,
+                    "sma200": float(row.get("SMA_200", 0.0))
+                    if not np.isnan(row.get("SMA_200", np.nan))
+                    else None,
+                    "bb_upper": float(row.get("BBU_20_2.0", 0.0))
+                    if not np.isnan(row.get("BBU_20_2.0", np.nan))
+                    else None,
+                    "bb_lower": float(row.get("BBL_20_2.0", 0.0))
+                    if not np.isnan(row.get("BBL_20_2.0", np.nan))
+                    else None,
+                    "atr": float(row.get("ATRr_14", 0.0))
+                    if not np.isnan(row.get("ATRr_14", np.nan))
+                    else None,
+                    "vwap": float(row.get("VWAP_D", 0.0))
+                    if not np.isnan(row.get("VWAP_D", np.nan))
+                    else None,
+                    "adx": float(row.get("ADX_14", 0.0))
+                    if not np.isnan(row.get("ADX_14", np.nan))
+                    else None,
+                }
+            )
 
         return {"symbol": symbol.upper(), "timeframe": timeframe, "indicators": results}
     except Exception as e:
@@ -119,7 +155,9 @@ async def get_zones(symbol: str):
         # Fetch daily history
         df = await MarketDataService.get_ticker_history_df(symbol, "1y", "1d")
         if df.empty or len(df) < 50:
-            raise HTTPException(status_code=404, detail="Insufficient price history for zone detection")
+            raise HTTPException(
+                status_code=404, detail="Insufficient price history for zone detection"
+            )
 
         # Run detection service
         df.columns = [c.lower() for c in df.columns]
@@ -128,11 +166,7 @@ async def get_zones(symbol: str):
         # Clean formatting for response
         return {
             "symbol": symbol.upper(),
-            "metrics": {
-                "precision": res["precision"],
-                "recall": res["recall"],
-                "f1": res["f1"]
-            },
+            "metrics": {"precision": res["precision"], "recall": res["recall"], "f1": res["f1"]},
             "classical_zones": [
                 {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]}
                 for z in res["classical_zones"]
@@ -140,7 +174,7 @@ async def get_zones(symbol: str):
             "deep_learning_zones": [
                 {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]}
                 for z in res["dl_zones"]
-            ]
+            ],
         }
     except Exception as e:
         logger.error(f"Error computing support/resistance zones for {symbol}: {e}")
@@ -156,7 +190,9 @@ async def get_signal_quantedge(symbol: str):
 
         return {
             "symbol": symbol.upper(),
-            "bias": "bullish" if ens.get("raw_ensemble", 0.0) > 0.15 else ("bearish" if ens.get("raw_ensemble", 0.0) < -0.15 else "neutral"),
+            "bias": "bullish"
+            if ens.get("raw_ensemble", 0.0) > 0.15
+            else ("bearish" if ens.get("raw_ensemble", 0.0) < -0.15 else "neutral"),
             "regime": ens.get("regime", {}).get("regime", "UNKNOWN"),
             "confidence": ens.get("confidence", 0.5),
             "reasoning": pred.get("message", "No clear signal drivers detected."),
@@ -179,7 +215,9 @@ async def get_regime(symbol: str):
     try:
         df = await MarketDataService.get_ticker_history_df(symbol, "1y", "1d")
         if df.empty or len(df) < 50:
-            raise HTTPException(status_code=404, detail="Insufficient price history for regime analysis")
+            raise HTTPException(
+                status_code=404, detail="Insufficient price history for regime analysis"
+            )
 
         df.columns = [c.lower() for c in df.columns]
         regime_info = detect_regime(df)
@@ -198,7 +236,9 @@ async def get_regime(symbol: str):
             "probs": {
                 "BULL": float(regime_info["bull_prob"]),
                 "BEAR": float(regime_info["bear_prob"]),
-                "SIDEWAYS": float(max(0.0, 1.0 - regime_info["bull_prob"] - regime_info["bear_prob"])),
+                "SIDEWAYS": float(
+                    max(0.0, 1.0 - regime_info["bull_prob"] - regime_info["bear_prob"])
+                ),
             },
             "transition_matrix": transition_matrix,
             "conditional_volatility_1d": float(regime_info["conditional_vol"]),
@@ -263,7 +303,7 @@ async def post_paper_trade(
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
     """Submit simulated paper order."""
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         res = await BrokerAdapter.place_order(
             db=db,
@@ -273,7 +313,7 @@ async def post_paper_trade(
             quantity=request.quantity,
             order_type=request.order_type,
             limit_price=request.limit_price,
-            product="I"
+            product="I",
         )
         return {"success": True, "order": res}
     except Exception as e:
@@ -287,7 +327,7 @@ async def get_paper_portfolio(
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
     """Get active positions, cash holdings, and mark-to-market P&L summary."""
-    user_id = current_user.get("sub") if current_user else "test-user-id"
+    user_id = str(current_user.id) if current_user else "test-user-id"
     try:
         pnl = await PaperTradingService.get_pnl(db, user_id)
         positions = await PaperTradingService.get_positions(db, user_id)
@@ -297,7 +337,7 @@ async def get_paper_portfolio(
             "total_equity": pnl["total_equity"],
             "realized_pnl": pnl["realized_pnl"],
             "unrealized_pnl": pnl["unrealized_pnl"],
-            "positions": positions
+            "positions": positions,
         }
     except Exception as e:
         logger.error(f"Error fetching paper portfolio: {e}")

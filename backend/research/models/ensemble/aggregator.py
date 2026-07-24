@@ -41,7 +41,9 @@ def build_ensemble_decision(
     regime_variance: float,
 ) -> EnsembleDecision:
     """Compute dynamic weights, aggregate signal, and position size in one call."""
-    weights = compute_dynamic_weights(rolling_sharpes=rolling_sharpes, regime_weights=regime_weights)
+    weights = compute_dynamic_weights(
+        rolling_sharpes=rolling_sharpes, regime_weights=regime_weights
+    )
     agg: EnsembleWeights = aggregate_signal(model_signals=model_signals, model_weights=weights)
     kelly = half_kelly_fraction(
         score=agg.score,

@@ -22,7 +22,7 @@ class PortfolioHolding(Base):
     Fields:
         id (UUID): Unique holding identifier, primary key.
         user_id (UUID): Foreign key to User.
-        symbol_id (int): Foreign key to Symbol.
+        symbol_id (int): Foreign key to Instrument.
         quantity (Decimal): Number of units held (precision to 8 decimals).
         avg_buy_price (Decimal): Average purchase price per unit.
         realized_pnl (Decimal): Realized profit/loss from closed positions.
@@ -53,7 +53,7 @@ class PortfolioHolding(Base):
         doc="Foreign key to users",
     )
     symbol_id: Mapped[int] = mapped_column(
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
         index=True,
         doc="Foreign key to symbols",

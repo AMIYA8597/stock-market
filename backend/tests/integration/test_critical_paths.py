@@ -7,7 +7,6 @@ Tests the most important user workflows end-to-end:
 - WebSocket connections for real-time feeds
 """
 
-from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -33,7 +32,7 @@ class TestAuthFlow:
                 "email": email,
                 "password": password,
                 "full_name": "Test User",
-            }
+            },
         )
         assert register_resp.status_code == status.HTTP_201_CREATED
         user_data = register_resp.json()
@@ -42,8 +41,7 @@ class TestAuthFlow:
 
         # LOGIN
         login_resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": email, "password": password}
+            "/api/v1/auth/login", json={"email": email, "password": password}
         )
         assert login_resp.status_code == status.HTTP_200_OK
         tokens = login_resp.json()
@@ -54,8 +52,7 @@ class TestAuthFlow:
 
         # GET PROFILE with access token
         profile_resp = await client.get(
-            "/api/v1/users/profile",
-            headers={"Authorization": f"Bearer {access_token}"}
+            "/api/v1/users/profile", headers={"Authorization": f"Bearer {access_token}"}
         )
         assert profile_resp.status_code == status.HTTP_200_OK
         profile = profile_resp.json()
@@ -63,8 +60,7 @@ class TestAuthFlow:
 
         # REFRESH TOKEN rotation
         refresh_resp = await client.post(
-            "/api/v1/auth/refresh",
-            json={"refresh_token": refresh_token}
+            "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
         )
         assert refresh_resp.status_code == status.HTTP_200_OK
         new_tokens = refresh_resp.json()
@@ -73,24 +69,21 @@ class TestAuthFlow:
 
         # Old access token should still work briefly
         profile_resp2 = await client.get(
-            "/api/v1/users/profile",
-            headers={"Authorization": f"Bearer {access_token}"}
+            "/api/v1/users/profile", headers={"Authorization": f"Bearer {access_token}"}
         )
         assert profile_resp2.status_code == status.HTTP_200_OK
 
         # LOGOUT
         logout_resp = await client.post(
-            "/api/v1/auth/logout",
-            headers={"Authorization": f"Bearer {new_access}"}
+            "/api/v1/auth/logout", headers={"Authorization": f"Bearer {new_access}"}
         )
         assert logout_resp.status_code == status.HTTP_204_NO_CONTENT
 
-        # Old tokens should now be invalid
-        invalid_resp = await client.get(
-            "/api/v1/users/profile",
-            headers={"Authorization": f"Bearer {new_access}"}
+        # The access token remains valid until it expires since it's stateless,
+        # but the refresh token should now be invalid.
+        invalid_resp = await client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": new_tokens["refresh_token"]}
         )
-        # Could be 401 or 404 depending on implementation
         assert invalid_resp.status_code >= 400
 
     async def test_account_lockout_after_failed_attempts(self, client: AsyncClient):
@@ -102,14 +95,13 @@ class TestAuthFlow:
         # Create user
         await client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": password, "full_name": "Lock Test"}
+            json={"email": email, "password": password, "full_name": "Lock Test"},
         )
 
         # Try login 5 times with wrong password
         for _attempt in range(5):
             resp = await client.post(
-                "/api/v1/auth/login",
-                json={"email": email, "password": wrong_password}
+                "/api/v1/auth/login", json={"email": email, "password": wrong_password}
             )
             assert resp.status_code == status.HTTP_401_UNAUTHORIZED
             error = resp.json()
@@ -117,8 +109,7 @@ class TestAuthFlow:
 
         # 6th attempt should be blocked due to lock
         lock_resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": email, "password": wrong_password}
+            "/api/v1/auth/login", json={"email": email, "password": wrong_password}
         )
         assert lock_resp.status_code == status.HTTP_429_TOO_MANY_REQUESTS
         error = lock_resp.json()
@@ -127,14 +118,14 @@ class TestAuthFlow:
 
         # Correct password should also be blocked while locked
         locked_resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": email, "password": password}
+            "/api/v1/auth/login", json={"email": email, "password": password}
         )
         assert locked_resp.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 
 class TestPaymentFlow:
     """Test complete payment lifecycle."""
+
     pass
 
 
@@ -149,7 +140,7 @@ class TestErrorResponseFormat:
                 "email": "invalid-email",  # Invalid email
                 "password": "weak",  # Too weak
                 "full_name": "",  # Empty
-            }
+            },
         )
         assert resp.status_code == status.HTTP_400_BAD_REQUEST
         error = resp.json()
@@ -179,9 +170,7 @@ class TestErrorResponseFormat:
 
     async def test_not_found_error_format(self, client: AsyncClient):
         """Test error response format for resource not found."""
-        resp = await client.get(
-            "/api/v1/blog/posts/nonexistent-slug"
-        )
+        resp = await client.get("/api/v1/blog/posts/nonexistent-slug")
         assert resp.status_code == status.HTTP_404_NOT_FOUND
         error = resp.json()
 
@@ -208,14 +197,14 @@ class TestDatabaseConstraints:
         # First registration succeeds
         resp1 = await client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": password, "full_name": "User 1"}
+            json={"email": email, "password": password, "full_name": "User 1"},
         )
         assert resp1.status_code == status.HTTP_201_CREATED
 
         # Duplicate email should fail
         resp2 = await client.post(
             "/api/v1/auth/register",
-            json={"email": email, "password": password, "full_name": "User 2"}
+            json={"email": email, "password": password, "full_name": "User 2"},
         )
         assert resp2.status_code == status.HTTP_409_CONFLICT
         error = resp2.json()

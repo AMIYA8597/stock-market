@@ -34,7 +34,7 @@ async def generate_csrf_token(db: AsyncSession, user_id: str) -> str:
     token_value = secrets.token_urlsafe(32)
     expires_at = datetime.now(UTC) + timedelta(hours=24)
 
-    csrf=CSRFToken(
+    csrf = CSRFToken(
         token=token_value,
         user_id=user_id,
         expires_at=expires_at,
@@ -86,10 +86,6 @@ async def cleanup_expired_tokens(db: AsyncSession) -> int:
     """
     from sqlalchemy import delete
 
-    result = await db.execute(
-        delete(CSRFToken).where(
-            CSRFToken.expires_at < datetime.now(UTC)
-        )
-    )
+    result = await db.execute(delete(CSRFToken).where(CSRFToken.expires_at < datetime.now(UTC)))
     await db.commit()
     return result.rowcount

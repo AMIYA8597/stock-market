@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 MODEL_DIR = Path(__file__).parent.parent / "data" / "models"
 SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 
+
 def train_single_xgboost(symbol: str) -> None:
     """Train XGBoost classifier for a single stock and save to disk."""
     import yfinance as yf
@@ -64,29 +65,55 @@ def train_single_xgboost(symbol: str) -> None:
     # Standardize column names
     rename_map = {}
     RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-    MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-    BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
+    MACDh_col = (
+        "MACDh_12_26_9"
+        if "MACDh_12_26_9" in df.columns
+        else [c for c in df.columns if "MACDh" in c][0]
+    )
+    BBP_col = (
+        "BBP_20_2.0_2.0"
+        if "BBP_20_2.0_2.0" in df.columns
+        else (
+            "BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0]
+        )
+    )
     ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
     ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
 
-    if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-    if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-    if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-    if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-    if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+    if RSI_col != "RSI_14":
+        rename_map[RSI_col] = "RSI_14"
+    if MACDh_col != "MACDh_12_26_9":
+        rename_map[MACDh_col] = "MACDh_12_26_9"
+    if BBP_col != "BBP_20_2.0":
+        rename_map[BBP_col] = "BBP_20_2.0"
+    if ATR_col != "ATRr_14":
+        rename_map[ATR_col] = "ATRr_14"
+    if ADX_col != "ADX_14":
+        rename_map[ADX_col] = "ADX_14"
 
     if rename_map:
         df = df.rename(columns=rename_map)
 
     features = [
-        "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-        "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-        "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-        "dist_52w_high", "dist_52w_low", "drawdown",
-        "range_pct", "close_to_open"
+        "ret_1d",
+        "ret_5d",
+        "ret_21d",
+        "momentum_63d",
+        "RSI_14",
+        "MACDh_12_26_9",
+        "BBP_20_2.0",
+        "ATRr_14",
+        "ADX_14",
+        "realized_vol_21d",
+        "yang_zhang_vol_21d",
+        "dist_52w_high",
+        "dist_52w_low",
+        "drawdown",
+        "range_pct",
+        "close_to_open",
     ]
 
-    df["target_5d"] = (df["close"].shift(-5) / df["close"] - 1.0)
+    df["target_5d"] = df["close"].shift(-5) / df["close"] - 1.0
     df["label"] = (df["target_5d"] > 0).astype(int)
 
     X_train = df[features].iloc[:-6].dropna()
@@ -97,7 +124,8 @@ def train_single_xgboost(symbol: str) -> None:
 
     # CPCV splits
     from research.backtesting.walk_forward import generate_cpcv_splits
-    splits = generate_cpcv_splits(n_samples, n_splits=5, purge_days=5, embargo_days=2)
+
+    splits = generate_cpcv_splits(len(X_train), n_splits=5, purge_days=5, embargo_days=2)
 
     predictions = []
     actuals = []
@@ -150,15 +178,22 @@ def train_single_xgboost(symbol: str) -> None:
 
     # Save walk-forward stats
     import json
+
     stats_path = MODEL_DIR / f"xgboost_backtest_{symbol.upper()}.json"
     with open(stats_path, "w") as f:
-        json.dump({
-            "win_rate": win_rate,
-            "payoff_ratio": payoff_ratio,
-            "samples_evaluated": len(predictions)
-        }, f)
+        json.dump(
+            {
+                "win_rate": win_rate,
+                "payoff_ratio": payoff_ratio,
+                "samples_evaluated": len(predictions),
+            },
+            f,
+        )
 
-    logger.info(f"XGBoost model saved for {symbol} to {checkpoint_path} with win_rate={win_rate:.2f}, payoff_ratio={payoff_ratio:.2f}")
+    logger.info(
+        f"XGBoost model saved for {symbol} to {checkpoint_path} with win_rate={win_rate:.2f}, payoff_ratio={payoff_ratio:.2f}"
+    )
+
 
 @shared_task(name="tasks.training_tasks.retrain_model")
 def retrain_model(model_name: str) -> dict[str, str]:
@@ -173,6 +208,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
 
     elif model_name.lower() == "meta_learner":
         from research.models.ensemble.meta_learner import EnsembleMetaLearner
+
         try:
             learner = EnsembleMetaLearner()
             X, y = learner.prepare_training_data(SYMBOLS)
@@ -187,7 +223,8 @@ def retrain_model(model_name: str) -> dict[str, str]:
     elif model_name.lower() == "lstm_attention":
         import yfinance as yf
 
-        from research.models.lstm_attention import LSTMAttentionClassifier
+        from research.models.lstm_attention.classifier import LSTMAttentionClassifier
+
         for symbol in SYMBOLS:
             try:
                 logger.info(f"Retraining LSTM with Attention for {symbol}...")
@@ -196,7 +233,9 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 if df.empty or len(df) < 100:
                     continue
                 df.columns = [c.lower() for c in df.columns]
-                df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
+                df = df.rename(
+                    columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
+                )
                 df = df[["open", "high", "low", "close", "volume"]].dropna()
                 df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
                 df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
@@ -205,6 +244,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
 
                 from research.feature_engineering.price_factors import PriceFactorsBuilder
                 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+
                 df = PriceFactorsBuilder().transform(df)
                 df = VolatilityFactorsBuilder().transform(df)
 
@@ -229,23 +269,48 @@ def retrain_model(model_name: str) -> dict[str, str]:
 
                 # Standardize column names
                 rename_map = {}
-                RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-                MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-                BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-                ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-                ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+                RSI_col = (
+                    "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
+                )
+                MACDh_col = (
+                    "MACDh_12_26_9"
+                    if "MACDh_12_26_9" in df.columns
+                    else [c for c in df.columns if "MACDh" in c][0]
+                )
+                BBP_col = (
+                    "BBP_20_2.0_2.0"
+                    if "BBP_20_2.0_2.0" in df.columns
+                    else (
+                        "BBP_20_2.0"
+                        if "BBP_20_2.0" in df.columns
+                        else [c for c in df.columns if "BBP" in c][0]
+                    )
+                )
+                ATR_col = (
+                    "ATRr_14"
+                    if "ATRr_14" in df.columns
+                    else [c for c in df.columns if "ATR" in c][0]
+                )
+                ADX_col = (
+                    "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+                )
 
-                if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-                if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-                if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-                if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-                if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+                if RSI_col != "RSI_14":
+                    rename_map[RSI_col] = "RSI_14"
+                if MACDh_col != "MACDh_12_26_9":
+                    rename_map[MACDh_col] = "MACDh_12_26_9"
+                if BBP_col != "BBP_20_2.0":
+                    rename_map[BBP_col] = "BBP_20_2.0"
+                if ATR_col != "ATRr_14":
+                    rename_map[ATR_col] = "ATRr_14"
+                if ADX_col != "ADX_14":
+                    rename_map[ADX_col] = "ADX_14"
                 if rename_map:
                     df = df.rename(columns=rename_map)
 
                 df = df.replace([np.inf, -np.inf], np.nan).dropna()
 
-                df["target_5d"] = (df["close"].shift(-5) / df["close"] - 1.0)
+                df["target_5d"] = df["close"].shift(-5) / df["close"] - 1.0
                 df["label"] = (df["target_5d"] > 0).astype(int)
 
                 clf = LSTMAttentionClassifier()
@@ -259,6 +324,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
 
     elif model_name.lower() == "quantile_forecaster":
         from research.models.tft.quantile_forecaster import QuantileLGBForecaster
+
         try:
             forecaster = QuantileLGBForecaster()
             X, y = forecaster.prepare_training_data(SYMBOLS)
@@ -274,6 +340,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
         import yfinance as yf
 
         from research.models.online_learner import OnlineAdaptiveLearner
+
         for symbol in SYMBOLS:
             try:
                 logger.info(f"Retraining Online Adaptive Learner for {symbol}...")
@@ -282,7 +349,9 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 if df.empty or len(df) < 100:
                     continue
                 df.columns = [c.lower() for c in df.columns]
-                df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
+                df = df.rename(
+                    columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
+                )
                 df = df[["open", "high", "low", "close", "volume"]].dropna()
                 df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
                 df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
@@ -291,6 +360,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
 
                 from research.feature_engineering.price_factors import PriceFactorsBuilder
                 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+
                 df = PriceFactorsBuilder().transform(df)
                 df = VolatilityFactorsBuilder().transform(df)
 
@@ -315,23 +385,48 @@ def retrain_model(model_name: str) -> dict[str, str]:
 
                 # Standardize column names
                 rename_map = {}
-                RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-                MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-                BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-                ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-                ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+                RSI_col = (
+                    "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
+                )
+                MACDh_col = (
+                    "MACDh_12_26_9"
+                    if "MACDh_12_26_9" in df.columns
+                    else [c for c in df.columns if "MACDh" in c][0]
+                )
+                BBP_col = (
+                    "BBP_20_2.0_2.0"
+                    if "BBP_20_2.0_2.0" in df.columns
+                    else (
+                        "BBP_20_2.0"
+                        if "BBP_20_2.0" in df.columns
+                        else [c for c in df.columns if "BBP" in c][0]
+                    )
+                )
+                ATR_col = (
+                    "ATRr_14"
+                    if "ATRr_14" in df.columns
+                    else [c for c in df.columns if "ATR" in c][0]
+                )
+                ADX_col = (
+                    "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+                )
 
-                if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-                if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-                if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-                if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-                if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+                if RSI_col != "RSI_14":
+                    rename_map[RSI_col] = "RSI_14"
+                if MACDh_col != "MACDh_12_26_9":
+                    rename_map[MACDh_col] = "MACDh_12_26_9"
+                if BBP_col != "BBP_20_2.0":
+                    rename_map[BBP_col] = "BBP_20_2.0"
+                if ATR_col != "ATRr_14":
+                    rename_map[ATR_col] = "ATRr_14"
+                if ADX_col != "ADX_14":
+                    rename_map[ADX_col] = "ADX_14"
                 if rename_map:
                     df = df.rename(columns=rename_map)
 
                 df = df.replace([np.inf, -np.inf], np.nan).dropna()
 
-                df["target_5d"] = (df["close"].shift(-5) / df["close"] - 1.0)
+                df["target_5d"] = df["close"].shift(-5) / df["close"] - 1.0
                 df["label"] = (df["target_5d"] > 0).astype(int)
 
                 # Fit online learner incrementally row-by-row
@@ -339,7 +434,11 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 df_clean = df.iloc[:-5].dropna()
                 for idx in range(len(df_clean)):
                     row = df_clean.iloc[idx]
-                    x_dict = {feat: float(row[feat]) for feat in learner.features if feat in df_clean.columns}
+                    x_dict = {
+                        feat: float(row[feat])
+                        for feat in learner.features
+                        if feat in df_clean.columns
+                    }
                     y = int(row["label"])
                     learner.update(x_dict, y)
 

@@ -29,7 +29,10 @@ def calculate_max_drawdown(cum_returns: np.ndarray) -> float:
             max_dd = dd
     return float(max_dd)
 
-def calculate_metrics(predictions: np.ndarray, actual_returns: np.ndarray, close_prices: np.ndarray) -> dict:
+
+def calculate_metrics(
+    predictions: np.ndarray, actual_returns: np.ndarray, close_prices: np.ndarray
+) -> dict:
     # predictions: array of 1 (BUY), -1 (SELL/SHORT) or 0 (NEUTRAL)
     # actual_returns: next 5-day return
     hits = (predictions * np.sign(actual_returns)) > 0
@@ -40,8 +43,8 @@ def calculate_metrics(predictions: np.ndarray, actual_returns: np.ndarray, close
 
     # apply transaction costs
     trades_abs = np.abs(np.diff(np.insert(predictions, 0, 0.0)))
-    adv = np.full_like(close_prices, 1000000.0) # mock average daily volume
-    realized_vol = np.full_like(close_prices, 0.02) # mock realized vol
+    adv = np.full_like(close_prices, 1000000.0)  # mock average daily volume
+    realized_vol = np.full_like(close_prices, 0.02)  # mock realized vol
     costs = compute_costs(trades_abs, close_prices, adv, realized_vol)
 
     net_returns = trading_returns - (costs / close_prices)
@@ -64,8 +67,9 @@ def calculate_metrics(predictions: np.ndarray, actual_returns: np.ndarray, close
         "hit_rate": hit_rate,
         "sharpe": sharpe,
         "max_dd": max_dd * 100,  # percentage
-        "win_loss": win_loss
+        "win_loss": win_loss,
     }
+
 
 def main():
     symbols = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
@@ -88,18 +92,18 @@ def main():
 
     # 1. Compute Old Fixed-Weight predictions
     old_signal = (
-        X["technical"] * 0.30 +
-        X["pattern"] * 0.15 +
-        X["momentum"] * 0.20 +
-        X["regime"] * 0.10 +
-        X["xgboost"] * 0.25
+        X["technical"] * 0.30
+        + X["pattern"] * 0.15
+        + X["momentum"] * 0.20
+        + X["regime"] * 0.10
+        + X["xgboost"] * 0.25
     )
     old_prob = np.clip((old_signal + 1.0) / 2.0, 0.0, 1.0)
     old_preds = np.where(old_prob > 0.52, 1.0, np.where(old_prob < 0.48, -1.0, 0.0))
 
     # 2. Compute New Meta-Learner predictions
     new_prob = []
-    for idx, row in X.iterrows():
+    for _idx, row in X.iterrows():
         new_prob.append(learner.predict_proba(row[features_list].tolist()))
     new_prob = np.array(new_prob)
     new_preds = np.where(new_prob > 0.52, 1.0, np.where(new_prob < 0.48, -1.0, 0.0))
@@ -132,11 +136,11 @@ This report presents the out-of-sample directional prediction and calibration me
 
 | Metric | Old Fixed-Weight | New Meta-Learner | Improvement |
 | :--- | :---: | :---: | :---: |
-| **Brier Calibration Score (lower is better)** | {mean_brier_old:.5f} | {mean_brier_new:.5f} | **+{((mean_brier_old - mean_brier_new)/mean_brier_old * 100):.2f}%** |
-| **Directional Accuracy (Hit-Rate)** | {metrics_old['hit_rate'] * 100:.2f}% | {metrics_new['hit_rate'] * 100:.2f}% | **+{(metrics_new['hit_rate'] - metrics_old['hit_rate']) * 100:.2f}%** |
-| **Sharpe Ratio (annualized, after costs)** | {metrics_old['sharpe']:.4f} | {metrics_new['sharpe']:.4f} | **+{((metrics_new['sharpe'] - metrics_old['sharpe'])/abs(metrics_old['sharpe']) * 100) if abs(metrics_old['sharpe']) > 0 else 0.0:.2f}%** |
-| **Max Drawdown** | {metrics_old['max_dd']:.1f}% | {metrics_new['max_dd']:.1f}% | **+{metrics_new['max_dd'] - metrics_old['max_dd']:.1f}%** |
-| **Win/Loss Ratio** | {metrics_old['win_loss']:.2f} | {metrics_new['win_loss']:.2f} | **+{((metrics_new['win_loss'] - metrics_old['win_loss'])/metrics_old['win_loss'] * 100) if metrics_old['win_loss'] > 0 else 0.0:.2f}%** |
+| **Brier Calibration Score (lower is better)** | {mean_brier_old:.5f} | {mean_brier_new:.5f} | **+{((mean_brier_old - mean_brier_new) / mean_brier_old * 100):.2f}%** |
+| **Directional Accuracy (Hit-Rate)** | {metrics_old["hit_rate"] * 100:.2f}% | {metrics_new["hit_rate"] * 100:.2f}% | **+{(metrics_new["hit_rate"] - metrics_old["hit_rate"]) * 100:.2f}%** |
+| **Sharpe Ratio (annualized, after costs)** | {metrics_old["sharpe"]:.4f} | {metrics_new["sharpe"]:.4f} | **+{((metrics_new["sharpe"] - metrics_old["sharpe"]) / abs(metrics_old["sharpe"]) * 100) if abs(metrics_old["sharpe"]) > 0 else 0.0:.2f}%** |
+| **Max Drawdown** | {metrics_old["max_dd"]:.1f}% | {metrics_new["max_dd"]:.1f}% | **+{metrics_new["max_dd"] - metrics_old["max_dd"]:.1f}%** |
+| **Win/Loss Ratio** | {metrics_old["win_loss"]:.2f} | {metrics_new["win_loss"]:.2f} | **+{((metrics_new["win_loss"] - metrics_old["win_loss"]) / metrics_old["win_loss"] * 100) if metrics_old["win_loss"] > 0 else 0.0:.2f}%** |
 
 ## Statistical Significance (Diebold-Mariano Test)
 
@@ -145,12 +149,14 @@ This report presents the out-of-sample directional prediction and calibration me
 *   **Verdict**: The improvement is **{"statistically significant (p < 0.05)" if p_val < 0.05 else "not statistically significant (p >= 0.05)"}** at the 95% confidence level.
 
 ## Interpretation & Calibration
-The Brier score measures calibration quality (how close predicted probabilities are to true outcomes). The new Calibrated Ensemble Meta-Learner reduces Brier score significantly (approaching closer to 0.0), showing that the model's confidence is strongly calibrated to historical reality rather than overconfident stubs. Out-of-sample directional accuracy sits at **{metrics_new['hit_rate'] * 100:.1f}%**, which complies fully with realistic market efficiency expectations (55-65%).
+The Brier score measures calibration quality (how close predicted probabilities are to true outcomes). The new Calibrated Ensemble Meta-Learner reduces Brier score significantly (approaching closer to 0.0), showing that the model's confidence is strongly calibrated to historical reality rather than overconfident stubs. Out-of-sample directional accuracy sits at **{metrics_new["hit_rate"] * 100:.1f}%**, which complies fully with realistic market efficiency expectations (55-65%).
 """
 
     print("Walk-forward evaluation complete.")
     print(f"Old Brier: {mean_brier_old:.5f} | New Brier: {mean_brier_new:.5f}")
-    print(f"Old Hit:   {metrics_old['hit_rate'] * 100:.2f}% | New Hit:   {metrics_new['hit_rate'] * 100:.2f}%")
+    print(
+        f"Old Hit:   {metrics_old['hit_rate'] * 100:.2f}% | New Hit:   {metrics_new['hit_rate'] * 100:.2f}%"
+    )
     print(f"DM Stat:   {dm_stat:.4f} | P-value:   {p_val:.6f}")
 
     parser = argparse.ArgumentParser()
@@ -166,6 +172,7 @@ The Brier score measures calibration quality (how close predicted probabilities 
         f.write(report_content)
 
     print(f"Report written to artifact file: {report_path}")
+
 
 if __name__ == "__main__":
     main()
