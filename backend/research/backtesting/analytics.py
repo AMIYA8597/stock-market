@@ -64,3 +64,48 @@ def omega_ratio(returns: np.ndarray, threshold: float = 0.0) -> float:
     if den == 0.0:
         return float("inf")
     return float(np.sum(gains) / den)
+
+
+def trade_metrics(pnl: np.ndarray) -> tuple[float, float, float]:
+    """Calculate win rate, profit factor, and expectancy.
+    Args:
+        pnl: Array of per-trade PnL (or daily PnL where trade happened).
+    Returns:
+        (win_rate, profit_factor, expectancy)
+    """
+    trades = pnl[pnl != 0]
+    if len(trades) == 0:
+        return 0.0, 0.0, 0.0
+
+    wins = trades[trades > 0]
+    losses = trades[trades < 0]
+
+    win_rate = len(wins) / len(trades)
+
+    gross_profit = np.sum(wins)
+    gross_loss = np.abs(np.sum(losses))
+
+    profit_factor = float(gross_profit / gross_loss) if gross_loss > 0 else float("inf")
+
+    expectancy = float(np.mean(trades))
+
+    return float(win_rate), profit_factor, expectancy
+
+
+def calculate_turnover(positions: np.ndarray, prices: np.ndarray, initial_capital: float) -> float:
+    """Calculate annualized portfolio turnover."""
+    if len(positions) < 2:
+        return 0.0
+
+    # Notional value of trades
+    trades = np.abs(np.diff(positions, prepend=0))
+    notional_traded = trades * prices
+
+    total_turnover = np.sum(notional_traded)
+    years = len(positions) / 252.0
+
+    if years <= 0:
+        return 0.0
+
+    annualized_turnover = (total_turnover / 2.0) / initial_capital / years
+    return float(annualized_turnover)

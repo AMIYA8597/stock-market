@@ -2,8 +2,9 @@
 
 Train / predict wrappers used by app.api.v1.ai and app.services.signals_service.
 If the underlying PredictionEngine is unavailable (models not trained yet), raises
-ServiceUnavailableError so callers can surface a clean 503 instead of a fake stub.
+ServiceUnavailableError so callers can surface a clean 503 instead of an invented stub.
 """
+
 from __future__ import annotations
 
 import logging

@@ -1,9 +1,10 @@
 """Health check endpoint."""
 
+import logging
+
 from fastapi import APIRouter
 from sqlalchemy import text
 
-import logging
 from app.core.dependencies import get_db, get_redis
 
 logger = logging.getLogger(__name__)
@@ -27,23 +28,20 @@ async def health_live_data():
     import httpx
 
     from app.core.config import get_settings
+
     settings = get_settings()
 
-    status = {
-        "yfinance": "down",
-        "nse": "down",
-        "coingecko": "down",
-        "fred": "down"
-    }
+    status = {"yfinance": "down", "nse": "down", "coingecko": "down", "fred": "down"}
 
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
     async with httpx.AsyncClient(timeout=5) as client:
         # 1. Ping yfinance
         try:
-            resp = await client.get("https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d", headers=headers)
+            resp = await client.get(
+                "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
+                headers=headers,
+            )
             if resp.status_code == 200:
                 status["yfinance"] = "up"
         except Exception:
@@ -54,7 +52,11 @@ async def health_live_data():
             # First load home page to get session/cookies
             resp1 = await client.get("https://www.nseindia.com", headers=headers)
             if resp1.status_code == 200:
-                resp2 = await client.get("https://www.nseindia.com/api/historical/cm/equity?symbol=RELIANCE&series=[%22EQ%22]", headers=headers, cookies=resp1.cookies)
+                resp2 = await client.get(
+                    "https://www.nseindia.com/api/historical/cm/equity?symbol=RELIANCE&series=[%22EQ%22]",
+                    headers=headers,
+                    cookies=resp1.cookies,
+                )
                 if resp2.status_code == 200:
                     status["nse"] = "up"
                 else:
@@ -97,6 +99,7 @@ async def debug_trigger_alert_check():
     Returns the list of alerts that were broadcast.
     """
     from app.services.alert_engine import trigger_one_cycle
+
     alerts = await trigger_one_cycle()
     return {"alerts_sent": alerts}
 
@@ -105,13 +108,15 @@ async def debug_trigger_alert_check():
 async def readiness_check():
     """Readiness probe with dependency checks for DB and Redis."""
     from fastapi.responses import JSONResponse
+
     dependencies: dict[str, str] = {"database": "down", "redis": "down"}
 
     db_ok = False
     redis_ok = False
 
     from app.core.config import get_settings
-    settings = get_settings()
+
+    get_settings()
 
     # 1. Test SQLite connection (primary DB)
     try:
@@ -142,4 +147,3 @@ async def readiness_check():
     if overall != "ready":
         return JSONResponse(status_code=503, content=payload)
     return payload
-

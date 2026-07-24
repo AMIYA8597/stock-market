@@ -88,9 +88,6 @@ async def _resolve_symbol_id(session, ticker: str) -> int:
     return int(new_id)
 
 
-
-
-
 async def run_full_history(years: int) -> None:
     orchestrator = DataIngestionOrchestrator(max_concurrency=10)
     symbols = DEFAULT_NSE + DEFAULT_US + DEFAULT_CRYPTO
@@ -118,10 +115,11 @@ async def run_full_history(years: int) -> None:
     print(f"Ingestion completed. Total rows upserted: {total_rows}")
 
 
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run market data ingestion pipeline")
-    parser.add_argument("--full-history", action="store_true", help="Fetch full history for default universe")
+    parser.add_argument(
+        "--full-history", action="store_true", help="Fetch full history for default universe"
+    )
     parser.add_argument("--years", type=int, default=5, help="History depth in years")
     return parser.parse_args()
 

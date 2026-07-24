@@ -1,9 +1,11 @@
 from fastapi import APIRouter
+
 from app.core.config import get_settings
 
 router = APIRouter()
 
-@router.get("/ws_url", tags=["debug"]) 
+
+@router.get("/ws_url", tags=["debug"])
 async def get_ws_url() -> dict[str, str]:
     """Return the WebSocket URL for clients.
 

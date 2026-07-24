@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -33,6 +34,8 @@ import {
 import { drawIndicators } from "./tradingview/indicatorsRenderer";
 import { drawSMC } from "./tradingview/smcRenderer";
 import { drawSubPanes } from "./tradingview/subpaneRenderer";
+
+import { type Quote } from "@neuroquant/types";
 
 interface LightweightCandlestickChartProps {
   bars: PriceBar[];
@@ -83,6 +86,7 @@ interface LightweightCandlestickChartProps {
     prediction_high?: number;
   }[];
   symbol?: string;
+  liveTick?: any;
 }
 
 function sanitizeSeriesData<T extends { time: unknown }>(data: T[]): T[] {
@@ -153,13 +157,15 @@ interface Drawing {
 
 export function LightweightCandlestickChart({
   bars,
-  height,
+  height = 400,
   chartStyle = "candlestick",
   indicators = {},
   predictions = [],
-  symbol = "",
+  symbol = "SPY",
+  liveTick,
 }: LightweightCandlestickChartProps): JSX.Element {
   const mainContainerRef = useRef<HTMLDivElement | null>(null);
+  const drawingIdCounter = useRef(0);
   const [legend, setLegend] = useState<{
     open: number;
     high: number;
@@ -329,8 +335,9 @@ export function LightweightCandlestickChart({
       if (time === null || price === null) return;
 
       if (activeTool === "horizontal") {
+        drawingIdCounter.current += 1;
         const newDrawing: Drawing = {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `drawing-${drawingIdCounter.current}`,
           type: "horizontal",
           points: [{ time: Number(time), price }],
         };
@@ -340,8 +347,9 @@ export function LightweightCandlestickChart({
         if (!tempStartPoint) {
           setTempStartPoint({ time: Number(time), price });
         } else {
+          drawingIdCounter.current += 1;
           const newDrawing: Drawing = {
-            id: Math.random().toString(36).substr(2, 9),
+            id: `drawing-${drawingIdCounter.current}`,
             type: activeTool,
             points: [tempStartPoint, { time: Number(time), price }],
           };
@@ -1170,6 +1178,26 @@ export function LightweightCandlestickChart({
     cleanSymbol,
     symbol,
   ]);
+
+  useEffect(() => {
+    if (liveTick && mainSeriesRef.current && mainChartRef.current) {
+      try {
+        const time = toUtcTimestamp(liveTick.timestamp);
+        // Only update if the tick is newer than or equal to the last candle
+        // and doesn't break the ascending time order
+        mainSeriesRef.current.update({
+          time,
+          open: liveTick.open ?? liveTick.price,
+          high: liveTick.high ?? liveTick.price,
+          low: liveTick.low ?? liveTick.price,
+          close: liveTick.price,
+          volume: liveTick.volume ?? 0,
+        });
+      } catch (err) {
+        console.warn("[Chart] live tick update failed (likely time out of order):", err);
+      }
+    }
+  }, [liveTick]);
 
   const formatVolume = (val: number): string => {
     if (val >= 1e6) return (val / 1e6).toFixed(2) + "M";

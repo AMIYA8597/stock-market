@@ -85,9 +85,7 @@ class PaperPosition(Base):
     """User open positions in paper trading mode."""
 
     __tablename__ = "paper_positions"
-    __table_args__ = (
-        UniqueConstraint("user_id", "symbol", name="uq_paper_position_user_symbol"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "symbol", name="uq_paper_position_user_symbol"),)
 
     id: Mapped[UUID] = mapped_column(
         SQLA_UUID(as_uuid=True),

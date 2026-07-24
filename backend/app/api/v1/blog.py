@@ -33,7 +33,7 @@ class BlogPostUpdate(BaseModel):
 
 
 def _admin_only(current_user: dict) -> None:
-    if current_user.get("role") != "ADMIN":
+    if current_user.role != "ADMIN":
         raise HTTPException(
             status_code=403,
             detail=ErrorResponse.create(
@@ -125,7 +125,7 @@ async def create_post(
         excerpt=payload.excerpt,
         content=payload.content,
         status=payload.status,
-        author_id=current_user.get("sub"),
+        author_id=str(current_user.id),
         published_at=published_at,
     )
     db.add(post)

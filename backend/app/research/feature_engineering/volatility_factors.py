@@ -62,7 +62,7 @@ class VolatilityFactorsBuilder:
             # sigma_{t+1}^2 = omega + alpha * eps_t^2 + beta * sigma_t^2
             # eps_t is the log return at t.
             # sigma_t^2 is the conditional variance at t.
-            forecast_var = params.omega + params.alpha * (returns_np ** 2) + params.beta * cond_var
+            forecast_var = params.omega + params.alpha * (returns_np**2) + params.beta * cond_var
             data["garch_vol_forecast_1d"] = np.sqrt(forecast_var)
         except Exception:
             # Fallback to rolling standard deviation if GARCH fit fails

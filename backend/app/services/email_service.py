@@ -11,10 +11,15 @@ from app.models.email_job import EmailJob
 try:
     from tasks.email_tasks import send_email_task  # type: ignore
 except ModuleNotFoundError:
+
     class OfflineLogTask:
         def delay(self, job_id, to_email, template, payload):
             import logging
-            logging.getLogger(__name__).info(f"Offline mode: simulated sending email to {to_email} with template {template}")
+
+            logging.getLogger(__name__).info(
+                f"Offline mode: simulated sending email to {to_email} with template {template}"
+            )
+
     send_email_task = OfflineLogTask()
 
 
@@ -24,7 +29,9 @@ TEMPLATES: dict[str, str] = {
 }
 
 
-async def enqueue_email(db: AsyncSession, to_email: str, template: str, payload: dict[str, object]) -> str:
+async def enqueue_email(
+    db: AsyncSession, to_email: str, template: str, payload: dict[str, object]
+) -> str:
     if template not in TEMPLATES:
         raise ValueError(f"Unsupported email template: {template}")
 
@@ -37,7 +44,12 @@ async def enqueue_email(db: AsyncSession, to_email: str, template: str, payload:
     db.add(job)
     await db.flush()
 
-    send_email_task.delay(str(job.id), to_email, template, payload)
+    import logging
+    try:
+        send_email_task.delay(str(job.id), to_email, template, payload)
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"Failed to enqueue email task (Broker might be down): {e}")
+
     return str(job.id)
 
 

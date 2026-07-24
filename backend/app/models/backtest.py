@@ -112,4 +112,6 @@ class BacktestJob(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<BacktestJob(id={self.id}, strategy='{self.strategy_name}', status='{self.status}')>"
+        return (
+            f"<BacktestJob(id={self.id}, strategy='{self.strategy_name}', status='{self.status}')>"
+        )

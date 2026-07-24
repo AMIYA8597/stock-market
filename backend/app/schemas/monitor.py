@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class ModelAccuracyMetrics(BaseModel):
     """Rolling accuracy metrics for single model."""
+
     model_config = ConfigDict(protected_namespaces=())
 
     model_name: str
@@ -23,6 +24,7 @@ class ModelAccuracyMetrics(BaseModel):
 
 class ModelAccuracyResponse(BaseModel):
     """GET /monitor/model-accuracy response."""
+
     models: list[ModelAccuracyMetrics]
     benchmark_ensemble_accuracy: Decimal = Field(..., ge=0, le=1)
     generated_at: datetime
@@ -30,6 +32,7 @@ class ModelAccuracyResponse(BaseModel):
 
 class DriftDistribution(BaseModel):
     """Residual distribution statistics."""
+
     mean: Decimal = Field(...)
     std: Decimal = Field(..., ge=0)
     p25: Decimal = Field(...)
@@ -41,6 +44,7 @@ class DriftDistribution(BaseModel):
 
 class ModelDriftMetrics(BaseModel):
     """Drift detection for single model."""
+
     model_config = ConfigDict(protected_namespaces=())
 
     model_name: str
@@ -57,6 +61,7 @@ class ModelDriftMetrics(BaseModel):
 
 class DriftResponse(BaseModel):
     """GET /monitor/drift response."""
+
     models: list[ModelDriftMetrics]
     overall_drift_detected: bool
     generated_at: datetime
@@ -64,6 +69,7 @@ class DriftResponse(BaseModel):
 
 class EnsembleWeightPoint(BaseModel):
     """Single point in ensemble weights history."""
+
     date: datetime
     tft: Decimal = Field(..., ge=0, le=1)
     hmm_garch: Decimal = Field(..., ge=0, le=1)
@@ -74,6 +80,7 @@ class EnsembleWeightPoint(BaseModel):
 
 class WeightsHistoryResponse(BaseModel):
     """GET /monitor/ensemble-weights-history response."""
+
     period_days: int = 252
     data: list[EnsembleWeightPoint]
     start_date: datetime

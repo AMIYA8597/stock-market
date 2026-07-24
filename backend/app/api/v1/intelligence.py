@@ -34,7 +34,9 @@ async def get_economic_calendar() -> list[EconomicCalendarEvent]:
 
 
 @router.get("/research/correlation-graph", response_model=CorrelationGraphResponse)
-async def get_correlation_graph(window_days: int = Query(default=60, ge=30, le=252)) -> CorrelationGraphResponse:
+async def get_correlation_graph(
+    window_days: int = Query(default=60, ge=30, le=252),
+) -> CorrelationGraphResponse:
     """Return correlation graph nodes and edges for research workspace."""
     return intelligence_service.get_correlation_graph(window_days=window_days)
 
@@ -49,7 +51,9 @@ async def get_factor_exposure(
 
 
 @router.get("/signals/bulk", response_model=list[SignalResponse])
-async def get_bulk_signals(symbols: str = Query(..., description="Comma separated symbols, max 50")) -> list[SignalResponse]:
+async def get_bulk_signals(
+    symbols: str = Query(..., description="Comma separated symbols, max 50"),
+) -> list[SignalResponse]:
     """Return parallel signal snapshots for up to 50 symbols."""
     parsed = [item.strip().upper() for item in symbols.split(",") if item.strip()]
     if not parsed:
@@ -88,7 +92,9 @@ async def get_signal(symbol: str) -> SignalResponse:
 @router.get("/signals/history/{symbol}", response_model=list[SignalHistoryPoint])
 async def get_signal_history(
     symbol: str,
-    model: str = Query(default="ensemble", pattern="^(ensemble|tft|hmm_garch|gnn|lstm_attn|xgboost)$"),
+    model: str = Query(
+        default="ensemble", pattern="^(ensemble|tft|hmm_garch|gnn|lstm_attn|xgboost)$"
+    ),
     days: int = Query(default=90, ge=30, le=252),
 ) -> list[SignalHistoryPoint]:
     """Return historical signal series and realized returns for model evaluation."""
@@ -102,7 +108,9 @@ async def get_regime_current() -> RegimeCurrentResponse:
 
 
 @router.get("/regime/history", response_model=list[RegimeHistoryPoint])
-async def get_regime_history(days: int = Query(default=252, ge=30, le=504)) -> list[RegimeHistoryPoint]:
+async def get_regime_history(
+    days: int = Query(default=252, ge=30, le=504),
+) -> list[RegimeHistoryPoint]:
     """Return daily regime labels and probabilities for the selected history window."""
     return intelligence_service.get_regime_history(days)
 
@@ -129,7 +137,9 @@ async def get_attention_explainability(
 
 
 @router.post("/explain/counterfactual/{symbol}", response_model=list[CounterfactualResponse])
-async def get_counterfactual(symbol: str, payload: CounterfactualRequest) -> list[CounterfactualResponse]:
+async def get_counterfactual(
+    symbol: str, payload: CounterfactualRequest
+) -> list[CounterfactualResponse]:
     """Return counterfactual feature changes that can flip signal direction."""
     return intelligence_service.get_counterfactuals(symbol=symbol, payload=payload)
 
@@ -147,6 +157,8 @@ async def get_drift() -> list[DriftItem]:
 
 
 @router.get("/monitor/ensemble-weights-history", response_model=list[EnsembleWeightPoint])
-async def get_ensemble_weights_history(days: int = Query(default=252, ge=30, le=504)) -> list[EnsembleWeightPoint]:
+async def get_ensemble_weights_history(
+    days: int = Query(default=252, ge=30, le=504),
+) -> list[EnsembleWeightPoint]:
     """Return historical dynamic ensemble weights for model governance analysis."""
     return intelligence_service.get_ensemble_weights_history(days)

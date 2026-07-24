@@ -9,7 +9,6 @@ from decimal import Decimal
 from pathlib import Path
 
 import numpy as np
-import yfinance as yf
 from fastapi import APIRouter, Depends
 from scipy.stats import ks_2samp
 from sqlalchemy import select
@@ -40,6 +39,7 @@ def get_dynamic_ensemble_weights() -> dict[str, float]:
     """
     try:
         from research.models.ensemble.meta_learner import EnsembleMetaLearner
+
         learner = EnsembleMetaLearner.load()
         coefs = getattr(learner, "coefficients", {})
         if not coefs:
@@ -47,9 +47,10 @@ def get_dynamic_ensemble_weights() -> dict[str, float]:
     except Exception as exc:
         logger.warning("Failed to load EnsembleMetaLearner: %s", exc)
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=503,
-            detail={"code": "MODEL_NOT_TRAINED", "message": "Ensemble meta-learner is not trained"}
+            detail={"code": "MODEL_NOT_TRAINED", "message": "Ensemble meta-learner is not trained"},
         )
 
     raw = {
@@ -90,10 +91,15 @@ async def _query_model_metrics(
     omit the model from the response rather than fabricating numbers.
     """
     db_name = "lstm_attn" if model_name == "lstm_attention" else model_name
-    stmt = select(MLPrediction).where(
-        MLPrediction.model_name == db_name,
-        MLPrediction.actual_return.isnot(None),
-    ).order_by(MLPrediction.time.desc()).limit(1000)
+    stmt = (
+        select(MLPrediction)
+        .where(
+            MLPrediction.model_name == db_name,
+            MLPrediction.actual_return.isnot(None),
+        )
+        .order_by(MLPrediction.time.desc())
+        .limit(1000)
+    )
     try:
         res = await db.execute(stmt)
         preds = res.scalars().all()
@@ -163,7 +169,9 @@ async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccurac
                     precision=Decimal(str(round(bt.get("precision", 0.0), 4))),
                     recall=Decimal(str(round(bt.get("recall", 0.0), 4))),
                     f1_score=Decimal(str(round(bt.get("f1", 0.0), 4))),
-                    directional_accuracy=Decimal(str(round(bt.get("directional_accuracy", 0.0), 4))),
+                    directional_accuracy=Decimal(
+                        str(round(bt.get("directional_accuracy", 0.0), 4))
+                    ),
                     p50_rmse=Decimal(str(round(bt.get("p50_rmse", 0.0), 6))),
                     winkler_coverage=Decimal(str(round(bt.get("winkler_coverage", 0.0), 4))),
                     as_of_date=now,
@@ -183,14 +191,22 @@ async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccurac
         from sqlalchemy import select  # noqa: PLC0415
 
         from app.models.backtest import BacktestJob  # noqa: PLC0415
-        stmt = select(BacktestJob).where(
-            BacktestJob.strategy_name == "ml_alpha",
-            BacktestJob.status.in_(["DONE", "COMPLETED"]),
-        ).order_by(BacktestJob.created_at.desc()).limit(1)
+
+        stmt = (
+            select(BacktestJob)
+            .where(
+                BacktestJob.strategy_name == "ml_alpha",
+                BacktestJob.status.in_(["DONE", "COMPLETED"]),
+            )
+            .order_by(BacktestJob.created_at.desc())
+            .limit(1)
+        )
         res = await db.execute(stmt)
         job = res.scalar_one_or_none()
         if job and job.results:
-            ensemble_acc = Decimal(str(round(job.results.get("metrics", {}).get("win_rate", 0.0), 4)))
+            ensemble_acc = Decimal(
+                str(round(job.results.get("metrics", {}).get("win_rate", 0.0), 4))
+            )
     except Exception as exc:  # noqa: BLE001
         logger.warning("Failed to fetch ensemble back-test job: %s", exc)
 
@@ -205,11 +221,16 @@ async def get_model_accuracy(db: AsyncSession = Depends(get_db)) -> ModelAccurac
 async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftResponse:
     now = datetime.now(UTC)
     # Try DB‑driven drift first (XGBoost predictions)
-    stmt = select(MLPrediction).where(
-        MLPrediction.model_name == "xgboost",
-        MLPrediction.actual_return.isnot(None),
-        MLPrediction.p50_return.isnot(None),
-    ).order_by(MLPrediction.time.desc()).limit(1000)
+    stmt = (
+        select(MLPrediction)
+        .where(
+            MLPrediction.model_name == "xgboost",
+            MLPrediction.actual_return.isnot(None),
+            MLPrediction.p50_return.isnot(None),
+        )
+        .order_by(MLPrediction.time.desc())
+        .limit(1000)
+    )
     try:
         res = await db.execute(stmt)
         preds = res.scalars().all()
@@ -226,6 +247,7 @@ async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftRespon
         ks_stat, ks_p = float(ks_res.statistic), float(ks_res.pvalue)
         drift = ks_p < 0.05
         adwin_p = ks_p
+
         def _dist(arr: np.ndarray) -> DriftDistribution:
             return DriftDistribution(
                 mean=Decimal(str(round(float(np.mean(arr)), 6))),
@@ -236,13 +258,18 @@ async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftRespon
                 min=Decimal(str(round(float(np.min(arr)), 6))),
                 max=Decimal(str(round(float(np.max(arr)), 6))),
             )
+
         cur_dist = _dist(current)
         base_dist = _dist(baseline)
     else:
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=503,
-            detail={"code": "MODEL_NOT_TRAINED", "message": "Insufficient prediction history to calculate drift"}
+            detail={
+                "code": "MODEL_NOT_TRAINED",
+                "message": "Insufficient prediction history to calculate drift",
+            },
         )
 
     # Last retraining timestamp derived from XGBoost artefact
@@ -253,12 +280,14 @@ async def get_drift_detection(db: AsyncSession = Depends(get_db)) -> DriftRespon
         except Exception as exc:
             raise HTTPException(
                 status_code=503,
-                detail={"code": "MODEL_NOT_TRAINED", "message": "Could not determine last retrain time"}
+                detail={
+                    "code": "MODEL_NOT_TRAINED",
+                    "message": "Could not determine last retrain time",
+                },
             ) from exc
     else:
         raise HTTPException(
-            status_code=503,
-            detail={"code": "MODEL_NOT_TRAINED", "message": "Models not trained"}
+            status_code=503, detail={"code": "MODEL_NOT_TRAINED", "message": "Models not trained"}
         )
     days_since = (now - last_retrain).days
 

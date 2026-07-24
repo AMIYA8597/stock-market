@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@neuroquant/ui";
-import { Button } from "@/components/dashboard/premium";
+import { Button } from "@neuroquant/ui";
 import { contractsApi, type DriftItem, type EnsembleWeightPoint, type ModelAccuracyItem } from "@/lib/contracts-api";
 import { ChartCard, SimpleBarChart, type SimpleBarPoint, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
 
@@ -75,11 +75,7 @@ export default function ModelMonitorPage(): JSX.Element {
 
   const accuracyBarData = useMemo<SimpleBarPoint[]>(() => {
     if (accuracy.length === 0) {
-      return [
-        { label: "tft", value: 0.15, color: "rgba(0,230,118,0.55)" },
-        { label: "lstm", value: 0.13, color: "rgba(0,212,245,0.55)" },
-        { label: "xgb", value: 0.12, color: "rgba(139,92,246,0.55)" },
-      ];
+      return [];
     }
 
     return accuracy.map((item) => ({
@@ -91,7 +87,7 @@ export default function ModelMonitorPage(): JSX.Element {
 
   const tftWeightTrend = useMemo<LineAreaPoint[]>(() => {
     if (weightColumns.length === 0) {
-      return Array.from({ length: 24 }, (_, idx) => ({ label: String(idx + 1), value: 0.2 }));
+      return [];
     }
 
     return weightColumns.map((point, idx) => ({
@@ -101,7 +97,10 @@ export default function ModelMonitorPage(): JSX.Element {
   }, [weightColumns]);
 
   const residualDistributionBars = useMemo<SimpleBarPoint[]>(() => {
-    const residuals = drift[0]?.residual_distribution ?? Array.from({ length: 20 }, () => 0.1);
+    if (drift.length === 0 || !drift[0]?.residual_distribution) {
+      return [];
+    }
+    const residuals = drift[0].residual_distribution;
     return residuals.slice(0, 24).map((value, idx) => ({
       label: String(idx + 1),
       value: Math.abs(value),

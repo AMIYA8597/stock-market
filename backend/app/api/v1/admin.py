@@ -1,11 +1,13 @@
 """Admin endpoints."""
+
 from __future__ import annotations
+
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.blog import BlogPost
@@ -16,7 +18,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _require_admin(current_user: dict) -> None:
-    if current_user.get("role") != "ADMIN":
+    if current_user.role != "ADMIN":
         raise HTTPException(
             status_code=403,
             detail=ErrorResponse.create(
@@ -39,7 +41,9 @@ class UpdateRoleRequest(BaseModel):
 
 
 @router.get("/users", response_model=list[AdminUserItem])
-async def list_users(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> list[AdminUserItem]:
+async def list_users(
+    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> list[AdminUserItem]:
     _require_admin(current_user)
 
     result = await db.execute(select(User).order_by(User.created_at.desc()).limit(200))
@@ -64,7 +68,7 @@ async def update_user_role(
     db: AsyncSession = Depends(get_db),
 ) -> AdminUserItem:
     _require_admin(current_user)
-    
+
     try:
         uid = uuid.UUID(user_id)
     except Exception:
@@ -95,7 +99,9 @@ async def update_user_role(
 
 
 @router.get("/content")
-async def content_control(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, list[dict[str, str]]]:
+async def content_control(
+    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict[str, list[dict[str, str]]]:
     _require_admin(current_user)
 
     post_result = await db.execute(select(BlogPost).order_by(BlogPost.updated_at.desc()).limit(100))

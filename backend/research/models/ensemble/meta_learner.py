@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path(__file__).parent.parent.parent.parent / "data" / "models"
 
+
 class EnsembleMetaLearner:
     """Trains meta-models on sub-scores to predict direction probability."""
 
@@ -44,7 +45,9 @@ class EnsembleMetaLearner:
         """Load meta-learner instance from disk."""
         target_path = path or (MODEL_DIR / "ensemble_meta_learner.pkl")
         if not os.path.exists(target_path):
-            logger.warning(f"Meta-learner checkpoint not found at {target_path}, returning default instance.")
+            logger.warning(
+                f"Meta-learner checkpoint not found at {target_path}, returning default instance."
+            )
             return cls()
         with open(target_path, "rb") as f:
             obj = pickle.load(f)
@@ -75,7 +78,9 @@ class EnsembleMetaLearner:
                 continue
 
             df.columns = [c.lower() for c in df.columns]
-            df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
+            df = df.rename(
+                columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
+            )
             df = df[["open", "high", "low", "close", "volume"]].dropna()
             df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
             df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
@@ -85,6 +90,7 @@ class EnsembleMetaLearner:
             # Add required indicator features to df
             from research.feature_engineering.price_factors import PriceFactorsBuilder
             from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+
             df = PriceFactorsBuilder().transform(df)
             df = VolatilityFactorsBuilder().transform(df)
 
@@ -107,17 +113,40 @@ class EnsembleMetaLearner:
 
             # Standardize column names
             rename_map = {}
-            RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-            MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-            BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-            ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-            ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+            RSI_col = (
+                "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
+            )
+            MACDh_col = (
+                "MACDh_12_26_9"
+                if "MACDh_12_26_9" in df.columns
+                else [c for c in df.columns if "MACDh" in c][0]
+            )
+            BBP_col = (
+                "BBP_20_2.0_2.0"
+                if "BBP_20_2.0_2.0" in df.columns
+                else (
+                    "BBP_20_2.0"
+                    if "BBP_20_2.0" in df.columns
+                    else [c for c in df.columns if "BBP" in c][0]
+                )
+            )
+            ATR_col = (
+                "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
+            )
+            ADX_col = (
+                "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+            )
 
-            if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-            if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-            if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-            if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-            if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+            if RSI_col != "RSI_14":
+                rename_map[RSI_col] = "RSI_14"
+            if MACDh_col != "MACDh_12_26_9":
+                rename_map[MACDh_col] = "MACDh_12_26_9"
+            if BBP_col != "BBP_20_2.0":
+                rename_map[BBP_col] = "BBP_20_2.0"
+            if ATR_col != "ATRr_14":
+                rename_map[ATR_col] = "ATRr_14"
+            if ADX_col != "ADX_14":
+                rename_map[ADX_col] = "ADX_14"
 
             if rename_map:
                 df = df.rename(columns=rename_map)
@@ -138,21 +167,33 @@ class EnsembleMetaLearner:
             # Start at index 60
             for idx in range(60, len(df)):
                 # We train a quick XGBoost model using data up to idx-6 to predict at idx
-                df_slice = df.iloc[:idx+1]
+                df_slice = df.iloc[: idx + 1]
                 # To make it fast, we fit a model every 21 steps and predict the block,
                 # but for simplicity and correctness, let's train a lightweight XGBoost model
                 # on historical slice.
                 if idx % 21 == 0 or idx == 60:
-                    train_df = df.iloc[:idx-5]
+                    train_df = df.iloc[: idx - 5]
                     # Simple train
                     import xgboost as xgb
                     from sklearn.preprocessing import StandardScaler
+
                     features_xgb = [
-                        "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-                        "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-                        "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-                        "dist_52w_high", "dist_52w_low", "drawdown",
-                        "range_pct", "close_to_open"
+                        "ret_1d",
+                        "ret_5d",
+                        "ret_21d",
+                        "momentum_63d",
+                        "RSI_14",
+                        "MACDh_12_26_9",
+                        "BBP_20_2.0",
+                        "ATRr_14",
+                        "ADX_14",
+                        "realized_vol_21d",
+                        "yang_zhang_vol_21d",
+                        "dist_52w_high",
+                        "dist_52w_low",
+                        "drawdown",
+                        "range_pct",
+                        "close_to_open",
                     ]
                     # Rename columns to avoid key errors
                     X_train = train_df[features_xgb].dropna()
@@ -161,9 +202,13 @@ class EnsembleMetaLearner:
                         scaler = StandardScaler()
                         X_train_s = scaler.fit_transform(X_train)
                         clf = xgb.XGBClassifier(
-                            n_estimators=30, max_depth=3, learning_rate=0.1,
-                            use_label_encoder=False, eval_metric="logloss",
-                            random_state=42, verbosity=0
+                            n_estimators=30,
+                            max_depth=3,
+                            learning_rate=0.1,
+                            use_label_encoder=False,
+                            eval_metric="logloss",
+                            random_state=42,
+                            verbosity=0,
                         )
                         clf.fit(X_train_s, y_train)
                         self_scaler = scaler
@@ -171,7 +216,7 @@ class EnsembleMetaLearner:
                     else:
                         self_clf = None
 
-                if 'self_clf' in locals() and self_clf is not None:
+                if "self_clf" in locals() and self_clf is not None:
                     row = df.iloc[[idx]][features_xgb]
                     if not row.isnull().any().any():
                         row_s = self_scaler.transform(row)
@@ -184,14 +229,33 @@ class EnsembleMetaLearner:
 
             # Compute other subscores for each row from index 60 onwards
             for idx in range(60, len(df) - 5):
-                df_slice = df.iloc[:idx+1]
+                df_slice = df.iloc[: idx + 1]
                 tech = score_technical(df_slice)
                 patt = score_patterns(df_slice)
                 mom = score_momentum(df_slice)
 
                 # Fast regime detection proxy to prevent statsmodels loop overhead
-                ret_63d = float((df_slice["close"].iloc[-1] / df_slice["close"].iloc[max(0, len(df_slice)-64)]) - 1.0) if len(df_slice) >= 64 else 0.0
-                realized_vol = float(np.log(df_slice["close"]/df_slice["close"].shift(1)).rolling(21).std().iloc[-1]) if len(df_slice) >= 22 else 0.02
+                ret_63d = (
+                    float(
+                        (
+                            df_slice["close"].iloc[-1]
+                            / df_slice["close"].iloc[max(0, len(df_slice) - 64)]
+                        )
+                        - 1.0
+                    )
+                    if len(df_slice) >= 64
+                    else 0.0
+                )
+                realized_vol = (
+                    float(
+                        np.log(df_slice["close"] / df_slice["close"].shift(1))
+                        .rolling(21)
+                        .std()
+                        .iloc[-1]
+                    )
+                    if len(df_slice) >= 22
+                    else 0.02
+                )
                 ann_vol = realized_vol * np.sqrt(252)
                 sharpe_proxy = ret_63d / (ann_vol + 1e-6)
                 reg_val = 1.0 if sharpe_proxy > 0.5 else (-1.0 if sharpe_proxy < -0.5 else 0.0)
@@ -199,19 +263,23 @@ class EnsembleMetaLearner:
                 # Lookahead-free simulated sentiment score based on past 5-day return and deterministic noise
                 ret_5d = float(df_slice["ret_5d"].iloc[-1]) if "ret_5d" in df_slice.columns else 0.0
                 dt_str = str(df["time"].iloc[idx])
-                noise_val = (((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0) - 0.1
+                noise_val = (
+                    ((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0
+                ) - 0.1
                 sentiment_score = float(np.clip(1.5 * ret_5d + noise_val, -1.0, 1.0))
 
-                X_list.append({
-                    "technical": tech["score"],
-                    "pattern": patt["pattern_score"],
-                    "momentum": mom["momentum_score"],
-                    "regime": reg_val,
-                    "xgboost": xgb_scores[idx],
-                    "sentiment": sentiment_score,
-                    "target_5d": float(df["target_5d"].iloc[idx]),
-                    "close": float(df["close"].iloc[idx]),
-                })
+                X_list.append(
+                    {
+                        "technical": tech["score"],
+                        "pattern": patt["pattern_score"],
+                        "momentum": mom["momentum_score"],
+                        "regime": reg_val,
+                        "xgboost": xgb_scores[idx],
+                        "sentiment": sentiment_score,
+                        "target_5d": float(df["target_5d"].iloc[idx]),
+                        "close": float(df["close"].iloc[idx]),
+                    }
+                )
                 y_list.append(df["label"].iloc[idx])
 
         return pd.DataFrame(X_list), pd.Series(y_list)
@@ -235,11 +303,11 @@ class EnsembleMetaLearner:
             # 1. Old fixed weight prediction probability proxy
             # fixed weights: tech:0.3, patt:0.15, mom:0.2, reg:0.1, xgb:0.25
             old_signal = (
-                X_test_feat["technical"] * 0.30 +
-                X_test_feat["pattern"] * 0.15 +
-                X_test_feat["momentum"] * 0.20 +
-                X_test_feat["regime"] * 0.10 +
-                X_test_feat["xgboost"] * 0.25
+                X_test_feat["technical"] * 0.30
+                + X_test_feat["pattern"] * 0.15
+                + X_test_feat["momentum"] * 0.20
+                + X_test_feat["regime"] * 0.10
+                + X_test_feat["xgboost"] * 0.25
             )
             old_prob = (old_signal + 1.0) / 2.0
             old_brier = brier_score_loss(y_test, old_prob)
@@ -249,12 +317,14 @@ class EnsembleMetaLearner:
             lr = LogisticRegression(random_state=42)
             lr.fit(X_train_feat, y_train)
             cal_lr = CalibratedClassifierCV(estimator=FrozenEstimator(lr), method="sigmoid")
-            cal_lr.fit(X_train_feat, y_train) # Platt scaling
+            cal_lr.fit(X_train_feat, y_train)  # Platt scaling
             lr_prob = cal_lr.predict_proba(X_test_feat)[:, 1]
             lr_briers.append(brier_score_loss(y_test, lr_prob))
 
             # 3. LightGBM
-            lgb_clf = lgb.LGBMClassifier(n_estimators=30, max_depth=3, learning_rate=0.05, random_state=42, verbose=-1)
+            lgb_clf = lgb.LGBMClassifier(
+                n_estimators=30, max_depth=3, learning_rate=0.05, random_state=42, verbose=-1
+            )
             lgb_clf.fit(X_train_feat, y_train)
             cal_lgb = CalibratedClassifierCV(estimator=FrozenEstimator(lgb_clf), method="isotonic")
             cal_lgb.fit(X_train_feat, y_train)
@@ -266,15 +336,17 @@ class EnsembleMetaLearner:
         self.lr_model = CalibratedClassifierCV(estimator=lr_final, method="sigmoid", cv=5)
         self.lr_model.fit(X[self.feature_names], y)
 
-        lgb_final = lgb.LGBMClassifier(n_estimators=30, max_depth=3, learning_rate=0.05, random_state=42, verbose=-1)
+        lgb_final = lgb.LGBMClassifier(
+            n_estimators=30, max_depth=3, learning_rate=0.05, random_state=42, verbose=-1
+        )
         self.lgb_model = CalibratedClassifierCV(estimator=lgb_final, method="isotonic", cv=5)
         self.lgb_model.fit(X[self.feature_names], y)
 
         # Log coefficients and feature importances
         coefs = self.lr_model.calibrated_classifiers_[0].estimator.coef_[0]
-        self.coefficients = dict(zip(self.feature_names, [float(c) for c in coefs]))
+        self.coefficients = dict(zip(self.feature_names, [float(c) for c in coefs], strict=False))
         logger.info("Logistic Regression Meta-learner coefficients:")
-        for name, coef in zip(self.feature_names, coefs):
+        for name, coef in zip(self.feature_names, coefs, strict=False):
             logger.info(f"  {name}: {coef:.4f}")
 
         mean_lr_brier = np.mean(lr_briers)
@@ -299,7 +371,7 @@ class EnsembleMetaLearner:
             "logistic_brier": mean_lr_brier,
             "lightgbm_brier": mean_lgb_brier,
             "best_model": self.best_model_name,
-            "coefficients": dict(zip(self.feature_names, [float(c) for c in coefs]))
+            "coefficients": dict(zip(self.feature_names, [float(c) for c in coefs], strict=False)),
         }
 
     def predict_proba(self, scores: list[float]) -> float:
@@ -312,5 +384,5 @@ class EnsembleMetaLearner:
         else:
             # Fallback to simple average or predefined weights if not trained
             WEIGHTS = [0.30, 0.15, 0.20, 0.10, 0.25]
-            raw = sum(s * w for s, w in zip(scores, WEIGHTS))
+            raw = sum(s * w for s, w in zip(scores, WEIGHTS, strict=False))
             return float(np.clip((raw + 1.0) / 2.0, 0.0, 1.0))

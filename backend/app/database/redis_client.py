@@ -33,8 +33,10 @@ settings = get_settings()
 
 # ─── Singleton Pool ───────────────────────────────────────────────────────
 
+
 class InMemoryPubSub:
     """Offline pubsub subscription implementation for fallback mode."""
+
     def __init__(self, cache: InMemoryCache):
         self.cache = cache
         self.subscribed_channels: set[str] = set()
@@ -67,6 +69,7 @@ class InMemoryCache:
     """Simple in‑memory fallback implementing a subset of Redis methods used in the app.
     Stores values in a dict; methods are async for compatibility.
     """
+
     def __init__(self):
         self.store: dict[str, any] = {}
         self.active_pubsubs: set[InMemoryPubSub] = set()
@@ -89,11 +92,7 @@ class InMemoryCache:
         count = 0
         for ps in list(self.active_pubsubs):
             if channel in ps.subscribed_channels:
-                await ps.queue.put({
-                    "type": "message",
-                    "channel": channel,
-                    "data": message
-                })
+                await ps.queue.put({"type": "message", "channel": channel, "data": message})
                 count += 1
         return count
 
@@ -156,9 +155,7 @@ async def _redis_pool_singleton() -> Redis:
 
             logger.info(
                 "redis_client_initialized",
-                redis_url=settings.REDIS_URL.split("@")[1]
-                if "@" in settings.REDIS_URL
-                else "***",
+                redis_url=settings.REDIS_URL.split("@")[1] if "@" in settings.REDIS_URL else "***",
                 max_connections=settings.REDIS_MAX_CONNECTIONS,
             )
             return _redis_client
@@ -438,4 +435,3 @@ async def get_redis_health() -> dict[str, Any]:
         logger.warning("redis_health_check_error: %s", str(e))
 
     return health
-
