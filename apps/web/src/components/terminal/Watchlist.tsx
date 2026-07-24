@@ -5,7 +5,6 @@ import { Search, Plus, Trash2 } from "lucide-react";
 import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
-import { cn } from "@/lib/utils";
 
 interface WatchlistProps {
   signals: SignalResponse[];
@@ -259,7 +258,7 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onA
         const res = await fetch(`${apiUrl}/api/v1/market/search?q=${encodeURIComponent(query)}`);
         if (res.ok) {
           const data = await res.json();
-          const filtered = data.results.filter((r: any) => !activeSymbols.includes(r.ticker));
+          const filtered = data.results.filter((r: { ticker: string }) => !activeSymbols.includes(r.ticker));
           setSearchResults(filtered.slice(0, 8));
         }
       } catch (err) {

@@ -49,7 +49,7 @@ async def enqueue_email(
         send_email_task.delay(str(job.id), to_email, template, payload)
     except Exception as e:
         logging.getLogger(__name__).warning(f"Failed to enqueue email task (Broker might be down): {e}")
-        
+
     return str(job.id)
 
 
