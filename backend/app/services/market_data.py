@@ -1,11 +1,12 @@
+from datetime import datetime
+
 import pandas as pd
 import yfinance as yf
-from datetime import datetime, timedelta
-from typing import List, Dict
 
 # Simple cache to avoid excessive API calls
-_cache: Dict[str, pd.DataFrame] = {}
+_cache: dict[str, pd.DataFrame] = {}
 _CACHE_TTL_SECONDS = 30  # refresh every 30 seconds
+
 
 def _is_cache_valid(symbol: str) -> bool:
     if symbol not in _cache:
@@ -14,6 +15,7 @@ def _is_cache_valid(symbol: str) -> bool:
     if not ts:
         return False
     return (datetime.utcnow() - ts).total_seconds() < _CACHE_TTL_SECONDS
+
 
 def fetch_ohlcv(symbol: str, interval: str = "1m", period: str = "1d") -> pd.DataFrame:
     """Fetch OHLCV data for a given symbol.
@@ -38,7 +40,8 @@ def fetch_ohlcv(symbol: str, interval: str = "1m", period: str = "1d") -> pd.Dat
     _cache[cache_key] = df
     return df
 
-def list_supported_symbols() -> List[str]:
+
+def list_supported_symbols() -> list[str]:
     """Return a static list of a few popular Indian symbols."""
     return [
         "RELIANCE.NS",

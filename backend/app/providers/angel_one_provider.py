@@ -1,7 +1,5 @@
-import asyncio
 import logging
 from datetime import datetime, timedelta
-from typing import List
 
 import httpx
 from pydantic import BaseModel
@@ -38,7 +36,13 @@ class AngelOneProvider:
         code generated from the stored base‑32 secret. For brevity we perform a simple request and raise
         an informative error if any credential is missing.
         """
-        if not all([settings.ANGEL_ONE_CLIENT_ID, settings.ANGEL_ONE_CLIENT_SECRET, settings.ANGEL_ONE_TOTP_SECRET]):
+        if not all(
+            [
+                settings.ANGEL_ONE_CLIENT_ID,
+                settings.ANGEL_ONE_CLIENT_SECRET,
+                settings.ANGEL_ONE_TOTP_SECRET,
+            ]
+        ):
             raise RuntimeError("Angel One credentials are not configured in the environment.")
 
         # Generate a TOTP code – we rely on the ``pyotp`` package which is already a transitive dependency.
@@ -54,7 +58,9 @@ class AngelOneProvider:
             "totp": totp.now(),
         }
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post("https://smartapi.angelbroking.com/v1/auth/login", json=payload)
+            resp = await client.post(
+                "https://smartapi.angelbroking.com/v1/auth/login", json=payload
+            )
             resp.raise_for_status()
             data = resp.json()
             token = data.get("jwtToken") or data.get("access_token")
@@ -63,7 +69,7 @@ class AngelOneProvider:
             return token
 
     @staticmethod
-    async def fetch_candles(symbol: str, interval: str = "1d", period: str = "1mo") -> List[Candle]:
+    async def fetch_candles(symbol: str, interval: str = "1d", period: str = "1mo") -> list[Candle]:
         """Return a list of :class:`Candle` objects for *symbol*.
 
         *interval* follows Angel One's naming (e.g. ``1minute``, ``5minute``, ``1day``).
@@ -73,13 +79,13 @@ class AngelOneProvider:
         # Determine exchange from suffix – simple heuristic for NSE/BSE.
         exchange = "NSE" if symbol.endswith(".NS") else "BSE" if symbol.endswith(".BO") else "NSE"
         # Strip the suffix for the API call.
-        clean_symbol = symbol.replace('.NS', '').replace('.BO', '')
+        clean_symbol = symbol.replace(".NS", "").replace(".BO", "")
         # Compute date range.
         to_date = datetime.utcnow()
-        if period.lower().endswith('mo'):
+        if period.lower().endswith("mo"):
             months = int(period[:-2])
             from_date = to_date - timedelta(days=30 * months)
-        elif period.lower().endswith('d'):
+        elif period.lower().endswith("d"):
             days = int(period[:-1])
             from_date = to_date - timedelta(days=days)
         else:
@@ -94,12 +100,16 @@ class AngelOneProvider:
         }
         headers = {"authorization": f"Bearer {token}"}
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get("https://smartapi.angelbroking.com/v1/marketdata/historical/", params=params, headers=headers)
+            resp = await client.get(
+                "https://smartapi.angelbroking.com/v1/marketdata/historical/",
+                params=params,
+                headers=headers,
+            )
             resp.raise_for_status()
             data = resp.json()
         # Expected payload: {"data": [{"timestamp": ..., "open": ..., ...}], "status": "success"}
         candles_raw = data.get("data", [])
-        candles: List[Candle] = []
+        candles: list[Candle] = []
         for item in candles_raw:
             try:
                 ts = int(datetime.strptime(item["timestamp"], "%Y-%m-%d %H:%M:%S").timestamp())

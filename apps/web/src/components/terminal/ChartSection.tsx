@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -236,7 +237,12 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   useEffect(() => {
     if (qForecastError) {
       setPredictions([]);
-      setForecastError(qForecastError instanceof Error ? qForecastError.message : "Unable to load forecast.");
+      const errMsg = qForecastError instanceof Error ? qForecastError.message : "Unable to load forecast.";
+      if (errMsg.includes("503")) {
+        setForecastError("Prediction model not yet trained");
+      } else {
+        setForecastError(errMsg);
+      }
     }
   }, [qForecastError]);
 

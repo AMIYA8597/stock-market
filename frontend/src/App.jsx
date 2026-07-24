@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from '../api';
+import api from './api';
 import { io } from 'socket.io-client';
 import Chart from './components/Chart';
 import './styles.css';

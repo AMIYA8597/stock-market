@@ -54,15 +54,16 @@ export interface Quote {
   source?: string;
 }
 
-export interface OHLCVBar {
-  timestamp: string;
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-  adjusted_close?: number;
-}
+export const ohlcvBarSchema = z.object({
+  timestamp: z.string(),
+  open: z.number(),
+  high: z.number(),
+  low: z.number(),
+  close: z.number(),
+  volume: z.number(),
+  adjusted_close: z.number().optional(),
+});
+export type OHLCVBar = z.infer<typeof ohlcvBarSchema>;
 
 export interface HistoryResponse {
   symbol: string;
@@ -102,6 +103,34 @@ export interface TickData {
   change_pct: number;
   timestamp: string;
 }
+
+export const instrumentInfoSchema = z.object({
+  symbol: z.string(),
+  displayName: z.string(),
+  exchange: z.string(),
+  yfinanceTicker: z.string(),
+});
+export type InstrumentInfo = z.infer<typeof instrumentInfoSchema>;
+
+export const universeResponseSchema = z.object({
+  instruments: z.array(instrumentInfoSchema),
+});
+export type UniverseResponse = z.infer<typeof universeResponseSchema>;
+
+export const searchResultSchema = z.object({
+  ticker: z.string(),
+  name: z.string(),
+  exchange: z.string(),
+  asset_type: z.string(),
+});
+export type SearchResult = z.infer<typeof searchResultSchema>;
+
+export const searchResponseSchema = z.object({
+  query: z.string(),
+  results: z.array(searchResultSchema),
+  total_matched: z.number(),
+});
+export type SearchResponse = z.infer<typeof searchResponseSchema>;
 
 // ─── Screener Types ──────────────────────────────────────────
 

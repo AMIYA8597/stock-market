@@ -19,7 +19,7 @@ class NewsSentiment(Base):
 
     Fields:
         id (int): Big serial primary key.
-        symbol_id (int): Foreign key to Symbol (nullable for market-wide news).
+        symbol_id (int): Foreign key to Instrument (nullable for market-wide news).
         headline (str): News headline text.
         source (str): News source (Reuters, Bloomberg, etc.).
         url (str): URL to full article.
@@ -35,14 +35,14 @@ class NewsSentiment(Base):
     __tablename__ = "news_sentiment"
 
     id: Mapped[int] = mapped_column(
-        BigInteger,
+        BigInteger().with_variant(Integer, "sqlite"),
         primary_key=True,
         autoincrement=True,
         doc="Big serial primary key",
     )
     symbol_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=True,
         index=True,
         doc="Foreign key to symbols (nullable for market-wide news)",

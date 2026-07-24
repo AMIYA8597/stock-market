@@ -21,7 +21,7 @@ class MLPrediction(Base):
     Fields:
         id (int): Big serial primary key.
         time (datetime): Prediction timestamp (UTC).
-        symbol_id (int): Foreign key to Symbol.
+        symbol_id (int): Foreign key to Instrument.
         model_name (str): Model identifier (tft, hmm_garch, gnn, lstm_attn, xgboost).
         horizon_days (int): Forecast horizon in days (1, 5, 21).
         p10_return (Decimal): 10th percentile predicted return.
@@ -54,7 +54,7 @@ class MLPrediction(Base):
     )
     symbol_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
         index=True,
         doc="Foreign key to symbols",

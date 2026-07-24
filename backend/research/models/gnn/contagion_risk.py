@@ -12,19 +12,22 @@ import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
+
 class ContagionRiskAnalyzer:
     """Computes cross-sectional risk factors and market beta."""
 
     def __init__(self, index_symbol: str = "^NSEI"):
         self.index_symbol = index_symbol
 
-    def compute_risk_factors(self, stock_df: pd.DataFrame, index_df: pd.DataFrame | None = None) -> dict[str, float]:
+    def compute_risk_factors(
+        self, stock_df: pd.DataFrame, index_df: pd.DataFrame | None = None
+    ) -> dict[str, float]:
         """Compute index correlation, beta, spread, alpha, and contagion score.
-        
+
         Args:
             stock_df: DataFrame with close prices of the target stock.
             index_df: Optional index DataFrame. If None, index is downloaded.
-            
+
         Returns:
             Dict containing correlation, beta, alpha, and contagion score.
         """
@@ -32,8 +35,8 @@ class ContagionRiskAnalyzer:
         if index_df is None or index_df.empty:
             try:
                 # Fetch index history matching the stock dataframe date range
-                start_date = stock_df.index.min().strftime('%Y-%m-%d')
-                end_date = (stock_df.index.max() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+                start_date = stock_df.index.min().strftime("%Y-%m-%d")
+                end_date = (stock_df.index.max() + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
                 index_ticker = yf.Ticker(self.index_symbol)
                 index_df = index_ticker.history(start=start_date, end=end_date, interval="1d")
             except Exception as e:
@@ -44,7 +47,7 @@ class ContagionRiskAnalyzer:
                     "sector_beta": 1.0,
                     "idiosyncratic_alpha": 0.0,
                     "contagion_score": 0.5,
-                    "raw_signal": 0.0
+                    "raw_signal": 0.0,
                 }
 
         if index_df.empty or len(stock_df) < 22:
@@ -53,7 +56,7 @@ class ContagionRiskAnalyzer:
                 "sector_beta": 1.0,
                 "idiosyncratic_alpha": 0.0,
                 "contagion_score": 0.5,
-                "raw_signal": 0.0
+                "raw_signal": 0.0,
             }
 
         # Align close prices
@@ -73,7 +76,7 @@ class ContagionRiskAnalyzer:
                 "sector_beta": 1.0,
                 "idiosyncratic_alpha": 0.0,
                 "contagion_score": 0.5,
-                "raw_signal": 0.0
+                "raw_signal": 0.0,
             }
 
         # Compute log returns
@@ -87,7 +90,7 @@ class ContagionRiskAnalyzer:
                 "sector_beta": 1.0,
                 "idiosyncratic_alpha": 0.0,
                 "contagion_score": 0.5,
-                "raw_signal": 0.0
+                "raw_signal": 0.0,
             }
 
         # Use last 63 trading days (approx 3 months) for beta and correlation
@@ -117,12 +120,16 @@ class ContagionRiskAnalyzer:
         spread = 0.0015  # Default free tier proxy
         if "high" in stock_df.columns and "low" in stock_df.columns:
             # Corwin-Schultz spread estimator proxy
-            high_low_ratio = float((stock_df["high"].iloc[-1] - stock_df["low"].iloc[-1]) / stock_df["close"].iloc[-1])
+            high_low_ratio = float(
+                (stock_df["high"].iloc[-1] - stock_df["low"].iloc[-1]) / stock_df["close"].iloc[-1]
+            )
             spread = max(0.0001, min(high_low_ratio * 0.1, 0.02))
 
         # Contagion score calculation
         corr_risk = abs(corr)
-        contagion_score = 0.6 * corr_risk + 0.3 * min(abs(beta - 1.0), 1.0) + 0.1 * min(spread * 500, 1.0)
+        contagion_score = (
+            0.6 * corr_risk + 0.3 * min(abs(beta - 1.0), 1.0) + 0.1 * min(spread * 500, 1.0)
+        )
 
         # Raw signal combining alpha and contagion dampening
         raw_signal = float(np.tanh(alpha * 20.0) * (1.0 - 0.65 * contagion_score))
@@ -132,5 +139,5 @@ class ContagionRiskAnalyzer:
             "sector_beta": beta,
             "idiosyncratic_alpha": alpha,
             "contagion_score": contagion_score,
-            "raw_signal": raw_signal
+            "raw_signal": raw_signal,
         }

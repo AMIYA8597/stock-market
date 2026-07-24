@@ -17,14 +17,16 @@ async def test_paper_trading_workflow():
 
     async with engine.begin() as conn:
         # Only create the paper trading tables to avoid SQLite rendering errors on PostgreSQL-only columns (like ARRAY)
-        await conn.run_sync(lambda connection: Base.metadata.create_all(
-            bind=connection,
-            tables=[
-                Base.metadata.tables["paper_wallets"],
-                Base.metadata.tables["paper_positions"],
-                Base.metadata.tables["paper_orders"]
-            ]
-        ))
+        await conn.run_sync(
+            lambda connection: Base.metadata.create_all(
+                bind=connection,
+                tables=[
+                    Base.metadata.tables["paper_wallets"],
+                    Base.metadata.tables["paper_positions"],
+                    Base.metadata.tables["paper_orders"],
+                ],
+            )
+        )
 
     async with async_session() as session:
         user_id = "test-unit-user"
@@ -42,13 +44,13 @@ async def test_paper_trading_workflow():
             symbol="RELIANCE.NS",
             side="BUY",
             quantity=5.0,
-            order_type="MARKET"
+            order_type="MARKET",
         )
         assert order.status == "FILLED"
         assert order.symbol == "RELIANCE.NS"
         assert order.side == "BUY"
         assert order.quantity == Decimal("5.00")
-        assert order.price > Decimal("2521.30") # due to slippage
+        assert order.price > Decimal("2521.30")  # due to slippage
 
         # Verify wallet cash is deducted
         wallet = await PaperTradingService.get_or_create_wallet(session, user_id)
@@ -67,7 +69,7 @@ async def test_paper_trading_workflow():
             symbol="RELIANCE.NS",
             side="SELL",
             quantity=2.0,
-            order_type="MARKET"
+            order_type="MARKET",
         )
         assert sell_order.status == "FILLED"
         assert sell_order.side == "SELL"
@@ -87,7 +89,7 @@ async def test_paper_trading_workflow():
                 symbol="RELIANCE.NS",
                 side="BUY",
                 quantity=30.0,
-                order_type="MARKET"
+                order_type="MARKET",
             )
         assert "exceeds risk limit" in str(exc_info.value)
 
@@ -103,7 +105,7 @@ async def test_paper_trading_workflow():
                 symbol="RELIANCE.NS",
                 side="BUY",
                 quantity=1.0,
-                order_type="MARKET"
+                order_type="MARKET",
             )
         assert "blocked" in str(cb_exc.value) or "circuit breaker" in str(cb_exc.value).lower()
 

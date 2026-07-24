@@ -26,7 +26,9 @@ class HMMGarchTrainer:
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
-    def train(self, returns: np.ndarray, symbol: str = "NIFTY") -> tuple[TrainResult, RegimeDetectionResult]:
+    def train(
+        self, returns: np.ndarray, symbol: str = "NIFTY"
+    ) -> tuple[TrainResult, RegimeDetectionResult]:
         """Train on return series and persist serialized state."""
         result = detect_regime(returns)
 

@@ -19,7 +19,13 @@ from sqlalchemy import text
 from app.core.config import get_settings
 from app.database.connection import async_session_factory
 from app.services.data_ingestion.base import Interval
-from app.services.data_ingestion.orchestrator import DataIngestionOrchestrator, IngestionTask
+
+try:
+    from app.services.data_ingestion.orchestrator import DataIngestionOrchestrator, IngestionTask
+except ImportError:
+    DataIngestionOrchestrator = None
+    IngestionTask = None
+
 from app.services.market_data_service import MarketDataService
 
 logger = logging.getLogger("NSEMarketScheduler")
@@ -41,9 +47,19 @@ NSE_HOLIDAYS_2026 = {
 }
 
 # Universe: NIFTY50 + BANKNIFTY constituents (~56 unique symbols)
-UNIVERSE_SYMBOLS = list(set(MarketDataService.NSE_NIFTY50 + [
-    "FEDERALBNK.NS", "IDFCFIRSTB.NS", "AUBANK.NS", "BANDHANBNK.NS", "PNB.NS", "BANKBARODA.NS"
-]))
+UNIVERSE_SYMBOLS = list(
+    set(
+        MarketDataService.NSE_NIFTY50
+        + [
+            "FEDERALBNK.NS",
+            "IDFCFIRSTB.NS",
+            "AUBANK.NS",
+            "BANDHANBNK.NS",
+            "PNB.NS",
+            "BANKBARODA.NS",
+        ]
+    )
+)
 
 
 def is_market_hours() -> bool:
@@ -71,7 +87,7 @@ class NSEMarketScheduler:
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
-        self.orchestrator = DataIngestionOrchestrator(max_concurrency=4)
+        self.orchestrator = DataIngestionOrchestrator(max_concurrency=4) if DataIngestionOrchestrator else None
         self._backfill_running = False
 
     async def poll_market_data(self):
@@ -82,7 +98,9 @@ class NSEMarketScheduler:
 
         logger.info("Starting scheduled market data poll...")
         now = datetime.now(pytz.UTC)
-        start_time = now - timedelta(minutes=15)  # Fetch recent 15 minutes to capture last closing candles
+        start_time = now - timedelta(
+            minutes=15
+        )  # Fetch recent 15 minutes to capture last closing candles
 
         tasks = []
         for symbol in UNIVERSE_SYMBOLS:
@@ -94,9 +112,12 @@ class NSEMarketScheduler:
                         interval=interval,
                         start=start_time,
                         end=now,
-                        asset_type="EQUITY"
+                        asset_type="EQUITY",
                     )
                 )
+
+        if not self.orchestrator:
+            return
 
         try:
             results = await self.orchestrator.fetch_many(tasks)
@@ -129,7 +150,7 @@ class NSEMarketScheduler:
 
     async def perform_backfill(self):
         """Historical backfill script to download past daily and intraday bars if DB is empty."""
-        if self._backfill_running:
+        if self._backfill_running or not self.orchestrator:
             return
 
         self._backfill_running = True
@@ -150,7 +171,15 @@ class NSEMarketScheduler:
                         ON CONFLICT (ticker) DO NOTHING
                         """
                     )
-                    await session.execute(stmt, {"ticker": sym, "name": name, "exchange": exchange, "asset_type": asset_type})
+                    await session.execute(
+                        stmt,
+                        {
+                            "ticker": sym,
+                            "name": name,
+                            "exchange": exchange,
+                            "asset_type": asset_type,
+                        },
+                    )
                 await session.commit()
 
                 # Check if we have OHLCV records
@@ -200,16 +229,20 @@ class NSEMarketScheduler:
                         interval=interval,
                         start=start_date,
                         end=now,
-                        asset_type="EQUITY"
+                        asset_type="EQUITY",
                     )
 
                     try:
                         source_name, bars = await self.orchestrator.fetch_task(task)
                         if bars:
                             async with async_session_factory() as session:
-                                count = await self.orchestrator.persist_ohlcv(session, symbol_id, bars)
+                                count = await self.orchestrator.persist_ohlcv(
+                                    session, symbol_id, bars
+                                )
                                 await session.commit()
-                                logger.debug(f"Persisted {count} bars for {symbol} ({interval}) via {source_name}")
+                                logger.debug(
+                                    f"Persisted {count} bars for {symbol} ({interval}) via {source_name}"
+                                )
                         await asyncio.sleep(0.5)  # 500ms safety throttle
                     except Exception as sym_err:
                         logger.warning(f"Failed to backfill {symbol} ({interval}): {sym_err}")
@@ -232,7 +265,7 @@ class NSEMarketScheduler:
                 "interval",
                 minutes=1,
                 id="market_data_polling_job",
-                replace_existing=True
+                replace_existing=True,
             )
             logger.info("Market polling job (1m interval) added to scheduler.")
 

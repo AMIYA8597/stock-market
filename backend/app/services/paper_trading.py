@@ -15,13 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
 from app.services.market_data_service import MarketDataService
+from research.backtesting.cost_model import compute_indian_costs
 
 logger = logging.getLogger(__name__)
 
 
 class PaperTradingService:
     @staticmethod
-    async def get_or_create_wallet(db: AsyncSession, user_id: str, for_update: bool = False) -> PaperWallet:
+    async def get_or_create_wallet(
+        db: AsyncSession, user_id: str, for_update: bool = False
+    ) -> PaperWallet:
         """Fetch the paper trading wallet for the user, or create one if missing."""
         stmt = select(PaperWallet).where(PaperWallet.user_id == user_id)
         if for_update:
@@ -66,18 +69,22 @@ class PaperTradingService:
                 curr_price = avg_price
 
             unrealized_pnl = (curr_price - avg_price) * qty
-            unrealized_pnl_pct = ((curr_price - avg_price) / avg_price * 100) if avg_price > 0 else Decimal("0.0")
+            unrealized_pnl_pct = (
+                ((curr_price - avg_price) / avg_price * 100) if avg_price > 0 else Decimal("0.0")
+            )
 
-            results.append({
-                "id": str(pos.id),
-                "symbol": symbol,
-                "quantity": float(qty),
-                "avg_buy_price": float(avg_price),
-                "current_price": float(curr_price),
-                "unrealized_pnl": float(round(unrealized_pnl, 2)),
-                "unrealized_pnl_pct": float(round(unrealized_pnl_pct, 4)),
-                "realized_pnl": float(round(pos.realized_pnl, 2)),
-            })
+            results.append(
+                {
+                    "id": str(pos.id),
+                    "symbol": symbol,
+                    "quantity": float(qty),
+                    "avg_buy_price": float(avg_price),
+                    "current_price": float(curr_price),
+                    "unrealized_pnl": float(round(unrealized_pnl, 2)),
+                    "unrealized_pnl_pct": float(round(unrealized_pnl_pct, 4)),
+                    "realized_pnl": float(round(pos.realized_pnl, 2)),
+                }
+            )
         return results
 
     @staticmethod
@@ -97,7 +104,9 @@ class PaperTradingService:
         total_unrealized_pnl = Decimal("0.0")
 
         for pos in positions:
-            total_holdings_value += Decimal(str(pos["current_price"])) * Decimal(str(pos["quantity"]))
+            total_holdings_value += Decimal(str(pos["current_price"])) * Decimal(
+                str(pos["quantity"])
+            )
             total_unrealized_pnl += Decimal(str(pos["unrealized_pnl"]))
 
         total_equity = wallet.balance + total_holdings_value
@@ -123,7 +132,7 @@ class PaperTradingService:
         quantity: float,
         order_type: str,
         limit_price: float | None = None,
-        signal_relation: str | None = None
+        signal_relation: str | None = None,
     ) -> PaperOrder:
         """Place and execute a paper trading order."""
         sym = MarketDataService._normalize_symbol(symbol).upper().strip()
@@ -159,22 +168,32 @@ class PaperTradingService:
         # Check risk guardrail: order size limit (max 50% of total portfolio equity)
         pnl_summary = await PaperTradingService.get_pnl(db, user_id)
         total_equity = Decimal(str(pnl_summary["total_equity"]))
-        order_price = Decimal(str(limit_price)) if order_type == "LIMIT" and limit_price is not None else quote_price
+        order_price = (
+            Decimal(str(limit_price))
+            if order_type == "LIMIT" and limit_price is not None
+            else quote_price
+        )
         order_value = Decimal(str(quantity)) * order_price
 
         if side == "BUY" and order_value > Decimal("0.5") * total_equity:
-            raise ValueError(f"Order size ₹{order_value:,.2f} exceeds risk limit of 50% of portfolio equity (₹{Decimal('0.5') * total_equity:,.2f})")
+            raise ValueError(
+                f"Order size ₹{order_value:,.2f} exceeds risk limit of 50% of portfolio equity (₹{Decimal('0.5') * total_equity:,.2f})"
+            )
 
         # VaR Margin Verification
         var_percentage = Decimal("0.09")
         elm_percentage = Decimal("0.035")
         leverage_multiplier = Decimal("0.0")
-        margin_req = order_value * (var_percentage + elm_percentage) * (Decimal("1.0") - leverage_multiplier)
+        margin_req = (
+            order_value * (var_percentage + elm_percentage) * (Decimal("1.0") - leverage_multiplier)
+        )
 
         if side == "BUY":
             available_balance = wallet.balance - wallet.locked_margin
             if margin_req > available_balance:
-                raise ValueError(f"Margin requirement (₹{margin_req:,.2f}) exceeds available balance (₹{available_balance:,.2f})")
+                raise ValueError(
+                    f"Margin requirement (₹{margin_req:,.2f}) exceeds available balance (₹{available_balance:,.2f})"
+                )
 
         qty_dec = Decimal(str(quantity))
 
@@ -183,6 +202,7 @@ class PaperTradingService:
             signal_relation = "INDEPENDENT"
             try:
                 from app.services.prediction_engine import get_full_prediction
+
                 pred = await get_full_prediction(sym, bypass_cache=False)
                 if pred and pred.get("is_computed", False):
                     ens = pred.get("ensemble", {})
@@ -198,16 +218,22 @@ class PaperTradingService:
 
         if order_type == "LIMIT":
             if limit_price is None or limit_price <= 0:
-                raise ValueError("Limit price must be specified and greater than zero for LIMIT orders")
+                raise ValueError(
+                    "Limit price must be specified and greater than zero for LIMIT orders"
+                )
 
             lim_price_dec = Decimal(str(limit_price))
             gross_amount = qty_dec * lim_price_dec
 
             # Simple pre-flight checks for LIMIT orders
             if side == "BUY" and wallet.balance < gross_amount:
-                raise ValueError(f"Insufficient cash balance for limit order. Required: ₹{gross_amount:,.2f}, Available: ₹{wallet.balance:,.2f}")
+                raise ValueError(
+                    f"Insufficient cash balance for limit order. Required: ₹{gross_amount:,.2f}, Available: ₹{wallet.balance:,.2f}"
+                )
             elif side == "SELL":
-                pos_stmt = select(PaperPosition).where(PaperPosition.user_id == user_id, PaperPosition.symbol == sym)
+                pos_stmt = select(PaperPosition).where(
+                    PaperPosition.user_id == user_id, PaperPosition.symbol == sym
+                )
                 pos_res = await db.execute(pos_stmt)
                 pos = pos_res.scalar_one_or_none()
                 if not pos or pos.quantity < qty_dec:
@@ -226,7 +252,7 @@ class PaperTradingService:
                 signal_relation=signal_relation,
             )
             if side == "BUY":
-                wallet.locked_margin += gross_amount # Lock full amount for limit buy
+                wallet.locked_margin += gross_amount  # Lock full amount for limit buy
             db.add(new_order)
             await db.commit()
             await db.refresh(new_order)
@@ -234,25 +260,33 @@ class PaperTradingService:
             return new_order
 
         # MARKET order execution
-        slippage_pct = Decimal("0.0005") # 0.05% slippage
-        stt_pct = Decimal("0.001") # 0.1% STT
+        cost_breakdown = compute_indian_costs(
+            gross_amount=float(qty_dec * quote_price),
+            side=side,
+            is_delivery=True,
+        )
 
         gross_amount = qty_dec * quote_price
-        brokerage = min(Decimal("20.00"), Decimal("0.0005") * gross_amount)
-        stt = stt_pct * gross_amount
-        slippage = slippage_pct * gross_amount
+        brokerage = Decimal(str(cost_breakdown["brokerage"]))
+        stt = Decimal(str(cost_breakdown["stt"]))
+        slippage = Decimal(str(cost_breakdown["slippage"]))
+        txn_charges = Decimal(str(cost_breakdown["txn_charge"])) + Decimal(str(cost_breakdown["sebi_fee"])) + Decimal(str(cost_breakdown["gst"])) + Decimal(str(cost_breakdown["stamp_duty"]))
 
         if side == "BUY":
             execute_price = quote_price + (slippage / qty_dec)
-            net_amount = gross_amount + brokerage + stt + slippage
+            net_amount = gross_amount + brokerage + stt + slippage + txn_charges
 
             if wallet.balance < net_amount:
-                raise ValueError(f"Insufficient cash balance. Required: ₹{net_amount:,.2f}, Available: ₹{wallet.balance:,.2f}")
+                raise ValueError(
+                    f"Insufficient cash balance. Required: ₹{net_amount:,.2f}, Available: ₹{wallet.balance:,.2f}"
+                )
 
             wallet.balance -= net_amount
 
             # Update position
-            pos_stmt = select(PaperPosition).where(PaperPosition.user_id == user_id, PaperPosition.symbol == sym)
+            pos_stmt = select(PaperPosition).where(
+                PaperPosition.user_id == user_id, PaperPosition.symbol == sym
+            )
             pos_res = await db.execute(pos_stmt)
             pos = pos_res.scalar_one_or_none()
 
@@ -271,21 +305,25 @@ class PaperTradingService:
                 )
                 db.add(pos)
 
-        else: # SELL
+        else:  # SELL
             execute_price = quote_price - (slippage / qty_dec)
-            net_amount = gross_amount - brokerage - stt - slippage
+            net_amount = gross_amount - brokerage - stt - slippage - txn_charges
 
-            pos_stmt = select(PaperPosition).where(PaperPosition.user_id == user_id, PaperPosition.symbol == sym)
+            pos_stmt = select(PaperPosition).where(
+                PaperPosition.user_id == user_id, PaperPosition.symbol == sym
+            )
             pos_res = await db.execute(pos_stmt)
             pos = pos_res.scalar_one_or_none()
 
             if not pos or pos.quantity < qty_dec:
-                raise ValueError(f"Insufficient holdings of {sym} to sell. Owned: {pos.quantity if pos else 0}")
+                raise ValueError(
+                    f"Insufficient holdings of {sym} to sell. Owned: {pos.quantity if pos else 0}"
+                )
 
             wallet.balance += net_amount
 
             # Calculate realized P&L
-            realized = qty_dec * (execute_price - pos.avg_buy_price) - (brokerage + stt + slippage)
+            realized = qty_dec * (execute_price - pos.avg_buy_price) - (brokerage + stt + slippage + txn_charges)
             wallet.realized_pnl += realized
             pos.realized_pnl += realized
 
@@ -313,19 +351,20 @@ class PaperTradingService:
         db.add(new_order)
         await db.commit()
         await db.refresh(new_order)
-        logger.info(f"Executed MARKET order for user_id={user_id}, symbol={sym}, side={side}, net_amount={net_amount}")
+        logger.info(
+            f"Executed MARKET order for user_id={user_id}, symbol={sym}, side={side}, net_amount={net_amount}"
+        )
         return new_order
 
     @staticmethod
-    async def check_and_execute_limit_orders(db: AsyncSession, symbol: str, current_price: Decimal) -> int:
+    async def check_and_execute_limit_orders(
+        db: AsyncSession, symbol: str, current_price: Decimal
+    ) -> int:
         """Scan PENDING limit orders for symbol and fill them if price triggers are met."""
         sym = MarketDataService._normalize_symbol(symbol).upper().strip()
 
         # Query pending orders
-        stmt = select(PaperOrder).where(
-            PaperOrder.symbol == sym,
-            PaperOrder.status == "PENDING"
-        )
+        stmt = select(PaperOrder).where(PaperOrder.symbol == sym, PaperOrder.status == "PENDING")
         res = await db.execute(stmt)
         pending_orders = res.scalars().all()
 
@@ -341,33 +380,43 @@ class PaperTradingService:
                 continue
 
             # Execute the order
-            wallet = await PaperTradingService.get_or_create_wallet(db, order.user_id, for_update=True)
+            wallet = await PaperTradingService.get_or_create_wallet(
+                db, order.user_id, for_update=True
+            )
             qty_dec = order.quantity
             limit_price_dec = order.limit_price
 
-            slippage_pct = Decimal("0.0005") # 0.05% slippage
-            stt_pct = Decimal("0.001") # 0.1% STT
+            cost_breakdown = compute_indian_costs(
+                gross_amount=float(qty_dec * limit_price_dec),
+                side=order.side,
+                is_delivery=True,
+            )
 
             gross_amount = qty_dec * limit_price_dec
-            brokerage = min(Decimal("20.00"), Decimal("0.0005") * gross_amount)
-            stt = stt_pct * gross_amount
-            slippage = slippage_pct * gross_amount
+            brokerage = Decimal(str(cost_breakdown["brokerage"]))
+            stt = Decimal(str(cost_breakdown["stt"]))
+            slippage = Decimal(str(cost_breakdown["slippage"]))
+            txn_charges = Decimal(str(cost_breakdown["txn_charge"])) + Decimal(str(cost_breakdown["sebi_fee"])) + Decimal(str(cost_breakdown["gst"])) + Decimal(str(cost_breakdown["stamp_duty"]))
 
             if order.side == "BUY":
                 execute_price = limit_price_dec + (slippage / qty_dec)
-                net_amount = gross_amount + brokerage + stt + slippage
+                net_amount = gross_amount + brokerage + stt + slippage + txn_charges
 
                 if wallet.balance < net_amount:
                     order.status = "CANCELLED"
                     wallet.locked_margin -= gross_amount
-                    logger.warning(f"Cancelled limit BUY order {order.id} due to insufficient funds.")
+                    logger.warning(
+                        f"Cancelled limit BUY order {order.id} due to insufficient funds."
+                    )
                     continue
 
                 wallet.balance -= net_amount
                 wallet.locked_margin -= gross_amount
 
                 # Update position
-                pos_stmt = select(PaperPosition).where(PaperPosition.user_id == order.user_id, PaperPosition.symbol == sym)
+                pos_stmt = select(PaperPosition).where(
+                    PaperPosition.user_id == order.user_id, PaperPosition.symbol == sym
+                )
                 pos_res = await db.execute(pos_stmt)
                 pos = pos_res.scalar_one_or_none()
 
@@ -385,23 +434,29 @@ class PaperTradingService:
                         realized_pnl=Decimal("0.00"),
                     )
                     db.add(pos)
-            else: # SELL
+            else:  # SELL
                 execute_price = limit_price_dec - (slippage / qty_dec)
-                net_amount = gross_amount - brokerage - stt - slippage
+                net_amount = gross_amount - brokerage - stt - slippage - txn_charges
 
-                pos_stmt = select(PaperPosition).where(PaperPosition.user_id == order.user_id, PaperPosition.symbol == sym)
+                pos_stmt = select(PaperPosition).where(
+                    PaperPosition.user_id == order.user_id, PaperPosition.symbol == sym
+                )
                 pos_res = await db.execute(pos_stmt)
                 pos = pos_res.scalar_one_or_none()
 
                 if not pos or pos.quantity < qty_dec:
                     order.status = "CANCELLED"
-                    logger.warning(f"Cancelled limit SELL order {order.id} due to insufficient holdings.")
+                    logger.warning(
+                        f"Cancelled limit SELL order {order.id} due to insufficient holdings."
+                    )
                     continue
 
                 wallet.balance += net_amount
 
                 # Calculate realized P&L
-                realized = qty_dec * (execute_price - pos.avg_buy_price) - (brokerage + stt + slippage)
+                realized = qty_dec * (execute_price - pos.avg_buy_price) - (
+                    brokerage + stt + slippage + txn_charges
+                )
                 wallet.realized_pnl += realized
                 pos.realized_pnl += realized
 
@@ -421,7 +476,9 @@ class PaperTradingService:
             order.net_amount = net_amount
             order.timestamp = datetime.now(UTC)
             filled_count += 1
-            logger.info(f"FILLED pending limit order {order.id} for user {order.user_id} at {execute_price}")
+            logger.info(
+                f"FILLED pending limit order {order.id} for user {order.user_id} at {execute_price}"
+            )
 
         if filled_count > 0:
             await db.commit()
@@ -431,7 +488,11 @@ class PaperTradingService:
     @staticmethod
     async def get_history(db: AsyncSession, user_id: str) -> list[dict]:
         """Fetch executed and pending orders log for the user."""
-        stmt = select(PaperOrder).where(PaperOrder.user_id == user_id).order_by(PaperOrder.timestamp.desc())
+        stmt = (
+            select(PaperOrder)
+            .where(PaperOrder.user_id == user_id)
+            .order_by(PaperOrder.timestamp.desc())
+        )
         res = await db.execute(stmt)
         orders = res.scalars().all()
 
