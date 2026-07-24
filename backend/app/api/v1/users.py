@@ -26,8 +26,10 @@ class UserProfileResponse(BaseModel):
 
 
 @router.get("/profile", response_model=UserProfileResponse)
-async def get_profile(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> UserProfileResponse:
-    user_id = current_user.get("sub")
+async def get_profile(
+    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> UserProfileResponse:
+    user_id = str(current_user.id)
     if is_test_mode():
         user = TEST_USERS_BY_ID.get(str(user_id))
         if user is None:
@@ -46,7 +48,6 @@ async def get_profile(current_user: dict = Depends(get_current_user), db: AsyncS
             role=str(user.get("role", "USER")),
             is_active=bool(user.get("is_active", True)),
         )
-
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -74,8 +75,7 @@ async def update_profile(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserProfileResponse:
-    user_id = current_user.get("sub")
-
+    user_id = str(current_user.id)
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

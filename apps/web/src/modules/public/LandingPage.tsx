@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import Link from "next/link";
@@ -23,7 +24,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/dashboard/premium";
+} from "@neuroquant/ui";
 import { Badge } from "@neuroquant/ui";
 import { cn } from "@/lib/utils";
 

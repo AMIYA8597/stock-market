@@ -22,7 +22,7 @@ class Transaction(Base):
     Fields:
         id (UUID): Unique transaction identifier, primary key.
         user_id (UUID): Foreign key to User.
-        symbol_id (int): Foreign key to Symbol.
+        symbol_id (int): Foreign key to Instrument.
         type (str): Transaction type (BUY or SELL).
         quantity (Decimal): Number of units traded (precision to 8 decimals).
         price (Decimal): Price per unit at execution (precision to 8 decimals).
@@ -48,7 +48,7 @@ class Transaction(Base):
         doc="Foreign key to users",
     )
     symbol_id: Mapped[int] = mapped_column(
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
         index=True,
         doc="Foreign key to symbols",

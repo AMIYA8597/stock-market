@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 
+
 async def main():
     logger.info("Starting live tick producer broadcaster...")
 
@@ -62,7 +63,7 @@ async def main():
                             "type": "tick",
                             "symbol": symbol.upper(),
                             "price": price_val,
-                            "change_pct": 0.0, # Approximate, client can use last known
+                            "change_pct": 0.0,  # Approximate, client can use last known
                             "timestamp": datetime.now(UTC).isoformat(),
                             "source": "yfinance",
                         }
@@ -74,6 +75,7 @@ async def main():
 
         # Poll every 15 seconds to respect free tier boundaries
         await asyncio.sleep(15)
+
 
 if __name__ == "__main__":
     try:

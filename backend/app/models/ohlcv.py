@@ -21,7 +21,7 @@ class OHLCV(Base):
 
     Fields:
         time (datetime): Candlestick timestamp (hypertable time column), PK.
-        symbol_id (int): Foreign key to Symbol, PK.
+        symbol_id (int): Foreign key to Instrument, PK.
         open (Decimal): Opening price (64-bit, 8 decimal places).
         high (Decimal): High price (64-bit, 8 decimal places).
         low (Decimal): Low price (64-bit, 8 decimal places).
@@ -53,10 +53,10 @@ class OHLCV(Base):
     )
     symbol_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
         primary_key=True,
-        doc="Foreign key to symbols table",
+        doc="Foreign key to instrument table",
     )
     open: Mapped[Decimal] = mapped_column(
         Numeric(20, 8),

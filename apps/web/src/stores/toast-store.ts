@@ -25,7 +25,7 @@ interface ToastStore {
 export const useToastStore = create<ToastStore>((set, get) => ({
   toasts: [],
   pushToast: (item) => {
-    const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const id = crypto.randomUUID();
     set((state) => ({ toasts: [...state.toasts, { ...item, id }] }));
     setTimeout(() => {
       get().removeToast(id);

@@ -13,6 +13,7 @@
   },
   "devDependencies": {
     "@neuroquant/config": "workspace:*",
+    "openapi-typescript": "^7.13.0",
     "typescript": "^5.4.5"
   }
 }

@@ -44,6 +44,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   const [typedPhrase, setTypedPhrase] = useState<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [accuracyMetrics, setAccuracyMetrics] = useState<any>(null);
+  const [predictionError, setPredictionError] = useState<boolean>(false);
   const [shapExpanded, setShapExpanded] = useState<boolean>(true);
   const [orderType, setOrderType] = useState<"MARKET" | "LIMIT">("LIMIT");
   const [slideValue, setSlideValue] = useState<number>(0);
@@ -61,8 +62,10 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           setAccuracyMetrics((res as any).accuracy_metrics);
         }
+        setPredictionError(false);
       } catch (e) {
         console.error("Failed to load historical signal accuracy metrics", e);
+        setPredictionError(true);
       }
     }
     void loadHistoryMetrics();
@@ -424,17 +427,19 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       <div className="mb-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3">
         <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Historical Backtest Performance</p>
         <div className="flex gap-1 mb-2.5">
-          {Array.from({ length: 20 }).map((_, idx) => {
-            const winSequence = [true, false, true, true, false, true, false, true, true, false, true, true, false, false, true, true, false, true, true, false];
-            const isWin = winSequence[idx % winSequence.length];
-            return (
+          {accuracyMetrics?.recent_trades ? (
+            accuracyMetrics.recent_trades.map((isWin: boolean, idx: number) => (
               <span
                 key={idx}
                 className={`h-2.5 flex-1 rounded ${isWin ? "bg-[var(--nq-accent-green)]/80 shadow-[0_0_4px_rgba(0,230,118,0.2)]" : "bg-[var(--nq-accent-red)]/70"}`}
-                title={`Backtest Trade #${20 - idx}: ${isWin ? "WIN" : "LOSS"}`}
+                title={`Backtest Trade #${idx + 1}: ${isWin ? "WIN" : "LOSS"}`}
               />
-            );
-          })}
+            ))
+          ) : (
+            <div className="h-2.5 w-full flex items-center justify-center rounded bg-[rgba(255,255,255,0.05)] text-[8px] font-mono text-[var(--nq-text-muted)]">
+              No recent trade sequence available
+            </div>
+          )}
         </div>
         {accuracyMetrics ? (
           <div className="grid grid-cols-2 gap-1.5 text-[9px] font-mono">
@@ -453,6 +458,12 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
             <div className="rounded bg-black/20 p-1.5 border border-[rgba(255,255,255,0.04)]">
               <span className="block text-[7px] text-[var(--nq-text-secondary)] uppercase tracking-wider">Cost-Adj Return</span>
               <strong className="text-[var(--nq-accent-cyan)]">+{safeFormat(accuracyMetrics.transaction_cost_adjusted_return_pct, 1)}%</strong>
+            </div>
+          </div>
+        ) : predictionError ? (
+          <div className="flex justify-center p-2">
+            <div className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-3 py-1.5 text-xs text-[#F7C948] text-center font-medium">
+              Prediction model not yet trained
             </div>
           </div>
         ) : (
@@ -568,17 +579,24 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         </button>
         {shapExpanded && (
           <div className="border-t border-[var(--nq-border)] p-3 space-y-1 font-mono text-xs text-[var(--nq-text-secondary)] bg-[rgba(255,255,255,0.005)]">
-            {featureRows.map((feature) => (
-              <div key={String(feature.name)} className="flex justify-between rounded px-1 transition-colors hover:bg-[rgba(255,255,255,0.03)]">
-                <span>{String(feature.name)}</span>
-                <span className={Number(feature.shap_value) >= 0 ? "text-[var(--nq-accent-green)]" : "text-[var(--nq-accent-red)]"}>
-                  {Number(feature.shap_value) >= 0 ? "+" : ""}{safeFormat(feature.shap_value, 4)}
-                </span>
+            {predictionError ? (
+              <div className="flex justify-center p-2">
+                <div className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-3 py-1.5 text-xs text-[#F7C948] text-center font-medium">
+                  Prediction model not yet trained
+                </div>
               </div>
-            ))}
-            {featureRows.length === 0 ? (
+            ) : featureRows.length > 0 ? (
+              featureRows.map((feature) => (
+                <div key={String(feature.name)} className="flex justify-between rounded px-1 transition-colors hover:bg-[rgba(255,255,255,0.03)]">
+                  <span>{String(feature.name)}</span>
+                  <span className={Number(feature.shap_value) >= 0 ? "text-[var(--nq-accent-green)]" : "text-[var(--nq-accent-red)]"}>
+                    {Number(feature.shap_value) >= 0 ? "+" : ""}{safeFormat(feature.shap_value, 4)}
+                  </span>
+                </div>
+              ))
+            ) : (
               <div className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[10px]">No feature attribution received yet.</div>
-            ) : null}
+            )}
           </div>
         )}
       </div>

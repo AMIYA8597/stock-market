@@ -10,8 +10,10 @@ from pydantic import BaseModel, Field, model_validator
 # Screener
 # ─────────────────────────────────────────────────────────────━━
 
+
 class ScreenerFilterConfig(BaseModel):
     """Screener filter configuration."""
+
     asset_class: str | None = None
     exchange: list[str] | str | None = None
     market_cap_min: Decimal | None = None
@@ -55,6 +57,7 @@ class ScreenerFilterConfig(BaseModel):
 
 class ScreenerRunRequest(BaseModel):
     """POST /screener/run request body."""
+
     exchange: list[str] = Field(..., description="NSE, NYSE, NASDAQ, CRYPTO, etc")
     filters: ScreenerFilterConfig
     sort_by: str = Field(default="sharpe_21d")
@@ -63,6 +66,7 @@ class ScreenerRunRequest(BaseModel):
 
 class ScreenerResult(BaseModel):
     """Single screener result."""
+
     ticker: str
     name: str
     exchange: str
@@ -80,6 +84,7 @@ class ScreenerResult(BaseModel):
 
 class ScreenerRunResponse(BaseModel):
     """POST /screener/run response."""
+
     results: list[ScreenerResult]
     total_matched: int
     filters_applied: dict
@@ -88,6 +93,7 @@ class ScreenerRunResponse(BaseModel):
 
 class ScreenerPreset(BaseModel):
     """Single screener preset."""
+
     name: str
     description: str
     filters_json: dict
@@ -96,6 +102,7 @@ class ScreenerPreset(BaseModel):
 
 class ScreenerPresetsResponse(BaseModel):
     """GET /screener/presets response."""
+
     presets: list[ScreenerPreset]
 
 
@@ -103,10 +110,14 @@ class ScreenerPresetsResponse(BaseModel):
 # Alerts
 # ─────────────────────────────────────────────────────────────━━
 
+
 class AlertCreateRequest(BaseModel):
     """POST /alerts request body."""
+
     symbol: str | None = None
-    alert_type: str = Field(..., description="PRICE_ABOVE|PRICE_BELOW|RSI_OB|MACD_CROSS|SIGNAL_CHANGE|REGIME_CHANGE")
+    alert_type: str = Field(
+        ..., description="PRICE_ABOVE|PRICE_BELOW|RSI_OB|MACD_CROSS|SIGNAL_CHANGE|REGIME_CHANGE"
+    )
     threshold: Decimal | None = None
     name: str = Field(..., min_length=1, max_length=100)
     enabled: bool = True
@@ -114,6 +125,7 @@ class AlertCreateRequest(BaseModel):
 
 class AlertData(BaseModel):
     """Alert object."""
+
     id: str
     symbol: str | None = None
     alert_type: str
@@ -128,12 +140,14 @@ class AlertData(BaseModel):
 
 class AlertListResponse(BaseModel):
     """GET /alerts response."""
+
     alerts: list[AlertData]
     total_count: int
 
 
 class AlertUpdateRequest(BaseModel):
     """PATCH /alerts/{id} request body."""
+
     name: str | None = None
     threshold: Decimal | None = None
     enabled: bool | None = None
@@ -141,10 +155,12 @@ class AlertUpdateRequest(BaseModel):
 
 class AlertUpdateResponse(BaseModel):
     """PATCH /alerts/{id} response."""
+
     alert: AlertData
 
 
 class AlertDeleteResponse(BaseModel):
     """DELETE /alerts/{id} response."""
+
     id: str
     deleted_at: datetime

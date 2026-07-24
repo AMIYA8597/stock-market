@@ -1,105 +1,167 @@
-# backend/app/services/data_ingestion/provider_manager.py
-"""Provider manager for live market data with automatic fallback.
+"""Provider manager orchestrating failover and caching for market data."""
 
-The manager knows about all built‑in data source classes (YFinanceSource,
-AlphaVantageSource, CoinGeckoSource, FREDSource, NSESource, StooqSource)
-and provides a unified ``fetch`` method that attempts each source in order
-until data is successfully retrieved.
-
-Configuration:
-    - API keys are read from environment variables (e.g. ``ALPHA_VANTAGE_KEY``).
-    - Sources that require a key are only instantiated when the key is present.
-    - The manager logs each attempt and raises ``DataSourceError`` if all
-      providers fail.
-"""
-
-from __future__ import annotations
-
-import os
+import asyncio
 import logging
-from typing import List
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from app.services.data_ingestion.base import MarketDataSource, IngestionTask, OHLCVBar, DataSourceError
-from app.services.data_ingestion.yfinance_source import YFinanceSource
-from app.services.data_ingestion.alpha_vantage_source import AlphaVantageSource
-from app.services.data_ingestion.coingecko_source import CoinGeckoSource
-from app.services.data_ingestion.fred_source import FREDSource
+from app.database.redis_client import cache_get, cache_set, get_redis_client
+from app.services.data_ingestion.base import (
+    DataUnavailableError,
+    Interval,
+    OHLCVBar,
+    ProviderError,
+    Quote,
+)
 from app.services.data_ingestion.nse_source import NSESource
-from app.services.data_ingestion.stooq_source import StooqSource
+from app.services.data_ingestion.stooq_source import StooqProvider
+from app.services.data_ingestion.yfinance_source import YFinanceProvider
 
 logger = logging.getLogger(__name__)
 
-
 class ProviderManager:
-    """Centralised manager that holds all available market data providers.
+    """Orchestrates market data providers with failover and cache-aside logic."""
 
-    It builds the provider list lazily based on environment configuration and
-    provides ``fetch`` which returns a list of ``OHLCVBar`` for the requested
-    ``IngestionTask``.
-    """
+    def __init__(self):
+        # Order: yfinance -> nse -> stooq
+        self.providers = [
+            YFinanceProvider(),
+            NSESource(),
+            StooqProvider()
+        ]
+        # TTL definitions (seconds)
+        self.ttls = {
+            "quote": 10,
+            "intraday": 60,
+            "daily": 24 * 60 * 60,
+            "index": 30
+        }
 
-    def __init__(self) -> None:
-        self._sources: List[MarketDataSource] = self._init_sources()
+    async def get_quote(self, symbol: str) -> Quote:
+        """Fetch quote with cache and failover."""
+        redis = await get_redis_client()
+        cache_key = f"market:quote:{symbol}"
 
-    def _init_sources(self) -> List[MarketDataSource]:
-        sources: List[MarketDataSource] = []
-        # Always available free sources
-        sources.append(YFinanceSource())
-        sources.append(StooqSource())
-        sources.append(CoinGeckoSource())
-        sources.append(FREDSource())
-        sources.append(NSESource())
-        # Conditional source requiring API key
-        av_key = os.getenv("ALPHA_VANTAGE_KEY")
-        if av_key:
-            # AlphaVantageSource reads the key from env internally, we just add it
-            sources.append(AlphaVantageSource())
-        else:
-            logger.info("Alpha Vantage key not set – skipping provider.")
-        return sources
+        # Check cache
+        cached = await cache_get(redis, cache_key)
+        if cached:
+            # We enforce stale-while-revalidate pattern
+            as_of = datetime.fromisoformat(cached["as_of"]) if isinstance(cached["as_of"], str) else cached["as_of"]
+            if (datetime.now(UTC) - as_of).total_seconds() > self.ttls["quote"]:
+                # Stale: kick off background refresh, return stale for now
+                asyncio.create_task(self._fetch_and_cache_quote(symbol, cache_key))
+            return Quote(
+                symbol=cached["symbol"],
+                price=cached["price"],
+                change=cached["change"],
+                change_pct=cached["change_pct"],
+                volume=cached["volume"],
+                timestamp=as_of
+            )
 
-    def _select_candidates(self, task: IngestionTask) -> List[MarketDataSource]:
-        """Return an ordered list of candidate providers for a given task.
+        # Cache miss, fetch synchronous
+        return await self._fetch_and_cache_quote(symbol, cache_key)
 
-        The ordering prefers the most reliable free sources first and falls back
-        to alternatives. Crypto assets use CoinGecko first, equities use YFinance
-        first, etc.
-        """
-        if task.asset_type == "CRYPTO":
-            # Prefer CoinGecko, then YFinance (if it supports crypto), then any fallback
-            return [src for src in self._sources if isinstance(src, (CoinGeckoSource, YFinanceSource))]
-        if task.asset_type == "MACRO":
-            return [src for src in self._sources if isinstance(src, FREDSource)]
-        # Default to equity handling – prioritize YFinance then Stooq then others
-        return [src for src in self._sources if isinstance(src, (YFinanceSource, StooqSource, NSESource))]
-
-    async def fetch(self, task: IngestionTask) -> List[OHLCVBar]:
-        """Attempt to fetch OHLCV data using the ordered provider list.
-
-        Raises
-        ------
-        DataSourceError
-            If none of the providers return data.
-        """
-        candidates = self._select_candidates(task)
-        errors: List[str] = []
-        for source in candidates:
+    async def _fetch_and_cache_quote(self, symbol: str, cache_key: str) -> Quote:
+        redis = await get_redis_client()
+        for provider in self.providers:
             try:
-                logger.debug(f"Attempting fetch from {source.name} for {task.symbol}")
-                bars = await source.fetch_ohlcv(
-                    symbol=task.symbol,
-                    interval=task.interval,
-                    start=task.start,
-                    end=task.end,
-                )
-                if bars:
-                    return bars
-                errors.append(f"{source.name}: empty result")
-            except Exception as exc:
-                errors.append(f"{source.name}: {exc}")
-                logger.warning(f"Provider {source.name} failed for {task.symbol}: {exc}")
-        raise DataSourceError(f"All providers failed for {task.symbol}. Details: {' | '.join(errors)}")
+                quote = await provider.get_quote(symbol)
+                # Cache it
+                await cache_set(redis, cache_key, {
+                    "symbol": quote.symbol,
+                    "price": quote.price,
+                    "change": quote.change,
+                    "change_pct": quote.change_pct,
+                    "volume": quote.volume,
+                    "as_of": quote.timestamp.isoformat(),
+                    "source": provider.name
+                }, ttl=timedelta(days=1)) # Keep physically cached for 1 day, stale after 10s
+                return quote
+            except ProviderError as e:
+                logger.warning(f"{provider.name} failed quote for {symbol}: {e}")
+            except Exception as e:
+                logger.error(f"{provider.name} unexpected error on quote {symbol}: {e}")
 
+        raise DataUnavailableError(f"All providers failed to fetch quote for {symbol}")
 
-# Export a singleton for easy import
+    async def get_ohlcv(
+        self, symbol: str, interval: Interval, start: datetime, end: datetime
+    ) -> list[OHLCVBar]:
+        """Fetch OHLCV with cache and failover."""
+        redis = await get_redis_client()
+        cache_key = f"market:ohlcv:{symbol}:{interval}:{start.date()}:{end.date()}"
+
+        cached = await cache_get(redis, cache_key)
+        ttl_seconds = self.ttls["daily"] if interval == "1d" else self.ttls["intraday"]
+
+        if cached:
+            as_of = datetime.fromisoformat(cached["as_of"])
+            if (datetime.now(UTC) - as_of).total_seconds() > ttl_seconds:
+                asyncio.create_task(self._fetch_and_cache_ohlcv(symbol, interval, start, end, cache_key))
+
+            bars = []
+            for b in cached["bars"]:
+                bars.append(OHLCVBar(
+                    time=datetime.fromisoformat(b["time"]),
+                    open=b["open"],
+                    high=b["high"],
+                    low=b["low"],
+                    close=b["close"],
+                    volume=b["volume"],
+                    adjusted_close=b.get("adjusted_close"),
+                    interval=interval
+                ))
+            return bars
+
+        return await self._fetch_and_cache_ohlcv(symbol, interval, start, end, cache_key)
+
+    async def _fetch_and_cache_ohlcv(
+        self, symbol: str, interval: Interval, start: datetime, end: datetime, cache_key: str
+    ) -> list[OHLCVBar]:
+        redis = await get_redis_client()
+        for provider in self.providers:
+            try:
+                bars = await provider.get_ohlcv(symbol, interval, start, end)
+                if not bars:
+                    continue
+                # Cache it
+                cached_bars = []
+                for b in bars:
+                    cached_bars.append({
+                        "time": b.time.isoformat(),
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                        "adjusted_close": b.adjusted_close
+                    })
+
+                await cache_set(redis, cache_key, {
+                    "bars": cached_bars,
+                    "as_of": datetime.now(UTC).isoformat(),
+                    "source": provider.name
+                }, ttl=timedelta(days=7)) # physical ttl
+                return bars
+            except ProviderError as e:
+                logger.warning(f"{provider.name} failed ohlcv for {symbol}: {e}")
+            except Exception as e:
+                logger.error(f"{provider.name} unexpected error on ohlcv {symbol}: {e}")
+
+        raise DataUnavailableError(f"All providers failed to fetch OHLCV for {symbol}")
+
+    async def get_providers_health(self) -> dict[str, Any]:
+        """Health check for all providers."""
+        tasks = [p.health() for p in self.providers]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        health_data = {}
+        for p, res in zip(self.providers, results, strict=False):
+            if isinstance(res, Exception):
+                health_data[p.name] = {"status": "down", "error": str(res)}
+            else:
+                health_data[p.name] = res
+        return health_data
+
 provider_manager = ProviderManager()

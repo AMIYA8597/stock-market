@@ -43,7 +43,7 @@ export default function ExplainabilityPage(): JSX.Element {
       if (shapRes.status === "fulfilled") {
         setShap(shapRes.value);
       } else {
-        setError("Unable to load SHAP contract.");
+        setError("Prediction model not yet trained. Explainability data is currently unavailable for this symbol.");
       }
 
       if (attentionRes.status === "fulfilled") {
@@ -113,7 +113,12 @@ export default function ExplainabilityPage(): JSX.Element {
         </div>
       </div>
 
-      {error ? <p className="mb-3 text-sm text-[var(--nq-accent-red)]">{error}</p> : null}
+      {error ? (
+        <div className="mb-4 rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-4 py-3 text-sm text-[#F7C948]">
+          <span className="font-semibold uppercase tracking-wider">Model Status: </span>
+          {error}
+        </div>
+      ) : null}
 
       <div className="space-y-4">
         <section className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">

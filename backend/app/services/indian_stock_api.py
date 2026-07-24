@@ -1,8 +1,9 @@
-import requests
 import logging
-from typing import Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
+
 
 class IndianStockAPI:
     """Simple client for the 0xramm Indian Stock Market API (free, no auth)."""
@@ -10,7 +11,7 @@ class IndianStockAPI:
     BASE_URL = "https://api.0xramm.com/stock/list"
 
     @staticmethod
-    def fetch_quote(symbol: str) -> Optional[dict]:
+    def fetch_quote(symbol: str) -> dict | None:
         """Fetch a live quote for a given NSE symbol.
         Returns a dict compatible with MarketDataService.get_quote format or None on failure.
         """

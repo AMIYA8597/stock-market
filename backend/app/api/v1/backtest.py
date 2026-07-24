@@ -10,14 +10,14 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import numpy as np
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
 from app.database.connection import async_session_factory
-from app.models.asset import Symbol
 from app.models.backtest import BacktestJob
+from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
 from app.models.signal import EnsembleSignal
 from app.schemas.backtest import (
@@ -33,6 +33,7 @@ from app.schemas.backtest import (
     TradeLogEntry,
     WalkForwardMetrics,
 )
+from app.tasks.backtest_tasks import run_backtest_job_task
 from research.backtesting.analytics import (
     cagr,
     calmar_ratio,
@@ -41,9 +42,9 @@ from research.backtesting.analytics import (
     sharpe_ratio,
     sortino_ratio,
 )
-
-# Vectorized engine and analytics
-from research.backtesting.engine import run_vectorized_backtest
+from research.backtesting.engine import (
+    run_vectorized_backtest,
+)
 from research.backtesting.monte_carlo import (
     bootstrap_paths,
     summarize_monte_carlo,
@@ -89,24 +90,25 @@ async def execute_backtest_job(job_id: UUID) -> None:
         date_from = job.date_from
         date_to = job.date_to
         initial_capital = float(job.initial_capital)
-        strategy_name = job.strategy_name
         strategy_params = job.strategy_params or {}
 
     BACKTEST_PROGRESS[job_str] = 20
 
     # 2. Get tickers mapping
     async with async_session_factory() as session:
-        stmt = select(Symbol).where(Symbol.ticker.in_(universe))
+        stmt = select(Instrument).where(Instrument.symbol.in_(universe))
         res = await session.execute(stmt)
         symbols = res.scalars().all()
-        ticker_to_symbol_id = {s.ticker: s.id for s in symbols}
-        symbol_id_to_ticker = {s.id: s.ticker for s in symbols}
+        ticker_to_symbol_id = {s.symbol: s.id for s in symbols}
+        symbol_id_to_ticker = {s.id: s.symbol for s in symbols}
 
-    # Identify tickers without a corresponding Symbol entry
+    # Identify tickers without a corresponding Instrument entry
     missing_symbols = [t for t in universe if t not in ticker_to_symbol_id]
     excluded_tickers: list[dict] = []
     if missing_symbols:
-        excluded_tickers.extend([{"ticker": t, "reason": "symbol not found"} for t in missing_symbols])
+        excluded_tickers.extend(
+            [{"ticker": t, "reason": "symbol not found"} for t in missing_symbols]
+        )
         # Filter out missing symbols from universe for further processing
         universe = [t for t in universe if t in ticker_to_symbol_id]
 
@@ -121,20 +123,28 @@ async def execute_backtest_job(job_id: UUID) -> None:
         dt_end = datetime.combine(date_to, time.max, tzinfo=UTC)
 
         async with async_session_factory() as session:
-            ohlcv_stmt = select(OHLCV).where(
-                OHLCV.symbol_id.in_(ticker_to_symbol_id.values()),
-                OHLCV.interval == "1d",
-                OHLCV.time >= dt_start,
-                OHLCV.time <= dt_end
-            ).order_by(OHLCV.time.asc())
+            ohlcv_stmt = (
+                select(OHLCV)
+                .where(
+                    OHLCV.symbol_id.in_(ticker_to_symbol_id.values()),
+                    OHLCV.interval == "1d",
+                    OHLCV.time >= dt_start,
+                    OHLCV.time <= dt_end,
+                )
+                .order_by(OHLCV.time.asc())
+            )
             ohlcv_res = await session.execute(ohlcv_stmt)
             ohlcv_records = ohlcv_res.scalars().all()
 
-            sig_stmt = select(EnsembleSignal).where(
-                EnsembleSignal.symbol_id.in_(ticker_to_symbol_id.values()),
-                EnsembleSignal.time >= dt_start,
-                EnsembleSignal.time <= dt_end
-            ).order_by(EnsembleSignal.time.asc())
+            sig_stmt = (
+                select(EnsembleSignal)
+                .where(
+                    EnsembleSignal.symbol_id.in_(ticker_to_symbol_id.values()),
+                    EnsembleSignal.time >= dt_start,
+                    EnsembleSignal.time <= dt_end,
+                )
+                .order_by(EnsembleSignal.time.asc())
+            )
             sig_res = await session.execute(sig_stmt)
             signal_records = sig_res.scalars().all()
 
@@ -171,12 +181,13 @@ async def execute_backtest_job(job_id: UUID) -> None:
 
         # Synthetic base_prices removed per policy – real data required.
 
-
     # Determine tickers that have no price data after DB fetch
     tickers_with_data = {t for (_, t) in prices_dict.keys()}
     missing_data_tickers = [t for t in universe if t not in tickers_with_data]
     if missing_data_tickers:
-        excluded_tickers.extend([{"ticker": t, "reason": "no price data"} for t in missing_data_tickers])
+        excluded_tickers.extend(
+            [{"ticker": t, "reason": "no price data"} for t in missing_data_tickers]
+        )
         universe = [t for t in universe if t in tickers_with_data]
 
     if not universe:
@@ -186,7 +197,9 @@ async def execute_backtest_job(job_id: UUID) -> None:
             job = db_res.scalar_one_or_none()
             if job:
                 job.status = "FAILED"
-                job.results = {"error": "None of the requested symbols have historical data for the selected period."}
+                job.results = {
+                    "error": "None of the requested symbols have historical data for the selected period."
+                }
                 await session.commit()
         BACKTEST_PROGRESS[job_str] = 100
         return
@@ -227,7 +240,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
             signals=signals_mat,
             prices=prices_mat,
             kelly_fraction=kelly_mat,
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
         )
     except Exception as e:
         async with async_session_factory() as session:
@@ -252,27 +265,35 @@ async def execute_backtest_job(job_id: UUID) -> None:
         price_series = prices_mat[:, j]
 
         for i in range(1, T):
-            prev_pos = pos_series[i-1]
+            prev_pos = pos_series[i - 1]
             curr_pos = pos_series[i]
             if curr_pos != prev_pos:
                 change = curr_pos - prev_pos
                 direction = "BUY" if change > 0 else "SELL"
                 qty = abs(change) * initial_capital / price_series[i]
 
-                trade_pnl = change * (price_series[i] - price_series[i-1]) * (initial_capital / price_series[i-1])
+                trade_pnl = (
+                    change
+                    * (price_series[i] - price_series[i - 1])
+                    * (initial_capital / price_series[i - 1])
+                )
                 cum_pnl += trade_pnl
-                commission = abs(qty) * price_series[i] * strategy_params.get("commission_pct", 0.001)
+                commission = (
+                    abs(qty) * price_series[i] * strategy_params.get("commission_pct", 0.001)
+                )
 
-                trades.append({
-                    "date": dates[i].isoformat(),
-                    "symbol": ticker,
-                    "direction": direction,
-                    "quantity": float(qty),
-                    "price": float(price_series[i]),
-                    "pnl": float(trade_pnl),
-                    "cum_pnl": float(cum_pnl),
-                    "commission": float(commission)
-                })
+                trades.append(
+                    {
+                        "date": dates[i].isoformat(),
+                        "symbol": ticker,
+                        "direction": direction,
+                        "quantity": float(qty),
+                        "price": float(price_series[i]),
+                        "pnl": float(trade_pnl),
+                        "cum_pnl": float(cum_pnl),
+                        "commission": float(commission),
+                    }
+                )
 
     num_trades = len(trades)
     wins = [t["pnl"] for t in trades if t["pnl"] > 0]
@@ -281,7 +302,9 @@ async def execute_backtest_job(job_id: UUID) -> None:
     win_rate = len(wins) / num_trades if num_trades > 0 else 0.5
     gross_profit = sum(wins) if wins else 0.0
     gross_loss = sum(losses) if losses else 0.0
-    profit_factor = abs(gross_profit / gross_loss) if gross_loss != 0 else 2.0 if gross_profit > 0 else 1.0
+    profit_factor = (
+        abs(gross_profit / gross_loss) if gross_loss != 0 else 2.0 if gross_profit > 0 else 1.0
+    )
     avg_win = np.mean(wins) if wins else 0.0
     avg_loss = np.mean(losses) if losses else 0.0
     payoff_ratio = abs(avg_win / avg_loss) if avg_loss != 0 else 1.5
@@ -290,8 +313,12 @@ async def execute_backtest_job(job_id: UUID) -> None:
     ret_95 = float(np.percentile(res_backtest.daily_returns, 95))
     ret_5 = float(np.percentile(res_backtest.daily_returns, 5))
     tail_ratio = abs(ret_95 / ret_5) if ret_5 != 0 else 1.0
-    serenity_ratio = float(abs(sharpe_ratio(res_backtest.daily_returns)) / (abs(max_dd_val) * 100 + 1))
-    deflated_sharpe = deflated_sharpe_ratio(sharpe=sharpe_ratio(res_backtest.daily_returns), n_trials=len(universe))
+    serenity_ratio = float(
+        abs(sharpe_ratio(res_backtest.daily_returns)) / (abs(max_dd_val) * 100 + 1)
+    )
+    deflated_sharpe = deflated_sharpe_ratio(
+        sharpe=sharpe_ratio(res_backtest.daily_returns), n_trials=len(universe)
+    )
 
     BACKTEST_PROGRESS[job_str] = 85
 
@@ -311,7 +338,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
                 n_splits=5,
                 purge_days=2,
                 embargo_days=2,
-                scorer=lambda r: sharpe_ratio(r)
+                scorer=lambda r: sharpe_ratio(r),
             )
             fold_sharpes = [float(s) for s in cpcv_sharpes]
         else:
@@ -322,10 +349,18 @@ async def execute_backtest_job(job_id: UUID) -> None:
     mean_sharpe = float(np.mean(fold_sharpes)) if fold_sharpes else 0.0
     std_sharpe = float(np.std(fold_sharpes)) if len(fold_sharpes) > 1 else 0.0
 
-    benchmark_returns = np.full(len(res_backtest.daily_returns), np.mean(res_backtest.daily_returns))
-    dm_stat, dm_p = diebold_mariano_test(loss_a=np.square(res_backtest.daily_returns), loss_b=np.square(benchmark_returns))
+    benchmark_returns = np.full(
+        len(res_backtest.daily_returns), np.mean(res_backtest.daily_returns)
+    )
+    dm_stat, dm_p = diebold_mariano_test(
+        loss_a=np.square(res_backtest.daily_returns), loss_b=np.square(benchmark_returns)
+    )
     sr = sharpe_ratio(res_backtest.daily_returns)
-    sharpe_se = float(math.sqrt((1 + 0.5 * sr**2) / len(res_backtest.daily_returns))) if len(res_backtest.daily_returns) > 0 else 0.08
+    sharpe_se = (
+        float(math.sqrt((1 + 0.5 * sr**2) / len(res_backtest.daily_returns)))
+        if len(res_backtest.daily_returns) > 0
+        else 0.08
+    )
     min_len = min_backtest_length_days(sr, sharpe_se)
 
     step_eq = max(1, T // 100)
@@ -335,15 +370,16 @@ async def execute_backtest_job(job_id: UUID) -> None:
     drawdown_pct = res_backtest.equity_curve / np.where(running_max == 0, 1.0, running_max) - 1.0
 
     for i in range(0, T, step_eq):
-        equity_curve.append({
-            "date": dates[i].isoformat(),
-            "portfolio_value": safe_round(res_backtest.equity_curve[i], 2),
-            "benchmark_value": safe_round(initial_capital * (1.0 + i * 0.0003), 2)
-        })
-        drawdown_series.append({
-            "date": dates[i].isoformat(),
-            "drawdown_pct": safe_round(drawdown_pct[i], 4)
-        })
+        equity_curve.append(
+            {
+                "date": dates[i].isoformat(),
+                "portfolio_value": safe_round(res_backtest.equity_curve[i], 2),
+                "benchmark_value": safe_round(initial_capital * (1.0 + i * 0.0003), 2),
+            }
+        )
+        drawdown_series.append(
+            {"date": dates[i].isoformat(), "drawdown_pct": safe_round(drawdown_pct[i], 4)}
+        )
 
     results_payload = {
         "metrics": {
@@ -366,7 +402,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
             "gross_loss": safe_round(gross_loss, 2),
             "tail_ratio": safe_round(tail_ratio, 4),
             "serenity_ratio": safe_round(serenity_ratio, 4),
-            "deflated_sharpe": safe_round(deflated_sharpe, 4)
+            "deflated_sharpe": safe_round(deflated_sharpe, 4),
         },
         "equity_curve": equity_curve,
         "drawdown_series": drawdown_series,
@@ -379,7 +415,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
                 "price": safe_round(t["price"], 8),
                 "pnl": safe_round(t["pnl"], 2),
                 "cum_pnl": safe_round(t["cum_pnl"], 2),
-                "commission": safe_round(t["commission"], 2)
+                "commission": safe_round(t["commission"], 2),
             }
             for t in trades[:100]
         ],
@@ -388,13 +424,13 @@ async def execute_backtest_job(job_id: UUID) -> None:
             "mean_sharpe": safe_round(mean_sharpe, 4),
             "std_sharpe": safe_round(std_sharpe, 4),
             "t_statistic": 2.13,
-            "p_value": 0.045
+            "p_value": 0.045,
         },
         "monte_carlo": {
             "percentiles": {k: safe_round(v, 4) for k, v in mc_res.percentiles.items()},
             "prob_of_ruin_10pct": safe_round(mc_res.prob_ruin_10pct, 4),
             "prob_of_ruin_25pct": safe_round(mc_res.prob_ruin_25pct, 4),
-            "fan_paths_sample": fan_paths
+            "fan_paths_sample": fan_paths,
         },
         "statistical_tests": {
             "dm_test_statistic": safe_round(dm_stat, 6),
@@ -402,9 +438,9 @@ async def execute_backtest_job(job_id: UUID) -> None:
             "dm_test_vs_benchmark": "ARIMA",
             "sharpe_se": safe_round(sharpe_se, 6),
             "min_backtest_length_days": int(min_len),
-            "multiple_testing_correction": "Bonferroni"
+            "multiple_testing_correction": "Bonferroni",
         },
-        "excluded_tickers": excluded_tickers if excluded_tickers else None
+        "excluded_tickers": excluded_tickers if excluded_tickers else None,
     }
 
     async with async_session_factory() as session:
@@ -423,9 +459,8 @@ async def execute_backtest_job(job_id: UUID) -> None:
 @router.post("/run", response_model=BacktestRunResponse, status_code=202)
 async def post_backtest_run(
     request: BacktestRequest,
-    background_tasks: BackgroundTasks,
     current_user: dict | None = Depends(get_current_user_or_none),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> BacktestRunResponse:
     user_id_str = "3b79b787-f2a8-4a48-abf1-0268d6131a5b"
     if current_user and "sub" in current_user:
@@ -445,12 +480,13 @@ async def post_backtest_run(
         date_from=request.date_from,
         date_to=request.date_to,
         initial_capital=request.initial_capital,
-        status="PENDING"
+        status="PENDING",
     )
     db.add(new_job)
     await db.commit()
 
-    background_tasks.add_task(execute_backtest_job, job_id)
+    # Trigger Celery task
+    run_backtest_job_task.delay(str(job_id))
 
     days = max((request.date_to - request.date_from).days, 1)
     estimate = min(3600, 30 + len(request.universe) * days // 20)
@@ -461,12 +497,14 @@ async def post_backtest_run(
         estimated_seconds=estimate,
         universe_size=len(request.universe),
         period_days=days,
-        strategy_name=request.strategy_name
+        strategy_name=request.strategy_name,
     )
 
 
 @router.get("/status/{job_id}", response_model=BacktestStatusResponse)
-async def get_backtest_status(job_id: str, db: AsyncSession = Depends(get_db)) -> BacktestStatusResponse:
+async def get_backtest_status(
+    job_id: str, db: AsyncSession = Depends(get_db)
+) -> BacktestStatusResponse:
     try:
         job_uuid = UUID(job_id)
     except ValueError:
@@ -479,14 +517,14 @@ async def get_backtest_status(job_id: str, db: AsyncSession = Depends(get_db)) -
         raise HTTPException(status_code=404, detail="Backtest job not found")
 
     status_str = "COMPLETED" if job.status in ("COMPLETED", "DONE") else job.status
-    progress_pct = 100 if status_str == "COMPLETED" else BACKTEST_PROGRESS.get(str(job_id), 0)
+    progress_pct = 100 if status_str == "COMPLETED" else (50 if status_str == "RUNNING" else 0)
 
     result_preview = None
     if status_str == "COMPLETED" and job.results and "metrics" in job.results:
         metrics = job.results["metrics"]
         result_preview = {
             "sharpe": metrics.get("sharpe") or metrics.get("sharpe_ratio"),
-            "max_drawdown": metrics.get("max_drawdown")
+            "max_drawdown": metrics.get("max_drawdown"),
         }
 
     return BacktestStatusResponse(
@@ -497,12 +535,14 @@ async def get_backtest_status(job_id: str, db: AsyncSession = Depends(get_db)) -
         equity_value=Decimal("1000000.00"),
         estimated_remaining_seconds=0 if status_str == "COMPLETED" else 15,
         error_message=job.results.get("error") if job.status == "FAILED" and job.results else None,
-        result_preview=result_preview
+        result_preview=result_preview,
     )
 
 
 @router.get("/results/{job_id}", response_model=BacktestResultsResponse)
-async def get_backtest_results(job_id: str, db: AsyncSession = Depends(get_db)) -> BacktestResultsResponse:
+async def get_backtest_results(
+    job_id: str, db: AsyncSession = Depends(get_db)
+) -> BacktestResultsResponse:
     try:
         job_uuid = UUID(job_id)
     except ValueError:
@@ -515,7 +555,9 @@ async def get_backtest_results(job_id: str, db: AsyncSession = Depends(get_db)) 
         raise HTTPException(status_code=404, detail="Backtest job not found")
 
     if job.status not in ("COMPLETED", "DONE"):
-        raise HTTPException(status_code=400, detail=f"Backtest job is not completed (status: {job.status})")
+        raise HTTPException(
+            status_code=400, detail=f"Backtest job is not completed (status: {job.status})"
+        )
 
     res_data = job.results
     if not res_data:
@@ -536,9 +578,15 @@ async def get_backtest_results(job_id: str, db: AsyncSession = Depends(get_db)) 
         equity_curve=[EquityCurvePoint(**pt) for pt in res_data["equity_curve"]],
         drawdown_series=[DrawdownPoint(**pt) for pt in res_data["drawdown_series"]],
         trade_log=[TradeLogEntry(**pt) for pt in res_data["trade_log"]],
-        walk_forward=WalkForwardMetrics(**res_data["walk_forward"]) if res_data.get("walk_forward") else None,
-        monte_carlo=MonteCarloResults(**res_data["monte_carlo"]) if res_data.get("monte_carlo") else None,
-        statistical_tests=StatisticalTests(**res_data["statistical_tests"]) if res_data.get("statistical_tests") else None,
+        walk_forward=WalkForwardMetrics(**res_data["walk_forward"])
+        if res_data.get("walk_forward")
+        else None,
+        monte_carlo=MonteCarloResults(**res_data["monte_carlo"])
+        if res_data.get("monte_carlo")
+        else None,
+        statistical_tests=StatisticalTests(**res_data["statistical_tests"])
+        if res_data.get("statistical_tests")
+        else None,
         status="DONE",
-        completed_at=completed_dt or datetime.now(UTC)
+        completed_at=completed_dt or datetime.now(UTC),
     )

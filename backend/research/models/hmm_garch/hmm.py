@@ -78,9 +78,12 @@ class StudentTHMM:
         self.nu_ = 4.0 + 11.0 * np.random.rand(self.n_states)
 
     def _emission_logprob(self, returns: np.ndarray) -> np.ndarray:
-        return np.column_stack([
-            _student_t_logpdf(returns, self.mu_[k], self.sigma2_[k], self.nu_[k]) for k in range(self.n_states)
-        ])
+        return np.column_stack(
+            [
+                _student_t_logpdf(returns, self.mu_[k], self.sigma2_[k], self.nu_[k])
+                for k in range(self.n_states)
+            ]
+        )
 
     def _forward(self, log_b: np.ndarray) -> tuple[np.ndarray, np.ndarray, float]:
         t_steps, k_states = log_b.shape
@@ -112,7 +115,9 @@ class StudentTHMM:
 
         return beta
 
-    def _gamma_xi(self, alpha_hat: np.ndarray, beta: np.ndarray, log_b: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def _gamma_xi(
+        self, alpha_hat: np.ndarray, beta: np.ndarray, log_b: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
         t_steps, k_states = alpha_hat.shape
         gamma = alpha_hat * beta
         gamma /= np.sum(gamma, axis=1, keepdims=True) + _EPS
@@ -125,7 +130,9 @@ class StudentTHMM:
 
         return gamma, xi
 
-    def _update_nu_newton(self, returns: np.ndarray, gamma_k: np.ndarray, mu: float, sigma2: float, nu0: float) -> float:
+    def _update_nu_newton(
+        self, returns: np.ndarray, gamma_k: np.ndarray, mu: float, sigma2: float, nu0: float
+    ) -> float:
         """Update Student-t degrees of freedom via Newton steps."""
         nu = max(float(nu0), 2.1)
         z2 = ((returns - mu) ** 2) / max(float(sigma2), _EPS)
@@ -133,7 +140,10 @@ class StudentTHMM:
 
         for _ in range(10):
             term = np.log1p(z2 / nu) - (z2 / (nu + z2))
-            g = 0.5 * (np.log(nu / 2.0) + 1.0 - psi(nu / 2.0)) - 0.5 * np.sum(gamma_k * term) / w_sum
+            g = (
+                0.5 * (np.log(nu / 2.0) + 1.0 - psi(nu / 2.0))
+                - 0.5 * np.sum(gamma_k * term) / w_sum
+            )
             h = 0.5 / nu - 0.25 * float(psi((nu + 1e-8) / 2.0) - psi(nu / 2.0))
             step = g / (h if abs(h) > 1e-8 else np.sign(h) * 1e-8 + 1e-8)
             nu = float(np.clip(nu - step, 2.1, 200.0))

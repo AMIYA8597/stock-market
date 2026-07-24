@@ -9,6 +9,7 @@ import { alertsApi } from "@/lib/api-client";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { CommandPalette } from "./command-palette";
+import { BottomNav } from "./bottom-nav";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { sidebarCollapsed, mobileSidebarOpen, closeMobileSidebar } = useUIStore();
@@ -69,8 +70,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             alertCount={alertCount}
           />
         )}
-        <main className={cn("flex-1 min-h-0", !isTerminal && "p-3 sm:p-4 lg:p-6")}>{children}</main>
+        <main className={cn("flex-1 min-h-0", !isTerminal && "p-3 sm:p-4 lg:p-6 mb-16 lg:mb-0")}>{children}</main>
       </div>
+      <BottomNav />
       <CommandPalette />
     </div>
   );

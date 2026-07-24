@@ -13,6 +13,7 @@ from research.feature_engineering.ff5_betas import FF5BetasBuilder
 from research.feature_engineering.microstructure import MicrostructureBuilder
 from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.sentiment_factors import SentimentFactorsBuilder
+from research.feature_engineering.technical_factors import TechnicalFactorsBuilder
 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
 
 
@@ -23,6 +24,7 @@ class FeaturePipeline:
         self.builders = builders or [
             PriceFactorsBuilder(),
             VolatilityFactorsBuilder(),
+            TechnicalFactorsBuilder(),
             ChartPatternsBuilder(),
             MicrostructureBuilder(),
             CalendarEffectsBuilder(),

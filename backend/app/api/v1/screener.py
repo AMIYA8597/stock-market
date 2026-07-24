@@ -23,27 +23,29 @@ router = APIRouter(prefix="/screener", tags=["screener"])
 
 
 @router.post("/run", response_model=ScreenerRunResponse)
-async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depends(get_db)) -> ScreenerRunResponse:
+async def post_screener_run(
+    request: ScreenerRunRequest, db: AsyncSession = Depends(get_db)
+) -> ScreenerRunResponse:
     try:
         import numpy as np
         from sqlalchemy import select
 
-        from app.models.asset import Symbol
+        from app.models.instrument import Instrument
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
-
 
         # Helper to round float values safely, handling NaNs and Inf
         def safe_round(val: float, places: int) -> float:
             import math
+
             if val is None or math.isnan(val) or math.isinf(val):
                 return 0.0
             return round(float(val), places)
 
         # 1. Fetch active symbols matching request exchange list
-        stmt = select(Symbol).where(Symbol.is_active == True)
+        stmt = select(Instrument).where(Instrument.is_active)
         if request.exchange:
-            stmt = stmt.where(Symbol.exchange.in_([ex.upper() for ex in request.exchange]))
+            stmt = stmt.where(Instrument.exchange.in_([ex.upper() for ex in request.exchange]))
         res = await db.execute(stmt)
         symbols = res.scalars().all()
 
@@ -61,16 +63,17 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
             records.reverse()
 
             if len(records) < 2:
-                # Insufficient data — skip this symbol, never generate fake prices
+                # Insufficient data – skip this symbol, never generate invented prices
                 continue
             else:
                 closes = [float(r.close) for r in records]
                 volumes = [float(r.volume) for r in records]
 
-
             latest_price = closes[-1]
             prev_price = closes[-2] if len(closes) > 1 else latest_price
-            change_pct = ((latest_price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
+            change_pct = (
+                ((latest_price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
+            )
 
             # Compute RSI-14
             deltas = np.diff(closes)
@@ -91,7 +94,11 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
             momentum_21d = (closes[-1] / closes[-22] - 1.0) if len(closes) >= 22 else 0.0
 
             # Compute volume_ratio
-            volume_ratio = volumes[-1] / np.mean(volumes[-21:]) if (len(volumes) >= 21 and np.mean(volumes[-21:]) > 0) else 1.0
+            volume_ratio = (
+                volumes[-1] / np.mean(volumes[-21:])
+                if (len(volumes) >= 21 and np.mean(volumes[-21:]) > 0)
+                else 1.0
+            )
 
             # Query latest EnsembleSignal
             sig_stmt = (
@@ -128,22 +135,24 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
             except Exception:
                 pass  # Leave pe_ratio and mcap as None — never fabricate values
 
-            results.append({
-                "ticker": s.ticker,
-                "name": s.name,
-                "exchange": s.exchange,
-                "asset_type": s.asset_type,
-                "price": latest_price,
-                "change_pct": change_pct,
-                "pe_ratio": pe_ratio,
-                "rsi": rsi_val,
-                "signal_direction": sig_dir,
-                "signal_confidence": sig_conf,
-                "regime_state": regime_state,
-                "momentum_21d": momentum_21d,
-                "volume_ratio": volume_ratio,
-                "market_cap": mcap,
-            })
+            results.append(
+                {
+                    "ticker": s.ticker,
+                    "name": s.name,
+                    "exchange": s.exchange,
+                    "asset_type": s.asset_type,
+                    "price": latest_price,
+                    "change_pct": change_pct,
+                    "pe_ratio": pe_ratio,
+                    "rsi": rsi_val,
+                    "signal_direction": sig_dir,
+                    "signal_confidence": sig_conf,
+                    "regime_state": regime_state,
+                    "momentum_21d": momentum_21d,
+                    "volume_ratio": volume_ratio,
+                    "market_cap": mcap,
+                }
+            )
 
         # Apply Filters
         filtered = []
@@ -167,10 +176,14 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
             if filters.rsi_max is not None and item["rsi"] > float(filters.rsi_max):
                 continue
 
-            if filters.momentum_21d_min is not None and item["momentum_21d"] < float(filters.momentum_21d_min):
+            if filters.momentum_21d_min is not None and item["momentum_21d"] < float(
+                filters.momentum_21d_min
+            ):
                 continue
 
-            if filters.volume_ratio_min is not None and item["volume_ratio"] < float(filters.volume_ratio_min):
+            if filters.volume_ratio_min is not None and item["volume_ratio"] < float(
+                filters.volume_ratio_min
+            ):
                 continue
 
             if filters.signal_direction:
@@ -198,6 +211,7 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
 
         # Sorting
         sort_by = request.sort_by.lower()
+
         def get_sort_key(item_dict):
             if sort_by == "rsi":
                 return item_dict["rsi"]
@@ -217,7 +231,7 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
         filtered.sort(key=get_sort_key, reverse=reverse)
 
         final_results = []
-        for item in filtered[:request.limit]:
+        for item in filtered[: request.limit]:
             final_results.append(
                 ScreenerResult(
                     ticker=item["ticker"],
@@ -226,8 +240,12 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
                     asset_type=item["asset_type"],
                     price=Decimal(str(safe_round(item["price"], 8))),
                     change_pct=Decimal(str(safe_round(item["change_pct"], 4))),
-                    pe_ratio=Decimal(str(safe_round(item["pe_ratio"], 4))) if item["pe_ratio"] is not None else None,
-                    rsi=Decimal(str(safe_round(item["rsi"], 4))) if item["rsi"] is not None else None,
+                    pe_ratio=Decimal(str(safe_round(item["pe_ratio"], 4)))
+                    if item["pe_ratio"] is not None
+                    else None,
+                    rsi=Decimal(str(safe_round(item["rsi"], 4)))
+                    if item["rsi"] is not None
+                    else None,
                     signal_direction=item["signal_direction"],
                     signal_confidence=Decimal(str(safe_round(item["signal_confidence"], 4))),
                     regime_state=item["regime_state"],
@@ -256,8 +274,23 @@ async def post_screener_run(request: ScreenerRunRequest, db: AsyncSession = Depe
 async def get_screener_presets() -> ScreenerPresetsResponse:
     now = datetime.now(UTC)
     presets = [
-        ScreenerPreset(name="value_stocks", description="Low PE and stable trend", filters_json={"pe_ratio_max": 20, "rsi_min": 35}, created_at=now),
-        ScreenerPreset(name="momentum", description="Strong 21d momentum with volume support", filters_json={"momentum_21d_min": 0.05, "volume_ratio_min": 1.3}, created_at=now),
-        ScreenerPreset(name="regime_aligned_buys", description="BUY signals aligned with bull regime", filters_json={"signal_direction": ["BUY", "STRONG_BUY"], "regime_compatible": True}, created_at=now),
+        ScreenerPreset(
+            name="value_stocks",
+            description="Low PE and stable trend",
+            filters_json={"pe_ratio_max": 20, "rsi_min": 35},
+            created_at=now,
+        ),
+        ScreenerPreset(
+            name="momentum",
+            description="Strong 21d momentum with volume support",
+            filters_json={"momentum_21d_min": 0.05, "volume_ratio_min": 1.3},
+            created_at=now,
+        ),
+        ScreenerPreset(
+            name="regime_aligned_buys",
+            description="BUY signals aligned with bull regime",
+            filters_json={"signal_direction": ["BUY", "STRONG_BUY"], "regime_compatible": True},
+            created_at=now,
+        ),
     ]
     return ScreenerPresetsResponse(presets=presets)
