@@ -9,15 +9,17 @@ interface AuthGuardProps {
 }
 
 export function AuthGuard({ children }: AuthGuardProps): JSX.Element {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user, error } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
+    console.log("AuthGuard Check:", { isLoading, isAuthenticated, error, user, pathname });
     if (!isLoading && !isAuthenticated) {
+      console.warn("AuthGuard Redirecting to login! Reason: Not authenticated and not loading.");
       router.replace(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
     }
-  }, [isLoading, isAuthenticated, router, pathname]);
+  }, [isLoading, isAuthenticated, router, pathname, error, user]);
 
   if (isLoading) {
     return (

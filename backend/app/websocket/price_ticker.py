@@ -16,6 +16,7 @@ from app.database.connection import async_session_factory
 from app.services.market_data_service import MarketDataService
 from app.services.paper_trading import PaperTradingService
 from app.services.prediction_engine import get_full_prediction
+import pandas_ta as ta
 
 logger = logging.getLogger(__name__)
 
