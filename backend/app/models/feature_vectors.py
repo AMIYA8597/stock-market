@@ -21,7 +21,7 @@ class FeatureVector(Base):
 
     Fields:
         time (datetime): Feature timestamp (hypertable time column), primary key.
-        symbol_id (int): Foreign key to Symbol, primary key.
+        symbol_id (int): Foreign key to Instrument, primary key.
         features (dict): 80+ computed float features as JSONB.
         feature_version (str): Feature version ID for schema tracking (v1, v2, etc.).
 
@@ -44,9 +44,7 @@ class FeatureVector(Base):
     """
 
     __tablename__ = "feature_vectors"
-    __table_args__ = (
-        UniqueConstraint("time", "symbol_id", name="uq_feature_vector_time_symbol"),
-    )
+    __table_args__ = (UniqueConstraint("time", "symbol_id", name="uq_feature_vector_time_symbol"),)
 
     time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -56,7 +54,7 @@ class FeatureVector(Base):
     )
     symbol_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
         primary_key=True,
         doc="Foreign key to symbols",

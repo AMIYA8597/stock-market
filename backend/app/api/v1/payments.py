@@ -1,26 +1,21 @@
 from __future__ import annotations
 
-import hmac
-import hashlib
 import json
 import logging
-import os
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import uuid4
 
-import razorpay # type: ignore
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
-
+import razorpay  # type: ignore
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
 from app.models.payment import PaymentTransaction, Plan, Subscription, WalletLedger
-from app.schemas.errors import ErrorCode, ErrorResponse
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -33,7 +28,7 @@ except Exception:
 
 
 def _resolve_user_id(current_user: dict | None) -> uuid.UUID:
-    if not current_user or not current_user.get("sub"):
+    if not current_user or not str(current_user.id):
         raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         return uuid.UUID(str(current_user["sub"]))
@@ -43,7 +38,7 @@ def _resolve_user_id(current_user: dict | None) -> uuid.UUID:
 
 @router.get("/plans")
 async def get_plans(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
-    result = await db.execute(select(Plan).where(Plan.is_active == True).order_by(Plan.price_inr.asc()))
+    result = await db.execute(select(Plan).where(Plan.is_active).order_by(Plan.price_inr.asc()))
     plans = result.scalars().all()
     return {
         "items": [
@@ -61,13 +56,19 @@ async def get_plans(db: AsyncSession = Depends(get_db)) -> dict[str, object]:
 
 
 @router.get("/balance")
-async def wallet_balance(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> dict[str, str]:
+async def wallet_balance(
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
     user_id = _resolve_user_id(current_user)
     result = await db.execute(select(WalletLedger).where(WalletLedger.user_id == user_id))
     rows = result.scalars().all()
-    
-    total = sum((row.amount if row.transaction_type == "credit" else -row.amount for row in rows), Decimal("0.00"))
-    return {"currency": "INR", "wallet_balance": str(total.quantize(Decimal('0.01')))}
+
+    total = sum(
+        (row.amount if row.transaction_type == "credit" else -row.amount for row in rows),
+        Decimal("0.00"),
+    )
+    return {"currency": "INR", "wallet_balance": str(total.quantize(Decimal("0.01")))}
 
 
 class PaymentIntentRequest(BaseModel):
@@ -84,21 +85,23 @@ async def create_intent(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     user_id = _resolve_user_id(current_user)
-    
+
     # 1. Create order in Razorpay
     amount_paise = int(payload.amount * 100)
     receipt_id = f"rcpt_{uuid4().hex[:10]}"
-    
+
     if razorpay_client is None or settings.RAZORPAY_KEY_ID == "rzp_test_replace_me":
-        # Mock payment gateway for local setup
+        # Test-mode payment gateway for local setup
         order_id = f"order_{uuid4().hex[:14]}"
     else:
-        order = razorpay_client.order.create({
-            "amount": amount_paise,
-            "currency": payload.currency.upper(),
-            "receipt": receipt_id,
-            "notes": {"user_id": user_id, "description": payload.description}
-        })
+        order = razorpay_client.order.create(
+            {
+                "amount": amount_paise,
+                "currency": payload.currency.upper(),
+                "receipt": receipt_id,
+                "notes": {"user_id": user_id, "description": payload.description},
+            }
+        )
         order_id = order["id"]
 
     # 2. Record transaction intent in DB
@@ -107,7 +110,7 @@ async def create_intent(
         user_id=user_id,
         intent_id=intent_id,
         provider_ref=order_id,
-        idempotency_key=uuid4().hex, # Auto idempotency for this example
+        idempotency_key=uuid4().hex,  # Auto idempotency for this example
         amount=payload.amount,
         currency=payload.currency.upper(),
         method=payload.method,
@@ -141,25 +144,27 @@ async def confirm_intent(
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
-    user_id = _resolve_user_id(current_user)
+    _resolve_user_id(current_user)
 
-    result = await db.execute(select(PaymentTransaction).where(PaymentTransaction.intent_id == payload.intent_id))
+    result = await db.execute(
+        select(PaymentTransaction).where(PaymentTransaction.intent_id == payload.intent_id)
+    )
     tx = result.scalar_one_or_none()
-    
+
     if not tx or (payload.razorpay_order_id and tx.provider_ref != payload.razorpay_order_id):
         raise HTTPException(status_code=404, detail="Payment intent not found or mismatch.")
-        
+
     if tx.status == "succeeded":
         return {"status": "already_succeeded"}
 
     if razorpay_client is None or settings.RAZORPAY_KEY_SECRET == "replace_me":
-        # Mock signature verification for local setup
+        # Test-mode signature verification for local setup
         pass
     else:
         params_dict = {
-            'razorpay_order_id': payload.razorpay_order_id,
-            'razorpay_payment_id': payload.razorpay_payment_id,
-            'razorpay_signature': payload.razorpay_signature
+            "razorpay_order_id": payload.razorpay_order_id,
+            "razorpay_payment_id": payload.razorpay_payment_id,
+            "razorpay_signature": payload.razorpay_signature,
         }
         try:
             razorpay_client.utility.verify_payment_signature(params_dict)
@@ -171,14 +176,14 @@ async def confirm_intent(
     tx.status = "succeeded"
     tx.confirmed_at = datetime.now(UTC)
     tx.provider_event_id = payload.razorpay_payment_id
-    
+
     # Credit the user's wallet
     ledger = WalletLedger(
         user_id=tx.user_id,
         amount=tx.amount,
         transaction_type="credit",
         description="Wallet top-up via Razorpay",
-        reference_id=tx.intent_id
+        reference_id=tx.intent_id,
     )
     db.add(ledger)
     await db.commit()
@@ -194,6 +199,7 @@ async def confirm_intent(
 class SubscribeRequest(BaseModel):
     plan_id: str
 
+
 @router.post("/subscribe")
 async def subscribe_to_plan(
     payload: SubscribeRequest,
@@ -204,38 +210,41 @@ async def subscribe_to_plan(
 
     plan_result = await db.execute(select(Plan).where(Plan.id == payload.plan_id))
     plan = plan_result.scalar_one_or_none()
-    
+
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found.")
 
     # Deduct from wallet
     balance_result = await db.execute(select(WalletLedger).where(WalletLedger.user_id == user_id))
     rows = balance_result.scalars().all()
-    total = sum((row.amount if row.transaction_type == "credit" else -row.amount for row in rows), Decimal("0.00"))
-    
+    total = sum(
+        (row.amount if row.transaction_type == "credit" else -row.amount for row in rows),
+        Decimal("0.00"),
+    )
+
     if total < plan.price_inr:
         raise HTTPException(status_code=400, detail="Insufficient wallet balance.")
-        
+
     # Debit wallet
     debit = WalletLedger(
         user_id=user_id,
         amount=plan.price_inr,
         transaction_type="debit",
         description=f"Subscription to {plan.name}",
-        reference_id=f"sub_{uuid4().hex[:10]}"
+        reference_id=f"sub_{uuid4().hex[:10]}",
     )
     db.add(debit)
-    
+
     # Create subscription
     sub = Subscription(
         user_id=user_id,
         plan_id=plan.id,
         status="active",
-        current_period_end=datetime.now(UTC) # TODO: add 1 month
+        current_period_end=datetime.now(UTC),  # TODO: add 1 month
     )
     db.add(sub)
     await db.commit()
-    
+
     return {"status": "subscribed", "plan": plan.name}
 
 
@@ -246,9 +255,14 @@ async def payment_history(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, object]:
     user_id = _resolve_user_id(current_user)
-    
+
     # Fetch from WalletLedger instead of PaymentIntent for accurate history
-    stmt = select(WalletLedger).where(WalletLedger.user_id == user_id).order_by(WalletLedger.created_at.desc()).limit(limit)
+    stmt = (
+        select(WalletLedger)
+        .where(WalletLedger.user_id == user_id)
+        .order_by(WalletLedger.created_at.desc())
+        .limit(limit)
+    )
     result = await db.execute(stmt)
     rows = result.scalars().all()
     return {
@@ -264,6 +278,7 @@ async def payment_history(
         ],
         "total": len(rows),
     }
+
 
 @router.get("/subscription")
 async def get_subscription(
@@ -282,16 +297,13 @@ async def get_subscription(
     row = result.first()
     if not row:
         return {"subscription": None}
-    
+
     sub, plan = row
     return {
         "subscription": {
             "id": str(sub.id),
             "status": sub.status,
             "current_period_end": sub.current_period_end.isoformat(),
-            "plan": {
-                "name": plan.name,
-                "features": json.loads(plan.features_json)
-            }
+            "plan": {"name": plan.name, "features": json.loads(plan.features_json)},
         }
     }

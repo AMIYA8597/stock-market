@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PublicLayout } from "./PublicLayout";
 import { Badge } from "@neuroquant/ui";
-import { Card } from "@/components/dashboard/premium";
+import { Card } from "@neuroquant/ui";
 import { ShieldCheck, Sparkles, Workflow } from "lucide-react";
 
 export function AuthLayout({ children }: { children: React.ReactNode }): JSX.Element {

@@ -9,7 +9,7 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  transpilePackages: ["@neuroquant/ui", "@neuroquant/types"],
+  transpilePackages: ["@neuroquant/ui", "@neuroquant/types", "react-resizable-panels"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "lh3.googleusercontent.com" },

@@ -10,8 +10,9 @@ NSE_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.nseindia.com"
+    "Referer": "https://www.nseindia.com",
 }
+
 
 class NSEService:
     _session: httpx.AsyncClient | None = None
@@ -19,7 +20,9 @@ class NSEService:
     @classmethod
     async def get_session(cls) -> httpx.AsyncClient:
         if cls._session is None or cls._session.is_closed:
-            cls._session = httpx.AsyncClient(headers=NSE_HEADERS, timeout=10.0, follow_redirects=True)
+            cls._session = httpx.AsyncClient(
+                headers=NSE_HEADERS, timeout=10.0, follow_redirects=True
+            )
             # Warm up session with homepage visit (required by NSE to get cookies)
             try:
                 await cls._session.get("https://www.nseindia.com")

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@neuroquant/ui";
-import { Button, Card, CardContent, CardHeader, CardTitle } from "@/components/dashboard/premium";
+import { Button, Card, CardContent, CardHeader, CardTitle } from "@neuroquant/ui";
 import { contractsApi, type RegimeCurrentResponse, type RegimeHistoryPoint, type RegimeStatisticsItem } from "@/lib/contracts-api";
 import { ChartCard, SimpleLineAreaChart, type LineAreaPoint, SimpleHeatGrid, type HeatCell } from "@/components/charts";
 

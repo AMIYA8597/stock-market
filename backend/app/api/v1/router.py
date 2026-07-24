@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
 import logging
+
+from fastapi import APIRouter, HTTPException
 
 from app.api.v1 import (
     admin,
+    ai,
     alerts,
     auth,
     backtest,
@@ -15,11 +17,10 @@ from app.api.v1 import (
     journal,
     market,
     models,
+    news,
     notifications,
-    ohlcv,
     paper_trading,
     payments,
-    ai,
     portfolio,
     predictions,
     regime,
@@ -27,6 +28,7 @@ from app.api.v1 import (
     signals,
     trading,
     users,
+    watchlist,
     websocket_url,
 )
 
@@ -42,6 +44,7 @@ router.include_router(admin.router)
 router.include_router(blog.router)
 router.include_router(notifications.router)
 router.include_router(payments.router)
+router.include_router(watchlist.router)
 
 
 router.include_router(market.router)
@@ -49,6 +52,7 @@ router.include_router(websocket_url.router)
 
 router.include_router(signals.router)
 router.include_router(regime.router)
+router.include_router(news.router)
 router.include_router(explain.router)
 router.include_router(backtest.router)
 router.include_router(portfolio.router, prefix="/portfolio")
@@ -58,21 +62,23 @@ router.include_router(screener.router)
 router.include_router(alerts.router)
 router.include_router(models.router)
 router.include_router(intelligence.router)
-router.include_router(ohlcv.router)
 router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])
 router.include_router(journal.router)
 
 router.include_router(ai.router)
 
+
 @router.get("/version", tags=["system"])
 async def get_version() -> dict[str, str]:
     return {"version": "2.0.0", "name": "NeuroQuant API"}
 
+
 @router.post("/debug/trigger-alert-check", tags=["debug"])
 async def trigger_alert_check():
-    from app.services.alert_engine import check_and_fire_alerts
     from app.core.watchlist import WATCHLIST_SYMBOLS
+    from app.services.alert_engine import check_and_fire_alerts
     from app.websocket.connection_manager import get_connection_manager
+
     try:
         manager = get_connection_manager()
         alerts = await check_and_fire_alerts(WATCHLIST_SYMBOLS, manager)
@@ -80,5 +86,6 @@ async def trigger_alert_check():
     except Exception as e:
         logger.error(f"Debug alert check failed: {e}")
         raise HTTPException(status_code=500, detail="Alert check failed")
+
 
 __all__ = ["router", "api_router"]

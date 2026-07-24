@@ -14,7 +14,9 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
-    totp_code: str | None = Field(default=None, min_length=6, max_length=6, description="6-digit TOTP code if 2FA is enabled")
+    totp_code: str | None = Field(
+        default=None, min_length=6, max_length=6, description="6-digit TOTP code if 2FA is enabled"
+    )
 
 
 class TokenRefresh(BaseModel):

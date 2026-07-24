@@ -1,4 +1,4 @@
-// backend/app/infrastructure/market_data/router.py
+# backend/app/infrastructure/market_data/router.py
 """Market data service using free providers with caching.
 
 Provides REST endpoint `/api/v1/market/quote/{symbol}` and WebSocket `/api/v1/market/ws/quotes`.
@@ -7,9 +7,9 @@ Provides REST endpoint `/api/v1/market/quote/{symbol}` and WebSocket `/api/v1/ma
 import asyncio
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
@@ -21,13 +21,15 @@ router = APIRouter(prefix="/market")
 settings = get_settings()
 CACHE_TTL = 300  # seconds
 
+
 class QuoteResponse(BaseModel):
     symbol: str = Field(..., description="Ticker symbol")
     price: float = Field(..., description="Current price")
     timestamp: datetime = Field(..., description="Quote timestamp (UTC)")
     source: str = Field(..., description="Provider that supplied the data")
 
-async def get_cached_quote(redis, symbol: str) -> Optional[Dict[str, Any]]:
+
+async def get_cached_quote(redis, symbol: str) -> dict[str, Any] | None:
     raw = await redis.get(f"quote:{symbol}")
     if raw:
         try:
@@ -38,10 +40,12 @@ async def get_cached_quote(redis, symbol: str) -> Optional[Dict[str, Any]]:
             return None
     return None
 
-async def set_cached_quote(redis, symbol: str, payload: Dict[str, Any]):
+
+async def set_cached_quote(redis, symbol: str, payload: dict[str, Any]):
     payload_copy = payload.copy()
     payload_copy["timestamp"] = payload_copy["timestamp"].isoformat()
     await redis.setex(f"quote:{symbol}", CACHE_TTL, json.dumps(payload_copy))
+
 
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
 async def get_quote(symbol: str, redis=Depends(get_redis)) -> QuoteResponse:
@@ -67,11 +71,12 @@ async def get_quote(symbol: str, redis=Depends(get_redis)) -> QuoteResponse:
             detail=f"Unable to fetch quote for {symbol}: {exc}",
         )
 
+
 # Simple WebSocket manager for broadcasting quotes to subscribed clients
 class WSManager:
     def __init__(self):
-        self.connections: List[WebSocket] = []
-        self.subscriptions: Dict[WebSocket, List[str]] = {}
+        self.connections: list[WebSocket] = []
+        self.subscriptions: dict[WebSocket, list[str]] = {}
 
     async def connect(self, ws: WebSocket):
         await ws.accept()
@@ -86,7 +91,9 @@ class WSManager:
     async def send(self, ws: WebSocket, data: dict):
         await ws.send_text(json.dumps(data))
 
+
 manager = WSManager()
+
 
 @router.websocket("/ws/quotes")
 async def ws_quotes(ws: WebSocket, redis=Depends(get_redis)):

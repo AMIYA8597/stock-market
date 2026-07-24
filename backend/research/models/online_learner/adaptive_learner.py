@@ -12,20 +12,32 @@ from river import compose, linear_model, preprocessing
 
 logger = logging.getLogger(__name__)
 
+
 class OnlineAdaptiveLearner:
     """Incremental learner using a River pipeline of StandardScaler and Logistic Regression."""
 
     def __init__(self) -> None:
         self.model = compose.Pipeline(
             preprocessing.StandardScaler(),
-            linear_model.LogisticRegression(optimizer=river.optim.SGD(0.01))
+            linear_model.LogisticRegression(optimizer=river.optim.SGD(0.01)),
         )
         self.features = [
-            "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-            "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-            "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-            "dist_52w_high", "dist_52w_low", "drawdown",
-            "range_pct", "close_to_open"
+            "ret_1d",
+            "ret_5d",
+            "ret_21d",
+            "momentum_63d",
+            "RSI_14",
+            "MACDh_12_26_9",
+            "BBP_20_2.0",
+            "ATRr_14",
+            "ADX_14",
+            "realized_vol_21d",
+            "yang_zhang_vol_21d",
+            "dist_52w_high",
+            "dist_52w_low",
+            "drawdown",
+            "range_pct",
+            "close_to_open",
         ]
 
     def update(self, x_dict: dict[str, float], y: int) -> None:

@@ -16,12 +16,14 @@ if str(ROOT) not in sys.path:
 
 os.environ.setdefault("ENVIRONMENT", "development")
 
+
 async def main():
     from app.database.connection import init_db
 
     print("Initializing dev SQLite database...")
     await init_db()
     print("Database initialized.")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

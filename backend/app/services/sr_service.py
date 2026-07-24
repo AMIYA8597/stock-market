@@ -36,23 +36,21 @@ MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 _BaseClass = nn.Module if nn is not None else object
 
+
 class SRBiLSTM(_BaseClass):
     """Bidirectional LSTM for sequence labeling of support/resistance zones."""
+
     def __init__(self, input_dim: int = 5, hidden_dim: int = 32, num_classes: int = 3):
         super().__init__()
         self.lstm = nn.LSTM(
-            input_dim,
-            hidden_dim,
-            num_layers=1,
-            batch_first=True,
-            bidirectional=True
+            input_dim, hidden_dim, num_layers=1, batch_first=True, bidirectional=True
         )
         self.fc = nn.Linear(hidden_dim * 2, num_classes)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # Input shape: (batch, seq_len, input_dim)
         lstm_out, _ = self.lstm(x)  # (batch, seq_len, hidden_dim * 2)
-        logits = self.fc(lstm_out)   # (batch, seq_len, num_classes)
+        logits = self.fc(lstm_out)  # (batch, seq_len, num_classes)
         return logits
 
 
@@ -61,9 +59,7 @@ class SupportResistanceEngine:
 
     @staticmethod
     def detect_classical_zones(
-        df: pd.DataFrame,
-        eps_pct: float = 0.012,
-        min_touches: int = 2
+        df: pd.DataFrame, eps_pct: float = 0.012, min_touches: int = 2
     ) -> list[dict[str, Any]]:
         """Identify S/R zones using swing highs/lows clustered with DBSCAN."""
         if len(df) < 20:
@@ -78,9 +74,9 @@ class SupportResistanceEngine:
 
         # Find local swing highs and lows (5-candle window)
         for i in range(2, len(df) - 2):
-            if highs[i] == max(highs[i-2:i+3]):
+            if highs[i] == max(highs[i - 2 : i + 3]):
                 swing_highs.append(highs[i])
-            if lows[i] == min(lows[i-2:i+3]):
+            if lows[i] == min(lows[i - 2 : i + 3]):
                 swing_lows.append(lows[i])
 
         # Default fallback to all highs/lows if swings are too few
@@ -104,13 +100,15 @@ class SupportResistanceEngine:
                 if cluster_idx == -1:
                     continue  # Ignore noise
                 cluster_prices = X_low[labels_low == cluster_idx]
-                zones.append({
-                    "type": "support",
-                    "min": float(np.min(cluster_prices)),
-                    "max": float(np.max(cluster_prices)),
-                    "touches": int(len(cluster_prices)),
-                    "avg": float(np.mean(cluster_prices))
-                })
+                zones.append(
+                    {
+                        "type": "support",
+                        "min": float(np.min(cluster_prices)),
+                        "max": float(np.max(cluster_prices)),
+                        "touches": int(len(cluster_prices)),
+                        "avg": float(np.mean(cluster_prices)),
+                    }
+                )
 
         # Cluster resistance zones (from swing highs)
         if swing_highs:
@@ -122,13 +120,15 @@ class SupportResistanceEngine:
                 if cluster_idx == -1:
                     continue  # Ignore noise
                 cluster_prices = X_high[labels_high == cluster_idx]
-                zones.append({
-                    "type": "resistance",
-                    "min": float(np.min(cluster_prices)),
-                    "max": float(np.max(cluster_prices)),
-                    "touches": int(len(cluster_prices)),
-                    "avg": float(np.mean(cluster_prices))
-                })
+                zones.append(
+                    {
+                        "type": "resistance",
+                        "min": float(np.min(cluster_prices)),
+                        "max": float(np.max(cluster_prices)),
+                        "touches": int(len(cluster_prices)),
+                        "avg": float(np.mean(cluster_prices)),
+                    }
+                )
 
         # Sort zones by price level
         zones.sort(key=lambda z: z["avg"])
@@ -136,8 +136,7 @@ class SupportResistanceEngine:
 
     @staticmethod
     def _prepare_sequence_data(
-        df: pd.DataFrame,
-        seq_len: int = 30
+        df: pd.DataFrame, seq_len: int = 30
     ) -> tuple[np.ndarray, np.ndarray, list[dict[str, Any]]]:
         """Prepares normalized sequences and labels for sequence labeling."""
         highs = df["high"].values
@@ -147,7 +146,9 @@ class SupportResistanceEngine:
         volumes = df["volume"].values
 
         # 1. Get ground truth zones using full history DBSCAN
-        classical_zones = SupportResistanceEngine.detect_classical_zones(df, eps_pct=0.012, min_touches=2)
+        classical_zones = SupportResistanceEngine.detect_classical_zones(
+            df, eps_pct=0.012, min_touches=2
+        )
 
         # 2. Label each candle: 0=neither, 1=support, 2=resistance
         labels = np.zeros(len(df), dtype=int)
@@ -191,20 +192,11 @@ class SupportResistanceEngine:
 
     @classmethod
     def train_and_evaluate_bilstm(
-        cls,
-        df: pd.DataFrame,
-        symbol: str,
-        seq_len: int = 30,
-        epochs: int = 8
+        cls, df: pd.DataFrame, symbol: str, seq_len: int = 30, epochs: int = 8
     ) -> dict[str, Any]:
         """Trains BiLSTM model on historical candles and reports out-of-sample performance."""
         if len(df) < seq_len + 20:
-            return {
-                "precision": 0.5,
-                "recall": 0.5,
-                "f1": 0.5,
-                "dl_zones": []
-            }
+            return {"precision": 0.5, "recall": 0.5, "f1": 0.5, "dl_zones": []}
 
         X, y, classical_zones = cls._prepare_sequence_data(df, seq_len=seq_len)
 
@@ -222,11 +214,11 @@ class SupportResistanceEngine:
         X_tr_t = torch.tensor(X_train, dtype=torch.float32).to(device)
         y_tr_t = torch.tensor(y_train, dtype=torch.long).to(device)
         X_te_t = torch.tensor(X_test, dtype=torch.float32).to(device)
-        y_te_t = torch.tensor(y_test, dtype=torch.long).to(device)
+        torch.tensor(y_test, dtype=torch.long).to(device)
 
         # Lightweight training loop
         model.train()
-        for epoch in range(epochs):
+        for _epoch in range(epochs):
             optimizer.zero_grad()
             outputs = model(X_tr_t)  # (batch, seq, 3)
             loss = criterion(outputs.view(-1, 3), y_tr_t.view(-1))
@@ -253,7 +245,11 @@ class SupportResistanceEngine:
 
             precision = float(tp / (tp + fp)) if (tp + fp) > 0 else 0.50
             recall = float(tp / (tp + fn)) if (tp + fn) > 0 else 0.50
-            f1 = float(2 * precision * recall / (precision + recall)) if (precision + recall) > 0 else 0.50
+            f1 = (
+                float(2 * precision * recall / (precision + recall))
+                if (precision + recall) > 0
+                else 0.50
+            )
         else:
             precision, recall, f1 = 0.55, 0.52, 0.53  # Fallbacks for small datasets
 
@@ -298,26 +294,30 @@ class SupportResistanceEngine:
             db_s = DBSCAN(eps=eps, min_samples=1).fit(X_s)
             for cid in set(db_s.labels_):
                 c_pr = X_s[db_s.labels_ == cid]
-                dl_zones.append({
-                    "type": "support",
-                    "min": float(np.min(c_pr)),
-                    "max": float(np.max(c_pr)),
-                    "touches": int(len(c_pr)),
-                    "avg": float(np.mean(c_pr))
-                })
+                dl_zones.append(
+                    {
+                        "type": "support",
+                        "min": float(np.min(c_pr)),
+                        "max": float(np.max(c_pr)),
+                        "touches": int(len(c_pr)),
+                        "avg": float(np.mean(c_pr)),
+                    }
+                )
 
         if dl_resistance_prices:
             X_r = np.array(dl_resistance_prices).reshape(-1, 1)
             db_r = DBSCAN(eps=eps, min_samples=1).fit(X_r)
             for cid in set(db_r.labels_):
                 c_pr = X_r[db_r.labels_ == cid]
-                dl_zones.append({
-                    "type": "resistance",
-                    "min": float(np.min(c_pr)),
-                    "max": float(np.max(c_pr)),
-                    "touches": int(len(c_pr)),
-                    "avg": float(np.mean(c_pr))
-                })
+                dl_zones.append(
+                    {
+                        "type": "resistance",
+                        "min": float(np.min(c_pr)),
+                        "max": float(np.max(c_pr)),
+                        "touches": int(len(c_pr)),
+                        "avg": float(np.mean(c_pr)),
+                    }
+                )
 
         dl_zones.sort(key=lambda z: z["avg"])
 
@@ -330,15 +330,15 @@ class SupportResistanceEngine:
             metrics_path = MODEL_DIR / f"sr_metrics_{symbol}.pkl"
             with open(metrics_path, "wb") as f:
                 pickle.dump({"precision": precision, "recall": recall, "f1": f1}, f)
-        except Exception as e:
-            logger_warning = f"Failed to save model checkpoints: {e}"
+        except Exception:
+            pass
 
         return {
             "precision": float(round(precision, 4)),
             "recall": float(round(recall, 4)),
             "f1": float(round(f1, 4)),
             "dl_zones": dl_zones,
-            "classical_zones": classical_zones
+            "classical_zones": classical_zones,
         }
 
 

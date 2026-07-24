@@ -27,25 +27,35 @@ REQUIRED_TABLES = {
 async def verify_schema() -> int:
     async with async_session_factory() as session:
         tables = (
-            await session.execute(
-                text(
-                    """
+            (
+                await session.execute(
+                    text(
+                        """
                     SELECT table_name
                     FROM information_schema.tables
                     WHERE table_schema = 'public'
                     """
+                    )
                 )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
 
         table_set = set(tables)
         missing = sorted(REQUIRED_TABLES - table_set)
 
         ext_rows = (
-            await session.execute(
-                text("SELECT extname FROM pg_extension WHERE extname IN ('timescaledb', 'pgcrypto')")
+            (
+                await session.execute(
+                    text(
+                        "SELECT extname FROM pg_extension WHERE extname IN ('timescaledb', 'pgcrypto')"
+                    )
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         extensions = set(ext_rows)
 
         cagg_exists = (

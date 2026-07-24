@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Bell, Pause, Trash2, Edit, AlertTriangle, Brain, TrendingUp, Newspaper } from "lucide-react";
-import { Card, CardHeader, CardTitle, Button, Badge } from "@neuroquant/ui";
+import { Card, CardHeader, CardTitle, Button, Badge, Modal, Input, Select } from "@neuroquant/ui";
 import type { AlertType, AlertSeverity } from "@neuroquant/types";
 import { alertsApi } from "@/lib/api-client";
 
@@ -45,6 +45,15 @@ export function AlertsContent() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "Custom Alert",
+    symbol: "NIFTY50",
+    alert_type: "technical" as AlertType,
+    cooldown_minutes: 15,
+  });
+  const [submitting, setSubmitting] = useState(false);
 
   const loadData = async (): Promise<void> => {
     try {
@@ -95,22 +104,26 @@ export function AlertsContent() {
     [alerts]
   );
 
-  const createDefaultAlert = async (): Promise<void> => {
+  const submitAlert = async (): Promise<void> => {
     try {
+      setSubmitting(true);
       await alertsApi.create({
-        name: "NIFTY Momentum Watch",
-        symbol: "NIFTY50",
-        alert_type: "technical",
-        conditions: { indicator: "rsi", operator: "lt", value: 35 },
+        name: formData.name,
+        symbol: formData.symbol,
+        alert_type: formData.alert_type,
+        conditions: formData.alert_type === "technical" ? { indicator: "rsi", operator: "lt", value: 35 } : { threshold: 5 },
         channels: ["in_app"],
-        cooldown_minutes: 20,
+        cooldown_minutes: formData.cooldown_minutes,
         is_active: true,
       });
+      setModalOpen(false);
       await loadData();
     } catch (createError) {
       const message =
         createError instanceof Error ? createError.message : "Failed to create alert.";
       setError(message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -141,7 +154,7 @@ export function AlertsContent() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold text-nq-text-primary">Smart Alert Center</h1>
-        <Button size="sm" onClick={() => void createDefaultAlert()} disabled={loading}>
+        <Button size="sm" onClick={() => setModalOpen(true)} disabled={loading}>
           <Plus className="h-3.5 w-3.5" />
           New Alert
         </Button>
@@ -241,6 +254,38 @@ export function AlertsContent() {
           </Card>
         </div>
       </div>
+
+      <Modal open={modalOpen} onOpenChange={setModalOpen} title="Create New Alert" description="Configure alert rules to notify you when market conditions are met.">
+        <div className="space-y-4 pt-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-nq-text-primary">Alert Name</label>
+            <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="E.g. NIFTY Oversold" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-nq-text-primary">Symbol</label>
+            <Input value={formData.symbol} onChange={(e) => setFormData({ ...formData, symbol: e.target.value })} placeholder="E.g. RELIANCE" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-nq-text-primary">Alert Type</label>
+            <Select value={formData.alert_type} onChange={(e) => setFormData({ ...formData, alert_type: e.target.value as AlertType })}>
+              <option value="price">Price Threshold</option>
+              <option value="technical">Technical Indicator (RSI/MACD)</option>
+              <option value="ml_signal">AI Signal Flip</option>
+              <option value="volume">Volume Surge</option>
+              <option value="pattern">Pattern Detected</option>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-nq-text-primary">Cooldown (Minutes)</label>
+            <Input type="number" value={formData.cooldown_minutes} onChange={(e) => setFormData({ ...formData, cooldown_minutes: Number(e.target.value) })} />
+          </div>
+          
+          <div className="flex justify-end gap-3 mt-6">
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Cancel</Button>
+            <Button onClick={() => void submitAlert()} disabled={submitting}>{submitting ? "Saving..." : "Create Alert"}</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

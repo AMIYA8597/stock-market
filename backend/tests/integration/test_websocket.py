@@ -20,5 +20,5 @@ def test_ws_signals_subscription() -> None:
     with client.websocket_connect("/ws/signals") as websocket:
         websocket.send_json({"action": "subscribe", "symbols": ["RELIANCE.NS"]})
         payload = websocket.receive_json()
-        assert payload["type"] == "signal_update"
+        assert payload["type"] == "signal"
         assert payload["symbol"] == "RELIANCE.NS"

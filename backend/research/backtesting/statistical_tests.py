@@ -29,7 +29,9 @@ def deflated_sharpe_ratio(sharpe: float, n_trials: int) -> float:
     """Compute deflated Sharpe ratio proxy with multiple-testing adjustment."""
     if n_trials <= 1:
         return sharpe
-    e_sr_max = (0.5772156649 + math.sqrt(2.0 * math.log(n_trials))) / (2.0 * math.sqrt(math.log(n_trials)))
+    e_sr_max = (0.5772156649 + math.sqrt(2.0 * math.log(n_trials))) / (
+        2.0 * math.sqrt(math.log(n_trials))
+    )
     return sharpe - e_sr_max
 
 

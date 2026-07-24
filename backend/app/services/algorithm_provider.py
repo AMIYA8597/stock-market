@@ -1,4 +1,3 @@
-
 # Simple algorithm registry mapping identifiers to implementation import paths.
 # This can be extended to load algorithms dynamically.
 ALGORITHM_MAP: dict[str, str] = {
@@ -10,6 +9,7 @@ ALGORITHM_MAP: dict[str, str] = {
     # Add more algorithms as needed.
 }
 
+
 def get_algorithm_path(name: str) -> str:
     """Return the import path for a given algorithm identifier.
 
@@ -19,6 +19,7 @@ def get_algorithm_path(name: str) -> str:
     if name not in ALGORITHM_MAP:
         raise KeyError(f"Algorithm '{name}' is not registered.")
     return ALGORITHM_MAP[name]
+
 
 def list_algorithms() -> list[str]:
     """Return a list of all available algorithm identifiers."""

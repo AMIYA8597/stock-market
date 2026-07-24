@@ -9,15 +9,16 @@ import math
 from datetime import UTC, datetime
 
 import yfinance as yf
-from app.services.indian_stock_api import IndianStockAPI
 
 from app.core.logging import get_logger
+from app.services.indian_stock_api import IndianStockAPI
 
 logger = get_logger(__name__)
 
 
 class HistoryList(list):
     """Subclass of list that carries data source metadata."""
+
     def __init__(self, items, source: str = "yfinance"):
         super().__init__(items)
         self.source = source
@@ -36,7 +37,9 @@ def safe_float(val, fallback=0.0) -> float:
 class MarketDataService:
     # Class-level session and caches for sockets, rate-limiting, and performance optimization
     _session = None
-    _semaphore = asyncio.Semaphore(8)  # limit concurrency to avoid descriptor exhaustion under select()
+    _semaphore = asyncio.Semaphore(
+        8
+    )  # limit concurrency to avoid descriptor exhaustion under select()
 
     _last_yfinance_request_time = 0.0
     _last_nse_request_time = 0.0
@@ -59,32 +62,75 @@ class MarketDataService:
 
     # NSE Top 50 stocks with .NS suffix
     NSE_NIFTY50 = [
-        "RELIANCE.NS","TCS.NS","HDFCBANK.NS","INFY.NS","ICICIBANK.NS",
-        "HINDUNILVR.NS","ITC.NS","SBIN.NS","BHARTIARTL.NS","KOTAKBANK.NS",
-        "AXISBANK.NS","LT.NS","WIPRO.NS","HCLTECH.NS","ASIANPAINT.NS",
-        "MARUTI.NS","SUNPHARMA.NS","TITAN.NS","ULTRACEMCO.NS","BAJFINANCE.NS",
-        "NESTLEIND.NS","M&M.NS","TATASTEEL.NS","NTPC.NS","POWERGRID.NS",
-        "ONGC.NS","COALINDIA.NS","JSWSTEEL.NS","GRASIM.NS","ADANIENT.NS",
-        "ADANIPORTS.NS","BAJAJFINSV.NS","TECHM.NS","DRREDDY.NS","CIPLA.NS",
-        "DIVISLAB.NS","BRITANNIA.NS","APOLLOHOSP.NS","TATACONSUM.NS","HEROMOTOCO.NS",
-        "EICHERMOT.NS","BPCL.NS","SHREECEM.NS","INDUSINDBK.NS","UPL.NS",
-        "HINDALCO.NS","SBILIFE.NS","HDFCLIFE.NS","TATAMOTORS.NS","BAJAJ-AUTO.NS"
+        "RELIANCE.NS",
+        "TCS.NS",
+        "HDFCBANK.NS",
+        "INFY.NS",
+        "ICICIBANK.NS",
+        "HINDUNILVR.NS",
+        "ITC.NS",
+        "SBIN.NS",
+        "BHARTIARTL.NS",
+        "KOTAKBANK.NS",
+        "AXISBANK.NS",
+        "LT.NS",
+        "WIPRO.NS",
+        "HCLTECH.NS",
+        "ASIANPAINT.NS",
+        "MARUTI.NS",
+        "SUNPHARMA.NS",
+        "TITAN.NS",
+        "ULTRACEMCO.NS",
+        "BAJFINANCE.NS",
+        "NESTLEIND.NS",
+        "M&M.NS",
+        "TATASTEEL.NS",
+        "NTPC.NS",
+        "POWERGRID.NS",
+        "ONGC.NS",
+        "COALINDIA.NS",
+        "JSWSTEEL.NS",
+        "GRASIM.NS",
+        "ADANIENT.NS",
+        "ADANIPORTS.NS",
+        "BAJAJFINSV.NS",
+        "TECHM.NS",
+        "DRREDDY.NS",
+        "CIPLA.NS",
+        "DIVISLAB.NS",
+        "BRITANNIA.NS",
+        "APOLLOHOSP.NS",
+        "TATACONSUM.NS",
+        "HEROMOTOCO.NS",
+        "EICHERMOT.NS",
+        "BPCL.NS",
+        "SHREECEM.NS",
+        "INDUSINDBK.NS",
+        "UPL.NS",
+        "HINDALCO.NS",
+        "SBILIFE.NS",
+        "HDFCLIFE.NS",
+        "TATAMOTORS.NS",
+        "BAJAJ-AUTO.NS",
     ]
 
     @classmethod
     def get_session(cls):
         if cls._session is None:
             import requests
+
             cls._session = requests.Session()
-            cls._session.headers.update({
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            })
+            cls._session.headers.update(
+                {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+            )
         return cls._session
 
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:
         """Automatically appends .NS if the symbol has no dot, caret, or dash.
-        
+
         Also maps index symbols like NIFTY50, BANKNIFTY, SENSEX to their Yahoo Finance tickers.
         """
         s = symbol.upper().strip()
@@ -113,8 +159,23 @@ class MarketDataService:
 
         # Bypass common US stock tickers to prevent appending .NS
         us_tickers = {
-            "AAPL", "MSFT", "GOOG", "GOOGL", "TSLA", "AMZN", "NVDA", "META",
-            "NFLX", "AMD", "INTC", "QCOM", "AVGO", "CSCO", "PEP", "KO", "DIS"
+            "AAPL",
+            "MSFT",
+            "GOOG",
+            "GOOGL",
+            "TSLA",
+            "AMZN",
+            "NVDA",
+            "META",
+            "NFLX",
+            "AMD",
+            "INTC",
+            "QCOM",
+            "AVGO",
+            "CSCO",
+            "PEP",
+            "KO",
+            "DIS",
         }
         if s in us_tickers:
             return s
@@ -126,7 +187,7 @@ class MarketDataService:
     @staticmethod
     async def get_quote(symbol: str) -> dict:
         """Fetch live quote using yfinance Ticker.
-        
+
         Uses fast_info for live price, falls back to history closes if unavailable.
         Raises ValueError with the symbol name if result is empty.
         Caches in in-memory and Redis.
@@ -136,6 +197,7 @@ class MarketDataService:
         # 1. Check Upstox live cache first
         try:
             from app.services.upstox_service import UpstoxService
+
             up_quote = UpstoxService.get_cached_quote(sym)
             if up_quote:
                 # Add source field
@@ -145,11 +207,12 @@ class MarketDataService:
             logger.debug(f"Upstox live cache check failed for {sym}: {ue}")
 
         cache_key = f"mds:quote:{sym}"
-        now = datetime.now(UTC).timestamp()
+        datetime.now(UTC).timestamp()
 
         redis = None
         try:
             from app.database.redis_client import get_redis_client
+
             redis = await get_redis_client()
             cached = await redis.get(cache_key)
             if cached:
@@ -182,13 +245,17 @@ class MarketDataService:
                 try:
                     info_dict = ticker.info or {}
                     market_cap = float(info_dict.get("marketCap") or 0.0)
-                    week_52_high = float(info_dict.get("fiftyTwoWeekHigh") or getattr(info, "year_high", price))
-                    week_52_low = float(info_dict.get("fiftyTwoWeekLow") or getattr(info, "year_low", price))
+                    week_52_high = float(
+                        info_dict.get("fiftyTwoWeekHigh") or getattr(info, "year_high", price)
+                    )
+                    week_52_low = float(
+                        info_dict.get("fiftyTwoWeekLow") or getattr(info, "year_low", price)
+                    )
                 except Exception:
                     market_cap = 0.0
                     week_52_high = getattr(info, "year_high", price)
                     week_52_low = getattr(info, "year_low", price)
-                
+
                 open_p = price
                 high = price
                 low = price
@@ -232,13 +299,13 @@ class MarketDataService:
             await MarketDataService._throttle_yfinance(sym)
             async with MarketDataService._semaphore:
                 result = await asyncio.wait_for(asyncio.to_thread(_fetch_quote), timeout=8.0)
-            
+
             if not result or result.get("price") is None:
                 # Async fallback to get_history if fast_info didn't work
                 hist = await MarketDataService.get_history(sym, interval="1d", period="5d")
                 if not hist:
                     raise ValueError(sym)
-                
+
                 # Update result with history
                 price = float(hist[-1]["close"])
                 prev_close = float(hist[-2]["close"]) if len(hist) >= 2 else price
@@ -255,22 +322,24 @@ class MarketDataService:
                     "week_52_low": float(hist[-1]["low"]),
                     "source": "yfinance",
                 }
-            
+
             # Format numbers properly before returning
             price = result["price"]
             prev_close = result["previous_close"]
             change = price - prev_close
             change_pct = (change / prev_close * 100.0) if prev_close != 0.0 else 0.0
-            
-            result.update({
-                "price": round(price, 2),
-                "change": round(change, 2),
-                "change_pct": round(change_pct, 4),
-                "open": round(result["open"], 2),
-                "high": round(result["high"], 2),
-                "low": round(result["low"], 2),
-                "previous_close": round(prev_close, 2),
-            })
+
+            result.update(
+                {
+                    "price": round(price, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 4),
+                    "open": round(result["open"], 2),
+                    "high": round(result["high"], 2),
+                    "low": round(result["low"], 2),
+                    "previous_close": round(prev_close, 2),
+                }
+            )
             if result.get("week_52_high"):
                 result["week_52_high"] = round(result["week_52_high"], 2)
             if result.get("week_52_low"):
@@ -289,7 +358,7 @@ class MarketDataService:
                 logger.debug(f"IndianStockAPI fallback failed for {sym}: {fe}")
 
             # Tombstone / cache the failure so we don't spam network
-            now_ts = datetime.now(UTC).timestamp()
+            datetime.now(UTC).timestamp()
             failure_dict = {"error": True, "message": str(e)}
             if redis:
                 try:
@@ -300,7 +369,7 @@ class MarketDataService:
                 raise
             raise ValueError(sym) from e
             # Tombstone / cache the failure so we don't spam network
-            now_ts = datetime.now(UTC).timestamp()
+            datetime.now(UTC).timestamp()
             failure_dict = {"error": True, "message": str(e)}
             if redis:
                 try:
@@ -312,7 +381,7 @@ class MarketDataService:
             raise ValueError(sym) from e
 
         # Store in caches
-        now_ts = datetime.now(UTC).timestamp()
+        datetime.now(UTC).timestamp()
         if redis:
             try:
                 await redis.setex(cache_key, 20, json.dumps(result))
@@ -324,7 +393,7 @@ class MarketDataService:
     @staticmethod
     async def get_history(symbol: str, interval: str, period: str) -> list[dict]:
         """Fetch historical bars using yfinance download.
-        
+
         Maps frontend timeframes to yfinance interval strings.
         """
         sym = MarketDataService._normalize_symbol(symbol)
@@ -336,15 +405,22 @@ class MarketDataService:
         # D9: yfinance interval/period limits
         if interval == "1m" and period not in ("1d", "5d"):
             period = "5d"
-        elif interval in ("2m", "5m", "15m", "30m", "1h", "60m") and period in ("max", "10y", "5y", "2y", "1y"):
+        elif interval in ("2m", "5m", "15m", "30m", "1h", "60m") and period in (
+            "max",
+            "10y",
+            "5y",
+            "2y",
+            "1y",
+        ):
             period = "60d"
 
         cache_key = f"mds:history:{sym}:{yf_interval}:{period}"
-        now = datetime.now(UTC).timestamp()
+        datetime.now(UTC).timestamp()
 
         redis = None
         try:
             from app.database.redis_client import get_redis_client
+
             redis = await get_redis_client()
             cached = await redis.get(cache_key)
             if cached:
@@ -352,7 +428,9 @@ class MarketDataService:
                 if isinstance(cached_data, dict) and cached_data.get("error"):
                     return []
                 if isinstance(cached_data, dict) and "bars" in cached_data:
-                    res_list = HistoryList(cached_data["bars"], source=cached_data.get("source", "yfinance"))
+                    res_list = HistoryList(
+                        cached_data["bars"], source=cached_data.get("source", "yfinance")
+                    )
                     return res_list
                 else:
                     res_list = HistoryList(cached_data, source="yfinance")
@@ -362,9 +440,18 @@ class MarketDataService:
 
         def _fetch_history() -> list[dict]:
             import pandas as pd
+
             session = MarketDataService.get_session()
             try:
-                df = yf.download(sym, period=period, interval=yf_interval, auto_adjust=True, progress=False, threads=False, session=session)
+                df = yf.download(
+                    sym,
+                    period=period,
+                    interval=yf_interval,
+                    auto_adjust=True,
+                    progress=False,
+                    threads=False,
+                    session=session,
+                )
             except Exception as de:
                 logger.warning(f"yfinance download exception for {sym}: {de}")
                 return []
@@ -381,17 +468,21 @@ class MarketDataService:
                     time_str = val.isoformat()
                 else:
                     time_str = str(val)
-                bars.append({
-                    "time": time_str,
-                    "open": float(row["Open"]),
-                    "high": float(row["High"]),
-                    "low": float(row["Low"]),
-                    "close": float(row["Close"]),
-                    "volume": float(row.get("Volume", 0.0) or 0.0),
-                })
-            
+                bars.append(
+                    {
+                        "time": time_str,
+                        "open": float(row["Open"]),
+                        "high": float(row["High"]),
+                        "low": float(row["Low"]),
+                        "close": float(row["Close"]),
+                        "volume": float(row.get("Volume", 0.0) or 0.0),
+                    }
+                )
+
             if bars:
-                print(f"[HOP 1 yfinance] {sym} @ {interval}: count_out={len(bars)}, first={bars[0]['time']}, last={bars[-1]['time']}")
+                print(
+                    f"[HOP 1 yfinance] {sym} @ {interval}: count_out={len(bars)}, first={bars[0]['time']}, last={bars[-1]['time']}"
+                )
             return bars
 
         result = None
@@ -427,7 +518,7 @@ class MarketDataService:
                 interval=orch_interval,
                 start=start_time,
                 end=end_time,
-                asset_type=asset_type
+                asset_type=asset_type,
             )
             orchestrator = DataIngestionOrchestrator(max_concurrency=4)
             source_name, ohlcv_bars = await orchestrator.fetch_task(task)
@@ -435,25 +526,35 @@ class MarketDataService:
                 bars_list = []
                 for b in ohlcv_bars:
                     time_str = b.time.isoformat() if hasattr(b.time, "isoformat") else str(b.time)
-                    bars_list.append({
-                        "time": time_str,
-                        "open": float(b.open),
-                        "high": float(b.high),
-                        "low": float(b.low),
-                        "close": float(b.close),
-                        "volume": float(b.volume),
-                    })
+                    bars_list.append(
+                        {
+                            "time": time_str,
+                            "open": float(b.open),
+                            "high": float(b.high),
+                            "low": float(b.low),
+                            "close": float(b.close),
+                            "volume": float(b.volume),
+                        }
+                    )
                 if bars_list:
-                    print(f"[HOP 1 {source_name}] {sym} @ {interval}: count_out={len(bars_list)}, first={bars_list[0]['time']}, last={bars_list[-1]['time']}")
+                    print(
+                        f"[HOP 1 {source_name}] {sym} @ {interval}: count_out={len(bars_list)}, first={bars_list[0]['time']}, last={bars_list[-1]['time']}"
+                    )
                 result = HistoryList(bars_list, source=source_name)
-                logger.info(f"Historical data fetched via orchestrator source: {source_name} for {sym}")
+                logger.info(
+                    f"Historical data fetched via orchestrator source: {source_name} for {sym}"
+                )
         except Exception as e:
-            logger.info(f"Orchestrator fetch failed for {sym}: {e}, falling back to direct yfinance...")
+            logger.info(
+                f"Orchestrator fetch failed for {sym}: {e}, falling back to direct yfinance..."
+            )
 
         if not result:
             try:
                 async with MarketDataService._semaphore:
-                    raw_bars = await asyncio.wait_for(asyncio.to_thread(_fetch_history), timeout=10.0)
+                    raw_bars = await asyncio.wait_for(
+                        asyncio.to_thread(_fetch_history), timeout=10.0
+                    )
                 if raw_bars:
                     result = HistoryList(raw_bars, source="yfinance")
                     logger.info(f"Historical data fallback fetched via yfinance for {sym}")
@@ -461,7 +562,7 @@ class MarketDataService:
                 logger.warning(f"yfinance download failed for {sym}: {e}")
                 result = None
 
-        now_ts = datetime.now(UTC).timestamp()
+        datetime.now(UTC).timestamp()
         if not result:
             failure_dict = {"error": True}
             if redis:
@@ -470,10 +571,7 @@ class MarketDataService:
                 except Exception:
                     pass
         else:
-            cache_payload = {
-                "source": result.source,
-                "bars": list(result)
-            }
+            cache_payload = {"source": result.source, "bars": list(result)}
             if redis:
                 try:
                     await redis.setex(cache_key, 300, json.dumps(cache_payload))
@@ -481,8 +579,10 @@ class MarketDataService:
                     logger.warning(f"Redis cache set failed for get_history key={cache_key}: {se}")
 
         if result:
-            bars_for_log = list(result) if not hasattr(result, 'bars') else result.bars
-            print(f"[HOP 2 MarketDataService] {sym} @ {interval}: count_out={len(bars_for_log)}, first={bars_for_log[0]['time'] if bars_for_log else 'None'}, last={bars_for_log[-1]['time'] if bars_for_log else 'None'}")
+            bars_for_log = list(result) if not hasattr(result, "bars") else result.bars
+            print(
+                f"[HOP 2 MarketDataService] {sym} @ {interval}: count_out={len(bars_for_log)}, first={bars_for_log[0]['time'] if bars_for_log else 'None'}, last={bars_for_log[-1]['time'] if bars_for_log else 'None'}"
+            )
         else:
             print(f"[HOP 2 MarketDataService] {sym} @ {interval}: count_out=0")
         return result
@@ -490,16 +590,10 @@ class MarketDataService:
     @classmethod
     async def get_intraday_candles(cls, symbol: str, interval: str) -> list[dict]:
         """Fetch intraday candles for a symbol, mapping interval to a sensible period.
-        
+
         Falls back to empty or NSE fallback if yfinance fails.
         """
-        period_map = {
-            "1m": "5d",
-            "5m": "30d",
-            "15m": "30d",
-            "1h": "60d",
-            "1d": "1y"
-        }
+        period_map = {"1m": "5d", "5m": "30d", "15m": "30d", "1h": "60d", "1d": "1y"}
         period = period_map.get(interval, "30d")
 
         try:
@@ -507,21 +601,25 @@ class MarketDataService:
             if bars:
                 return bars
         except Exception as e:
-            logger.warning(f"Failed to fetch intraday candles for {symbol} ({interval}) via yfinance: {e}")
+            logger.warning(
+                f"Failed to fetch intraday candles for {symbol} ({interval}) via yfinance: {e}"
+            )
 
         # If empty or fails, attempt a fallback. If it is an NSE symbol, we can try to append a live quote as a single candle
         try:
             logger.info(f"Falling back to NSE service/quote for {symbol}")
             q = await cls.get_quote(symbol)
             if q and q.get("price") is not None:
-                return [{
-                    "time": datetime.now(UTC).isoformat(),
-                    "open": q["price"],
-                    "high": q["price"],
-                    "low": q["price"],
-                    "close": q["price"],
-                    "volume": q.get("volume", 0.0),
-                }]
+                return [
+                    {
+                        "time": datetime.now(UTC).isoformat(),
+                        "open": q["price"],
+                        "high": q["price"],
+                        "low": q["price"],
+                        "close": q["price"],
+                        "volume": q.get("volume", 0.0),
+                    }
+                ]
         except Exception as fe:
             logger.warning(f"NSE fallback/quote fetch also failed for {symbol}: {fe}")
 
@@ -530,16 +628,16 @@ class MarketDataService:
     @staticmethod
     async def get_movers(n: int = 10, mover_type: str = "gainers") -> list[dict]:
         """Fetch quotes concurrently for NIFTY 50 symbol roots.
-        
+
         Sorts by change_pct and returns top n.
         """
-        symbols = cls.NSE_NIFTY50
+        symbols = MarketDataService.NSE_NIFTY50
 
         tasks = [MarketDataService.get_quote(sym) for sym in symbols]
         quotes_res = await asyncio.gather(*tasks, return_exceptions=True)
 
         quotes = []
-        for sym, q in zip(symbols, quotes_res):
+        for sym, q in zip(symbols, quotes_res, strict=False):
             if isinstance(q, Exception):
                 logger.debug(f"Mover quote failed for symbol={sym}: {q}")
                 continue
@@ -561,52 +659,53 @@ class MarketDataService:
 
         movers = []
         for i, q in enumerate(quotes[:n]):
-            movers.append({
-                "ticker": q["symbol"],
-                "name": q["symbol"].split(".")[0],
-                "price": q["price"],
-                "change_pct": q["change_pct"],
-                "volume": q["volume"],
-                "rank": i + 1,
-            })
+            movers.append(
+                {
+                    "ticker": q["symbol"],
+                    "name": q["symbol"].split(".")[0],
+                    "price": q["price"],
+                    "change_pct": q["change_pct"],
+                    "volume": q["volume"],
+                    "rank": i + 1,
+                }
+            )
         return movers
 
     @staticmethod
     async def get_indices() -> list[dict]:
         """Fetch quotes for ^NSEI, ^BSESN, and ^NSEBANK concurrently.
-        
+
         Maps ticker symbols to display names: NIFTY 50, BSE Sensex, Bank Nifty.
         """
         index_symbols = ["^NSEI", "^BSESN", "^NSEBANK"]
         tasks = [MarketDataService.get_quote(sym) for sym in index_symbols]
         res = await asyncio.gather(*tasks, return_exceptions=True)
 
-        names_map = {
-            "^NSEI": "NIFTY 50",
-            "^BSESN": "BSE Sensex",
-            "^NSEBANK": "Bank Nifty"
-        }
+        names_map = {"^NSEI": "NIFTY 50", "^BSESN": "BSE Sensex", "^NSEBANK": "Bank Nifty"}
 
         indices = []
-        for sym, q in zip(index_symbols, res):
+        for sym, q in zip(index_symbols, res, strict=False):
             if isinstance(q, Exception):
                 logger.debug(f"Index quote failed for symbol={sym}: {q}")
                 continue
             if not q or q.get("price") is None:
                 continue
-            indices.append({
-                "name": names_map.get(sym, sym),
-                "ticker": sym,
-                "value": q["price"],
-                "change": q["change"],
-                "change_pct": q["change_pct"]
-            })
+            indices.append(
+                {
+                    "name": names_map.get(sym, sym),
+                    "ticker": sym,
+                    "value": q["price"],
+                    "change": q["change"],
+                    "change_pct": q["change_pct"],
+                }
+            )
         return indices
 
     @staticmethod
     async def get_ticker_info(symbol: str) -> dict:
         """Fetch general info for symbol (PE, Market Cap, etc.)."""
         sym = MarketDataService._normalize_symbol(symbol)
+
         def _fetch_info():
             session = MarketDataService.get_session()
             ticker = yf.Ticker(sym, session=session)
@@ -620,6 +719,7 @@ class MarketDataService:
                 }
             except Exception:
                 return {}
+
         async with MarketDataService._semaphore:
             return await asyncio.to_thread(_fetch_info)
 
@@ -645,11 +745,20 @@ class MarketDataService:
             result = await asyncio.to_thread(_fetch)
 
         if not result.empty:
-                    return result
+            return result
 
     @staticmethod
-    async def download_raw(tickers: str, start: datetime | str, end: datetime | str, interval: str, auto_adjust: bool = False, progress: bool = False, threads: bool = False):
+    async def download_raw(
+        tickers: str,
+        start: datetime | str,
+        end: datetime | str,
+        interval: str,
+        auto_adjust: bool = False,
+        progress: bool = False,
+        threads: bool = False,
+    ):
         """Wrapper for yfinance.download to allow ingestion pipeline usage."""
+
         def _download():
             session = MarketDataService.get_session()
             return yf.download(
@@ -660,8 +769,9 @@ class MarketDataService:
                 auto_adjust=auto_adjust,
                 progress=progress,
                 threads=threads,
-                session=session
+                session=session,
             )
+
         async with MarketDataService._semaphore:
             return await asyncio.to_thread(_download)
 
@@ -681,6 +791,7 @@ class MarketDataService:
         cache_key = f"mds:quote:{sym}"
         try:
             from app.database.redis_client import get_redis_client
+
             redis = await get_redis_client()
             cached = await redis.get(cache_key)
             if cached:
@@ -690,9 +801,13 @@ class MarketDataService:
 
         # If cache fails too, raise a 503 since we have no real data
         from fastapi import HTTPException
+
         raise HTTPException(
             status_code=503,
-            detail={"code": "MARKET_DATA_UNAVAILABLE", "message": f"Live quote unavailable for {sym}"}
+            detail={
+                "code": "MARKET_DATA_UNAVAILABLE",
+                "message": f"Live quote unavailable for {sym}",
+            },
         )
 
     @staticmethod
@@ -707,7 +822,9 @@ class MarketDataService:
         try:
             await MarketDataService._throttle_yfinance(sym)
             loop = asyncio.get_event_loop()
-            bars = await loop.run_in_executor(None, MarketDataService._fetch_ohlcv_sync, sym, period, interval)
+            bars = await loop.run_in_executor(
+                None, MarketDataService._fetch_ohlcv_sync, sym, period, interval
+            )
             if bars:
                 return bars
         except Exception as e:
@@ -718,17 +835,20 @@ class MarketDataService:
             bars_iso = await MarketDataService.get_history(sym, interval, period)
             if bars_iso:
                 import pandas as pd
+
                 mapped_bars = []
                 for b in bars_iso:
                     unix_ts = int(pd.Timestamp(b["time"]).timestamp())
-                    mapped_bars.append({
-                        "time": unix_ts,
-                        "open": float(b["open"]),
-                        "high": float(b["high"]),
-                        "low": float(b["low"]),
-                        "close": float(b["close"]),
-                        "volume": int(b["volume"])
-                    })
+                    mapped_bars.append(
+                        {
+                            "time": unix_ts,
+                            "open": float(b["open"]),
+                            "high": float(b["high"]),
+                            "low": float(b["low"]),
+                            "close": float(b["close"]),
+                            "volume": int(b["volume"]),
+                        }
+                    )
                 return mapped_bars
         except Exception as ex:
             logger.error(f"get_ohlcv: history fallback failed for {sym}: {ex}")
@@ -738,6 +858,7 @@ class MarketDataService:
     @staticmethod
     def _fetch_ohlcv_sync(symbol: str, period: str, interval: str) -> list:
         import pandas as pd
+
         ticker = yf.Ticker(symbol)
         df = ticker.history(period=period, interval=interval)
         if df.empty:
@@ -752,14 +873,16 @@ class MarketDataService:
             else:
                 unix_ts = int(pd.Timestamp(ts).timestamp())
 
-            bars.append({
-                "time": unix_ts,
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"])
-            })
+            bars.append(
+                {
+                    "time": unix_ts,
+                    "open": round(float(row["Open"]), 2),
+                    "high": round(float(row["High"]), 2),
+                    "low": round(float(row["Low"]), 2),
+                    "close": round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"]),
+                }
+            )
         return bars
 
     @staticmethod
@@ -773,7 +896,10 @@ class MarketDataService:
         # Batch download is faster than individual calls
         data = yf.download(
             MarketDataService.NSE_NIFTY50,
-            period="2d", interval="1d", group_by="ticker", progress=False
+            period="2d",
+            interval="1d",
+            group_by="ticker",
+            progress=False,
         )
 
         movers = []
@@ -784,12 +910,15 @@ class MarketDataService:
                     today = float(sym_data["Close"].iloc[-1])
                     yesterday = float(sym_data["Close"].iloc[-2])
                     chg_pct = ((today - yesterday) / yesterday) * 100
-                    movers.append({"symbol": sym.replace(".NS",""), "price": today, "change_pct": round(chg_pct, 2)})
+                    movers.append(
+                        {
+                            "symbol": sym.replace(".NS", ""),
+                            "price": today,
+                            "change_pct": round(chg_pct, 2),
+                        }
+                    )
             except Exception:
                 continue
 
         movers_sorted = sorted(movers, key=lambda x: x["change_pct"], reverse=True)
-        return {
-            "gainers": movers_sorted[:5],
-            "losers": movers_sorted[-5:][::-1]
-        }
+        return {"gainers": movers_sorted[:5], "losers": movers_sorted[-5:][::-1]}

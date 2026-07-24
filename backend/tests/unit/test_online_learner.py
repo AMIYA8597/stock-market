@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from research.models.online_learner import OnlineAdaptiveLearner
+from research.models.online_learner.adaptive_learner import OnlineAdaptiveLearner
 
 
 def test_online_learner_flow():
@@ -22,7 +22,7 @@ def test_online_learner_flow():
 
     # 4. Perform multiple incremental updates
     # Let's train on 20 samples of positive class and 20 of negative class
-    for i in range(20):
+    for _i in range(20):
         # positive features
         pos_row = {feat: 1.0 + np.random.normal(0, 0.1) for feat in learner.features}
         learner.update(pos_row, 1)

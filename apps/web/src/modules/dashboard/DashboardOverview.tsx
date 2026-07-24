@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { portfolioApi, alertsApi } from "@/lib/api-client";
+import { portfolioApi, alertsApi, paperTradingApi } from "@/lib/api-client";
 import { useSignalQuery } from "@/hooks/queries/useSignals";
 
 import { motion } from "framer-motion";
@@ -50,7 +51,7 @@ import {
   CardHeader,
   CardTitle,
   StatCard,
-} from "@/components/dashboard/premium";
+} from "@neuroquant/ui";
 
 
 
@@ -66,17 +67,30 @@ function scoreLabel(score: number): string {
 export function DashboardOverview(): JSX.Element {
   const [createAlertOpen, setCreateAlertOpen] = useState(false);
 
-  const { data: portfolios } = useQuery({ queryKey: ["portfolios"], queryFn: () => portfolioApi.list() });
+  const { data: pnl, isLoading: isLoadingPnl, isError: isErrorPnl } = useQuery({ queryKey: ["paper-trade", "pnl"], queryFn: () => paperTradingApi.getPnl() });
+  const { data: positions, isLoading: isLoadingPositions, isError: isErrorPositions } = useQuery({ queryKey: ["paper-trade", "positions"], queryFn: () => paperTradingApi.getPositions() });
+  const { data: portfolios, isLoading: isLoadingPortfolios, isError: isErrorPortfolios } = useQuery({ queryKey: ["portfolios"], queryFn: () => portfolioApi.list() });
   const portfolio = portfolios?.[0];
-  const { data: riskMetrics } = useQuery({ queryKey: ["risk", portfolio?.id], queryFn: () => portfolioApi.getRisk(portfolio!.id), enabled: !!portfolio?.id });
-  const { data: signal } = useSignalQuery("NIFTY50");
-  const { data: alertsHistory } = useQuery({ queryKey: ["alerts", "history"], queryFn: () => alertsApi.getHistory(5) });
-  const { data: performance } = useQuery({ queryKey: ["performance", portfolio?.id], queryFn: () => portfolioApi.getPerformance(), enabled: !!portfolio?.id });
+  const { data: riskMetrics, isLoading: isLoadingRisk, isError: isErrorRisk } = useQuery({ queryKey: ["risk", portfolio?.id], queryFn: () => portfolioApi.getRisk(portfolio!.id), enabled: !!portfolio?.id });
+  const { data: signal, isLoading: isLoadingSignal, isError: isErrorSignal } = useSignalQuery("NIFTY50");
+  const { data: alertsHistory, isLoading: isLoadingAlerts } = useQuery({ queryKey: ["alerts", "history"], queryFn: () => alertsApi.getHistory(5) });
+  const { data: performance, isLoading: isLoadingPerf } = useQuery({ queryKey: ["performance", portfolio?.id], queryFn: () => portfolioApi.getPerformance(), enabled: !!portfolio?.id });
 
-  const kpis: any[] = portfolio ? [
-    { title: "Total Capital", value: `$${(portfolio.total_value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: performance ? `${(performance.total_return * 100).toFixed(2)}%` : "--", icon: BarChart3 },
-    { title: "Unrealized P&L", value: `$${((portfolio.total_value || 0) - (portfolio.initial_capital || 100000)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: performance ? `Alpha: ${(performance.excess_return * 100).toFixed(2)}%` : "Active", icon: TrendingUp },
-    { title: "Risk Exposure", value: riskMetrics ? `${(riskMetrics.var_95 * 100).toFixed(2)}%` : "N/A", trend: riskMetrics ? `Max DD: ${(riskMetrics.max_drawdown * 100).toFixed(2)}%` : "Safe", icon: ShieldCheck },
+  if (isLoadingPnl || isLoadingPositions || isLoadingSignal) {
+    return <div className="p-8 text-center text-sm text-[var(--nq-text-secondary)]">Loading dashboard data...</div>;
+  }
+  
+  if (isErrorPnl || isErrorPositions || isErrorSignal) {
+    return <div className="p-8 text-center text-sm text-[var(--nq-bear)]">Error loading dashboard data. Please try again.</div>;
+  }
+
+  const pnlData = pnl as any;
+  const positionsData = positions as any[];
+
+  const kpis: any[] = pnlData ? [
+    { title: "Total Equity", value: `$${(pnlData.total_equity || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: `Cash: $${(pnlData.cash_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: BarChart3 },
+    { title: "Unrealized P&L", value: `$${(pnlData.unrealized_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: pnlData.unrealized_pnl >= 0 ? "Profit" : "Loss", icon: TrendingUp },
+    { title: "Realized P&L", value: `$${(pnlData.realized_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: `Daily Loss: $${(pnlData.daily_realized_loss || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: ShieldCheck },
     { title: "Model Status", value: "Online", trend: "Latest", icon: BrainCircuit },
   ] : [];
 
@@ -86,7 +100,7 @@ export function DashboardOverview(): JSX.Element {
     benchmark: Number(p.benchmark_value),
     drawdown: Number(p.portfolio_value) < 100000 ? 100000 - Number(p.portfolio_value) : 0,
   })) : [];
-  const allocationSeries = portfolio ? portfolio.holdings.map((h: any) => ({ name: h.symbol, value: h.quantity * h.current_price, color: "#00E676" })) : [];
+  const allocationSeries = positionsData ? positionsData.map((h: any) => ({ name: h.symbol, value: h.quantity * h.current_price, color: "#00E676" })) : [];
   
   const modelSignals = signal
     ? Object.entries(signal.models)
@@ -106,7 +120,7 @@ export function DashboardOverview(): JSX.Element {
     : [];
   const newsFeed: any[] = [];
   const activityFeed = alertsHistory ? alertsHistory.map((a: any) => ({ id: a.id, title: a.alert_name, description: a.message, time: new Date(a.triggered_at).toLocaleTimeString(), icon: Zap })) : [];
-  const openPositions = portfolio ? portfolio.holdings : [];
+  const openPositions = positionsData ? positionsData : [];
 
 
   
@@ -117,10 +131,10 @@ export function DashboardOverview(): JSX.Element {
   ];
 
   
-  const regimeData = signal?.regime?.probs || { BULL: 0.33, BEAR: 0.33, SIDEWAYS: 0.33 };
-  const bullProb = Math.round((regimeData.BULL ?? 0.33) * 100);
-  const bearProb = Math.round((regimeData.BEAR ?? 0.33) * 100);
-  const sideProb = Math.round((regimeData.SIDEWAYS ?? 0.33) * 100);
+  const regimeData = signal?.regime?.probs || { BULL: 0, BEAR: 0, SIDEWAYS: 0 };
+  const bullProb = Math.round((regimeData.BULL ?? 0) * 100);
+  const bearProb = Math.round((regimeData.BEAR ?? 0) * 100);
+  const sideProb = Math.round((regimeData.SIDEWAYS ?? 0) * 100);
 
   const regimeScores = [
     { label: "BULL", value: bullProb, detail: "Bull regime probability", color: "#00E676" },
@@ -216,9 +230,9 @@ export function DashboardOverview(): JSX.Element {
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[
-                    { label: "Active Signals", value: signals?.length ?? 0, detail: "Across watchlists" },
-                    { label: "Win Rate", value: performance ? "64%" : "--", detail: "Trailing 30D" },
-                    { label: "Sharpe", value: performance ? "1.8" : "--", detail: "Risk adj return" }
+                    { label: "Active Signals", value: signal ? Object.keys(signal.models).length : 0, detail: "Across watchlists" },
+                    { label: "Win Rate", value: "--", detail: "Trailing 30D" },
+                    { label: "Sharpe", value: riskMetrics?.sharpe_ratio != null ? riskMetrics.sharpe_ratio.toFixed(2) : "--", detail: "Risk adj return" }
                   ].map((item: any) => (
                     <div
                       key={item.label}
@@ -343,9 +357,9 @@ export function DashboardOverview(): JSX.Element {
 
                   <div className="mt-5 grid grid-cols-3 gap-3">
                     {[
-                      { label: "Expected Alpha", value: "3.2%" },
-                      { label: "Volatility", value: "14%" },
-                      { label: "Max Drawdown", value: "-4.5%" }
+                      { label: "Expected Alpha", value: (riskMetrics as any)?.expected_alpha != null ? `${((riskMetrics as any).expected_alpha * 100).toFixed(1)}%` : "--" },
+                      { label: "Volatility", value: (riskMetrics as any)?.volatility != null ? `${((riskMetrics as any).volatility * 100).toFixed(1)}%` : "--" },
+                      { label: "Max Drawdown", value: (riskMetrics as any)?.max_drawdown != null ? `${-((riskMetrics as any).max_drawdown * 100).toFixed(1)}%` : "--" }
                     ].map((item: any) => (
                       <div
                         key={item.label}
@@ -364,9 +378,9 @@ export function DashboardOverview(): JSX.Element {
 
                 <div className="grid grid-cols-3 gap-3">
                   {[
-                    { label: "Information Ratio", value: "1.2" },
-                    { label: "Sortino Ratio", value: "2.1" },
-                    { label: "Beta", value: "0.85" }
+                    { label: "Information Ratio", value: (riskMetrics as any)?.information_ratio != null ? (riskMetrics as any).information_ratio.toFixed(1) : "--" },
+                    { label: "Sortino Ratio", value: (riskMetrics as any)?.sortino_ratio != null ? (riskMetrics as any).sortino_ratio.toFixed(1) : "--" },
+                    { label: "Beta", value: (riskMetrics as any)?.beta != null ? (riskMetrics as any).beta.toFixed(2) : "--" }
                   ].map((item: any) => (
                     <div
                       key={item.label}
@@ -439,7 +453,7 @@ export function DashboardOverview(): JSX.Element {
                   <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
                     Win rate
                   </p>
-                  <p className="mt-1 text-xl font-semibold">68%</p>
+                  <p className="mt-1 text-xl font-semibold">--</p>
                 </div>
               </div>
 
