@@ -20,8 +20,9 @@ if str(ROOT) not in sys.path:
 
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.database.connection import async_session_factory
 from app.models.asset import Symbol
+
+from app.database.connection import async_session_factory
 from app.models.ohlcv import OHLCV
 from app.models.signal import EnsembleSignal
 from app.services.prediction_engine import build_ensemble_signal, standardize_df_columns

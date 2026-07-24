@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pandas as pd
-import pandas_ta as ta
 from redis.asyncio import Redis
 
 from app.database.connection import async_session_factory
