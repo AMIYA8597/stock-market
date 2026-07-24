@@ -49,24 +49,24 @@ class AlertEvaluator:
             stmt = select(Alert, Instrument.symbol).outerjoin(
                 Instrument, Alert.instrument_id == Instrument.id
             ).where(
-                Alert.enabled == True,
-                Alert.is_triggered == False
+                Alert.enabled.is_(True),
+                Alert.is_triggered.is_(False)
             )
             result = await session.execute(stmt)
             rows = result.all()
-            
+
             for alert, symbol in rows:
                 if not symbol:
                     continue  # Portfolio level alerts not supported here yet
-                
+
                 try:
                     quote = await provider_manager.get_quote(symbol)
                     if not quote or quote.price is None:
                         continue
-                    
+
                     price = float(quote.price)
                     threshold = float(alert.threshold) if alert.threshold else None
-                    
+
                     triggered = False
                     if alert.alert_type == "PRICE_ABOVE" and threshold is not None:
                         if price >= threshold:
@@ -74,7 +74,7 @@ class AlertEvaluator:
                     elif alert.alert_type == "PRICE_BELOW" and threshold is not None:
                         if price <= threshold:
                             triggered = True
-                    
+
                     if triggered:
                         alert.is_triggered = True
                         alert.triggered_at = datetime.now(UTC)
@@ -82,7 +82,7 @@ class AlertEvaluator:
                         await session.commit()
                         logger.info(f"Alert {alert.id} TRIGGERED for {symbol} at {price}")
                         # Next phase: send WebSocket/Push Notification here
-                        
+
                 except Exception as e:
                     logger.warning(f"Failed to evaluate alert {alert.id} for {symbol}: {e}")
 

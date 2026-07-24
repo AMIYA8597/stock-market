@@ -408,15 +408,16 @@ async def search_symbols(
     q: str = Query(..., min_length=2, max_length=50),
 ) -> SearchResponse:
     import urllib.parse
+
     import httpx
 
     query = urllib.parse.quote(q)
     url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=15&newsCount=0"
-    
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    
+
     results = []
     try:
         async with httpx.AsyncClient() as client:
@@ -427,10 +428,10 @@ async def search_symbols(
                 for item in quotes:
                     quote_type = item.get("quoteType", "EQUITY")
                     if quote_type in ("EQUITY", "ETF", "INDEX", "CRYPTOCURRENCY", "MUTUALFUND", "CURRENCY"):
-                        # Ensure we map Yahoo's quoteType to our expected asset_type strings if needed, 
+                        # Ensure we map Yahoo's quoteType to our expected asset_type strings if needed,
                         # but our schema expects string. We map CRYPTOCURRENCY -> CRYPTO.
                         asset_type = "CRYPTO" if quote_type == "CRYPTOCURRENCY" else quote_type
-                        
+
                         results.append(
                             SearchResult(
                                 ticker=item.get("symbol", ""),
@@ -441,7 +442,7 @@ async def search_symbols(
                         )
     except Exception as e:
         logger.error(f"Yahoo Finance search failed for query '{q}': {e}")
-        
+
     return SearchResponse(query=q, results=results, total_matched=len(results))
 
 
