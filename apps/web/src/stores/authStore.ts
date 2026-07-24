@@ -57,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
           const profile = await authApi.getProfile();
           set({ user: profile, isAuthenticated: true, isLoading: false });
         } catch (err: unknown) {
+          console.error("fetchProfile failed:", err);
           // If the profile fetch fails, it might be due to an expired refresh token
           clearAuthTokens();
           set({ user: null, isAuthenticated: false, isLoading: false, error: "Session expired. Please log in again." });
