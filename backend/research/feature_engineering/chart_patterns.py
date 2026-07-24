@@ -109,7 +109,9 @@ class ChartPatternsBuilder(FeatureBuilder):
                 # Head must be higher than shoulders
                 if h2_val > h1_val and h2_val > h3_val and abs(h1_val - h3_val) / h1_val < 0.03:
                     # Neckline support is the low between H1 and H2, and H2 and H3
-                    lows_between_head = [l_val for l_idx, l_val in swing_lows if h1_idx < l_idx < h3_idx]
+                    lows_between_head = [
+                        l_val for l_idx, l_val in swing_lows if h1_idx < l_idx < h3_idx
+                    ]
                     if lows_between_head:
                         neckline = min(lows_between_head)
                         if closes[t] < neckline:
@@ -121,7 +123,9 @@ class ChartPatternsBuilder(FeatureBuilder):
                 l2_idx, l2_val = swing_lows[-2]
                 l1_idx, l1_val = swing_lows[-3]
                 if l2_val < l1_val and l2_val < l3_val and abs(l1_val - l3_val) / l1_val < 0.03:
-                    highs_between_head = [h_val for h_idx, h_val in swing_highs if l1_idx < h_idx < l3_idx]
+                    highs_between_head = [
+                        h_val for h_idx, h_val in swing_highs if l1_idx < h_idx < l3_idx
+                    ]
                     if highs_between_head:
                         neckline = max(highs_between_head)
                         if closes[t] > neckline:
@@ -161,9 +165,11 @@ class ChartPatternDetector:
     def __init__(self, window: int = 5):
         self.window = window
 
-    def get_swing_levels(self, df: pd.DataFrame) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
+    def get_swing_levels(
+        self, df: pd.DataFrame
+    ) -> tuple[list[tuple[int, float]], list[tuple[int, float]]]:
         """Identify swing highs and swing lows.
-        
+
         Returns lists of (index_position, price_value) tuples.
         """
         highs = df["high"].values
@@ -221,12 +227,18 @@ class ChartPatternDetector:
 
         return {
             "pivot": p,
-            "r1": r1, "s1": s1,
-            "r2": r2, "s2": s2,
-            "r3": r3, "s3": s3,
-            "fib_r1": fib_r1, "fib_s1": fib_s1,
-            "fib_r2": fib_r2, "fib_s2": fib_s2,
-            "fib_r3": fib_r3, "fib_s3": fib_s3,
+            "r1": r1,
+            "s1": s1,
+            "r2": r2,
+            "s2": s2,
+            "r3": r3,
+            "s3": s3,
+            "fib_r1": fib_r1,
+            "fib_s1": fib_s1,
+            "fib_r2": fib_r2,
+            "fib_s2": fib_s2,
+            "fib_r3": fib_r3,
+            "fib_s3": fib_s3,
         }
 
     def compute_volume_profile(self, df: pd.DataFrame, bins: int = 20) -> dict[str, Any]:
@@ -243,10 +255,10 @@ class ChartPatternDetector:
         bin_edges = np.linspace(min_p, max_p, bins + 1)
         bin_vols = np.zeros(bins)
 
-        for price, vol in zip(closes, volumes):
+        for price, vol in zip(closes, volumes, strict=False):
             # Find which bin this price belongs to
             for b in range(bins):
-                if bin_edges[b] <= price <= bin_edges[b+1]:
+                if bin_edges[b] <= price <= bin_edges[b + 1]:
                     bin_vols[b] += vol
                     break
 
@@ -255,16 +267,15 @@ class ChartPatternDetector:
 
         profile_bins = []
         for b in range(bins):
-            profile_bins.append({
-                "low": float(bin_edges[b]),
-                "high": float(bin_edges[b+1]),
-                "volume": float(bin_vols[b])
-            })
+            profile_bins.append(
+                {
+                    "low": float(bin_edges[b]),
+                    "high": float(bin_edges[b + 1]),
+                    "volume": float(bin_vols[b]),
+                }
+            )
 
-        return {
-            "poc": poc,
-            "profile": profile_bins
-        }
+        return {"poc": poc, "profile": profile_bins}
 
     def detect_patterns(self, df: pd.DataFrame) -> dict[str, Any]:
         """Detect chart patterns using swing highs and swing lows."""
@@ -305,9 +316,9 @@ class ChartPatternDetector:
 
         # 2. Head and Shoulders (HNS) / Inverse HNS
         if len(sh) >= 3:
-            s1 = sh[-3][1] # Left shoulder
-            head = sh[-2][1] # Head
-            s2 = sh[-1][1] # Right shoulder
+            s1 = sh[-3][1]  # Left shoulder
+            head = sh[-2][1]  # Head
+            s2 = sh[-1][1]  # Right shoulder
 
             if head > s1 and head > s2 and abs(s1 - s2) / max(s1, s2) <= 0.03:
                 # Neckline support check
@@ -319,9 +330,9 @@ class ChartPatternDetector:
                         pattern_score -= 0.50
 
         if len(sl) >= 3:
-            s1 = sl[-3][1] # Left shoulder
-            head = sl[-2][1] # Head
-            s2 = sl[-1][1] # Right shoulder
+            s1 = sl[-3][1]  # Left shoulder
+            head = sl[-2][1]  # Head
+            s2 = sl[-1][1]  # Right shoulder
 
             if head < s1 and head < s2 and abs(s1 - s2) / max(s1, s2) <= 0.03:
                 between_highs = [h for h in sh if sl[-3][0] < h[0] < sl[-1][0]]
@@ -345,7 +356,9 @@ class ChartPatternDetector:
             # Symmetrical (Highs sloping down, Lows sloping up)
             if sh_slope < -1e-4 and sl_slope > 1e-4:
                 patterns.append("SYMMETRICAL_TRIANGLE")
-                pattern_score += 0.10 * np.sign(current_close - float(df["close"].iloc[-5])) # direction of breakout
+                pattern_score += 0.10 * np.sign(
+                    current_close - float(df["close"].iloc[-5])
+                )  # direction of breakout
             # Ascending (Highs flat, Lows sloping up)
             elif abs(sh_slope) < 2e-4 and sl_slope > 1e-4:
                 patterns.append("ASCENDING_TRIANGLE")
@@ -375,8 +388,11 @@ class ChartPatternDetector:
             trough_idx = int(np.argmin(past_40[:-10]))
 
             # Cup condition
-            if abs(left_rim - right_rim) / max(left_rim, right_rim) <= 0.05 and mid_trough < min(left_rim, right_rim) * 0.90:
-                if 10 < trough_idx < 30: # trough is centered
+            if (
+                abs(left_rim - right_rim) / max(left_rim, right_rim) <= 0.05
+                and mid_trough < min(left_rim, right_rim) * 0.90
+            ):
+                if 10 < trough_idx < 30:  # trough is centered
                     # Handle condition (slight pullback in last 10 days)
                     handle_prices = past_40[-10:]
                     handle_max = np.max(handle_prices)
@@ -388,13 +404,14 @@ class ChartPatternDetector:
         sr_zones = []
         try:
             from app.services.sr_service import SupportResistanceEngine
+
             zones_res = SupportResistanceEngine.detect_classical_zones(df)
             sr_zones = [z["avg"] for z in zones_res]
         except Exception:
             all_swings = [s[1] for s in sh] + [s[1] for s in sl]
             if all_swings:
                 hist, bin_edges = np.histogram(all_swings, bins=10)
-                top_bins = np.argsort(hist)[::-1][:3] # top 3 density clusters
+                top_bins = np.argsort(hist)[::-1][:3]  # top 3 density clusters
                 for b in top_bins:
                     zone_center = (bin_edges[b] + bin_edges[b + 1]) / 2.0
                     sr_zones.append(float(zone_center))

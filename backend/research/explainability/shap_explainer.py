@@ -31,8 +31,44 @@ def approximate_tree_shap(
     return ShapExplanation(values=values, base_value=float(base_value), feature_names=feature_names)
 
 
-def top_contributors(expl: ShapExplanation, row_index: int, top_k: int = 10) -> list[tuple[str, float]]:
+def get_tree_shap(
+    model,
+    feature_matrix: np.ndarray,
+    feature_names: list[str] | None = None
+) -> ShapExplanation:
+    """Compute true SHAP values using shap.TreeExplainer."""
+    import shap
+
+    explainer = shap.TreeExplainer(model)
+    shap_values = explainer.shap_values(feature_matrix)
+
+    # Handle multi-class (returns list of arrays) vs binary (returns single array)
+    if isinstance(shap_values, list):
+        # Default to positive class for binary classification represented as multi-class
+        shap_values = shap_values[1]
+
+    # Handle TreeExplainer's expected_value format
+    base_value = explainer.expected_value
+    if isinstance(base_value, (list, np.ndarray)):
+        base_value = float(base_value[1] if len(base_value) > 1 else base_value[0])
+    else:
+        base_value = float(base_value)
+
+    if feature_names is None:
+        feature_names = [f"f_{i}" for i in range(feature_matrix.shape[1])]
+
+    return ShapExplanation(
+        values=shap_values,
+        base_value=base_value,
+        feature_names=feature_names
+    )
+
+
+def top_contributors(
+    expl: ShapExplanation, row_index: int, top_k: int = 10
+) -> list[tuple[str, float]]:
     """Return top absolute SHAP contributors for one row."""
     row = expl.values[row_index]
     idx = np.argsort(np.abs(row))[::-1][:top_k]
     return [(expl.feature_names[i], float(row[i])) for i in idx]
+

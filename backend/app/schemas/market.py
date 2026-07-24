@@ -9,14 +9,17 @@ from pydantic import BaseModel, Field
 # Embedded Models (used in multiple responses)
 # ─────────────────────────────────────────────────────────────━━
 
+
 class RegimeData(BaseModel):
     """Regime state object."""
+
     state: str = Field(..., description="bull|bear|sideways|crisis")
     probs: list[float] = Field(..., description="[P(bull), P(bear), P(sideways), P(crisis)]")
 
 
 class SignalData(BaseModel):
     """Signal object."""
+
     direction: str = Field(..., description="STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL")
     confidence: float = Field(..., ge=0.0, le=1.0)
 
@@ -25,8 +28,10 @@ class SignalData(BaseModel):
 # Market Endpoints
 # ─────────────────────────────────────────────────────────────━━
 
+
 class QuoteResponse(BaseModel):
     """GET /market/quote/{symbol} response."""
+
     ticker: str
     name: str
     price: Decimal = Field(...)
@@ -46,16 +51,18 @@ class QuoteResponse(BaseModel):
 
 class OHLCVBar(BaseModel):
     """Single OHLCV candle."""
-    timestamp: str
-    open: Decimal = Field(...)
-    high: Decimal = Field(...)
-    low: Decimal = Field(...)
-    close: Decimal = Field(...)
-    volume: Decimal = Field(...)
+
+    time: int = Field(..., description="UNIX timestamp in seconds")
+    open: float = Field(...)
+    high: float = Field(...)
+    low: float = Field(...)
+    close: float = Field(...)
+    volume: float = Field(...)
 
 
 class HistoryResponse(BaseModel):
     """GET /market/history/{symbol} response."""
+
     symbol: str
     interval: str = Field(..., description="1m|5m|15m|1h|1d")
     bars: list[OHLCVBar]
@@ -65,6 +72,7 @@ class HistoryResponse(BaseModel):
 
 class IndexData(BaseModel):
     """Single index in indices response."""
+
     name: str
     ticker: str
     value: Decimal = Field(...)
@@ -76,11 +84,13 @@ class IndexData(BaseModel):
 
 class IndicesResponse(BaseModel):
     """GET /market/indices response."""
+
     indices: list[IndexData]
 
 
 class MoverData(BaseModel):
     """Single asset in movers response."""
+
     ticker: str
     name: str
     exchange: str
@@ -94,6 +104,7 @@ class MoverData(BaseModel):
 
 class MoversResponse(BaseModel):
     """GET /market/movers response."""
+
     assets: list[MoverData]
     exchange: str
     type: str = Field(..., description="gainers|losers|volume|momentum")
@@ -102,6 +113,7 @@ class MoversResponse(BaseModel):
 
 class SectorNode(BaseModel):
     """Sector treemap node."""
+
     ticker: str
     name: str
     value: Decimal = Field(...)
@@ -111,6 +123,7 @@ class SectorNode(BaseModel):
 
 class HeatmapResponse(BaseModel):
     """GET /market/heatmap response."""
+
     exchange: str
     metric: str = Field(..., description="return_1d|return_5d|volume_surge")
     sectors: dict[str, list[SectorNode]]
@@ -119,6 +132,7 @@ class HeatmapResponse(BaseModel):
 
 class SearchResult(BaseModel):
     """Single search result."""
+
     ticker: str
     name: str
     exchange: str
@@ -127,6 +141,7 @@ class SearchResult(BaseModel):
 
 class SearchResponse(BaseModel):
     """GET /market/search response."""
+
     query: str
     results: list[SearchResult]
     total_matched: int
@@ -134,6 +149,7 @@ class SearchResponse(BaseModel):
 
 class EconomicEvent(BaseModel):
     """Single economic calendar event."""
+
     date: datetime
     event_name: str
     country: str
@@ -144,9 +160,25 @@ class EconomicEvent(BaseModel):
 
 class EconomicCalendarResponse(BaseModel):
     """GET /market/economic-calendar response."""
+
     events: list[EconomicEvent]
     period_start: datetime
     period_end: datetime
+
+
+class InstrumentInfo(BaseModel):
+    """Core instrument details."""
+
+    symbol: str
+    displayName: str  # noqa: N815
+    exchange: str
+    yfinanceTicker: str  # noqa: N815
+
+
+class UniverseResponse(BaseModel):
+    """GET /market/universe response."""
+
+    instruments: list[InstrumentInfo]
     min_price: float | None = None
     max_price: float | None = None
     rsi_min: float | None = None
@@ -162,6 +194,7 @@ class EconomicCalendarResponse(BaseModel):
 
 class ScreenerResult(BaseModel):
     """Single screener result row."""
+
     symbol: str
     name: str
     asset_class: str
@@ -178,6 +211,7 @@ class ScreenerResult(BaseModel):
 
 class ScreenerResponse(BaseModel):
     """Screener response with pagination."""
+
     results: list[ScreenerResult]
     total: int
     limit: int

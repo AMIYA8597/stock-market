@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, BarChart3, BrainCircuit, Menu, Sparkles, X } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/dashboard/premium";
+import { Button } from "@neuroquant/ui";
 import { cn } from "@/lib/utils";
 
 const navItems = [

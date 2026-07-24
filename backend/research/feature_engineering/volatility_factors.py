@@ -21,7 +21,9 @@ class VolatilityFactorsBuilder(FeatureBuilder):
         open_ = data["open"].astype(float)
 
         log_hl = np.log(high / low.replace(0, np.nan))
-        data["parkinson_vol_21d"] = (log_hl.pow(2).rolling(21, min_periods=10).mean() / (4 * np.log(2))) ** 0.5
+        data["parkinson_vol_21d"] = (
+            log_hl.pow(2).rolling(21, min_periods=10).mean() / (4 * np.log(2))
+        ) ** 0.5
 
         close_ret = np.log(close / close.shift(1))
         open_ret = np.log(open_ / close.shift(1))
@@ -31,7 +33,9 @@ class VolatilityFactorsBuilder(FeatureBuilder):
         sigma_c = close_ret.rolling(21, min_periods=10).var()
         sigma_rs = rs.rolling(21, min_periods=10).mean()
         k = 0.34 / (1.34 + (21 + 1) / (21 - 1))
-        data["yang_zhang_vol_21d"] = (sigma_o + k * sigma_c + (1 - k) * sigma_rs).clip(lower=0).pow(0.5)
+        data["yang_zhang_vol_21d"] = (
+            (sigma_o + k * sigma_c + (1 - k) * sigma_rs).clip(lower=0).pow(0.5)
+        )
 
         ewma_var = close_ret.pow(2).ewm(alpha=0.06, adjust=False).mean()
         data["ewma_garch_vol"] = ewma_var.pow(0.5)

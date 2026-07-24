@@ -13,19 +13,23 @@ These functions are used as FastAPI `Depends()` parameters in route handlers.
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.security import decode_token, oauth2_scheme
+from app.core.test_state import is_test_mode
 from app.database.connection import async_session_factory
 from app.database.redis_client import _redis_pool_singleton
+from app.models.user import User
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -104,7 +108,8 @@ async def get_redis() -> Redis:
 # ─── Current User ────────────────────────────────────────────────────────
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],
-) -> dict:
+    db: AsyncSession = Depends(get_db),
+) -> User:
     """Get the current authenticated user from JWT token.
 
     Validates JWT signature and expiration. Returns decoded token payload
@@ -114,7 +119,7 @@ async def get_current_user(
         token: Bearer token from Authorization header (injected by oauth2_scheme).
 
     Returns:
-        dict: Token payload with keys: user_id, role, type, iat, exp, jti.
+        User: Typed User database model
 
     Raises:
         HTTPException: 401 if token is invalid, expired, or malformed.
@@ -148,7 +153,18 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        return payload
+        from uuid import UUID
+        result = await db.execute(select(User).where(User.id == UUID(user_id)))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # In test mode we need to attach the JTI or payload if tests rely on it, but we removed that usage.
+        return user
 
     except HTTPException:
         raise
@@ -163,7 +179,8 @@ async def get_current_user(
 
 async def get_current_user_or_none(
     token: Annotated[str | None, Depends(oauth2_scheme_optional)] = None,
-) -> dict | None:
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
     """Get current user if authenticated, otherwise None.
 
     Use this dependency for endpoints where authentication is optional.
@@ -192,7 +209,7 @@ async def get_current_user_or_none(
         return None
 
     try:
-        return await get_current_user(token)
+        return await get_current_user(token=token, db=db)
     except HTTPException:
         return None
     except Exception as e:
@@ -227,9 +244,10 @@ def require_role(required_role: str):
             # Only ADMIN role can access this endpoint
             ...
     """
+
     async def role_checker(
-        current_user: Annotated[dict, Depends(get_current_user)],
-    ) -> dict:
+        current_user: Annotated[User, Depends(get_current_user)],
+    ) -> User:
         """Check if user has required role."""
         role_hierarchy = {
             "ADMIN": 5,
@@ -239,8 +257,8 @@ def require_role(required_role: str):
             "API_USER": 1,
         }
 
-        user_role = current_user.get("role")
-        user_id = current_user.get("sub")
+        user_role = current_user.role
+        user_id = str(current_user.id)
         user_level = role_hierarchy.get(user_role, 0)
         required_level = role_hierarchy.get(required_role, 99)
 
@@ -282,7 +300,7 @@ class RequestContext:
 
 
 async def get_request_context(
-    current_user: Annotated[dict | None, Depends(get_current_user_or_none)] = None,
+    current_user: Annotated[User | None, Depends(get_current_user_or_none)] = None,
 ) -> RequestContext:
     """Create request context from current user.
 
@@ -301,8 +319,8 @@ async def get_request_context(
             return {"user_id": ctx.user_id}
     """
     return RequestContext(
-        user_id=current_user.get("sub") if current_user else None,
-        role=current_user.get("role") if current_user else None,
+        user_id=str(current_user.id) if current_user else None,
+        role=current_user.role if current_user else None,
     )
 
 
@@ -343,3 +361,42 @@ async def get_pagination(
             return items
     """
     return PaginationParams(skip=skip, limit=limit)
+
+
+# ─── Rate Limiting ───────────────────────────────────────────────────────
+def get_rate_limiter(requests: int, window: int):
+    """Dependency factory for Redis-based rate limiting.
+
+    Args:
+        requests: Maximum number of requests allowed in the window.
+        window: Time window in seconds.
+    """
+    async def _rate_limiter(request: Request):
+        if is_test_mode():
+            return
+
+        client_ip = request.client.host if request.client else "unknown"
+        bucket_key = f"rate_limit:route:{request.url.path}:{client_ip}"
+        now = time.monotonic()
+        window_start = now - window
+
+        try:
+            redis = await _redis_pool_singleton()
+            pipe = redis.pipeline()
+            pipe.zremrangebyscore(bucket_key, "-inf", window_start)
+            pipe.zadd(bucket_key, {str(now): now})
+            pipe.zcard(bucket_key)
+            pipe.expire(bucket_key, window)
+            results = await pipe.execute()
+
+            if results[2] > requests:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limit exceeded for this endpoint."
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("redis_rate_limit_error", error=str(e))
+
+    return _rate_limiter

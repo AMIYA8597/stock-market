@@ -10,7 +10,9 @@ from celery import shared_task
     retry_backoff=True,
     retry_kwargs={"max_retries": 5},
 )
-def send_email_task(self, job_id: str, to_email: str, template: str, payload: dict[str, object]) -> dict[str, str]:
+def send_email_task(
+    self, job_id: str, to_email: str, template: str, payload: dict[str, object]
+) -> dict[str, str]:
     # In a production setting, this uses an SMTP relay or HTTP API (e.g., SendGrid/SES).
     # This task intentionally retries transient failures via Celery.
     if "@" not in to_email:

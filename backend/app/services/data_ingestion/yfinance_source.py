@@ -1,14 +1,29 @@
-"""Yahoo Finance market data adapter with async-safe execution."""
-
-from __future__ import annotations
+"""Yahoo Finance market data provider."""
 
 import asyncio
+import logging
 from datetime import UTC, datetime
+from typing import Any
 
-import pandas as pd
+import aiohttp
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-from app.services.data_ingestion.base import DataSourceError, Interval, MarketDataSource, OHLCVBar
-from app.services.market_data_service import MarketDataService
+from app.models.instrument import Instrument
+from app.services.data_ingestion.base import (
+    DataUnavailableError,
+    Interval,
+    MarketDataProvider,
+    OHLCVBar,
+    Quote,
+    RateLimitExceededError,
+)
+
+logger = logging.getLogger(__name__)
 
 _YF_INTERVAL_MAP: dict[Interval, str] = {
     "1m": "1m",
@@ -19,102 +34,107 @@ _YF_INTERVAL_MAP: dict[Interval, str] = {
 }
 
 
-class YFinanceSource(MarketDataSource):
-    """Fetch OHLCV from Yahoo Finance using yfinance in a worker thread."""
+class YFinanceProvider(MarketDataProvider):
+    """Yahoo Finance provider implementation."""
 
     name = "yfinance"
 
-    async def fetch_ohlcv(
-        self,
-        symbol: str,
-        interval: Interval,
-        start: datetime,
-        end: datetime,
-    ) -> list[OHLCVBar]:
-        y_interval = _YF_INTERVAL_MAP[interval]
+    def __init__(self, timeout: int = 15):
+        self.timeout = aiohttp.ClientTimeout(total=timeout)
 
+    @retry(
+        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
+    async def _fetch(self, url: str) -> dict[str, Any]:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Accept": "application/json",
+        }
+        async with aiohttp.ClientSession(timeout=self.timeout) as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 429:
+                    raise RateLimitExceededError(f"{self.name} rate limit exceeded.")
+                if response.status == 404:
+                    raise DataUnavailableError(f"{self.name} returned 404 for url: {url}")
+                if response.status >= 400:
+                    raise DataUnavailableError(f"{self.name} returned {response.status}")
+                return await response.json()
+
+    async def get_quote(self, symbol: str) -> Quote:
+        yf_symbol = Instrument.normalize_symbol(symbol) + ".NS" if not symbol.endswith(".NS") and "^" not in symbol else symbol
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}?interval=1m&range=1d"
         try:
-            frame = await MarketDataService.download_raw(
-                tickers=symbol,
-                start=start,
-                end=end,
-                interval=y_interval,
-                auto_adjust=False,
-                progress=False,
-                threads=False,
+            data = await self._fetch(url)
+            result = data.get("chart", {}).get("result", [])
+            if not result:
+                raise DataUnavailableError(f"No quote data for {symbol}")
+            meta = result[0].get("meta", {})
+            return Quote(
+                symbol=symbol,
+                price=meta.get("regularMarketPrice", 0.0),
+                change=meta.get("regularMarketPrice", 0.0) - meta.get("previousClose", 0.0),
+                change_pct=((meta.get("regularMarketPrice", 0.0) / meta.get("previousClose", 1.0)) - 1) * 100 if meta.get("previousClose") else 0.0,
+                volume=meta.get("regularMarketVolume", 0.0),
+                timestamp=datetime.now(UTC),
             )
-            if not frame.empty and isinstance(frame.columns, pd.MultiIndex):
-                frame.columns = frame.columns.get_level_values(0)
         except Exception as e:
-            logger.warning(f"yfinance download failed for {symbol}: {e}. Trying direct HTTP fallback...")
-            frame = pd.DataFrame()
+            raise DataUnavailableError(f"{self.name} quote failed: {e}") from e
 
-        if frame.empty:
-            # Try direct HTTP v8 API fallback
-            try:
-                import json
-                import urllib.request
+    async def get_ohlcv(
+        self, symbol: str, interval: Interval, start: datetime, end: datetime
+    ) -> list[OHLCVBar]:
+        yf_symbol = Instrument.normalize_symbol(symbol) + ".NS" if not symbol.endswith(".NS") and "^" not in symbol else symbol
+        y_interval = _YF_INTERVAL_MAP[interval]
+        start_ts = int(start.timestamp())
+        end_ts = int(end.timestamp())
 
-                # Convert datetime to Unix timestamps
-                start_ts = int(start.timestamp())
-                end_ts = int(end.timestamp())
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}?period1={start_ts}&period2={end_ts}&interval={y_interval}"
+        try:
+            data = await self._fetch(url)
+            result = data.get("chart", {}).get("result", [])
+            if not result:
+                return []
 
-                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol.upper()}?period1={start_ts}&period2={end_ts}&interval={y_interval}"
-                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            res = result[0]
+            timestamps = res.get("timestamp", [])
+            if not timestamps:
+                return []
 
-                def _fetch_direct():
-                    req = urllib.request.Request(url, headers=headers)
-                    with urllib.request.urlopen(req, timeout=15) as response:
-                        return json.loads(response.read().decode())
+            indicators = res.get("indicators", {}).get("quote", [{}])[0]
+            opens = indicators.get("open", [])
+            highs = indicators.get("high", [])
+            lows = indicators.get("low", [])
+            closes = indicators.get("close", [])
+            volumes = indicators.get("volume", [])
 
-                payload = await asyncio.to_thread(_fetch_direct)
-                res = payload["chart"]["result"][0]
-                indicators = res["indicators"]["quote"][0]
-                timestamps = res["timestamp"]
+            bars = []
+            for i, ts in enumerate(timestamps):
+                if opens[i] is None or closes[i] is None:
+                    continue
+                bars.append(OHLCVBar(
+                    time=datetime.fromtimestamp(ts, tz=UTC),
+                    open=float(opens[i]),
+                    high=float(highs[i]),
+                    low=float(lows[i]),
+                    close=float(closes[i]),
+                    volume=float(volumes[i]) if volumes[i] is not None else 0.0,
+                    adjusted_close=float(closes[i]),
+                    interval=interval
+                ))
+            return bars
+        except Exception as e:
+            raise DataUnavailableError(f"{self.name} ohlcv failed for {symbol}: {e}") from e
 
-                frame = pd.DataFrame({
-                    "Date": pd.to_datetime(timestamps, unit="s"),
-                    "Open": indicators["open"],
-                    "High": indicators["high"],
-                    "Low": indicators["low"],
-                    "Close": indicators["close"],
-                    "Volume": indicators["volume"],
-                    "Adj Close": indicators["close"]  # Fallback adjusted close
-                }).dropna(subset=["Close"])
+    async def get_universe(self) -> list[dict]:
+        # yfinance doesn't have a specific universe endpoint, return empty or implement a fallback
+        return []
 
-                logger.info(f"Direct HTTP v8 API fallback succeeded for {symbol}")
-            except Exception as e:
-                logger.error(f"Direct HTTP v8 fallback failed for {symbol}: {e}")
-                raise DataSourceError(f"yfinance completely failed for {symbol}: {e}")
-
-        frame = frame.reset_index()
-        datetime_col = "Datetime" if "Datetime" in frame.columns else ("Date" if "Date" in frame.columns else "time")
-        if datetime_col not in frame.columns:
-            raise DataSourceError(f"{self.name}: missing datetime column for {symbol}")
-
-        bars: list[OHLCVBar] = []
-        for row in frame.to_dict(orient="records"):
-            ts_raw = row[datetime_col]
-            ts = ts_raw.to_pydatetime() if hasattr(ts_raw, "to_pydatetime") else ts_raw
-            if isinstance(ts, str):
-                ts = datetime.fromisoformat(ts)
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=UTC)
-            else:
-                ts = ts.astimezone(UTC)
-
-            bars.append(
-                OHLCVBar(
-                    time=ts,
-                    open=float(row["Open"]),
-                    high=float(row["High"]),
-                    low=float(row["Low"]),
-                    close=float(row["Close"]),
-                    volume=float(row.get("Volume", 0.0) or 0.0),
-                    adjusted_close=float(row["Adj Close"]) if "Adj Close" in row and row["Adj Close"] is not None else None,
-                    interval=interval,
-                )
-            )
-
-        return bars
-
+    async def health(self) -> dict:
+        try:
+            await self.get_quote("^NSEI")
+            return {"status": "ok", "provider": self.name}
+        except Exception as e:
+            return {"status": "down", "provider": self.name, "error": str(e)}

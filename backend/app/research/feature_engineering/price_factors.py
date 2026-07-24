@@ -68,8 +68,18 @@ class PriceFactorsBuilder:
         data["CDL_DOJI"] = (body <= 0.1 * candle_range).astype(float)
 
         # Engulfing
-        bull_eng = (close.shift(1) < open_.shift(1)) & (close > open_) & (open_ <= close.shift(1)) & (close >= open_.shift(1))
-        bear_eng = (close.shift(1) > open_.shift(1)) & (close < open_) & (open_ >= close.shift(1)) & (close <= open_.shift(1))
+        bull_eng = (
+            (close.shift(1) < open_.shift(1))
+            & (close > open_)
+            & (open_ <= close.shift(1))
+            & (close >= open_.shift(1))
+        )
+        bear_eng = (
+            (close.shift(1) > open_.shift(1))
+            & (close < open_)
+            & (open_ >= close.shift(1))
+            & (close <= open_.shift(1))
+        )
         data["CDL_ENGULFING"] = np.where(bull_eng, 100.0, np.where(bear_eng, -100.0, 0.0))
 
         # Hammer
@@ -79,7 +89,9 @@ class PriceFactorsBuilder:
         data["CDL_HAMMER"] = hammer.astype(float) * 100.0
 
         # Shooting Star
-        shooting_star = (upper_shadow >= 2 * body) & (lower_shadow <= 0.1 * candle_range) & (body > 0)
+        shooting_star = (
+            (upper_shadow >= 2 * body) & (lower_shadow <= 0.1 * candle_range) & (body > 0)
+        )
         data["CDL_SHOOTINGSTAR"] = shooting_star.astype(float) * -100.0
 
         return data

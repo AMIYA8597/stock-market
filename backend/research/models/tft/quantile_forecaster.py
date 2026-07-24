@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path(__file__).parent.parent.parent.parent / "data" / "models"
 
+
 class QuantileLGBForecaster:
     """Multi-quantile LightGBM regressor for predicting multi-horizon returns."""
 
@@ -24,18 +25,29 @@ class QuantileLGBForecaster:
         self.quantiles = [0.1, 0.5, 0.9]
         self.models: dict[float, lgb.LGBMRegressor] = {}
         self.features = [
-            "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-            "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-            "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-            "dist_52w_high", "dist_52w_low", "drawdown",
-            "range_pct", "close_to_open"
+            "ret_1d",
+            "ret_5d",
+            "ret_21d",
+            "momentum_63d",
+            "RSI_14",
+            "MACDh_12_26_9",
+            "BBP_20_2.0",
+            "ATRr_14",
+            "ADX_14",
+            "realized_vol_21d",
+            "yang_zhang_vol_21d",
+            "dist_52w_high",
+            "dist_52w_low",
+            "drawdown",
+            "range_pct",
+            "close_to_open",
         ]
 
     def save(self) -> None:
         """Save models to disk."""
         os.makedirs(MODEL_DIR, exist_ok=True)
         for q, model in self.models.items():
-            path = MODEL_DIR / f"quantile_lgb_q{int(q*100)}.pkl"
+            path = MODEL_DIR / f"quantile_lgb_q{int(q * 100)}.pkl"
             with open(path, "wb") as f:
                 pickle.dump(model, f)
         logger.info(f"QuantileLGBForecaster models saved to {MODEL_DIR}")
@@ -46,7 +58,7 @@ class QuantileLGBForecaster:
         forecaster = cls()
         loaded = 0
         for q in forecaster.quantiles:
-            path = MODEL_DIR / f"quantile_lgb_q{int(q*100)}.pkl"
+            path = MODEL_DIR / f"quantile_lgb_q{int(q * 100)}.pkl"
             if os.path.exists(path):
                 with open(path, "rb") as f:
                     forecaster.models[q] = pickle.load(f)
@@ -74,7 +86,9 @@ class QuantileLGBForecaster:
                 continue
 
             df.columns = [c.lower() for c in df.columns]
-            df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
+            df = df.rename(
+                columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
+            )
             df = df[["open", "high", "low", "close", "volume"]].dropna()
             df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
             df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
@@ -109,17 +123,40 @@ class QuantileLGBForecaster:
 
             # Standardize columns to match self.features
             rename_map = {}
-            RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-            MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-            BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-            ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-            ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+            RSI_col = (
+                "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
+            )
+            MACDh_col = (
+                "MACDh_12_26_9"
+                if "MACDh_12_26_9" in df.columns
+                else [c for c in df.columns if "MACDh" in c][0]
+            )
+            BBP_col = (
+                "BBP_20_2.0_2.0"
+                if "BBP_20_2.0_2.0" in df.columns
+                else (
+                    "BBP_20_2.0"
+                    if "BBP_20_2.0" in df.columns
+                    else [c for c in df.columns if "BBP" in c][0]
+                )
+            )
+            ATR_col = (
+                "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
+            )
+            ADX_col = (
+                "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+            )
 
-            if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-            if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-            if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-            if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-            if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+            if RSI_col != "RSI_14":
+                rename_map[RSI_col] = "RSI_14"
+            if MACDh_col != "MACDh_12_26_9":
+                rename_map[MACDh_col] = "MACDh_12_26_9"
+            if BBP_col != "BBP_20_2.0":
+                rename_map[BBP_col] = "BBP_20_2.0"
+            if ATR_col != "ATRr_14":
+                rename_map[ATR_col] = "ATRr_14"
+            if ADX_col != "ADX_14":
+                rename_map[ADX_col] = "ADX_14"
 
             if rename_map:
                 df = df.rename(columns=rename_map)
@@ -150,17 +187,17 @@ class QuantileLGBForecaster:
                 max_depth=4,
                 learning_rate=0.05,
                 random_state=42,
-                verbose=-1
+                verbose=-1,
             )
             model.fit(X, y)
             self.models[q] = model
 
     def predict(self, features: dict[str, float]) -> tuple[float, float, float]:
         """Predict P10, P50, and P90 returns for a single feature vector.
-        
+
         Args:
             features: Dict containing the standard indicators for the stock.
-            
+
         Returns:
             Tuple of (p10_return, p50_return, p90_return)
         """

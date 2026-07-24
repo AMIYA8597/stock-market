@@ -20,7 +20,7 @@ class EnsembleSignal(Base):
 
     Fields:
         time (datetime): Signal timestamp (UTC), primary key.
-        symbol_id (int): Foreign key to Symbol, primary key.
+        symbol_id (int): Foreign key to Instrument, primary key.
         signal (Decimal): Final continuous signal in range [-1, +1].
         confidence (Decimal): Ensemble confidence/agreement in range [0, 1].
         direction (str): Discrete direction (STRONG_BUY, BUY, NEUTRAL, SELL, STRONG_SELL).
@@ -40,9 +40,7 @@ class EnsembleSignal(Base):
     """
 
     __tablename__ = "ensemble_signals"
-    __table_args__ = (
-        UniqueConstraint("time", "symbol_id", name="uq_ensemble_signal_time_symbol"),
-    )
+    __table_args__ = (UniqueConstraint("time", "symbol_id", name="uq_ensemble_signal_time_symbol"),)
 
     time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -52,7 +50,7 @@ class EnsembleSignal(Base):
     )
     symbol_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("symbols.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
         primary_key=True,
         doc="Foreign key to symbols",

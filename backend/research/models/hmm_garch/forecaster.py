@@ -7,7 +7,9 @@ import numpy as np
 from research.models.hmm_garch.garch import GarchParams
 
 
-def forecast_state_garch_vol(last_sigma2: float, last_eps2: float, params: GarchParams, horizon_days: int) -> np.ndarray:
+def forecast_state_garch_vol(
+    last_sigma2: float, last_eps2: float, params: GarchParams, horizon_days: int
+) -> np.ndarray:
     """Forecast conditional volatility for n steps ahead.
 
     Uses recurrence sigma_t^2 = omega + alpha*eps_{t-1}^2 + beta*sigma_{t-1}^2,

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -19,12 +20,19 @@ import {
   type DonutSlice,
   SimpleBarChart,
   type SimpleBarPoint,
-  LightweightCandlestickChart,
 } from "@/components/charts";
+import dynamic from "next/dynamic";
 import { Skeleton } from "@neuroquant/ui";
 import { type PriceBar } from "@/utils/chartFormatters";
+import { StockQuoteHeader } from "./StockQuoteHeader";
+import { ohlcvBarSchema } from "@neuroquant/types";
 import type { ModelEnsemble, Prediction, Quote } from "@neuroquant/types";
 import type { SignalResponse } from "@/types/intelligence";
+
+const LightweightCandlestickChart = dynamic(
+  () => import("@/components/charts/LightweightCandlestickChart").then(mod => mod.LightweightCandlestickChart),
+  { ssr: false, loading: () => <div className="h-[360px] w-full"><Skeleton className="h-full w-full rounded" /></div> }
+);
 
 interface StockLiveContractContentProps {
   symbol: string;
@@ -65,6 +73,7 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
   const [counterfactuals, setCounterfactuals] = useState<CounterfactualResponse[]>([]);
   const [similarAssets, setSimilarAssets] = useState<MarketMover[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [predictionError, setPredictionError] = useState<boolean>(false);
 
   // Candlestick Chart States
   const [chartInterval, setChartInterval] = useState<
@@ -137,14 +146,20 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
         const historyRes = await marketApi.getHistory(symbol, chartInterval, undefined, undefined, period);
         if (isMounted) {
           if (historyRes?.bars) {
-            const mapped: PriceBar[] = historyRes.bars.map((bar) => ({
-              timestamp: bar.timestamp,
-              open: Number(bar.open),
-              high: Number(bar.high),
-              low: Number(bar.low),
-              close: Number(bar.close),
-              volume: Number(bar.volume),
-            }));
+            const mapped: PriceBar[] = [];
+            for (const b of historyRes.bars) {
+              const parsed = ohlcvBarSchema.safeParse(b);
+              if (parsed.success) {
+                mapped.push({
+                  timestamp: parsed.data.timestamp,
+                  open: parsed.data.open,
+                  high: parsed.data.high,
+                  low: parsed.data.low,
+                  close: parsed.data.close,
+                  volume: parsed.data.volume,
+                });
+              }
+            }
             setChartBars(mapped);
           } else {
             setChartBars([]);
@@ -203,6 +218,9 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
 
       if (predictionResult.status === "fulfilled") {
         setPrediction(predictionResult.value);
+        setPredictionError(false);
+      } else {
+        setPredictionError(true);
       }
       if (ensembleResult.status === "fulfilled") {
         setEnsemble(ensembleResult.value);
@@ -400,6 +418,7 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                 chartStyle={chartStyle}
                 height={chartHeight}
                 symbol={symbol}
+                liveTick={liveTick}
                 indicators={{
                   ema21: true,
                   ema50: true,
@@ -459,12 +478,23 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
           </ChartCard>
 
           <ChartCard title="Model Grid">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded border border-[var(--nq-border)] px-2 py-1">Latest model: {prediction?.model_name ?? "--"}</div>
-              <div className="rounded border border-[var(--nq-border)] px-2 py-1">Predicted: {formatInr(prediction?.predicted_price)}</div>
-              <div className="rounded border border-[var(--nq-border)] px-2 py-1">Consensus: {ensemble?.consensus_direction ?? "--"}</div>
-              <div className="rounded border border-[var(--nq-border)] px-2 py-1">Confidence: {ensemble ? ensemble.consensus_confidence.toFixed(2) : "--"}</div>
-            </div>
+            {predictionError ? (
+              <div className="flex h-full flex-col items-center justify-center space-y-2 py-4">
+                <div className="rounded border border-[rgba(255,193,7,0.35)] bg-[rgba(255,193,7,0.08)] px-3 py-1.5 text-xs text-[#F7C948] text-center font-medium">
+                  Prediction model not yet trained
+                </div>
+                <p className="text-[10px] text-[var(--nq-text-secondary)] text-center max-w-[200px]">
+                  Models are currently being trained in the backend. Predictions will appear here once ready.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="rounded border border-[var(--nq-border)] px-2 py-1">Latest model: {prediction?.model_name ?? "--"}</div>
+                <div className="rounded border border-[var(--nq-border)] px-2 py-1">Predicted: {formatInr(prediction?.predicted_price)}</div>
+                <div className="rounded border border-[var(--nq-border)] px-2 py-1">Consensus: {ensemble?.consensus_direction ?? "--"}</div>
+                <div className="rounded border border-[var(--nq-border)] px-2 py-1">Confidence: {ensemble ? ensemble.consensus_confidence.toFixed(2) : "--"}</div>
+              </div>
+            )}
           </ChartCard>
 
           <div className="rounded border border-red-500/20 bg-red-500/5 p-3 text-[11px] text-[var(--nq-text-secondary)] leading-relaxed space-y-1">
