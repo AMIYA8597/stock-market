@@ -27,9 +27,6 @@ _signal_cache: dict[str, tuple[dict, float]] = {}
 _SIGNAL_CACHE_TTL = 60.0  # seconds
 
 
-
-
-
 # Removed dead ws_portfolio_feed route (unused)
 # @router.websocket("/portfolio")
 # async def ws_portfolio_feed(websocket: WebSocket):
@@ -45,12 +42,9 @@ _SIGNAL_CACHE_TTL = 60.0  # seconds
 
 @router.websocket("/prices")
 async def ws_prices(websocket: WebSocket):
-    """WebSocket route for live prices and signals.
-    
-    Subscribes to Redis 'prices.ticks' channel and forwards updates for
-    symbols that the client has explicitly subscribed to.
-    """
-    await websocket.accept()
+    """WebSocket route for live prices and signals."""
+    manager = get_connection_manager()
+    await manager.connect(websocket)
     subscribed_symbols: set[str] = set()
 
     import json
@@ -71,25 +65,31 @@ async def ws_prices(websocket: WebSocket):
                     subscribed_symbols.update(symbols)
                     logger.info(f"ws_prices: client subscribed to symbols={symbols}")
                     for sym in symbols:
+                        await manager.subscribe(websocket, f"market:{sym}")
                         try:
                             q = await MarketDataService.get_quote(sym)
                             if q and q.get("price") is not None:
-                                await websocket.send_json({
-                                    "type": "tick",
-                                    "symbol": q["symbol"],
-                                    "price": float(q["price"]),
-                                    "change": float(q.get("change", 0.0)),
-                                    "change_pct": float(q.get("change_pct", 0.0)),
-                                    "timestamp": datetime.now(UTC).isoformat(),
-                                    "source": q.get("source", "yfinance"),
-                                })
+                                await manager.send_personal(
+                                    websocket,
+                                    {
+                                        "type": "tick",
+                                        "symbol": q["symbol"],
+                                        "payload": {
+                                            "price": float(q["price"]),
+                                            "change": float(q.get("change", 0.0)),
+                                            "change_pct": float(q.get("change_pct", 0.0)),
+                                        },
+                                        "ts": datetime.now(UTC).isoformat(),
+                                        "source": q.get("source", "yfinance"),
+                                    }
+                                )
                         except Exception as q_err:
                             logger.debug(f"Error sending initial quote snapshot for {sym}: {q_err}")
                 elif action == "unsubscribe":
                     subscribed_symbols.difference_update(symbols)
+                    for sym in symbols:
+                        await manager.unsubscribe(websocket, f"market:{sym}")
                     logger.info(f"ws_prices: client unsubscribed from symbols={symbols}")
-        except WebSocketDisconnect:
-            raise
         except Exception as e:
             logger.debug(f"Error reading client message: {e}")
 
@@ -106,9 +106,7 @@ async def ws_prices(websocket: WebSocket):
                 symbol_base = symbol.split(".")[0]
 
                 if symbol in subscribed_symbols or symbol_base in subscribed_symbols:
-                    await websocket.send_json(payload)
-        except WebSocketDisconnect:
-            raise
+                    await manager.send_personal(websocket, payload)
         except Exception as e:
             logger.debug(f"Error sending ticks to client: {e}")
 
@@ -116,7 +114,7 @@ async def ws_prices(websocket: WebSocket):
     t2 = asyncio.create_task(send_price_ticks())
     try:
         await asyncio.gather(t1, t2)
-    except WebSocketDisconnect:
+    except asyncio.CancelledError:
         pass
     except Exception as e:
         logger.debug(f"ws_prices connection error: {e}")
@@ -128,6 +126,7 @@ async def ws_prices(websocket: WebSocket):
             await pubsub.close()
         except Exception:
             pass
+        await manager.disconnect(websocket)
 
 
 @router.websocket("/signals")
@@ -135,12 +134,13 @@ async def ws_signals(websocket: WebSocket):
     """Stream real signal_update messages from the 7-layer prediction engine.
 
     Each subscribed symbol is computed via get_full_prediction (with a 60s in-process
-    cache). Symbols where the engine returns is_computed=False are skipped — never
+    cache). Instruments where the engine returns is_computed=False are skipped — never
     replaced with random data.
     """
     manager = get_connection_manager()
+    await manager.connect(websocket)
     channel = "signals:global"
-    await manager.connect(websocket, channel)
+    await manager.subscribe(websocket, channel)
     subscribed_symbols: set[str] = set()
     try:
         while True:
@@ -154,6 +154,8 @@ async def ws_signals(websocket: WebSocket):
                 elif action == "unsubscribe":
                     subscribed_symbols.difference_update(symbols)
             except TimeoutError:
+                pass
+            except Exception:
                 pass
 
             now_ts = asyncio.get_event_loop().time()
@@ -169,11 +171,12 @@ async def ws_signals(websocket: WebSocket):
                         if result and result.get("is_computed", False):
                             _signal_cache[symbol] = (result, now_ts)
                     except Exception as e:
-                        logger.debug("ws_signals_prediction_error symbol=%s error=%s", symbol, str(e))
+                        logger.debug(
+                            "ws_signals_prediction_error symbol=%s error=%s", symbol, str(e)
+                        )
                         result = None
 
                 if not result or not result.get("is_computed", False):
-                    # Skip — no random fallback ever
                     continue
 
                 ens = result.get("ensemble", {})
@@ -185,38 +188,40 @@ async def ws_signals(websocket: WebSocket):
                     await manager.send_personal(
                         websocket,
                         {
-                            "type": "signal_update",
+                            "type": "signal",
                             "symbol": symbol,
-                            "signal": round(float(signal_score), 4),
-                            "confidence": round(float(confidence), 4),
-                            "direction": direction,
-                            "timestamp": datetime.now(UTC).isoformat(),
+                            "payload": {
+                                "signal": round(float(signal_score), 4),
+                                "confidence": round(float(confidence), 4),
+                                "direction": direction,
+                            },
+                            "ts": datetime.now(UTC).isoformat(),
+                            "source": "system"
                         },
                     )
                 except Exception as e:
                     logger.debug("ws_signals_send_error symbol=%s error=%s", symbol, str(e))
 
-            if not subscribed_symbols:
-                await manager.send_personal(
-                    websocket,
-                    {"type": "heartbeat", "channel": "signals", "timestamp": datetime.now(UTC).isoformat()},
-                )
-
             # Rate-limit: avoid hammering the prediction engine
             await asyncio.sleep(5.0)
     except WebSocketDisconnect:
-        await manager.disconnect(websocket, channel)
+        pass
+    finally:
+        await manager.disconnect(websocket)
 
 
 @router.websocket("/alerts")
 async def ws_alerts(websocket: WebSocket):
     manager = get_connection_manager()
-    await manager.connect(websocket, "signals:alerts")
+    await manager.connect(websocket)
+    await manager.subscribe(websocket, "signals:alerts")
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        await manager.disconnect(websocket, "signals:alerts")
+        pass
+    finally:
+        await manager.disconnect(websocket)
 
 
 @router.websocket("/backtest-progress")
@@ -230,8 +235,9 @@ async def ws_backtest_progress(websocket: WebSocket):
     from app.models.backtest import BacktestJob
 
     manager = get_connection_manager()
+    await manager.connect(websocket)
     channel = "backtest:progress"
-    await manager.connect(websocket, channel)
+    await manager.subscribe(websocket, channel)
 
     subscribed_job_id = None
 
@@ -282,54 +288,61 @@ async def ws_backtest_progress(websocket: WebSocket):
                     websocket,
                     {
                         "type": "progress",
-                        "job_id": subscribed_job_id,
-                        "pct": pct,
-                        "current_date": datetime.now(UTC).date().isoformat(),
-                        "equity_value": round(1_000_000 * (1 + pct / 1000), 2),
+                        "symbol": None,
+                        "payload": {
+                            "job_id": subscribed_job_id,
+                            "pct": pct,
+                            "current_date": datetime.now(UTC).date().isoformat(),
+                            "equity_value": round(1_000_000 * (1 + pct / 1000), 2),
+                        },
+                        "ts": datetime.now(UTC).isoformat(),
+                        "source": "system"
                     },
                 )
                 if pct >= 100:
                     await asyncio.sleep(2.0)
             else:
-                await manager.send_personal(
-                    websocket,
-                    {"type": "heartbeat", "channel": "backtest", "timestamp": datetime.now(UTC).isoformat()},
-                )
                 await asyncio.sleep(2.0)
     except WebSocketDisconnect:
-        await manager.disconnect(websocket, channel)
+        pass
+    finally:
+        await manager.disconnect(websocket)
 
 
 @router.websocket("/live/{symbol}")
 async def ws_live_feed(websocket: WebSocket, symbol: str):
-    """Real-time live feed for a single symbol.
-    Pushes price updates every 30 seconds (or on change) and signal updates every 5 minutes.
-    """
-    await websocket.accept()
+    """Real-time live feed for a single symbol."""
+    manager = get_connection_manager()
+    await manager.connect(websocket)
+    await manager.subscribe(websocket, f"market:{symbol}")
+
     logger.info(f"ws_live: Client connected for symbol={symbol}")
 
-    last_price = None
     tick_count = 0
 
     try:
         while True:
             # 1. Fetch live quote
             try:
-                quote = await MarketDataService.get_live_quote(symbol)
+                quote = await MarketDataService.get_quote(symbol)
                 price = float(quote["price"])
                 change_pct = float(quote.get("change_pct", 0.0))
                 volume = int(quote.get("volume", 0))
 
-                # Push tick if price changed or every 30s
-                await websocket.send_json({
-                    "type": "price_update",
-                    "symbol": quote["symbol"],
-                    "price": price,
-                    "change_pct": change_pct,
-                    "volume": volume,
-                    "timestamp": datetime.now(UTC).isoformat()
-                })
-                last_price = price
+                await manager.send_personal(
+                    websocket,
+                    {
+                        "type": "tick",
+                        "symbol": quote["symbol"],
+                        "payload": {
+                            "price": price,
+                            "change_pct": change_pct,
+                            "volume": volume,
+                        },
+                        "ts": datetime.now(UTC).isoformat(),
+                        "source": quote.get("source", "system")
+                    }
+                )
             except Exception as e:
                 logger.warning(f"ws_live: Quote fetch failed for {symbol}: {e}")
 
@@ -339,13 +352,20 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
                     pred = await get_full_prediction(symbol)
                     if pred and pred.get("is_computed", False):
                         ens = pred.get("ensemble", {})
-                        await websocket.send_json({
-                            "type": "signal_update",
-                            "symbol": symbol.upper(),
-                            "direction": ens.get("direction", "NEUTRAL"),
-                            "confidence": float(ens.get("confidence", 0.5)),
-                            "kelly": float(ens.get("kelly", 0.0))
-                        })
+                        await manager.send_personal(
+                            websocket,
+                            {
+                                "type": "signal",
+                                "symbol": symbol.upper(),
+                                "payload": {
+                                    "direction": ens.get("direction", "NEUTRAL"),
+                                    "confidence": float(ens.get("confidence", 0.5)),
+                                    "kelly": float(ens.get("kelly", 0.0)),
+                                },
+                                "ts": datetime.now(UTC).isoformat(),
+                                "source": "system"
+                            }
+                        )
                 except Exception as e:
                     logger.warning(f"ws_live: Prediction fetch failed for {symbol}: {e}")
 
@@ -356,3 +376,5 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
         logger.info(f"ws_live: Client disconnected for symbol={symbol}")
     except Exception as e:
         logger.error(f"ws_live: Connection error for symbol={symbol}: {e}")
+    finally:
+        await manager.disconnect(websocket)

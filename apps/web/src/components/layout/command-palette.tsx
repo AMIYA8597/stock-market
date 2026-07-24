@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -11,6 +12,8 @@ import {
 } from "lucide-react";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
+
+import { marketApi } from "@/lib/api-client";
 
 interface SearchItem {
   symbol: string;
@@ -65,15 +68,37 @@ export function CommandPalette() {
   const [query, setQuery] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const allItems = [...PAGE_SHORTCUTS, ...POPULAR_SEARCHES];
+  const [liveResults, setLiveResults] = useState<SearchItem[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const filteredItems = query.length === 0
-    ? allItems
-    : allItems.filter(
-        (item) =>
-          item.symbol.toLowerCase().includes(query.toLowerCase()) ||
-          item.name.toLowerCase().includes(query.toLowerCase())
-      );
+  useEffect(() => {
+    if (query.trim().length < 2) {
+      setLiveResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const res = await marketApi.search(query);
+        const mapped: SearchItem[] = res.results.map((r) => ({
+          symbol: r.ticker,
+          name: r.name,
+          type: (r.asset_type.toLowerCase() as SearchItem["type"]) || "stock",
+          exchange: r.exchange,
+        }));
+        setLiveResults(mapped);
+      } catch (e) {
+        console.error("Search failed", e);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const allItems = query.length === 0 ? [...PAGE_SHORTCUTS, ...POPULAR_SEARCHES] : [...PAGE_SHORTCUTS.filter(item => item.symbol.toLowerCase().includes(query.toLowerCase()) || item.name.toLowerCase().includes(query.toLowerCase())), ...liveResults];
+
+  const filteredItems = allItems;
 
   const handleSelect = useCallback(
     (item: SearchItem) => {

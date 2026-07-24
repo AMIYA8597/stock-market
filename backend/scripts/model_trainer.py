@@ -37,7 +37,11 @@ async def _load_symbol_ohlcv(symbol: str, interval: str = "1d") -> pd.DataFrame:
         """
     )
     async with async_session_factory() as session:
-        rows = (await session.execute(query, {"symbol": symbol.upper(), "interval": interval})).mappings().all()
+        rows = (
+            (await session.execute(query, {"symbol": symbol.upper(), "interval": interval}))
+            .mappings()
+            .all()
+        )
 
     if not rows:
         return pd.DataFrame(columns=["time", "close"])
@@ -48,7 +52,9 @@ async def _load_symbol_ohlcv(symbol: str, interval: str = "1d") -> pd.DataFrame:
     return frame
 
 
-async def _load_universe_returns(exchange: str = "NSE", interval: str = "1d", max_symbols: int = 30) -> pd.DataFrame:
+async def _load_universe_returns(
+    exchange: str = "NSE", interval: str = "1d", max_symbols: int = 30
+) -> pd.DataFrame:
     query = text(
         """
         SELECT s.ticker, o.time, o.close
@@ -60,7 +66,11 @@ async def _load_universe_returns(exchange: str = "NSE", interval: str = "1d", ma
         """
     )
     async with async_session_factory() as session:
-        rows = (await session.execute(query, {"interval": interval, "exchange": exchange.upper()})).mappings().all()
+        rows = (
+            (await session.execute(query, {"interval": interval, "exchange": exchange.upper()}))
+            .mappings()
+            .all()
+        )
 
     if not rows:
         return pd.DataFrame()
@@ -87,7 +97,9 @@ def _ensure_dir(path: Path) -> None:
 async def _train_hmm(symbol: str, interval: str) -> dict[str, Any]:
     frame = await _load_symbol_ohlcv(symbol, interval)
     if len(frame) < 300:
-        raise RuntimeError(f"Not enough rows for HMM training for {symbol}. Need >=300, found {len(frame)}")
+        raise RuntimeError(
+            f"Not enough rows for HMM training for {symbol}. Need >=300, found {len(frame)}"
+        )
 
     returns = np.log(frame["close"] / frame["close"].shift(1)).dropna().to_numpy(dtype=float)
     trainer = HMMGarchTrainer(checkpoint_dir="data/models/hmm_garch")
@@ -117,7 +129,9 @@ async def _train_tft(symbol: str, interval: str, epochs: int) -> dict[str, Any]:
 
     frame = await _load_symbol_ohlcv(symbol, interval)
     if len(frame) < 260:
-        raise RuntimeError(f"Not enough rows for TFT training for {symbol}. Need >=260, found {len(frame)}")
+        raise RuntimeError(
+            f"Not enough rows for TFT training for {symbol}. Need >=260, found {len(frame)}"
+        )
 
     frame = frame.copy()
     frame["ret_1d"] = np.log(frame["close"] / frame["close"].shift(1))
@@ -177,7 +191,9 @@ async def _train_gnn(exchange: str, interval: str, epochs: int) -> dict[str, Any
 
     returns = await _load_universe_returns(exchange=exchange, interval=interval)
     if returns.empty or returns.shape[1] < 5:
-        raise RuntimeError("Not enough cross-asset data for GNN training (need >=5 symbols with history).")
+        raise RuntimeError(
+            "Not enough cross-asset data for GNN training (need >=5 symbols with history)."
+        )
 
     # Use last 252 days for graph, simple node features from rolling statistics.
     ret_window = returns.tail(252)
@@ -224,7 +240,9 @@ async def _train_gnn(exchange: str, interval: str, epochs: int) -> dict[str, Any
     }
 
 
-async def run_training(model: str, symbol: str | None, universe: str | None, interval: str, epochs: int) -> int:
+async def run_training(
+    model: str, symbol: str | None, universe: str | None, interval: str, epochs: int
+) -> int:
     selected = model.lower()
     symbol_value = (symbol or "NIFTY").upper()
     exchange_value = (universe or "NSE").upper()

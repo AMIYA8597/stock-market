@@ -13,7 +13,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import pickle
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -22,6 +21,7 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 from statsmodels.tsa.statespace.sarimax import SARIMAX
+
 from app.services.signal_engine import TechnicalSignalEngine
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,7 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
 
 def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> float:
     """Compute Kelly fraction from measured out-of-sample win-rate and payoff stats.
-    
+
     Formula: f* = (p * b - q) / b
     Where:
       p = win probability (measured win rate from backtest)
@@ -244,10 +244,10 @@ def standardize_df_columns(df: pd.DataFrame, expected_features: list[str]) -> pd
     return df_copy
 
 
-async def build_ensemble_signal(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
-    return await asyncio.to_thread(build_ensemble_signal_sync, symbol, df)
+async def build_ensemble_signal(symbol: str, df: pd.DataFrame, artifact_path: str = None, model_version: str = None) -> dict[str, Any]:
+    return await asyncio.to_thread(build_ensemble_signal_sync, symbol, df, artifact_path, model_version)
 
-def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
+def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str = None, model_version: str = None) -> dict[str, Any]:
     expected_features = [
         "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
         "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
@@ -274,7 +274,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     model_names = ["tft", "hmm_garch", "gnn", "lstm_attention", "xgboost"]
 
     # Prior weights matrix matching regimes (bull, bear, sideways, crisis)
-    regime_weights_matrix = np.array(
+    np.array(
         [
             [0.30, 0.10, 0.20, 0.15, 0.25],  # Bull state
             [0.15, 0.35, 0.10, 0.10, 0.30],  # Bear state
@@ -293,6 +293,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     xgb_score = 0.0
     xgb_confidence = 0.5
     xgb_top_features = []
+    xgb_base_value = 0.5
     xgb_status = "untrained"
     try:
         from research.models.xgboost_model.classifier import (
@@ -302,11 +303,11 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     except ImportError:
         xgb_status = "unavailable"
 
-    xgb_path = MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
+    xgb_path = Path(artifact_path) if artifact_path else MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
 
     if xgb_path.exists():
         try:
-            xgb_key = f"xgboost_{symbol.upper()}"
+            xgb_key = f"xgboost_{symbol.upper()}_{model_version or 'latest'}"
             if xgb_key in _MODEL_CACHE:
                 xgb_clf = _MODEL_CACHE[xgb_key]
             else:
@@ -317,7 +318,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
                 prob_up = xgb_clf.predict_proba(df)
                 xgb_score = float((prob_up - 0.5) * 2.0)
                 xgb_confidence = float(prob_up if prob_up > 0.5 else (1.0 - prob_up))
-                xgb_top_features = xgb_clf.get_feature_importances()
+                xgb_top_features, xgb_base_value = xgb_clf.get_shap_values(df)
                 xgb_status = "trained"
         except FeatureMismatchError:
             raise
@@ -455,11 +456,10 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
     # --- Online Learner ---
     online_score = 0.0
     online_prob = 0.5
-    online_status = "untrained"
     try:
         from research.models.online_learner import OnlineAdaptiveLearner
     except ImportError:
-        online_status = "unavailable"
+        pass
 
     online_checkpoint = MODEL_DIR / f"online_learner_{symbol.upper()}.pkl"
     if online_checkpoint.exists():
@@ -475,105 +475,44 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
             logger.warning(f"Failed to load or run OnlineAdaptiveLearner for {symbol}: {e}")
 
     # 3. Dynamic Weight Management and Ensemble Combining
-    # Load backtest metrics for rolling performance
-    rolling_performance = {}
-    metrics_path = MODEL_DIR / "backtest_metrics.json"
-    if metrics_path.exists():
-        try:
-            with open(metrics_path) as f:
-                metrics_data = json.load(f)
-            rolling_performance = {
-                "tft": float(metrics_data.get("tft", {}).get("sharpe", 1.88)),
-                "hmm_garch": float(metrics_data.get("hmm_garch", {}).get("sharpe", -0.07)),
-                "gnn": 0.5,
-                "lstm_attention": float(metrics_data.get("lstm_attn", {}).get("sharpe", 2.06)),
-                "xgboost": float(metrics_data.get("xgboost", {}).get("sharpe", 3.44)),
-            }
-        except Exception as e:
-            logger.warning(f"Failed to parse backtest_metrics.json: {e}")
+    # EXPLICIT FUSION RULE (Phase A6)
+    # final = (0.4 * technical) + (0.6 * ML) + sentiment_tilt + regime_gate
 
-    if not rolling_performance:
-        rolling_performance = {
-            "tft": 1.88,
-            "hmm_garch": -0.07,
-            "gnn": 0.5,
-            "lstm_attention": 2.06,
-            "xgboost": 3.44,
-        }
+    technical = TechnicalSignalEngine.generate_signal(df)
+    tech_score = technical["score"]
 
-    # Softmax of performance (Sharpe ratios)
-    sharpes = np.array([rolling_performance.get(m, 0.0) for m in model_names], dtype=np.float32)
-    e_x = np.exp(sharpes - np.max(sharpes))
-    perf_weights = e_x / e_x.sum()
+    # simulated lookahead-free sentiment score
+    import datetime
+    ret_5d = float((df["close"].iloc[-1] / df["close"].iloc[max(0, len(df)-6)]) - 1.0) if len(df) >= 6 else 0.0
+    dt_str = str(df["time"].iloc[-1]) if "time" in df.columns else str(datetime.datetime.now().date())
+    noise_val = (((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0) - 0.1
+    sentiment_score = float(np.clip(1.5 * ret_5d + noise_val, -1.0, 1.0))
+    sentiment_tilt = sentiment_score * 0.15
 
-    regime_weights = regime_weights_matrix[regime_state]
-    final_weights = 0.6 * perf_weights + 0.4 * regime_weights
-    final_weights /= final_weights.sum()
+    ml_score = xgb_score if xgb_status == "trained" else 0.0
 
-    # Filter out untrained models
-    active_mask = np.array([1.0 if model_statuses[m] == "trained" else 0.0 for m in model_names], dtype=np.float32)
+    fused_score = (0.4 * tech_score) + (0.6 * ml_score) + sentiment_tilt
 
-    # If no model is trained, fallback to equal weights on all
-    if active_mask.sum() == 0:
-        active_mask = np.ones(len(model_names), dtype=np.float32)
+    regime = regime_info["regime"]
+    if regime in ("BEAR", "CRISIS") and fused_score > 0:
+        fused_score = min(fused_score, 0.2)  # Suppress BUY
+    elif regime == "BULL" and fused_score < 0:
+        fused_score = max(fused_score, -0.2) # Suppress SELL
 
-    masked_weights = final_weights * active_mask
-    if masked_weights.sum() > 0:
-        masked_weights /= masked_weights.sum()
+    raw_ensemble = float(np.clip(fused_score, -1.0, 1.0))
+    prob_up = (raw_ensemble / 2.0) + 0.5
+    ensemble_confidence = float(prob_up if prob_up > 0.5 else (1.0 - prob_up))
+
+    active_signals = [xgb_score] if xgb_status == "trained" else [tech_score]
+    if len(active_signals) > 0:
+        pos = sum(1 for s in active_signals if s > 0.1)
+        neg = sum(1 for s in active_signals if s < -0.1)
+        total_votes = pos + neg
+        agreement = max(pos, neg) / total_votes if total_votes > 0 else 0.5
     else:
-        masked_weights = active_mask / active_mask.sum()
+        agreement = 0.5
 
-    # 3. Load EnsembleMetaLearner and predict calibrated direction probability
-    prob_up = None
-    try:
-        from research.models.ensemble.meta_learner import EnsembleMetaLearner
-        meta_path = MODEL_DIR / "ensemble_meta_learner.pkl"
-        meta_learner = EnsembleMetaLearner.load(meta_path)
-
-        # Calculate subscores exactly as in meta_learner training prep
-        technical = TechnicalSignalEngine.generate_signal(df)
-
-        # Get pattern score
-        patt_score = technical["breakdown"].get("structure", 0.0)
-
-        # Get momentum score
-        mom_score = technical["breakdown"].get("momentum", 0.0)
-
-        reg_val = 1.0 if regime_info["regime"] == "BULL" else (-1.0 if regime_info["regime"] in ("BEAR", "CRISIS") else 0.0)
-
-        # simulated lookahead-free sentiment score
-        ret_5d = float((df["close"].iloc[-1] / df["close"].iloc[max(0, len(df)-6)]) - 1.0) if len(df) >= 6 else 0.0
-        dt_str = str(df["time"].iloc[-1]) if "time" in df.columns else str(datetime.now().date())
-        noise_val = (((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0) - 0.1
-        sentiment_score = float(np.clip(1.5 * ret_5d + noise_val, -1.0, 1.0))
-
-        scores_list = [technical["score"], patt_score, mom_score, reg_val, xgb_score, sentiment_score]
-        prob_up = meta_learner.predict_proba(scores_list)
-
-        # Calibrated output metrics
-        raw_ensemble = float((prob_up - 0.5) * 2.0)
-        ensemble_confidence = float(prob_up if prob_up > 0.5 else (1.0 - prob_up))
-        logger.info(f"Calibrated probability for {symbol}: {prob_up:.4f} (Raw: {raw_ensemble:.4f}, Conf: {ensemble_confidence:.4f})")
-        agreement = 1.0
-    except Exception as e:
-        logger.warning(f"Failed to run calibrated EnsembleMetaLearner for {symbol}: {e}. Falling back to default ensemble aggregation.")
-
-        # Default fallback aggregation
-        signals_arr = np.array([model_signals[m] for m in model_names], dtype=np.float32)
-        raw_ensemble = float(np.sum(signals_arr * masked_weights))
-
-        active_signals = [model_signals[m] for m in model_names if model_statuses[m] == "trained"]
-        if len(active_signals) > 1:
-            signal_std = float(np.std(active_signals))
-            agreement = float(max(0.0, min(1.0, 1.0 - signal_std / 2.0)))
-        else:
-            agreement = 1.0
-
-        active_confidences = [model_confidences[m] for m in model_names if model_statuses[m] == "trained"]
-        if active_confidences:
-            ensemble_confidence = float(np.mean(active_confidences) * agreement)
-        else:
-            ensemble_confidence = 0.5
+    masked_weights = [1.0 if m == "xgboost" else 0.0 for m in model_names]
 
     # 4. Sizing and Stops
     kelly_fraction = compute_kelly_fraction(symbol, raw_ensemble, ensemble_confidence)
@@ -655,7 +594,8 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame) -> dict[str, Any]:
             "xgb_score": xgb_score,
             "xgb_confidence": xgb_confidence,
             "xgb_direction": "BUY" if xgb_score > 0.2 else ("SELL" if xgb_score < -0.2 else "NEUTRAL"),
-            "top_features": [{"name": feat["name"], "shap_value": feat["importance"]} for feat in xgb_top_features],
+            "top_features": [{"name": feat["name"], "shap_value": feat["shap_value" if "shap_value" in feat else "importance"]} for feat in xgb_top_features],
+            "base_value": xgb_base_value,
             "status": xgb_status
         },
         "tft": {
@@ -741,7 +681,7 @@ def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any
 # Main Entry Point
 # ---------------------------------------------------------------------------
 
-async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> dict[str, Any]:
+async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_path: str = None, model_version: str = None) -> dict[str, Any]:
     """Fetch OHLCV, run all 7 methods, return complete prediction payload."""
     from app.services.market_data_service import MarketDataService
     symbol = MarketDataService._normalize_symbol(symbol)
@@ -847,7 +787,13 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> dict[s
     df.ta.cdl_pattern(name="all", append=True)
 
     # Deduplicate columns (e.g. RSI_14, MACD, etc. added by both builders and df.ta)
-    df = df.loc[:, ~df.columns.duplicated()]
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+
+    # Ensure database-derived features are present (fallback to 0 if missing during live inference)
+    for col in ["sentiment_score", "news_volume", "sentiment_pos_neg_ratio", "market_sentiment_index", "sentiment_momentum_3d", "regime_state", "garch_vol"]:
+        if col not in df.columns:
+            df[col] = 0.0
+
 
     # Incremental update for OnlineAdaptiveLearner
     try:
@@ -864,11 +810,16 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> dict[s
         ATR_col = "ATRr_14" if "ATRr_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "ATR" in c][0]
         ADX_col = "ADX_14" if "ADX_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "ADX" in c][0]
 
-        if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-        if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-        if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-        if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-        if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+        if RSI_col != "RSI_14":
+            rename_map[RSI_col] = "RSI_14"
+        if MACDh_col != "MACDh_12_26_9":
+            rename_map[MACDh_col] = "MACDh_12_26_9"
+        if BBP_col != "BBP_20_2.0":
+            rename_map[BBP_col] = "BBP_20_2.0"
+        if ATR_col != "ATRr_14":
+            rename_map[ATR_col] = "ATRr_14"
+        if ADX_col != "ADX_14":
+            rename_map[ADX_col] = "ADX_14"
         if rename_map:
             df_clean_copy = df_clean_copy.rename(columns=rename_map)
 
@@ -889,7 +840,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False) -> dict[s
     # Run the scoring methods
     from research.models.xgboost_model.classifier import FeatureMismatchError
     try:
-        ensemble = await build_ensemble_signal(symbol, df)
+        ensemble = await build_ensemble_signal(symbol, df, artifact_path, model_version)
     except FeatureMismatchError as e:
         logger.error(f"Prediction mismatch for {symbol}: {e}")
         raise ValueError(f"model unavailable: missing features {e.missing_features}")

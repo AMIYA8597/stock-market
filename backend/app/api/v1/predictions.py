@@ -1,69 +1,109 @@
 # backend/app/api/v1/predictions.py
 """Predictions endpoint
-    Returns AI model predictions for a single symbol.
-    Provides forecast trajectories, support/resistance levels, and signals.
-    """
+Returns AI model predictions for a single symbol.
+Provides forecast trajectories, support/resistance levels, and signals.
+"""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi import APIRouter, HTTPException
-
+from app.database.connection import get_db
+from app.models.instrument import Instrument
+from app.models.model_artifact import ModelArtifact
 from app.schemas.prediction import ForecastRequest
+from app.services.market_data_service import MarketDataService
 from app.services.prediction_engine import get_full_prediction
 
 router = APIRouter()
 
+
+@router.get("/{symbol}")
+async def get_prediction(symbol: str, db: AsyncSession = Depends(get_db)):
+    norm_symbol = MarketDataService._normalize_symbol(symbol)
+
+    # Check if we have an active XGBoost model for this symbol
+    stmt = (
+        select(ModelArtifact)
+        .join(Instrument)
+        .where(
+            Instrument.symbol == norm_symbol,
+            ModelArtifact.is_active,
+        )
+    )
+    result = await db.execute(stmt)
+    artifact = result.scalar_one_or_none()
+
+    if not artifact:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "MODEL_NOT_TRAINED", "message": f"ML prediction engine is offline until training phase for {symbol}."}
+        )
+
+    return await get_full_prediction(
+        symbol,
+        bypass_cache=False,
+        artifact_path=artifact.artifact_path,
+        model_version=artifact.version_tag
+    )
+
 @router.post("/forecast")
 async def generate_forecast(payload: ForecastRequest):
-    try:
-        result = await get_full_prediction(payload.symbol)
-        return {
-            "symbol": payload.symbol.upper(),
-            "current_price": result["current_price"],
-            "generated_at": datetime.now(UTC),
-            "forecast": result["forecast"],
-            "ensemble_direction": result["ensemble"]["direction"],
-            "confidence": result["ensemble"]["confidence"],
-            "data_points_used": result["data_points_used"]
-        }
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    raise HTTPException(
+        status_code=503,
+        detail={"code": "MODEL_NOT_TRAINED", "message": "ML prediction engine is offline until training phase."}
+    )
 
 @router.get("/latest/{symbol}")
-async def get_latest_forecast(symbol: str):
-    """Return the forecast entry for horizon_days == 5."""
-    try:
-        result = await get_full_prediction(symbol)
-        forecast = result.get("forecast", [])
-        # Find where horizon_days equals 5
-        pt5 = next((pt for pt in forecast if pt["horizon_days"] == 5), None)
-        if pt5 is None:
-            if forecast:
-                pt5 = forecast[0]
-            else:
-                raise ValueError("No forecast available")
-        return pt5
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+async def get_latest_forecast(symbol: str, db: AsyncSession = Depends(get_db)):
+    return await get_prediction(symbol, db)
 
 @router.get("/ensemble/{symbol}")
 async def get_ensemble_data(symbol: str):
-    """Return the model weights and sub-model scores."""
-    try:
-        result = await get_full_prediction(symbol)
-        ensemble = result["ensemble"]
-        return {
-            "symbol": symbol.upper(),
-            "model_weights": ensemble.get("model_weights", {}),
-            "scores": {
-                "technical": ensemble.get("technical", {}).get("score", 0.0),
-                "pattern": ensemble.get("pattern", {}).get("pattern_score", 0.0),
-                "momentum": ensemble.get("momentum", {}).get("momentum_score", 0.0),
-                "regime": ensemble.get("regime", {}).get("regime_confidence", 0.0) if ensemble.get("regime", {}).get("regime") == "BULL" else -ensemble.get("regime", {}).get("regime_confidence", 0.0) if ensemble.get("regime", {}).get("regime") == "BEAR" else 0.0,
-                "xgboost": ensemble.get("xgboost", {}).get("xgb_score", 0.0),
-            }
+    raise HTTPException(
+        status_code=503,
+        detail={"code": "MODEL_NOT_TRAINED", "message": "ML prediction engine is offline until training phase."}
+    )
+
+@router.get("/history/{symbol}")
+async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)):
+    from app.models.model_metric import ModelMetric
+
+    norm_symbol = MarketDataService._normalize_symbol(symbol)
+
+    stmt = (
+        select(ModelMetric, ModelArtifact)
+        .join(ModelArtifact, ModelMetric.artifact_id == ModelArtifact.id)
+        .join(Instrument, ModelArtifact.symbol_id == Instrument.id)
+        .where(
+            Instrument.symbol == norm_symbol,
+            ModelArtifact.is_active,
+        )
+        .order_by(ModelMetric.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(stmt)
+    row = result.first()
+
+    if not row:
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "MODEL_NOT_TRAINED", "message": "No metrics available."}
+        )
+
+    metric, artifact = row
+
+    return {
+        "accuracy_metrics": {
+            "accuracy": metric.accuracy,
+            "precision": metric.precision,
+            "recall": metric.recall,
+            "sharpe": metric.sharpe,
+            "cost_adjusted_sharpe": metric.cost_adjusted_sharpe,
+            "recent_trades": [], # Cannot invent this per honesty law
+            "regime_breakdown": metric.regime_breakdown
         }
-    except Exception as e:
-        raise HTTPException(status_code=503, detail=str(e))
+    }
+

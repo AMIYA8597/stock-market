@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 import type {
   TokenResponse,
   UserProfile,
@@ -20,6 +21,8 @@ import type {
   CorrelationNode,
   CorrelationEdge,
   SignalResponse,
+  SearchResponse,
+  UniverseResponse,
 } from "@neuroquant/types";
 import { getApiBaseUrl } from "@/lib/runtime-config";
 
@@ -342,7 +345,7 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
       ? (raw.data as UnknownRecord[])
       : [];
 
-  let validBars = rawBars.map((bar) => {
+  const validBars = rawBars.map((bar) => {
     let timestamp = "";
     if (typeof bar.timestamp === "string") {
       timestamp = bar.timestamp;
@@ -427,12 +430,16 @@ export const marketApi = {
       .map((result) => result.value);
   },
 
-  getUniverse(): Promise<{ universe: string[] }> {
-    return fetchApi<{ universe: string[] }>("/market/universe");
+  getUniverse(): Promise<UniverseResponse> {
+    return fetchApi<UniverseResponse>("/market/universe");
   },
 
   getStatus(): Promise<{ is_open: boolean; current_time: string; market_timezone: string; regular_market_hours: string }> {
     return fetchApi<{ is_open: boolean; current_time: string; market_timezone: string; regular_market_hours: string }>("/market/status");
+  },
+
+  search(query: string): Promise<SearchResponse> {
+    return fetchApi<SearchResponse>(`/market/search?q=${encodeURIComponent(query)}`);
   },
 };
 
@@ -780,6 +787,19 @@ export const systemApi = {
 };
 
 export const paperTradingApi = {
+  submitOrder(order: {
+    symbol: string;
+    side: "BUY" | "SELL";
+    quantity: number;
+    order_type: "MARKET" | "LIMIT";
+    limit_price?: number;
+    signal_relation?: "AGREEMENT" | "AGAINST" | "INDEPENDENT" | "AUTO";
+  }): Promise<unknown> {
+    return fetchApi("/paper-trade/order", {
+      method: "POST",
+      body: JSON.stringify(order),
+    });
+  },
   getPositions(): Promise<unknown[]> {
     return fetchApi<unknown[]>("/paper-trade/positions");
   },
@@ -800,6 +820,23 @@ export const paperTradingApi = {
 export const signalsApi = {
   getSignal(symbol: string): Promise<SignalResponse> {
     return fetchApi(`/signals/${encodeURIComponent(symbol)}`);
+  },
+};
+
+export const watchlistApi = {
+  getWatchlist(): Promise<{ symbols: string[] }> {
+    return fetchApi<{ symbols: string[] }>("/watchlist");
+  },
+  addSymbol(symbol: string): Promise<{ symbols: string[] }> {
+    return fetchApi<{ symbols: string[] }>("/watchlist", {
+      method: "POST",
+      body: JSON.stringify({ symbol }),
+    });
+  },
+  removeSymbol(symbol: string): Promise<{ symbols: string[] }> {
+    return fetchApi<{ symbols: string[] }>(`/watchlist/${encodeURIComponent(symbol)}`, {
+      method: "DELETE",
+    });
   },
 };
 

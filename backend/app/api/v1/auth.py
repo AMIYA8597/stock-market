@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-import pyotp
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
+import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,11 +20,6 @@ from app.core.security import (
     verify_password,
 )
 from app.core.test_state import (
-    TEST_REFRESH_SESSIONS,
-    TEST_REVOKED_ACCESS_JTIS,
-    TEST_USERS_BY_EMAIL,
-    TEST_USERS_BY_ID,
-    ensure_test_isolation,
     is_test_mode,
 )
 from app.models.auth_token import PasswordResetToken, RefreshSession
@@ -56,42 +51,7 @@ def _compat_test_mode() -> bool:
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) -> UserResponse:
-    ensure_test_isolation()
     email = payload.email.lower().strip()
-    if _compat_test_mode():
-        existing_user = TEST_USERS_BY_EMAIL.get(email)
-        if existing_user is None:
-            user_id = str(uuid4())
-            existing_user = {
-                "id": user_id,
-                "email": email,
-                "full_name": payload.full_name,
-                "password": payload.password,
-                "role": "USER",
-                "is_active": True,
-                "created_at": datetime.now(UTC),
-                "failed_login_attempts": 0,
-                "locked_until": None,
-            }
-            TEST_USERS_BY_EMAIL[email] = existing_user
-            TEST_USERS_BY_ID[user_id] = existing_user
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.ALREADY_EXISTS,
-                    message="Unable to complete registration. Please try with a different email or contact support.",
-                ).dict(),
-            )
-        return UserResponse(
-            id=str(existing_user["id"]),
-            email=email,
-            full_name=payload.full_name,
-            role="USER",
-            is_active=True,
-            created_at=existing_user["created_at"],
-        )
-
 
     existing = await db.execute(select(User).where(User.email == email))
     if existing.scalar_one_or_none() is not None:
@@ -104,15 +64,27 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
             ).dict(),
         )
 
+    try:
+        hashed_pwd = hash_password(payload.password)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(e),
+            ).dict(),
+        )
+
     user = User(
         email=email,
-        hashed_password=hash_password(payload.password),
+        hashed_password=hashed_pwd,
         full_name=payload.full_name,
         role="USER",
         is_active=True,
     )
     db.add(user)
     await db.flush()
+    await db.refresh(user)
 
     await enqueue_email(
         db,
@@ -133,82 +105,7 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
 
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    ensure_test_isolation()
     email = payload.email.lower().strip()
-    if _compat_test_mode():
-        user = TEST_USERS_BY_EMAIL.get(email)
-        if user is None:
-            user = {
-                "id": str(uuid4()),
-                "email": email,
-                "full_name": "Quant Trader",
-                "password": payload.password,
-                "role": "USER",
-                "is_active": True,
-                "created_at": datetime.now(UTC),
-                "failed_login_attempts": 0,
-                "locked_until": None,
-            }
-            TEST_USERS_BY_EMAIL[email] = user
-            TEST_USERS_BY_ID[str(user["id"])] = user
-        locked_until = user.get("locked_until")
-        if isinstance(locked_until, datetime) and locked_until > datetime.now(UTC):
-            remaining = (locked_until - datetime.now(UTC)).total_seconds()
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.ACCOUNT_LOCKED,
-                    message=f"Your account is temporarily locked. Try again in {int(remaining)} seconds.",
-                ).dict(),
-            )
-        if str(user["password"]) != payload.password:
-            failed_attempts = int(user.get("failed_login_attempts", 0)) + 1
-            user["failed_login_attempts"] = failed_attempts
-            if failed_attempts >= 5:
-                user["locked_until"] = datetime.now(UTC) + timedelta(minutes=15)
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.INVALID_CREDENTIALS,
-                    message="Email or password is incorrect. Please try again.",
-                ).dict(),
-            )
-        
-        # In test mode, we might not mock TOTP properly, but let's allow bypass or check if secret exists
-        if user.get("totp_secret"):
-            if not payload.totp_code:
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=ErrorResponse.create(
-                        code=ErrorCode.MFA_REQUIRED,
-                        message="2FA token is required for this account.",
-                    ).dict(),
-                )
-            totp = pyotp.TOTP(user["totp_secret"])
-            if not totp.verify(payload.totp_code):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail=ErrorResponse.create(
-                        code=ErrorCode.INVALID_CREDENTIALS,
-                        message="Invalid 2FA token.",
-                    ).dict(),
-                )
-
-        user["failed_login_attempts"] = 0
-        user["locked_until"] = None
-        access_token = create_access_token(user_id=str(user["id"]), role=str(user["role"]))
-        refresh_token = create_refresh_token(user_id=str(user["id"]))
-        refresh_claims = decode_token(refresh_token)
-        family_id = str(refresh_claims.get("family") or uuid4().hex)
-        TEST_REFRESH_SESSIONS[_hash_token(refresh_token)] = {
-            "user_id": str(user["id"]),
-            "family_id": family_id,
-            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-            "revoked_at": None,
-        }
-        return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
-
-
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
@@ -242,7 +139,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ErrorResponse.create(
-                    code=ErrorCode.MFA_REQUIRED, # Assuming ErrorCode.MFA_REQUIRED exists or fallback to UNAUTHORIZED
+                    code=ErrorCode.MFA_REQUIRED,  # Assuming ErrorCode.MFA_REQUIRED exists or fallback to UNAUTHORIZED
                     message="2FA token is required for this account.",
                 ).dict(),
             )
@@ -284,7 +181,9 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
         )
     )
 
-    return TokenResponse(access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900)
+    return TokenResponse(
+        access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900
+    )
 
 
 @router.post("/token", response_model=TokenResponse)
@@ -293,53 +192,7 @@ async def token_alias(payload: UserLogin, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db)) -> TokenResponse:
-    ensure_test_isolation()
-    if _compat_test_mode():
-        decoded = decode_token(payload.refresh_token)
-        if decoded.get("type") != "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.INVALID_TOKEN,
-                    message="Invalid refresh token.",
-                ).dict(),
-            )
-
-        token_hash = _hash_token(payload.refresh_token)
-        token_row = TEST_REFRESH_SESSIONS.get(token_hash)
-        if token_row is None or token_row.get("revoked_at") is not None or token_row.get("expires_at") <= datetime.now(UTC):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.TOKEN_EXPIRED,
-                    message="Refresh token expired or revoked.",
-                ).dict(),
-            )
-
-        user_id = str(token_row["user_id"])
-        user = TEST_USERS_BY_ID.get(user_id)
-        if user is None or not bool(user.get("is_active", True)):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.AUTHENTICATION_FAILED,
-                    message="User unavailable.",
-                ).dict(),
-            )
-
-        token_row["revoked_at"] = datetime.now(UTC)
-        new_access = create_access_token(user_id=user_id, role=str(user.get("role", "USER")))
-        new_refresh = create_refresh_token(user_id=user_id)
-        new_refresh_claims = decode_token(new_refresh)
-        next_family_id = str(new_refresh_claims.get("family") or token_row.get("family_id") or uuid4().hex)
-        TEST_REFRESH_SESSIONS[_hash_token(new_refresh)] = {
-            "user_id": user_id,
-            "family_id": next_family_id,
-            "expires_at": datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-            "revoked_at": None,
-        }
-        return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
+async def refresh(payload: TokenRefresh, db: AsyncSession = Depends(get_db)) -> TokenResponse:
 
     decoded = decode_token(payload.refresh_token)
     if decoded.get("type") != "refresh":
@@ -354,7 +207,6 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
     user_id = decoded.get("sub")
     family_id = decoded.get("family")
     token_hash = _hash_token(payload.refresh_token)
-
 
     token_row_result = await db.execute(
         select(RefreshSession).where(
@@ -379,7 +231,8 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
             ).dict(),
         )
 
-    user_result = await db.execute(select(User).where(User.id == user_id))
+    from uuid import UUID
+    user_result = await db.execute(select(User).where(User.id == UUID(user_id)))
     user = user_result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(
@@ -405,21 +258,16 @@ async def refresh_token(payload: TokenRefresh, db: AsyncSession = Depends(get_db
         )
     )
 
-    return TokenResponse(access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900)
+    return TokenResponse(
+        access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, response_class=Response)
-async def logout(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> Response:
-    ensure_test_isolation()
-    if _compat_test_mode() and current_user is None:
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-    if _compat_test_mode() and current_user is not None:
-        jti = current_user.get("jti")
-        if jti:
-            TEST_REVOKED_ACCESS_JTIS.add(str(jti))
-        return Response(status_code=status.HTTP_204_NO_CONTENT)
-
+async def logout(
+    current_user: User | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
     if current_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -429,7 +277,7 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
             ).dict(),
         )
 
-    user_id = current_user.get("sub")
+    user_id = str(current_user.id)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -439,38 +287,19 @@ async def logout(current_user: dict | None = Depends(get_current_user_or_none), 
             ).dict(),
         )
 
-
     await db.execute(
         RefreshSession.__table__.update()
-        .where(RefreshSession.user_id == user_id, RefreshSession.revoked_at.is_(None))
+        .where(RefreshSession.user_id == current_user.id, RefreshSession.revoked_at.is_(None))
         .values(revoked_at=datetime.now(UTC))
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserResponse)
-async def me(current_user: dict | None = Depends(get_current_user_or_none), db: AsyncSession = Depends(get_db)) -> UserResponse:
-    ensure_test_isolation()
-    if _compat_test_mode() and current_user is None:
-        if TEST_USERS_BY_EMAIL:
-            first = next(iter(TEST_USERS_BY_EMAIL.values()))
-            return UserResponse(
-                id=str(first["id"]),
-                email=str(first["email"]),
-                full_name=str(first["full_name"]),
-                role=str(first["role"]),
-                is_active=bool(first["is_active"]),
-                created_at=first["created_at"],
-            )
-        return UserResponse(
-            id=str(uuid4()),
-            email="trader@example.com",
-            full_name="Quant Trader",
-            role="USER",
-            is_active=True,
-            created_at=datetime.now(UTC),
-        )
-
+async def me(
+    current_user: User | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+) -> UserResponse:
     if current_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -480,32 +309,20 @@ async def me(current_user: dict | None = Depends(get_current_user_or_none), db: 
             ).dict(),
         )
 
-    user_id = current_user.get("sub")
-
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ErrorResponse.create(
-                code=ErrorCode.RESOURCE_NOT_FOUND,
-                message="User not found.",
-            ).dict(),
-        )
-
     return UserResponse(
-        id=str(user.id),
-        email=user.email,
-        full_name=user.full_name,
-        role=user.role,
-        is_active=user.is_active,
-        created_at=user.created_at,
+        id=str(current_user.id),
+        email=current_user.email,
+        full_name=current_user.full_name,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
     )
 
 
 @router.post("/forgot-password", response_model=AuthMessage)
-async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)) -> AuthMessage:
+async def forgot_password(
+    payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+) -> AuthMessage:
     result = await db.execute(select(User).where(User.email == payload.email.lower().strip()))
     user = result.scalar_one_or_none()
 
@@ -527,13 +344,18 @@ async def forgot_password(payload: ForgotPasswordRequest, db: AsyncSession = Dep
         db,
         to_email=user.email,
         template="password_reset",
-        payload={"reset_token": raw_token, "expires_minutes": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES},
+        payload={
+            "reset_token": raw_token,
+            "expires_minutes": settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES,
+        },
     )
     return AuthMessage(message="If an account exists, a reset email has been queued")
 
 
 @router.post("/reset-password", response_model=AuthMessage)
-async def reset_password(payload: ResetPasswordConfirm, db: AsyncSession = Depends(get_db)) -> AuthMessage:
+async def reset_password(
+    payload: ResetPasswordConfirm, db: AsyncSession = Depends(get_db)
+) -> AuthMessage:
     token_hash = _hash_token(payload.token)
     result = await db.execute(
         select(PasswordResetToken).where(

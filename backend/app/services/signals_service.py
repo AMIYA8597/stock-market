@@ -9,7 +9,6 @@ This service provides:
 The implementation uses existing models (`EnsembleSignal`) and the `SignalEngine` from `app.services.signal_engine`.
 """
 
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.signal import EnsembleSignal

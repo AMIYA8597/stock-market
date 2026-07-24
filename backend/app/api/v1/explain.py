@@ -12,8 +12,10 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import NAMESPACE_DNS, uuid5
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.database.connection import get_db
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.explain import (
     AttentionResponse,
@@ -39,14 +41,53 @@ def safe_round(val: float, places: int) -> float:
 
 
 @router.get("/shap/{symbol}", response_model=SHAPResponse)
-async def get_shap_explanation(symbol: str) -> SHAPResponse:
+async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) -> SHAPResponse:
     try:
+        norm_symbol = MarketDataService._normalize_symbol(symbol)
+
+        from sqlalchemy import select
+
+        from app.models.instrument import Instrument
+        from app.models.model_artifact import ModelArtifact
+
+        stmt = (
+            select(ModelArtifact)
+            .join(Instrument)
+            .where(
+                Instrument.symbol == norm_symbol,
+                ModelArtifact.is_active,
+            )
+        )
+        result = await db.execute(stmt)
+        artifact = result.scalar_one_or_none()
+
+        if not artifact:
+            # Return an empty response so the UI doesn't break
+            return SHAPResponse(
+                symbol=symbol,
+                base_value=0.5,
+                features=[],
+                model_type="Unknown",
+                confidence=0.5,
+                direction="NEUTRAL"
+            )
+
         # 1. Fetch live prediction
-        result = await get_full_prediction(symbol)
+        result = await get_full_prediction(
+            symbol,
+            bypass_cache=False,
+            artifact_path=artifact.artifact_path,
+            model_version=artifact.version_tag
+        )
         if not result or not result.get("is_computed", False):
-            raise HTTPException(
-                status_code=530,
-                detail="Real prediction calculation failed for this symbol.",
+            # Return an empty response so the UI doesn't break
+            return SHAPResponse(
+                symbol=symbol,
+                base_value=0.5,
+                features=[],
+                model_type="Unknown",
+                confidence=0.5,
+                direction="NEUTRAL"
             )
 
         ensemble = result.get("ensemble", {})
@@ -57,7 +98,7 @@ async def get_shap_explanation(symbol: str) -> SHAPResponse:
         top_features = xgb_sub.get("top_features", [])
         feature_contributions = []
 
-        base_value = 0.0011
+        base_value = float(xgb_sub.get("base_value", 0.5))
 
         for feat in top_features:
             name = feat.get("name", "")
@@ -90,7 +131,11 @@ async def get_shap_explanation(symbol: str) -> SHAPResponse:
                 feat_val = mom_sub.get("ret_21d", 0.0)
             elif "jt_momentum" in name_lower or "momentum_63d" in name_lower:
                 feat_val = mom_sub.get("jt_momentum", 0.0)
-            elif "vol_21d" in name_lower or "realized_vol" in name_lower or "yang_zhang" in name_lower:
+            elif (
+                "vol_21d" in name_lower
+                or "realized_vol" in name_lower
+                or "yang_zhang" in name_lower
+            ):
                 feat_val = mom_sub.get("vol_21d", 0.05)
             elif "dist_52w_high" in name_lower:
                 feat_val = mom_sub.get("dist_52w_high", 0.0)
@@ -156,7 +201,10 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         if model == "tft":
             raise HTTPException(
                 status_code=400,
-                detail={"explainability": "unavailable", "message": "TFT model attention weights are unavailable."}
+                detail={
+                    "explainability": "unavailable",
+                    "message": "TFT model attention weights are unavailable.",
+                },
             )
 
         from app.services.prediction_engine import MODEL_DIR
@@ -166,14 +214,20 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         if not lstm_path.exists():
             raise HTTPException(
                 status_code=400,
-                detail={"explainability": "unavailable", "message": f"LSTM Attention model for {symbol} is untrained."}
+                detail={
+                    "explainability": "unavailable",
+                    "message": f"LSTM Attention model for {symbol} is untrained.",
+                },
             )
 
         clf = LSTMAttentionClassifier.load(lstm_path)
         if clf is None or clf.model is None:
             raise HTTPException(
                 status_code=400,
-                detail={"explainability": "unavailable", "message": f"Failed to load LSTM Attention model for {symbol}."}
+                detail={
+                    "explainability": "unavailable",
+                    "message": f"Failed to load LSTM Attention model for {symbol}.",
+                },
             )
 
         # Fetch 90 daily bars to compute real attention weights
@@ -187,6 +241,7 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         # Convert to DataFrame
         import numpy as np
         import pandas as pd
+
         df = pd.DataFrame(bars)
         df.columns = [c.lower() for c in df.columns]
         df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
@@ -200,6 +255,7 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         # Build features
         from research.feature_engineering.price_factors import PriceFactorsBuilder
         from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+
         df = PriceFactorsBuilder().transform(df)
         df = VolatilityFactorsBuilder().transform(df)
 
@@ -226,16 +282,33 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         # Standardize columns
         rename_map = {}
         RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-        MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-        BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
+        MACDh_col = (
+            "MACDh_12_26_9"
+            if "MACDh_12_26_9" in df.columns
+            else [c for c in df.columns if "MACDh" in c][0]
+        )
+        BBP_col = (
+            "BBP_20_2.0_2.0"
+            if "BBP_20_2.0_2.0" in df.columns
+            else (
+                "BBP_20_2.0"
+                if "BBP_20_2.0" in df.columns
+                else [c for c in df.columns if "BBP" in c][0]
+            )
+        )
         ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
         ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
 
-        if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-        if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-        if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-        if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-        if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+        if RSI_col != "RSI_14":
+            rename_map[RSI_col] = "RSI_14"
+        if MACDh_col != "MACDh_12_26_9":
+            rename_map[MACDh_col] = "MACDh_12_26_9"
+        if BBP_col != "BBP_20_2.0":
+            rename_map[BBP_col] = "BBP_20_2.0"
+        if ATR_col != "ATRr_14":
+            rename_map[ATR_col] = "ATRr_14"
+        if ADX_col != "ADX_14":
+            rename_map[ADX_col] = "ADX_14"
         if rename_map:
             df = df.rename(columns=rename_map)
 
@@ -244,7 +317,10 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
         if len(df) < clf.seq_len:
             raise HTTPException(
                 status_code=400,
-                detail={"explainability": "unavailable", "message": "Insufficient bars after feature cleaning."}
+                detail={
+                    "explainability": "unavailable",
+                    "message": "Insufficient bars after feature cleaning.",
+                },
             )
 
         # Run predict_proba which returns attn_dict (mapping t-i -> weight)
@@ -252,11 +328,13 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 
         # Get actual dates corresponding to the sequence window
         # The sequence uses the last seq_len rows of df
-        seq_df = df.iloc[-clf.seq_len:]
+        seq_df = df.iloc[-clf.seq_len :]
         dates = seq_df["time"].tolist()
 
         # Format weights
-        weights_list = [float(attn_dict.get(f"t-{clf.seq_len - 1 - i}", 0.0)) for i in range(clf.seq_len)]
+        weights_list = [
+            float(attn_dict.get(f"t-{clf.seq_len - 1 - i}", 0.0)) for i in range(clf.seq_len)
+        ]
 
         # Normalize weights so they sum to 1.0
         sum_w = sum(weights_list) + 1e-9
@@ -268,12 +346,13 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 
         top_timesteps = []
         # Sort indices by weight desc
-        top_indices = sorted(range(len(weights_list)), key=lambda idx: weights_list[idx], reverse=True)[:5]
+        top_indices = sorted(
+            range(len(weights_list)), key=lambda idx: weights_list[idx], reverse=True
+        )[:5]
         for idx in top_indices:
             top_timesteps.append(
                 AttentionTimestep(
-                    date=dates[idx],
-                    weight=Decimal(str(safe_round(weights_list[idx], 6)))
+                    date=dates[idx], weight=Decimal(str(safe_round(weights_list[idx], 6)))
                 )
             )
 
@@ -304,10 +383,40 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 async def post_counterfactual_explanation(
     symbol: str,
     request: CounterfactualRequest,
+    db: AsyncSession = Depends(get_db)
 ) -> CounterfactualResponse:
     try:
+        norm_symbol = MarketDataService._normalize_symbol(symbol)
+
+        from sqlalchemy import select
+
+        from app.models.instrument import Instrument
+        from app.models.model_artifact import ModelArtifact
+
+        stmt = (
+            select(ModelArtifact)
+            .join(Instrument)
+            .where(
+                Instrument.symbol == norm_symbol,
+                ModelArtifact.is_active,
+            )
+        )
+        result = await db.execute(stmt)
+        artifact = result.scalar_one_or_none()
+
+        if not artifact:
+            raise HTTPException(
+                status_code=503,
+                detail="ML prediction engine is offline until training phase."
+            )
+
         # 1. Fetch live prediction
-        result = await get_full_prediction(symbol)
+        result = await get_full_prediction(
+            symbol,
+            bypass_cache=False,
+            artifact_path=artifact.artifact_path,
+            model_version=artifact.version_tag
+        )
         if not result or not result.get("is_computed", False):
             raise HTTPException(
                 status_code=530,
@@ -357,11 +466,7 @@ async def post_counterfactual_explanation(
                     change = 0.01 * multiplier
                     cf_val = orig_val + change if target == "BUY" else orig_val - change
 
-                change_pct = (
-                    ((cf_val - orig_val) / orig_val * 100.0)
-                    if orig_val != 0
-                    else 0.0
-                )
+                change_pct = ((cf_val - orig_val) / orig_val * 100.0) if orig_val != 0 else 0.0
 
                 changed_features.append(
                     FeatureChange(

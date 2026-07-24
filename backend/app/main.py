@@ -3,6 +3,7 @@ QuantEdge — FastAPI Application Entry Point.
 
 Configures CORS, mounts API v1 router, and registers WebSocket endpoints.
 """
+
 from __future__ import annotations
 
 import sys
@@ -18,11 +19,9 @@ if _backend_root_str not in sys.path:
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.exceptions import RequestValidationError
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
 from loguru import logger
 
 try:
@@ -39,14 +38,19 @@ for _noisy_lib in ("pymongo", "motor", "yfinance", "urllib3", "urllib3.connectio
     _logging.getLogger(_noisy_lib).setLevel(_logging.WARNING)
 
 
+import time
+
+from app.api.quantedge_router import router as quantedge_router
 from app.api.v1.router import api_router
 from app.core.config import get_settings
+from app.core.errors import register_exception_handlers
 from app.core.events import shutdown_events, startup_events
 from app.core.logging import setup_logging
-from app.core.middleware import SecurityHeadersMiddleware
+from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
 from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
-from app.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
+from app.database.connection import async_session_factory
+from app.database.redis_client import get_redis_client
 from app.websocket.router import router as websocket_router
 
 settings = get_settings()
@@ -62,111 +66,101 @@ async def lifespan(app: FastAPI):
     logger.info("🛑 QuantEdge API shutting down...")
 
 
-app = FastAPI(
-    title=settings.PROJECT_NAME,
-    description="AI-Powered Stock Market Intelligence System",
-    version="0.1.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
-    lifespan=lifespan,
-)
-
-setup_logging()
-configure_logging(settings.ENVIRONMENT)
-
-if settings.SENTRY_DSN and sentry_sdk is not None and FastApiIntegration is not None:
-    sentry_sdk.init(
-        dsn=settings.SENTRY_DSN,
-        integrations=[FastApiIntegration()],
-        traces_sample_rate=0.1,
-        environment=settings.ENVIRONMENT,
+def create_app() -> FastAPI:
+    _app = FastAPI(
+        title=settings.PROJECT_NAME,
+        description="AI-Powered Stock Market Intelligence System",
+        version="0.1.0",
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
+        openapi_url="/api/openapi.json",
+        lifespan=lifespan,
     )
 
-# ─── CORS Middleware ───────────────────────────────────────
-app.add_middleware(RequestIDMiddleware)
+    setup_logging()
+    configure_logging(settings.ENVIRONMENT)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=settings.CORS_ALLOW_METHODS,
-    allow_headers=settings.CORS_ALLOW_HEADERS,
-)
-
-if settings.ALLOWED_HOSTS:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
-
-app.add_middleware(SecurityHeadersMiddleware)
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-from slowapi.errors import RateLimitExceeded
-from slowapi.middleware import SlowAPIMiddleware
-
-# Setup SlowAPI Limiter
-limiter = Limiter(key_func=get_remote_address, default_limits=[settings.DEFAULT_RATE_LIMIT])
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-if settings.RATE_LIMIT_ENABLED:
-    app.add_middleware(SlowAPIMiddleware)
-
-
-def _error_code_for_status(status_code: int) -> ErrorCode:
-    mapping = {
-        400: ErrorCode.VALIDATION_ERROR,
-        401: ErrorCode.UNAUTHORIZED,
-        403: ErrorCode.FORBIDDEN,
-        404: ErrorCode.RESOURCE_NOT_FOUND,
-        409: ErrorCode.ALREADY_EXISTS,
-        429: ErrorCode.RATE_LIMIT_EXCEEDED,
-    }
-    return mapping.get(status_code, ErrorCode.INTERNAL_SERVER_ERROR)
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    details = []
-    for error in exc.errors():
-        location = error.get("loc") or []
-        field = ".".join(str(part) for part in location if part not in {"body", "query", "path", "header"}) or None
-        details.append(
-            ErrorDetail(
-                field=field,
-                message=error.get("msg", "Invalid value"),
-                code=str(error.get("type", "invalid_request")).upper(),
-            )
+    if settings.SENTRY_DSN and sentry_sdk is not None and FastApiIntegration is not None:
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            integrations=[FastApiIntegration()],
+            traces_sample_rate=0.1,
+            environment=settings.ENVIRONMENT,
         )
 
-    payload = ErrorResponse.create(
-        code=ErrorCode.VALIDATION_ERROR,
-        message="Validation failed. Please check your input.",
-        details=details,
-    ).dict()
-    return JSONResponse(status_code=400, content=payload)
+    # ─── CORS Middleware ───────────────────────────────────────
+    _app.add_middleware(RequestIDMiddleware)
 
+    _app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.BACKEND_CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=settings.CORS_ALLOW_METHODS,
+        allow_headers=settings.CORS_ALLOW_HEADERS,
+    )
 
-@app.exception_handler(HTTPException)
-async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-    if isinstance(exc.detail, dict) and {"success", "error", "request_id"}.issubset(exc.detail.keys()):
-        return JSONResponse(status_code=exc.status_code, content=exc.detail, headers=exc.headers)
+    if settings.ALLOWED_HOSTS:
+        _app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
 
-    code = _error_code_for_status(exc.status_code)
-    message = exc.detail if isinstance(exc.detail, str) else "Request failed."
-    payload = ErrorResponse.create(code=code, message=message).dict()
-    return JSONResponse(status_code=exc.status_code, content=payload, headers=exc.headers)
+    _app.add_middleware(SecurityHeadersMiddleware)
 
-# ─── Mount API v1 ─────────────────────────────────────────
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-app.include_router(websocket_router)
+    if settings.RATE_LIMIT_ENABLED:
+        _app.add_middleware(RateLimitMiddleware)
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
+    register_exception_handlers(_app)
 
-# ─── Mount QuantEdge specific router ──────────────────────
-from app.api.quantedge_router import router as quantedge_router
+    # ─── Mount Routers ─────────────────────────────────────────
+    _app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    _app.include_router(websocket_router)
+    _app.include_router(quantedge_router)
 
-app.include_router(quantedge_router)
+    # Health check endpoint
+    @_app.get("/health")
+    async def health_check():
+        start_time = time.time()
+        health_status = {
+            "status": "healthy",
+            "db": "ok",
+            "redis": "ok",
+            "providers": "ok",
+            "uptime_seconds": 0.0
+        }
 
+        # Check DB
+        try:
+            from sqlalchemy import text
+            async with async_session_factory() as session:
+                await session.execute(text("SELECT 1"))
+        except Exception as e:
+            logger.error(f"DB health check failed: {e}")
+            health_status["db"] = "unhealthy"
+            health_status["status"] = "degraded"
+
+        # Check Redis
+        try:
+            redis = get_redis_client()
+            if not await redis.ping():
+                raise ValueError("Redis ping returned false")
+        except Exception as e:
+            logger.error(f"Redis health check failed: {e}")
+            health_status["redis"] = "unhealthy"
+            health_status["status"] = "degraded"
+
+        # Check Providers
+        try:
+            from app.services.market_data_service import MarketDataService
+            providers_health = await MarketDataService.health()
+            if not providers_health or providers_health.get("status") != "ok":
+                health_status["providers"] = providers_health.get("status", "unhealthy")
+                health_status["status"] = "degraded"
+        except Exception as e:
+            logger.error(f"Providers health check failed: {e}")
+            health_status["providers"] = "unhealthy"
+            health_status["status"] = "degraded"
+
+        health_status["uptime_seconds"] = round(time.time() - start_time, 3)
+        return health_status
+
+    return _app
+
+app = create_app()

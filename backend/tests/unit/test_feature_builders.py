@@ -17,14 +17,11 @@ def _build_synthetic_df(rows: int = 150) -> pd.DataFrame:
     low = np.minimum(open_, close) * (1.0 - 0.005 * np.random.rand(rows))
     volume = np.random.randint(100_000, 1_000_000, rows).astype(float)
 
-    return pd.DataFrame({
-        "time": dates,
-        "open": open_,
-        "high": high,
-        "low": low,
-        "close": close,
-        "volume": volume
-    }, index=dates)
+    return pd.DataFrame(
+        {"time": dates, "open": open_, "high": high, "low": low, "close": close, "volume": volume},
+        index=dates,
+    )
+
 
 def test_price_factors_builder_output_quality():
     df = _build_synthetic_df()
@@ -40,7 +37,10 @@ def test_price_factors_builder_output_quality():
         # Check that it's not a single repeated value (except for sparse binary/trinary candlestick flags)
         if not col.startswith("CDL_"):
             unique_vals = out_df[col].dropna().unique()
-            assert len(unique_vals) > 1, f"Column {col} contains only one unique value: {unique_vals[0]}"
+            assert len(unique_vals) > 1, (
+                f"Column {col} contains only one unique value: {unique_vals[0]}"
+            )
+
 
 def test_volatility_factors_builder_output_quality():
     df = _build_synthetic_df()
@@ -54,4 +54,6 @@ def test_volatility_factors_builder_output_quality():
 
         # Check that it's not a single repeated value
         unique_vals = out_df[col].dropna().unique()
-        assert len(unique_vals) > 1, f"Column {col} contains only one unique value: {unique_vals[0]}"
+        assert len(unique_vals) > 1, (
+            f"Column {col} contains only one unique value: {unique_vals[0]}"
+        )

@@ -31,5 +31,6 @@ def main():
     learner.save()
     print("Model serialized successfully.")
 
+
 if __name__ == "__main__":
     main()

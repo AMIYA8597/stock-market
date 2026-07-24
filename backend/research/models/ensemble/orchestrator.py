@@ -35,7 +35,9 @@ async def _run_callable(maybe_async_callable: Any, *args: Any, **kwargs: Any) ->
     return await asyncio.to_thread(lambda: result)
 
 
-async def run_parallel_inference(model_calls: dict[str, tuple[Any, tuple[Any, ...], dict[str, Any]]]) -> dict[str, float]:
+async def run_parallel_inference(
+    model_calls: dict[str, tuple[Any, tuple[Any, ...], dict[str, Any]]],
+) -> dict[str, float]:
     """Run model inference calls concurrently and normalize into scalar signals.
 
     Input mapping format:
@@ -67,4 +69,6 @@ def build_ensemble_result(ctx: InferenceContext) -> EnsembleInferenceResult:
         regime_mean=ctx.regime_mean,
         regime_variance=ctx.regime_variance,
     )
-    return EnsembleInferenceResult(combined=combined, model_weights=weights, model_signals=ctx.model_signals)
+    return EnsembleInferenceResult(
+        combined=combined, model_weights=weights, model_signals=ctx.model_signals
+    )

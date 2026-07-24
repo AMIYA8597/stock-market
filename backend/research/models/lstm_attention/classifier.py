@@ -16,6 +16,7 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
+
 class AttentionLayer(nn.Module):
     def __init__(self, hidden_dim: int):
         super().__init__()
@@ -28,6 +29,7 @@ class AttentionLayer(nn.Module):
         attn_weights = torch.softmax(scores, dim=1)  # [batch_size, seq_len, 1]
         context = torch.sum(lstm_out * attn_weights, dim=1)  # [batch_size, hidden_dim]
         return context, attn_weights
+
 
 class LSTMAttentionNet(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1):
@@ -44,6 +46,7 @@ class LSTMAttentionNet(nn.Module):
         out = self.sigmoid(self.fc(context))
         return out, attn_weights
 
+
 class LSTMAttentionClassifier:
     """Estimator wrapping LSTMAttentionNet PyTorch model."""
 
@@ -53,23 +56,20 @@ class LSTMAttentionClassifier:
         self.lr = lr
         self.model = None
         self.scaler = StandardScaler()
-        self.features = [
-            "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-            "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-            "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-            "dist_52w_high", "dist_52w_low", "drawdown",
-            "range_pct", "close_to_open"
-        ]
+        self.features = []
 
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         X_seq, y_seq = [], []
         for i in range(len(X) - self.seq_len):
-            X_seq.append(X[i:i+self.seq_len])
-            y_seq.append(y[i+self.seq_len])
+            X_seq.append(X[i : i + self.seq_len])
+            y_seq.append(y[i + self.seq_len])
         return np.array(X_seq), np.array(y_seq)
 
     def fit(self, df: pd.DataFrame, y: pd.Series) -> LSTMAttentionClassifier:
         """Fit the scaler, prepare sequences, and train the model."""
+        if not self.features:
+            self.features = list(df.columns)
+
         X_clean = df[self.features].dropna()
         y_clean = y.loc[X_clean.index].values
         X_scaled = self.scaler.fit_transform(X_clean)
@@ -89,7 +89,7 @@ class LSTMAttentionClassifier:
         criterion = nn.BCELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
 
-        for epoch in range(self.epochs):
+        for _epoch in range(self.epochs):
             optimizer.zero_grad()
             outputs, _ = self.model(X_tensor)
             loss = criterion(outputs, y_tensor)
@@ -110,7 +110,7 @@ class LSTMAttentionClassifier:
             padding = np.zeros((self.seq_len - len(X_scaled), len(self.features)))
             X_scaled = np.vstack([padding, X_scaled])
         else:
-            X_scaled = X_scaled[-self.seq_len:]
+            X_scaled = X_scaled[-self.seq_len :]
 
         X_tensor = torch.tensor(X_scaled, dtype=torch.float32).unsqueeze(0)
 
@@ -123,6 +123,19 @@ class LSTMAttentionClassifier:
         attn_dict = {f"t-{self.seq_len - 1 - i}": float(w) for i, w in enumerate(attn_weights_val)}
         return prob_val, attn_dict
 
+    def predict_proba_batch(self, df: pd.DataFrame) -> pd.Series:
+        if self.model is None:
+            return pd.Series(0.5, index=df.index)
+
+        probs = []
+        for i in range(len(df)):
+            # slice up to i+1
+            sub_df = df.iloc[: i + 1]
+            prob, _ = self.predict_proba(sub_df)
+            probs.append(prob)
+
+        return pd.Series(probs, index=df.index)
+
     def save(self, path: Path | str) -> None:
         """Save model state dict and settings."""
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -130,7 +143,7 @@ class LSTMAttentionClassifier:
             "scaler": self.scaler,
             "features": self.features,
             "seq_len": self.seq_len,
-            "model_state_dict": self.model.state_dict() if self.model is not None else None
+            "model_state_dict": self.model.state_dict() if self.model is not None else None,
         }
         with open(path, "wb") as f:
             pickle.dump(state, f)

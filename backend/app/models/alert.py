@@ -10,7 +10,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 from sqlalchemy import UUID as SQLA_UUID
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
@@ -22,7 +22,7 @@ class Alert(Base):
     Fields:
         id (UUID): Unique alert identifier, primary key.
         user_id (UUID): Foreign key to User.
-        symbol_id (int): Foreign key to Symbol (nullable for portfolio-level alerts).
+        symbol_id (int): Foreign key to Instrument (nullable for portfolio-level alerts).
         alert_type (str): Alert category (PRICE_ABOVE, PRICE_BELOW, RSI_OB, etc.).
         threshold (Decimal): Numeric threshold value for comparison.
         is_triggered (bool): Whether alert has been triggered.
@@ -52,11 +52,12 @@ class Alert(Base):
         index=True,
         doc="Foreign key to users",
     )
-    symbol_id: Mapped[int | None] = mapped_column(
-        ForeignKey("symbols.id"),
+    instrument_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("instrument.id"),
         nullable=True,
         index=True,
-        doc="Foreign key to symbols (nullable for portfolio-level)",
+        doc="Foreign key to instrument table (nullable for portfolio-level)",
     )
     alert_type: Mapped[str] = mapped_column(
         String(32),
@@ -67,6 +68,17 @@ class Alert(Base):
         Numeric(20, 8),
         nullable=True,
         doc="Numeric threshold for comparison",
+    )
+    name: Mapped[str | None] = mapped_column(
+        String(255),
+        nullable=True,
+        doc="Name of the alert",
+    )
+    enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+        doc="Whether alert is active",
     )
     is_triggered: Mapped[bool] = mapped_column(
         Boolean,
@@ -84,6 +96,13 @@ class Alert(Base):
         server_default=func.now(),
         nullable=False,
         doc="Created timestamp (UTC)",
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+        doc="Updated timestamp (UTC)",
     )
 
     def __repr__(self) -> str:

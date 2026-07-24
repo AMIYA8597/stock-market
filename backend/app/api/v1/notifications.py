@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 import uuid
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -26,15 +26,20 @@ class NotificationCreate(BaseModel):
 
 
 @router.get("")
-async def list_notifications(current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> dict[str, object]:
-    user_id_str = current_user.get("sub")
+async def list_notifications(
+    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict[str, object]:
+    user_id_str = str(current_user.id)
     try:
         uid = uuid.UUID(user_id_str)
     except Exception:
         return {"items": []}
 
     result = await db.execute(
-        select(Notification).where(Notification.user_id == uid).order_by(Notification.created_at.desc()).limit(100)
+        select(Notification)
+        .where(Notification.user_id == uid)
+        .order_by(Notification.created_at.desc())
+        .limit(100)
     )
     rows = result.scalars().all()
     return {
@@ -58,7 +63,7 @@ async def create_notification(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    if current_user.get("role") != "ADMIN":
+    if current_user.role != "ADMIN":
         raise HTTPException(
             status_code=403,
             detail=ErrorResponse.create(
@@ -100,7 +105,7 @@ async def mark_read(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    user_id_str = current_user.get("sub")
+    user_id_str = str(current_user.id)
     try:
         uid = uuid.UUID(user_id_str)
         nid = uuid.UUID(notification_id)

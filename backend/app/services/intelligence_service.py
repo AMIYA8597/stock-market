@@ -1,7 +1,7 @@
 # backend/app/services/intelligence_service.py
 """Deterministic service layer for advanced intelligence endpoints.
 
-All predictions, indicators, regimes, correlations, and explanations are derived from 
+All predictions, indicators, regimes, correlations, and explanations are derived from
 real mathematical calculations on real market and symbol OHLCV data.
 """
 
@@ -49,6 +49,7 @@ from app.services.prediction_engine import get_full_prediction
 REGIME_STATES = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
 MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
 
+
 @dataclass(frozen=True)
 class IntelligenceService:
     def _direction(self, score: float) -> str:
@@ -77,6 +78,7 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, get_full_prediction(symbol))
                     result = future.result(timeout=45)
@@ -97,23 +99,37 @@ class IntelligenceService:
                     kelly_fraction=0.0,
                 ),
                 models={
-                    "tft": TFTSignal(p10=-0.015, p50=0.0, p90=0.015, raw_signal=0.0, horizon_days=1),
-                    "hmm_garch": HMMGarchSignal(regime_signal="SIDEWAYS", vol_forecast_1d=0.015, vol_forecast_21d=0.05),
-                    "gnn": GNNSignal(spillover_risk=0.1, embedding_norm=0.6, top_correlated_assets=["NIFTY50"]),
-                    "lstm_attn": LSTMAttnSignal(raw_signal=0.0, attention_peaks=[{"timestep": 7.0, "weight": 0.15}]),
+                    "tft": TFTSignal(
+                        p10=-0.015, p50=0.0, p90=0.015, raw_signal=0.0, horizon_days=1
+                    ),
+                    "hmm_garch": HMMGarchSignal(
+                        regime_signal="SIDEWAYS", vol_forecast_1d=0.015, vol_forecast_21d=0.05
+                    ),
+                    "gnn": GNNSignal(
+                        spillover_risk=0.1, embedding_norm=0.6, top_correlated_assets=["NIFTY50"]
+                    ),
+                    "lstm_attn": LSTMAttnSignal(
+                        raw_signal=0.0, attention_peaks=[{"timestep": 7.0, "weight": 0.15}]
+                    ),
                     "xgboost": XGBoostSignal(raw_signal=0.0, top_features=[]),
                 },
-                model_weights={"tft": 0.28, "hmm_garch": 0.13, "gnn": 0.12, "lstm_attn": 0.22, "xgboost": 0.25},
+                model_weights={
+                    "tft": 0.28,
+                    "hmm_garch": 0.13,
+                    "gnn": 0.12,
+                    "lstm_attn": 0.22,
+                    "xgboost": 0.25,
+                },
                 regime=RegimeDetails(
                     state="SIDEWAYS",
                     probs={"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34, "CRISIS": 0.0},
                     transition_probs={"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "CRISIS": 0.25},
-                )
+                ),
             )
 
         ens = result.get("ensemble", {})
-        tech_sub = ens.get("technical", {})
-        pat_sub = ens.get("pattern", {})
+        ens.get("technical", {})
+        ens.get("pattern", {})
         mom_sub = ens.get("momentum", {})
         reg_sub = ens.get("regime", {})
         xgb_sub = ens.get("xgboost", {})
@@ -142,7 +158,11 @@ class IntelligenceService:
             horizon_days=1,
         )
 
-        vol_1d = math.sqrt(reg_sub.get("regime_variance", 0.01)) if "regime_variance" in reg_sub else mom_sub.get("vol_21d", 0.015)
+        vol_1d = (
+            math.sqrt(reg_sub.get("regime_variance", 0.01))
+            if "regime_variance" in reg_sub
+            else mom_sub.get("vol_21d", 0.015)
+        )
         hmm_signal = HMMGarchSignal(
             regime_signal=reg_sub.get("regime", "SIDEWAYS"),
             vol_forecast_1d=round(vol_1d, 5),
@@ -186,12 +206,14 @@ class IntelligenceService:
         if regime_state not in REGIME_STATES:
             regime_state = "SIDEWAYS"
 
-        transition_probs = self._normalize_weights({
-            "BULL": 0.4 if regime_state == "BULL" else 0.2,
-            "BEAR": 0.4 if regime_state == "BEAR" else 0.2,
-            "SIDEWAYS": 0.4 if regime_state == "SIDEWAYS" else 0.2,
-            "CRISIS": 0.4 if regime_state == "CRISIS" else 0.2,
-        })
+        transition_probs = self._normalize_weights(
+            {
+                "BULL": 0.4 if regime_state == "BULL" else 0.2,
+                "BEAR": 0.4 if regime_state == "BEAR" else 0.2,
+                "SIDEWAYS": 0.4 if regime_state == "SIDEWAYS" else 0.2,
+                "CRISIS": 0.4 if regime_state == "CRISIS" else 0.2,
+            }
+        )
 
         return SignalResponse(
             symbol=symbol.upper(),
@@ -235,8 +257,11 @@ class IntelligenceService:
             hist_days = days + 10
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, MarketDataService.get_history(symbol, "1d", f"{hist_days}d"))
+                    future = pool.submit(
+                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{hist_days}d")
+                    )
                     bars = future.result(timeout=10)
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{hist_days}d"))
@@ -251,7 +276,7 @@ class IntelligenceService:
                 if i < 1 or i >= len(closes):
                     continue
                 dt = datetime.fromisoformat(times[i])
-                ret = (closes[i] - closes[i-1]) / closes[i-1]
+                ret = (closes[i] - closes[i - 1]) / closes[i - 1]
                 sig = math.tanh(ret * 25.0)
                 points.append(
                     SignalHistoryPoint(
@@ -284,6 +309,7 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, get_full_prediction(symbol))
                     pred = future.result(timeout=15)
@@ -304,7 +330,11 @@ class IntelligenceService:
             [0.02, 0.18, 0.10, 0.70],
         ]
 
-        vol_1d = math.sqrt(reg_sub.get("regime_variance", 0.01)) if "regime_variance" in reg_sub else 0.013
+        vol_1d = (
+            math.sqrt(reg_sub.get("regime_variance", 0.01))
+            if "regime_variance" in reg_sub
+            else 0.013
+        )
         return RegimeCurrentResponse(
             state=state,
             probs=probs,
@@ -326,8 +356,11 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 30}d"))
+                    future = pool.submit(
+                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 30}d")
+                    )
                     bars = future.result(timeout=10)
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 30}d"))
@@ -355,14 +388,18 @@ class IntelligenceService:
 
             for i in range(max(0, len(closes) - days), len(closes)):
                 d = datetime.fromisoformat(times[i]).date()
-                window = closes[max(0, i-21):i+1]
+                window = closes[max(0, i - 21) : i + 1]
                 if len(window) >= 2:
-                    ret_window = [(window[j] - window[j-1])/window[j-1] for j in range(1, len(window))]
+                    ret_window = [
+                        (window[j] - window[j - 1]) / window[j - 1] for j in range(1, len(window))
+                    ]
                     vol = float(np.std(ret_window))
                 else:
                     vol = 0.015
 
-                ret_5d = (closes[i] - closes[max(0, i-5)]) / closes[max(0, i-5)] if i > 0 else 0.0
+                ret_5d = (
+                    (closes[i] - closes[max(0, i - 5)]) / closes[max(0, i - 5)] if i > 0 else 0.0
+                )
                 if ret_5d > 0.015 and vol < 0.015:
                     state = "BULL"
                     probs = {"BULL": 0.70, "BEAR": 0.10, "SIDEWAYS": 0.20}
@@ -396,10 +433,18 @@ class IntelligenceService:
 
     def get_regime_statistics(self) -> list[RegimeStatisticsItem]:
         return [
-            RegimeStatisticsItem(state="BULL", avg_duration=48.2, avg_return=0.0012, avg_vol=0.011, freq=0.36),
-            RegimeStatisticsItem(state="BEAR", avg_duration=29.7, avg_return=-0.0016, avg_vol=0.022, freq=0.23),
-            RegimeStatisticsItem(state="SIDEWAYS", avg_duration=38.5, avg_return=0.0002, avg_vol=0.009, freq=0.31),
-            RegimeStatisticsItem(state="CRISIS", avg_duration=11.3, avg_return=-0.0034, avg_vol=0.038, freq=0.10),
+            RegimeStatisticsItem(
+                state="BULL", avg_duration=48.2, avg_return=0.0012, avg_vol=0.011, freq=0.36
+            ),
+            RegimeStatisticsItem(
+                state="BEAR", avg_duration=29.7, avg_return=-0.0016, avg_vol=0.022, freq=0.23
+            ),
+            RegimeStatisticsItem(
+                state="SIDEWAYS", avg_duration=38.5, avg_return=0.0002, avg_vol=0.009, freq=0.31
+            ),
+            RegimeStatisticsItem(
+                state="CRISIS", avg_duration=11.3, avg_return=-0.0034, avg_vol=0.038, freq=0.10
+            ),
         ]
 
     def get_shap(self, symbol: str) -> ExplainShapResponse:
@@ -411,6 +456,7 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, get_full_prediction(symbol))
                     pred = future.result(timeout=15)
@@ -439,7 +485,14 @@ class IntelligenceService:
                     )
                 )
         else:
-            features = ["rsi_14", "macd_hist", "realized_vol_21d", "momentum_63d", "dist_52w_high", "dist_52w_low"]
+            features = [
+                "rsi_14",
+                "macd_hist",
+                "realized_vol_21d",
+                "momentum_63d",
+                "dist_52w_high",
+                "dist_52w_low",
+            ]
             for name in features:
                 contribs.append(
                     SHAPContribution(
@@ -469,8 +522,11 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, MarketDataService.get_history(symbol, "1d", "60d"))
+                    future = pool.submit(
+                        asyncio.run, MarketDataService.get_history(symbol, "1d", "60d")
+                    )
                     bars = future.result(timeout=10)
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "60d"))
@@ -480,7 +536,7 @@ class IntelligenceService:
         if len(bars) >= 5:
             closes = [b["close"] for b in bars]
             times = [b["time"] for b in bars]
-            log_returns = [abs(math.log(closes[j]/closes[j-1])) for j in range(1, len(closes))]
+            log_returns = [abs(math.log(closes[j] / closes[j - 1])) for j in range(1, len(closes))]
             while len(log_returns) < 60:
                 log_returns.append(0.0)
             log_returns = log_returns[:60]
@@ -495,9 +551,11 @@ class IntelligenceService:
         else:
             mean_weights = [1.0 / 60.0] * 60
             weights = [mean_weights] * 8
-            times = [(datetime.now(UTC) - timedelta(days=60-i)).isoformat() for i in range(60)]
+            times = [(datetime.now(UTC) - timedelta(days=60 - i)).isoformat() for i in range(60)]
 
-        top_indices = sorted(range(len(mean_weights)), key=lambda i: mean_weights[i], reverse=True)[:5]
+        top_indices = sorted(range(len(mean_weights)), key=lambda i: mean_weights[i], reverse=True)[
+            :5
+        ]
         top = [
             {"date": datetime.fromisoformat(times[idx]).date(), "weight": mean_weights[idx]}
             for idx in top_indices
@@ -509,7 +567,9 @@ class IntelligenceService:
             top_timesteps=top,
         )
 
-    def get_counterfactuals(self, symbol: str, payload: CounterfactualRequest) -> list[CounterfactualResponse]:
+    def get_counterfactuals(
+        self, symbol: str, payload: CounterfactualRequest
+    ) -> list[CounterfactualResponse]:
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -518,6 +578,7 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, get_full_prediction(symbol))
                     pred = future.result(timeout=15)
@@ -545,7 +606,9 @@ class IntelligenceService:
                         CounterfactualFeatureChange(
                             name="momentum_21d",
                             original=round(-0.02, 4),
-                            counterfactual=round(0.02 if payload.target_direction == "BUY" else -0.05, 4),
+                            counterfactual=round(
+                                0.02 if payload.target_direction == "BUY" else -0.05, 4
+                            ),
                         ),
                     ],
                     resulting_signal="BUY" if payload.target_direction == "BUY" else "SELL",
@@ -580,8 +643,11 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, MarketDataService.get_history(symbol, "1d", "126d"))
+                    future = pool.submit(
+                        asyncio.run, MarketDataService.get_history(symbol, "1d", "126d")
+                    )
                     bars = future.result(timeout=10)
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "126d"))
@@ -591,12 +657,13 @@ class IntelligenceService:
         rows: list[DriftItem] = []
         if len(bars) >= 42:
             closes = [b["close"] for b in bars]
-            returns = [(closes[i] - closes[i-1])/closes[i-1] for i in range(1, len(closes))]
+            returns = [(closes[i] - closes[i - 1]) / closes[i - 1] for i in range(1, len(closes))]
             mid = len(returns) // 2
             p1 = returns[:mid]
             p2 = returns[mid:]
 
             from scipy.stats import ks_2samp
+
             res = ks_2samp(p1, p2)
             ks_stat = float(res.statistic)
             p_val = float(res.pvalue)
@@ -634,8 +701,11 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 1}d"))
+                    future = pool.submit(
+                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 1}d")
+                    )
                     bars = future.result(timeout=10)
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 1}d"))
@@ -650,7 +720,7 @@ class IntelligenceService:
                 if i < 0 or i >= len(closes):
                     continue
                 d = datetime.fromisoformat(times[i]).date()
-                ret = (closes[i] - closes[i-1])/closes[i-1] if i > 0 else 0.0
+                ret = (closes[i] - closes[i - 1]) / closes[i - 1] if i > 0 else 0.0
 
                 tft_w = 0.28 + ret * 0.1
                 xg_w = 0.25 + ret * 0.1
@@ -658,13 +728,15 @@ class IntelligenceService:
                 gnn_w = 0.12
                 lstm_w = 0.22 - ret * 0.05
 
-                weights = self._normalize_weights({
-                    "tft": max(0.05, tft_w),
-                    "hmm_garch": max(0.05, hmm_w),
-                    "gnn": max(0.05, gnn_w),
-                    "lstm_attn": max(0.05, lstm_w),
-                    "xgboost": max(0.05, xg_w),
-                })
+                weights = self._normalize_weights(
+                    {
+                        "tft": max(0.05, tft_w),
+                        "hmm_garch": max(0.05, hmm_w),
+                        "gnn": max(0.05, gnn_w),
+                        "lstm_attn": max(0.05, lstm_w),
+                        "xgboost": max(0.05, xg_w),
+                    }
+                )
                 rows.append(
                     EnsembleWeightPoint(
                         date=d,
@@ -737,12 +809,17 @@ class IntelligenceService:
             loop = None
 
         try:
+
             async def fetch_all():
-                tasks = [MarketDataService.get_history(sym[0], "1d", f"{window_days + 5}d") for sym in symbols]
+                tasks = [
+                    MarketDataService.get_history(sym[0], "1d", f"{window_days + 5}d")
+                    for sym in symbols
+                ]
                 return await asyncio.gather(*tasks)
 
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, fetch_all())
                     all_hist = future.result(timeout=20)
@@ -752,8 +829,9 @@ class IntelligenceService:
             all_hist = [[] for _ in symbols]
 
         import pandas as pd
+
         returns_dict = {}
-        for (ticker, sector), hist in zip(symbols, all_hist):
+        for (ticker, _sector), hist in zip(symbols, all_hist, strict=False):
             if len(hist) >= 2:
                 df_temp = pd.DataFrame(hist)
                 df_temp["time"] = pd.to_datetime(df_temp["time"])
@@ -792,7 +870,11 @@ class IntelligenceService:
         ]
         edges: list[CorrelationEdge] = []
         for source, target in edges_seed:
-            if corr_matrix is not None and source in corr_matrix.columns and target in corr_matrix.columns:
+            if (
+                corr_matrix is not None
+                and source in corr_matrix.columns
+                and target in corr_matrix.columns
+            ):
                 corr = round(float(corr_matrix.loc[source, target]), 3)
             else:
                 corr = 0.55
@@ -801,7 +883,11 @@ class IntelligenceService:
         central = "^NSEI"
         top_correlates = [
             {"ticker": edge.target, "correlation": edge.correlation}
-            for edge in sorted((e for e in edges if e.source == central), key=lambda item: item.correlation, reverse=True)
+            for edge in sorted(
+                (e for e in edges if e.source == central),
+                key=lambda item: item.correlation,
+                reverse=True,
+            )
         ]
 
         return CorrelationGraphResponse(
@@ -822,6 +908,7 @@ class IntelligenceService:
             loop = None
 
         try:
+
             async def fetch_both():
                 t1 = MarketDataService.get_history(ticker, "1d", f"{window_days + 5}d")
                 t2 = MarketDataService.get_history(market_symbol, "1d", f"{window_days + 5}d")
@@ -829,6 +916,7 @@ class IntelligenceService:
 
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, fetch_both())
                     hist_sym, hist_mkt = future.result(timeout=15)
@@ -846,6 +934,7 @@ class IntelligenceService:
 
         if len(hist_sym) >= 10 and len(hist_mkt) >= 10:
             import pandas as pd
+
             df_sym = pd.DataFrame(hist_sym)
             df_sym["time"] = pd.to_datetime(df_sym["time"])
             df_sym.set_index("time", inplace=True)
@@ -899,5 +988,6 @@ class IntelligenceService:
             exposures=exposures,
             metrics=metrics,
         )
+
 
 intelligence_service = IntelligenceService()

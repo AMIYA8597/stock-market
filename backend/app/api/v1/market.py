@@ -3,11 +3,13 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-import logging
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from app.core.dependencies import get_rate_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +21,7 @@ from app.schemas.market import (
     HistoryResponse,
     IndexData,
     IndicesResponse,
+    InstrumentInfo,
     MoverData,
     MoversResponse,
     OHLCVBar,
@@ -28,27 +31,52 @@ from app.schemas.market import (
     SearchResult,
     SectorNode,
     SignalData,
+    UniverseResponse,
 )
+from app.services.data_ingestion.provider_manager import provider_manager
 from app.services.market_data_service import MarketDataService
-from app.services.pattern_service import detect_patterns
+from app.services.market_status import MarketStatusService
 
 router = APIRouter(prefix="/market", tags=["market"])
 
 SECTOR_MAP = {
-    "RELIANCE": "Energy", "NTPC": "Energy", "ONGC": "Energy", "COALINDIA": "Energy", "POWERGRID": "Energy",
-    "TCS": "IT", "INFY": "IT", "WIPRO": "IT", "HCLTECH": "IT",
-    "HDFCBANK": "Financials", "ICICIBANK": "Financials", "SBIN": "Financials", "KOTAKBANK": "Financials", "AXISBANK": "Financials", "BAJFINANCE": "Financials",
-    "HINDUNILVR": "Consumer Goods", "ITC": "Consumer Goods", "ASIANPAINT": "Consumer Goods", "TITAN": "Consumer Goods", "NESTLEIND": "Consumer Goods",
+    "RELIANCE": "Energy",
+    "NTPC": "Energy",
+    "ONGC": "Energy",
+    "COALINDIA": "Energy",
+    "POWERGRID": "Energy",
+    "TCS": "IT",
+    "INFY": "IT",
+    "WIPRO": "IT",
+    "HCLTECH": "IT",
+    "HDFCBANK": "Financials",
+    "ICICIBANK": "Financials",
+    "SBIN": "Financials",
+    "KOTAKBANK": "Financials",
+    "AXISBANK": "Financials",
+    "BAJFINANCE": "Financials",
+    "HINDUNILVR": "Consumer Goods",
+    "ITC": "Consumer Goods",
+    "ASIANPAINT": "Consumer Goods",
+    "TITAN": "Consumer Goods",
+    "NESTLEIND": "Consumer Goods",
     "MARUTI": "Automobile",
     "LT": "Industrials",
     "SUNPHARMA": "Healthcare",
-    "ULTRACEMCO": "Materials", "TATASTEEL": "Materials", "JSWSTEEL": "Materials", "GRASIM": "Materials",
-    "ADANIENT": "Conglomerates", "ADANIPORTS": "Conglomerates"
+    "ULTRACEMCO": "Materials",
+    "TATASTEEL": "Materials",
+    "JSWSTEEL": "Materials",
+    "GRASIM": "Materials",
+    "ADANIENT": "Conglomerates",
+    "ADANIPORTS": "Conglomerates",
 }
 
 
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
-async def get_quote(symbol: str) -> QuoteResponse:
+async def get_quote(
+    symbol: str,
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+) -> QuoteResponse:
     if not symbol.strip():
         raise HTTPException(
             status_code=400,
@@ -59,9 +87,9 @@ async def get_quote(symbol: str) -> QuoteResponse:
         )
 
     try:
-        quote = await MarketDataService.get_quote(symbol)
-        price_val = quote["price"]
-        change_pct = quote["change_pct"]
+        quote = await provider_manager.get_quote(symbol)
+        price_val = float(quote.price)
+        change_pct = float(quote.change_pct)
 
         # Build neutral/deterministic regime/signal metrics for simple quotes
         sig_dir = "NEUTRAL"
@@ -82,20 +110,20 @@ async def get_quote(symbol: str) -> QuoteResponse:
             regime_state = "bear"
 
         return QuoteResponse(
-            ticker=quote["symbol"],
-            name=quote["symbol"].split(".")[0],
+            ticker=quote.symbol,
+            name=quote.symbol.split(".")[0],
             price=Decimal(str(price_val)),
-            change=Decimal(str(quote["change"])),
+            change=Decimal(str(quote.change)),
             change_pct=Decimal(str(change_pct)),
-            volume=Decimal(str(quote["volume"])),
-            market_cap=Decimal(str(quote["market_cap"])) if quote.get("market_cap") else None,
+            volume=Decimal(str(quote.volume)),
+            market_cap=None,
             pe_ratio=None,
-            week_52_high=Decimal(str(quote["week_52_high"])) if quote.get("week_52_high") else Decimal(str(price_val)),
-            week_52_low=Decimal(str(quote["week_52_low"])) if quote.get("week_52_low") else Decimal(str(price_val)),
+            week_52_high=Decimal(str(price_val)),
+            week_52_low=Decimal(str(price_val)),
             regime=RegimeData(state=regime_state, probs=[0.25, 0.25, 0.25, 0.25]),
             signal=SignalData(direction=sig_dir, confidence=sig_conf),
-            timestamp=datetime.now(UTC),
-            source=quote.get("source", "yfinance"),
+            timestamp=quote.timestamp,
+            source="yfinance",
         )
     except Exception as e:
         raise HTTPException(
@@ -109,18 +137,18 @@ async def get_quote(symbol: str) -> QuoteResponse:
 
 # Mapping: interval -> sensible default period when the client omits period
 _INTERVAL_DEFAULT_PERIOD: dict[str, str] = {
-    "1m":  "5d",
-    "3m":  "5d",
-    "5m":  "5d",
+    "1m": "5d",
+    "3m": "5d",
+    "5m": "5d",
     "10m": "5d",
     "15m": "5d",
     "30m": "5d",
     "45m": "5d",
-    "1h":  "5d",
-    "2h":  "5d",
-    "4h":  "5d",
-    "1d":  "1y",
-    "1w":  "2y",
+    "1h": "5d",
+    "2h": "5d",
+    "4h": "5d",
+    "1d": "1y",
+    "1w": "2y",
     "1mo": "max",
 }
 
@@ -130,6 +158,7 @@ async def get_history(
     symbol: str,
     interval: str = Query("1d", pattern="^(1m|3m|5m|10m|15m|30m|45m|1h|2h|4h|1d|1w|1mo)$"),
     period: str | None = Query(None, pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
 ) -> HistoryResponse:
     if not symbol.strip():
         raise HTTPException(
@@ -143,8 +172,15 @@ async def get_history(
     # Auto-select period from interval when the client doesn't specify one
     effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
 
+    period_days = {
+        "1d": 1, "5d": 5, "1w": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650,
+    }
+    days = period_days.get(effective_period, 30)
+    start_time = datetime.now(UTC) - timedelta(days=days)
+    end_time = datetime.now(UTC)
+
     try:
-        bars_data = await MarketDataService.get_history(symbol, interval, effective_period)
+        bars_data = await provider_manager.get_ohlcv(symbol, interval, start_time, end_time)
         if not bars_data:
             raise HTTPException(
                 status_code=503,
@@ -153,56 +189,71 @@ async def get_history(
                     "message": f"Live data temporarily unavailable for {symbol}",
                     "symbol": symbol,
                     "interval": interval,
-                    "retry_after": 60
-                }
+                    "retry_after": 60,
+                },
             )
 
         bars = []
         total_bars = len(bars_data)
         dropped_bars = 0
+
+        def _get_time(x):
+            if hasattr(x, "time"):
+                return str(x.time)
+            elif isinstance(x, dict):
+                return str(x.get("time", ""))
+            return ""
+        bars_data = sorted(bars_data, key=_get_time)
+
+        last_time_val = None
         for b in bars_data:
-            time_str = b["time"]
+            time_str = _get_time(b)
             try:
-                # yfinance returns pandas Timestamp isoformat or str
                 from dateutil import parser as dt_parser
+
                 dt_obj = dt_parser.parse(time_str)
                 if dt_obj.tzinfo is None:
                     dt_obj = dt_obj.replace(tzinfo=UTC)
                 time_val = int(dt_obj.timestamp())
-                
-                iso_time = datetime.fromtimestamp(time_val, tz=UTC).isoformat()
+
+                # De-duplicate strictly ascending
+                if last_time_val is not None and time_val <= last_time_val:
+                    dropped_bars += 1
+                    continue
+                last_time_val = time_val
+
+                def _safe_float(v):
+                    import math
+                    val = float(v)
+                    if math.isnan(val):
+                        raise ValueError("NaN value")
+                    return val
+
                 bars.append(
                     OHLCVBar(
-                        timestamp=iso_time,
-                        open=b.get("open", 0.0),
-                        high=b.get("high", 0.0),
-                        low=b.get("low", 0.0),
-                        close=b.get("close", 0.0),
-                        volume=b.get("volume", 0.0)
+                        time=time_val,
+                        open=_safe_float(getattr(b, "open", 0.0) if hasattr(b, "open") else b.get("open", 0.0)),
+                        high=_safe_float(getattr(b, "high", 0.0) if hasattr(b, "high") else b.get("high", 0.0)),
+                        low=_safe_float(getattr(b, "low", 0.0) if hasattr(b, "low") else b.get("low", 0.0)),
+                        close=_safe_float(getattr(b, "close", 0.0) if hasattr(b, "close") else b.get("close", 0.0)),
+                        volume=_safe_float(getattr(b, "volume", 0.0) if hasattr(b, "volume") else b.get("volume", 0.0)),
                     )
                 )
             except Exception as e:
                 dropped_bars += 1
-                logger.warning(f"Failed to parse timestamp {time_str}: {e}. Dropping bar.")
+                logger.warning(f"Failed to parse bar {time_str}: {e}. Dropping bar.")
 
         if total_bars > 0 and dropped_bars / total_bars > 0.05:
             raise HTTPException(
                 status_code=502,
-                detail=f"Bad Gateway: Too many malformed data points ({dropped_bars}/{total_bars} dropped)."
+                detail=f"Bad Gateway: Too many malformed data points ({dropped_bars}/{total_bars} dropped).",
             )
 
-        print(f"[HOP 3 API return] {symbol} @ {interval}: count_out={len(bars)}, first={bars[0].timestamp if bars else 'None'}, last={bars[-1].timestamp if bars else 'None'}")
-
-
-
-        # bars_data may be a HistoryList (carries .source) or a plain list.
-        # Guard against None just in case the service returns it despite the
-        # empty-list check above (shouldn't happen, but be safe).
-        source_val: str = (
-            getattr(bars_data, "source", None) or "yfinance"
-            if bars_data is not None
-            else "yfinance"
+        print(
+            f"[HOP 3 API return] {symbol} @ {interval}: count_out={len(bars)}, first={bars[0].time if bars else 'None'}, last={bars[-1].time if bars else 'None'}"
         )
+
+        source_val = "provider_manager"
         return HistoryResponse(
             symbol=symbol.upper(),
             interval=interval,
@@ -308,7 +359,9 @@ async def get_heatmap(
 ) -> HeatmapResponse:
     try:
         # Fetch NIFTY movers to construct heatmap nodes
-        movers_data = await MarketDataService.get_movers(30, "momentum" if metric == "volume_surge" else "gainers")
+        movers_data = await MarketDataService.get_movers(
+            30, "momentum" if metric == "volume_surge" else "gainers"
+        )
         if not movers_data:
             raise HTTPException(
                 status_code=404,
@@ -354,13 +407,42 @@ async def get_heatmap(
 async def search_symbols(
     q: str = Query(..., min_length=2, max_length=50),
 ) -> SearchResponse:
-    q_upper = q.upper()
-    rows = [
-        SearchResult(ticker="RELIANCE.NS", name="Reliance Industries", exchange="NSE", asset_type="EQUITY"),
-        SearchResult(ticker="TCS.NS", name="Tata Consultancy Services", exchange="NSE", asset_type="EQUITY"),
-    ]
-    filtered = [r for r in rows if q_upper in r.ticker or q_upper in r.name.upper()]
-    return SearchResponse(query=q, results=filtered, total_matched=len(filtered))
+    import urllib.parse
+    import httpx
+
+    query = urllib.parse.quote(q)
+    url = f"https://query2.finance.yahoo.com/v1/finance/search?q={query}&quotesCount=15&newsCount=0"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    results = []
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, headers=headers, timeout=8.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                quotes = data.get("quotes", [])
+                for item in quotes:
+                    quote_type = item.get("quoteType", "EQUITY")
+                    if quote_type in ("EQUITY", "ETF", "INDEX", "CRYPTOCURRENCY", "MUTUALFUND", "CURRENCY"):
+                        # Ensure we map Yahoo's quoteType to our expected asset_type strings if needed, 
+                        # but our schema expects string. We map CRYPTOCURRENCY -> CRYPTO.
+                        asset_type = "CRYPTO" if quote_type == "CRYPTOCURRENCY" else quote_type
+                        
+                        results.append(
+                            SearchResult(
+                                ticker=item.get("symbol", ""),
+                                name=item.get("shortname") or item.get("longname") or item.get("symbol", ""),
+                                exchange=item.get("exchDisp") or item.get("exchange", "Unknown"),
+                                asset_type=asset_type
+                            )
+                        )
+    except Exception as e:
+        logger.error(f"Yahoo Finance search failed for query '{q}': {e}")
+        
+    return SearchResponse(query=q, results=results, total_matched=len(results))
 
 
 @router.get("/economic-calendar", response_model=EconomicCalendarResponse)
@@ -368,53 +450,57 @@ async def get_economic_calendar() -> EconomicCalendarResponse:
     start = datetime.now(UTC)
     end = start + timedelta(days=30)
     events = [
-        EconomicEvent(date=start + timedelta(days=2), event_name="RBI Policy Rate", country="India", importance="high", forecast="6.50%", previous="6.50%"),
-        EconomicEvent(date=start + timedelta(days=9), event_name="US CPI YoY", country="US", importance="high", forecast="3.1%", previous="3.2%"),
+        EconomicEvent(
+            date=start + timedelta(days=2),
+            event_name="RBI Policy Rate",
+            country="India",
+            importance="high",
+            forecast="6.50%",
+            previous="6.50%",
+        ),
+        EconomicEvent(
+            date=start + timedelta(days=9),
+            event_name="US CPI YoY",
+            country="US",
+            importance="high",
+            forecast="3.1%",
+            previous="3.2%",
+        ),
     ]
     return EconomicCalendarResponse(events=events, period_start=start, period_end=end)
 
 
-@router.get("/ohlcv/{symbol}")
-async def get_ohlcv(
-    symbol: str,
-    period: str = Query(default="1y", description="1d,5d,1mo,3mo,6mo,1y,2y,5y"),
-    interval: str = Query(default="1d", description="1m,5m,15m,30m,60m,1d,1wk,1mo")
-):
-    """
-    Returns OHLCV bars for lightweight-charts.
-    Symbol format: RELIANCE.NS, ^NSEI, BTC-USD
-    """
-    try:
-        bars = await MarketDataService.get_ohlcv(symbol, period, interval)
-        return bars
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/universe")
-async def get_market_universe() -> dict[str, list[str]]:
+@router.get("/universe", response_model=UniverseResponse)
+async def get_market_universe() -> UniverseResponse:
     """Return the list of core symbols supported by the platform."""
-    from app.services.market_data_service import MarketDataService
-    return {"universe": MarketDataService.NSE_NIFTY50}
+    from sqlalchemy import select
+
+    from app.database.connection import async_session_factory
+    from app.models.instrument import Instrument
+
+    async with async_session_factory() as session:
+        stmt = select(Instrument).where(Instrument.is_active)
+        result = await session.execute(stmt)
+        instruments = result.scalars().all()
+
+        out = []
+        for inst in instruments:
+            out.append(InstrumentInfo(
+                symbol=inst.symbol,
+                displayName=inst.display_name or inst.symbol,
+                exchange=inst.exchange,
+                yfinanceTicker=inst.yfinance_ticker or inst.symbol
+            ))
+        return UniverseResponse(instruments=out)
+
 
 @router.get("/status")
 async def get_market_status() -> dict:
     """Return the real IST market hours status."""
-    import zoneinfo
-    
-    ist = zoneinfo.ZoneInfo("Asia/Kolkata")
-    now = datetime.now(ist)
-    
-    is_open = False
-    # Market hours: Monday (0) to Friday (4), 9:15 AM to 3:30 PM
-    if now.weekday() < 5:
-        market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
-        market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
-        if market_open <= now <= market_close:
-            is_open = True
-            
-    return {
-        "is_open": is_open,
-        "current_time": now.isoformat(),
-        "market_timezone": "Asia/Kolkata",
-        "regular_market_hours": "09:15-15:30"
-    }
+    return MarketStatusService.get_status()
+
+@router.get("/providers/health")
+async def get_providers_health() -> dict:
+    """Return health status of all data providers."""
+    return await provider_manager.get_providers_health()
+

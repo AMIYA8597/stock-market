@@ -71,6 +71,7 @@ def test_feature_pipeline_ret_1d_is_causality_safe() -> None:
 
 def test_chart_patterns_builder() -> None:
     from research.feature_engineering.chart_patterns import ChartPatternsBuilder
+
     frame = _build_input_frame(rows=100)
     builder = ChartPatternsBuilder()
     out = builder.transform(frame)
@@ -82,7 +83,7 @@ def test_chart_patterns_builder() -> None:
         "pattern_inv_head_shoulders",
         "pattern_ascending_triangle",
         "pattern_descending_triangle",
-        "pattern_symmetrical_triangle"
+        "pattern_symmetrical_triangle",
     }
     missing = required_pattern_cols.difference(set(out.columns))
     assert not missing

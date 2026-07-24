@@ -21,6 +21,7 @@ except Exception as exc:
 # Simple in‑memory cache as a fallback
 _in_memory_cache: dict[str, tuple[float, str]] = {}
 
+
 class Candle(BaseModel):
     timestamp: int  # UNIX epoch seconds
     open: float
@@ -28,6 +29,7 @@ class Candle(BaseModel):
     low: float
     close: float
     volume: float
+
 
 class MarketDataProvider:
     """Fetch OHLCV data with fallback and caching.
@@ -43,7 +45,9 @@ class MarketDataProvider:
     RETRY_BACKOFF = 1  # seconds
 
     @classmethod
-    async def get_candle(cls, symbol: str, interval: str = "1d", period: str = "1mo") -> list[Candle]:
+    async def get_candle(
+        cls, symbol: str, interval: str = "1d", period: str = "1mo"
+    ) -> list[Candle]:
         """Return a list of Candle objects for the requested symbol.
 
         Results are cached per `symbol|interval|period`.
@@ -74,7 +78,9 @@ class MarketDataProvider:
                 if candles:
                     # Store in Redis if available, else in‑memory cache with expiry timestamp
                     if redis_client:
-                        redis_client.setex(cache_key, cls.CACHE_TTL, str([c.dict() for c in candles]))
+                        redis_client.setex(
+                            cache_key, cls.CACHE_TTL, str([c.dict() for c in candles])
+                        )
                     else:
                         expiry = asyncio.get_event_loop().time() + cls.CACHE_TTL
                         _in_memory_cache[cache_key] = (expiry, str([c.dict() for c in candles]))
@@ -104,6 +110,7 @@ class MarketDataProvider:
                     )
                 )
             return candles
+
         return await MarketDataProvider._retry(_call)
 
     @staticmethod
@@ -131,11 +138,13 @@ class MarketDataProvider:
                         )
                     )
                 return candles
+
         return await MarketDataProvider._retry(_call)
 
     @staticmethod
     async def _fetch_twelvedata(symbol: str, interval: str, period: str) -> list[Candle]:
         api_key = settings.TWELVE_DATA_API_KEY
+
         async def _call():
             url = "https://api.twelvedata.com/time_series"
             params = {
@@ -166,6 +175,7 @@ class MarketDataProvider:
                         )
                     )
                 return candles
+
         return await MarketDataProvider._retry(_call)
 
     @staticmethod

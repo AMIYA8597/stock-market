@@ -177,9 +177,9 @@ class RiskCalculator:
         # Cornish-Fisher adjustment
         z_cf = (
             z_alpha
-            + (z_alpha ** 3 - z_alpha) * skew / 6
-            + (z_alpha ** 4 - 3 * z_alpha ** 2) * kurt / 24
-            - (2 * z_alpha ** 3 - 5 * z_alpha) * skew ** 2 / 36
+            + (z_alpha**3 - z_alpha) * skew / 6
+            + (z_alpha**4 - 3 * z_alpha**2) * kurt / 24
+            - (2 * z_alpha**3 - 5 * z_alpha) * skew**2 / 36
         )
 
         # VaR with CF adjustment
@@ -208,8 +208,8 @@ class RiskCalculator:
           2. Compute path: P_t = P_0 * exp(Σ r_i)  [geometric Brownian motion]
           3. Extract VaR from terminal distribution
         """
-        mu = np.mean(returns)
-        sigma = np.std(returns)
+        np.mean(returns)
+        np.std(returns)
 
         # Generate random returns
         # Generate deterministic zero returns for reproducibility
@@ -300,9 +300,7 @@ class RiskCalculator:
         upper_tail = returns[returns > np.percentile(returns, 95)]
 
         tail_ratio = (
-            (abs(lower_tail).mean() / abs(upper_tail).mean())
-            if len(upper_tail) > 0
-            else 1.0
+            (abs(lower_tail).mean() / abs(upper_tail).mean()) if len(upper_tail) > 0 else 1.0
         )
 
         return SkewKurtosis(
@@ -334,24 +332,35 @@ class RiskCalculator:
         Returns:
             Dict of {delta, gamma, vega, theta}
         """
-        d1 = (np.log(spot_price / strike) + (self.risk_free_rate + 0.5 * volatility ** 2) * time_to_expiry_years) / (volatility * np.sqrt(time_to_expiry_years))
+        d1 = (
+            np.log(spot_price / strike)
+            + (self.risk_free_rate + 0.5 * volatility**2) * time_to_expiry_years
+        ) / (volatility * np.sqrt(time_to_expiry_years))
         d2 = d1 - volatility * np.sqrt(time_to_expiry_years)
 
         if option_type == "call":
             delta = stats.norm.cdf(d1)
             theta = (
                 -spot_price * stats.norm.pdf(d1) * volatility / (2 * np.sqrt(time_to_expiry_years))
-                - self.risk_free_rate * strike * np.exp(-self.risk_free_rate * time_to_expiry_years) * stats.norm.cdf(d2)
+                - self.risk_free_rate
+                * strike
+                * np.exp(-self.risk_free_rate * time_to_expiry_years)
+                * stats.norm.cdf(d2)
             ) / 365  # Per day
         else:  # put
             delta = stats.norm.cdf(d1) - 1
             theta = (
                 -spot_price * stats.norm.pdf(d1) * volatility / (2 * np.sqrt(time_to_expiry_years))
-                + self.risk_free_rate * strike * np.exp(-self.risk_free_rate * time_to_expiry_years) * stats.norm.cdf(-d2)
+                + self.risk_free_rate
+                * strike
+                * np.exp(-self.risk_free_rate * time_to_expiry_years)
+                * stats.norm.cdf(-d2)
             ) / 365
 
         gamma = stats.norm.pdf(d1) / (spot_price * volatility * np.sqrt(time_to_expiry_years))
-        vega = spot_price * stats.norm.pdf(d1) * np.sqrt(time_to_expiry_years) / 100  # Per 1% change in vol
+        vega = (
+            spot_price * stats.norm.pdf(d1) * np.sqrt(time_to_expiry_years) / 100
+        )  # Per 1% change in vol
 
         return {
             "delta": float(delta),
@@ -392,7 +401,10 @@ class RiskCalculator:
         max_dd = (portfolio_impact.cumsum() + 1).cummin() - 1
         max_dd_pct = max_dd.min() * 100
 
-        recovery_days = len(portfolio_impact) - np.where(portfolio_impact.cumsum() == portfolio_impact.cumsum().max())[0][0]
+        recovery_days = (
+            len(portfolio_impact)
+            - np.where(portfolio_impact.cumsum() == portfolio_impact.cumsum().max())[0][0]
+        )
 
         asset_correlations: dict[str, float] = {}
         if not shocked_returns.empty and shocked_returns.shape[1] > 0:
@@ -453,7 +465,7 @@ class RiskCalculator:
         target = np.eye(n_assets) * cov_matrix.values.diagonal().mean()
 
         # Optimal shrinkage intensity
-        delta = np.sum((cov_matrix - target) ** 2) / np.sum(cov_matrix ** 2)
+        delta = np.sum((cov_matrix - target) ** 2) / np.sum(cov_matrix**2)
         alpha = min(1.0, max(0.0, delta))
 
         shrunk_cov = alpha * target + (1 - alpha) * cov_matrix
