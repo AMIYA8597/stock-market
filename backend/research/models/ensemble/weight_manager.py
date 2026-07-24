@@ -83,10 +83,16 @@ def aggregate_signal(
 
     score = float(np.sum(weights * values))
     confidence = float(np.clip(1.0 - np.std(values) / 2.0, 0.0, 1.0))
-    return EnsembleWeights(weights={m: float(w) for m, w in zip(models, weights, strict=True)}, confidence=confidence, score=score)
+    return EnsembleWeights(
+        weights={m: float(w) for m, w in zip(models, weights, strict=True)},
+        confidence=confidence,
+        score=score,
+    )
 
 
-def half_kelly_fraction(score: float, confidence: float, regime_mean: float, regime_variance: float) -> float:
+def half_kelly_fraction(
+    score: float, confidence: float, regime_mean: float, regime_variance: float
+) -> float:
     """Compute capped half-Kelly sizing fraction.
 
     Formula:

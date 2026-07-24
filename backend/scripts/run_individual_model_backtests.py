@@ -25,6 +25,7 @@ from research.models.tft.quantile_forecaster import QuantileLGBForecaster
 
 SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 
+
 def calculate_max_drawdown(cum_returns: np.ndarray) -> float:
     peak = -99.0
     max_dd = 0.0
@@ -38,7 +39,10 @@ def calculate_max_drawdown(cum_returns: np.ndarray) -> float:
             max_dd = dd
     return float(max_dd)
 
-def calculate_metrics(predictions: np.ndarray, actual_returns: np.ndarray, close_prices: np.ndarray) -> dict:
+
+def calculate_metrics(
+    predictions: np.ndarray, actual_returns: np.ndarray, close_prices: np.ndarray
+) -> dict:
     # predictions: array of 1 (BUY), -1 (SELL/SHORT) or 0 (NEUTRAL)
     # actual_returns: next 5-day return
     # direction hit-rate
@@ -50,8 +54,8 @@ def calculate_metrics(predictions: np.ndarray, actual_returns: np.ndarray, close
 
     # apply transaction costs
     trades_abs = np.abs(np.diff(np.insert(predictions, 0, 0.0)))
-    adv = np.full_like(close_prices, 1000000.0) # mock average daily volume
-    realized_vol = np.full_like(close_prices, 0.02) # mock realized vol
+    adv = np.full_like(close_prices, 1000000.0)  # mock average daily volume
+    realized_vol = np.full_like(close_prices, 0.02)  # mock realized vol
     costs = compute_costs(trades_abs, close_prices, adv, realized_vol)
 
     net_returns = trading_returns - (costs / close_prices)
@@ -74,8 +78,9 @@ def calculate_metrics(predictions: np.ndarray, actual_returns: np.ndarray, close
         "hit_rate": hit_rate,
         "sharpe": sharpe,
         "max_dd": max_dd * 100,  # percentage
-        "win_loss": win_loss
+        "win_loss": win_loss,
     }
+
 
 def main():
     print("Preparing data for individual backtests...")
@@ -89,7 +94,9 @@ def main():
         df = t.history(start="2022-01-01", end="2026-06-01", interval="1d")
         if not df.empty:
             df.columns = [c.lower() for c in df.columns]
-            df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
+            df = df.rename(
+                columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
+            )
             df = df[["open", "high", "low", "close", "volume"]].dropna()
             df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
             df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
@@ -98,6 +105,7 @@ def main():
 
             from research.feature_engineering.price_factors import PriceFactorsBuilder
             from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
+
             df = PriceFactorsBuilder().transform(df)
             df = VolatilityFactorsBuilder().transform(df)
 
@@ -120,17 +128,40 @@ def main():
             df = df.drop(columns=cols_to_drop, errors="ignore")
 
             rename_map = {}
-            RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-            MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df.columns else [c for c in df.columns if "MACDh" in c][0]
-            BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df.columns else [c for c in df.columns if "BBP" in c][0])
-            ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-            ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+            RSI_col = (
+                "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
+            )
+            MACDh_col = (
+                "MACDh_12_26_9"
+                if "MACDh_12_26_9" in df.columns
+                else [c for c in df.columns if "MACDh" in c][0]
+            )
+            BBP_col = (
+                "BBP_20_2.0_2.0"
+                if "BBP_20_2.0_2.0" in df.columns
+                else (
+                    "BBP_20_2.0"
+                    if "BBP_20_2.0" in df.columns
+                    else [c for c in df.columns if "BBP" in c][0]
+                )
+            )
+            ATR_col = (
+                "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
+            )
+            ADX_col = (
+                "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+            )
 
-            if RSI_col != "RSI_14": rename_map[RSI_col] = "RSI_14"
-            if MACDh_col != "MACDh_12_26_9": rename_map[MACDh_col] = "MACDh_12_26_9"
-            if BBP_col != "BBP_20_2.0": rename_map[BBP_col] = "BBP_20_2.0"
-            if ATR_col != "ATRr_14": rename_map[ATR_col] = "ATRr_14"
-            if ADX_col != "ADX_14": rename_map[ADX_col] = "ADX_14"
+            if RSI_col != "RSI_14":
+                rename_map[RSI_col] = "RSI_14"
+            if MACDh_col != "MACDh_12_26_9":
+                rename_map[MACDh_col] = "MACDh_12_26_9"
+            if BBP_col != "BBP_20_2.0":
+                rename_map[BBP_col] = "BBP_20_2.0"
+            if ATR_col != "ATRr_14":
+                rename_map[ATR_col] = "ATRr_14"
+            if ADX_col != "ADX_14":
+                rename_map[ADX_col] = "ADX_14"
             if rename_map:
                 df = df.rename(columns=rename_map)
 
@@ -154,6 +185,7 @@ def main():
         lstm_checkpoint = MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
 
         import pickle
+
         with open(xgb_checkpoint, "rb") as f:
             xgb_data = pickle.load(f)
             xgb_scaler = xgb_data["scaler"]
@@ -164,14 +196,14 @@ def main():
 
         # Walk-forward loop (evaluation starting at index 100 to allow history)
         for idx in range(100, len(df) - 5, 5):
-            df_slice = df.iloc[:idx+1]
+            df_slice = df.iloc[: idx + 1]
             close = float(df_slice["close"].iloc[-1])
             target_ret = float(df["target_5d"].iloc[idx])
 
             # --- 1. ARIMA prediction ---
             try:
                 log_closes = np.log(df_slice["close"].values[-60:])
-                arima_model = SARIMAX(log_closes, order=(2, 1, 1), trend='c')
+                arima_model = SARIMAX(log_closes, order=(2, 1, 1), trend="c")
                 arima_res = arima_model.fit(disp=False, maxiter=10)
                 arima_pred = np.exp(arima_res.forecast(steps=5)[-1])
                 arima_sig = 1 if arima_pred > close else -1
@@ -192,11 +224,22 @@ def main():
             # --- 3. XGBoost prediction ---
             try:
                 xgb_features = [
-                    "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-                    "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-                    "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-                    "dist_52w_high", "dist_52w_low", "drawdown",
-                    "range_pct", "close_to_open"
+                    "ret_1d",
+                    "ret_5d",
+                    "ret_21d",
+                    "momentum_63d",
+                    "RSI_14",
+                    "MACDh_12_26_9",
+                    "BBP_20_2.0",
+                    "ATRr_14",
+                    "ADX_14",
+                    "realized_vol_21d",
+                    "yang_zhang_vol_21d",
+                    "dist_52w_high",
+                    "dist_52w_low",
+                    "drawdown",
+                    "range_pct",
+                    "close_to_open",
                 ]
                 row = df_slice[xgb_features].iloc[[-1]]
                 row_s = xgb_scaler.transform(row)
@@ -214,7 +257,11 @@ def main():
 
             # --- 5. Quantile LGB prediction ---
             try:
-                row_dict = {f: float(df_slice[f].iloc[-1]) for f in quantile_forecaster.features if f in df_slice.columns}
+                row_dict = {
+                    f: float(df_slice[f].iloc[-1])
+                    for f in quantile_forecaster.features
+                    if f in df_slice.columns
+                }
                 p10, p50, p90 = quantile_forecaster.predict(row_dict)
                 lgb_sig = 1 if p50 > 0.001 else (-1 if p50 < -0.001 else 0)
             except Exception:
@@ -251,7 +298,7 @@ def main():
         "GARCH_Regime": "hmm_garch",
         "XGBoost": "xgboost",
         "LSTM_Attention": "lstm_attn",
-        "Quantile_LightGBM": "tft"
+        "Quantile_LightGBM": "tft",
     }
 
     for mk in model_keys:
@@ -266,14 +313,16 @@ def main():
         report_output += f"- **Sharpe ratio (annualized, after costs)**: {metrics['sharpe']:.2f}\n"
         report_output += f"- **Max drawdown**: {metrics['max_dd']:.1f}%\n"
         report_output += f"- **Win/loss ratio**: {metrics['win_loss']:.2f}\n"
-        report_output += "- **Backtest period**: 2022-01-01 to 2026-06-01 (walk-forward, 6-month windows)\n\n"
+        report_output += (
+            "- **Backtest period**: 2022-01-01 to 2026-06-01 (walk-forward, 6-month windows)\n\n"
+        )
 
         mapped_key = model_key_map.get(mk, mk.lower())
         metrics_json[mapped_key] = {
             "hit_rate": float(metrics["hit_rate"]),
             "sharpe": float(metrics["sharpe"]),
             "max_dd": float(metrics["max_dd"]),
-            "win_loss": float(metrics["win_loss"])
+            "win_loss": float(metrics["win_loss"]),
         }
 
     parser = argparse.ArgumentParser()
@@ -282,6 +331,7 @@ def main():
 
     # Save metrics JSON to backend/data/models
     import json
+
     metrics_json_path = project_root / "data" / "models" / "backtest_metrics.json"
     os.makedirs(metrics_json_path.parent, exist_ok=True)
     with open(metrics_json_path, "w") as f:

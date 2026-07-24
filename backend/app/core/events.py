@@ -21,8 +21,8 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.database.redis_client import _redis_pool_singleton
 from app.core.watchlist import WATCHLIST_SYMBOLS
+from app.database.redis_client import _redis_pool_singleton
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -81,11 +81,7 @@ async def startup_events() -> dict[str, Any]:
 
             # Test database connection
             async with engine.begin() as conn:
-                await conn.execute(
-                    text("SELECT 1")
-                    if hasattr(conn, "execute")
-                    else "SELECT 1"
-                )
+                await conn.execute(text("SELECT 1") if hasattr(conn, "execute") else "SELECT 1")
             logger.info("startup_database_success", database_url=settings.DATABASE_URL)
 
             # Automatically create tables if not exists
@@ -100,8 +96,6 @@ async def startup_events() -> dict[str, Any]:
 
         logger.info("startup_background_tasks_init")
         try:
-
-
             # Price ticker task
             try:
                 from app.websocket.price_ticker import run_price_ticker
@@ -116,19 +110,18 @@ async def startup_events() -> dict[str, Any]:
             except Exception as e:
                 logger.error(f"Failed to start price ticker task: {e}")
 
-
-
             # Alert polling loop task
             try:
                 # WATCHLIST_SYMBOLS imported from central module
 
                 async def alert_polling_loop():
                     # Sleep slightly on startup to let server initialize
-                    await asyncio.sleep(86400) # DISABLED FOR LOCAL DEV to prevent blocking
+                    await asyncio.sleep(86400)  # DISABLED FOR LOCAL DEV to prevent blocking
                     while True:
                         try:
                             from app.services.alert_engine import check_and_fire_alerts
                             from app.websocket.connection_manager import get_connection_manager
+
                             manager = get_connection_manager()
                             await check_and_fire_alerts(WATCHLIST_SYMBOLS, manager)
                         except Exception as loop_err:
@@ -144,6 +137,7 @@ async def startup_events() -> dict[str, Any]:
             # Initialize Upstox Integration
             try:
                 from app.services.upstox_service import UpstoxService
+
                 await UpstoxService.init_service()
                 logger.info("startup_upstox_service_initialized")
             except Exception as up_err:
@@ -151,11 +145,20 @@ async def startup_events() -> dict[str, Any]:
 
             # Initialize Background Market Scheduler
             try:
-                from app.services.data_ingestion.scheduler import market_scheduler
                 # market_scheduler.start() # DISABLED FOR LOCAL DEV
                 logger.info("startup_market_scheduler_started")
             except Exception as sched_err:
                 logger.error(f"Failed to start market scheduler: {sched_err}")
+
+            # Initialize Alert Evaluator
+            try:
+                from app.workers.alert_evaluator import evaluator as alert_evaluator
+                await alert_evaluator.start()
+                if alert_evaluator._task:
+                    background_tasks.append(alert_evaluator._task)
+                logger.info("startup_alert_evaluator_started")
+            except Exception as err:
+                logger.error(f"Failed to start alert evaluator: {err}")
 
             if background_tasks:
                 services["background_tasks"] = background_tasks
@@ -262,6 +265,7 @@ async def shutdown_events(services: dict[str, Any]) -> None:
         # Close Background Scheduler
         try:
             from app.services.data_ingestion.scheduler import market_scheduler
+
             market_scheduler.shutdown()
             logger.info("shutdown_market_scheduler_complete")
         except Exception as e:
@@ -322,4 +326,3 @@ async def lifespan(app: Any):
         await shutdown_events(services)
     except Exception as e:
         logger.critical("lifespan_shutdown_failed", error=str(e), exc_info=True)
-

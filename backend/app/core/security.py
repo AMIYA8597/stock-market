@@ -40,6 +40,7 @@ except ImportError:  # pragma: no cover - optional local-dev fallback
     class InvalidToken(Exception):
         pass
 
+
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.test_state import TEST_REVOKED_ACCESS_JTIS, is_test_mode
@@ -152,6 +153,7 @@ oauth2_scheme = OAuth2PasswordBearer(
     },
 )
 
+
 # ─── Enums ──────────────────────────────────────────────────────────────
 class UserRole:
     """Role-based access control hierarchy.
@@ -159,6 +161,7 @@ class UserRole:
     Roles are ordered by privilege level:
     ADMIN (5) > RESEARCHER (4) > ANALYST (3) > VIEWER (2) > API_USER (1)
     """
+
     ADMIN = "ADMIN"
     RESEARCHER = "RESEARCHER"
     ANALYST = "ANALYST"
@@ -176,6 +179,7 @@ class UserRole:
 
 class TokenType:
     """JWT token types."""
+
     ACCESS = "access"
     REFRESH = "refresh"
 
@@ -202,7 +206,9 @@ def validate_password_strength(password: str) -> tuple[bool, str]:
     if settings.PASSWORD_REQUIRE_NUMBERS and not re.search(r"\d", password):
         return False, "Password must contain at least one number"
 
-    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(r"[!@#$%^&*()_+\-=\[\]{};:'\",.<>?/\\|`~]", password):
+    if settings.PASSWORD_REQUIRE_SPECIAL and not re.search(
+        r"[!@#$%^&*()_+\-=\[\]{};:'\",.<>?/\\|`~]", password
+    ):
         return False, "Password must contain at least one special character"
 
     return True, ""
@@ -332,7 +338,12 @@ def create_refresh_token(
         algorithm=JWT_ALGORITHM,
     )
 
-    logger.debug("refresh_token_created user_id=%s family_id=%s expires_at=%s", user_id, family_id, expire.isoformat())
+    logger.debug(
+        "refresh_token_created user_id=%s family_id=%s expires_at=%s",
+        user_id,
+        family_id,
+        expire.isoformat(),
+    )
 
     return token
 
@@ -355,7 +366,11 @@ def decode_token(token: str) -> dict[str, Any]:
             JWT_PUBLIC_KEY,
             algorithms=[JWT_ALGORITHM],
         )
-        if is_test_mode() and payload.get("type") == TokenType.ACCESS and payload.get("jti") in TEST_REVOKED_ACCESS_JTIS:
+        if (
+            is_test_mode()
+            and payload.get("type") == TokenType.ACCESS
+            and payload.get("jti") in TEST_REVOKED_ACCESS_JTIS
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired authentication token",
@@ -590,6 +605,7 @@ def require_role(required_role: str):
     Raises:
         HTTPException: 403 if user lacks required role.
     """
+
     async def role_checker(
         token: Annotated[str, Depends(oauth2_scheme)],
     ) -> dict[str, Any]:
@@ -623,5 +639,3 @@ def require_role(required_role: str):
         return {"user_id": user_id, "role": user_role, **payload}
 
     return role_checker
-
-

@@ -26,5 +26,6 @@ def main():
     forecaster.save()
     print("Quantile LGB models saved successfully.")
 
+
 if __name__ == "__main__":
     main()

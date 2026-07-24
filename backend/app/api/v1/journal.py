@@ -1,5 +1,4 @@
-"""Trade journal API endpoints for creating, listing, and deleting trade review notes.
-"""
+"""Trade journal API endpoints for creating, listing, and deleting trade review notes."""
 
 from __future__ import annotations
 
@@ -11,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
 from app.models.journal import TradeJournal
-from app.models.user import User
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.journal import JournalCreate, JournalResponse
 
@@ -26,7 +24,6 @@ async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UU
         return uuid.UUID(str(current_user["sub"]))
     except ValueError:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
 
 
 @router.get("", response_model=list[JournalResponse])
@@ -79,10 +76,7 @@ async def delete_journal(
     """Delete a trade journal entry by ID."""
     user_uuid = await get_db_user_id(current_user, db)
     result = await db.execute(
-        select(TradeJournal).where(
-            TradeJournal.id == journal_id,
-            TradeJournal.user_id == user_uuid
-        )
+        select(TradeJournal).where(TradeJournal.id == journal_id, TradeJournal.user_id == user_uuid)
     )
     entry = result.scalar_one_or_none()
     if not entry:

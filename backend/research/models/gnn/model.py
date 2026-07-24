@@ -45,9 +45,9 @@ class GraphSpilloverNet(nn.Module):
 
     def forward(self, node_features: Tensor, edge_index: Tensor, edge_weight: Tensor) -> Tensor:
         """Args:
-            node_features: (n_nodes, input_dim)
-            edge_index: (2, n_edges)
-            edge_weight: (n_edges,)
+        node_features: (n_nodes, input_dim)
+        edge_index: (2, n_edges)
+        edge_weight: (n_edges,)
         """
         h = torch.relu(self.node_proj(node_features))
         if edge_index.numel() > 0:

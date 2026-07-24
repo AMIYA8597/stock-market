@@ -97,7 +97,9 @@ class GatedResidualNetwork(nn.Module):
 
         # Dense layers
         self.fc1 = nn.Linear(input_dim, hidden_dim)
-        self.ctx = nn.Linear(context_dim, hidden_dim, bias=False) if context_dim is not None else None
+        self.ctx = (
+            nn.Linear(context_dim, hidden_dim, bias=False) if context_dim is not None else None
+        )
         self.fc2 = nn.Linear(hidden_dim, output_dim)
 
         # Gate
@@ -108,7 +110,9 @@ class GatedResidualNetwork(nn.Module):
         self.norm = nn.LayerNorm(output_dim)
 
         # Residual projection (for dimension matching)
-        self.residual_proj = nn.Linear(input_dim, output_dim) if input_dim != output_dim else nn.Identity()
+        self.residual_proj = (
+            nn.Linear(input_dim, output_dim) if input_dim != output_dim else nn.Identity()
+        )
 
     def forward(self, x: Tensor, c: Tensor | None = None) -> Tensor:
         r"""
@@ -252,4 +256,3 @@ class VariableSelectionNetwork(nn.Module):
         selected = weighted.sum(dim=2)  # (batch, time, hidden_dim)
 
         return selected, weights
-

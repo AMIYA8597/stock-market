@@ -68,4 +68,9 @@ def build_correlation_graph(
         edge_index = np.array([src, dst], dtype=np.int64)
         edge_weight = np.array(w, dtype=np.float32)
 
-    return CorrelationGraph(adjacency=adjacency.astype(np.float32), edge_index=edge_index, edge_weight=edge_weight, symbols=symbols)
+    return CorrelationGraph(
+        adjacency=adjacency.astype(np.float32),
+        edge_index=edge_index,
+        edge_weight=edge_weight,
+        symbols=symbols,
+    )

@@ -49,7 +49,9 @@ class MeanReversionStrategy:
 class MomentumTrendStrategy:
     """Momentum + Trend Following Strategy using EMA stack and ADX filter."""
 
-    def __init__(self, fast: int = 9, medium: int = 21, slow: int = 50, trend_strength: float = 25.0):
+    def __init__(
+        self, fast: int = 9, medium: int = 21, slow: int = 50, trend_strength: float = 25.0
+    ):
         self.fast = fast
         self.medium = medium
         self.slow = slow
@@ -87,7 +89,13 @@ class MomentumTrendStrategy:
 class VolatilityBreakoutStrategy:
     """Volatility Breakout Strategy using Bollinger Bands and ATR channels."""
 
-    def __init__(self, bb_window: int = 20, bb_std: float = 2.0, atr_window: int = 14, multiplier: float = 1.5):
+    def __init__(
+        self,
+        bb_window: int = 20,
+        bb_std: float = 2.0,
+        atr_window: int = 14,
+        multiplier: float = 1.5,
+    ):
         self.bb_window = bb_window
         self.bb_std = bb_std
         self.atr_window = atr_window
@@ -155,7 +163,9 @@ class StatisticalArbitrageStrategy:
         self.entry_z = entry_z
         self.is_active = False
 
-    def generate_signals_pair(self, df_a: pd.DataFrame, df_b: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    def generate_signals_pair(
+        self, df_a: pd.DataFrame, df_b: pd.DataFrame
+    ) -> tuple[pd.Series, pd.Series]:
         """Generate long/short signals for a pair of cointegrated assets."""
         if len(df_a) < self.window or len(df_b) < self.window:
             return pd.Series(0.0, index=df_a.index), pd.Series(0.0, index=df_b.index)
@@ -170,7 +180,7 @@ class StatisticalArbitrageStrategy:
 
         # Run Engle-Granger cointegration test on historical window
         try:
-            score, pvalue, _ = ts.coint(close_a.iloc[-self.window:], close_b.iloc[-self.window:])
+            score, pvalue, _ = ts.coint(close_a.iloc[-self.window :], close_b.iloc[-self.window :])
             self.is_active = pvalue < 0.05
         except Exception:
             self.is_active = False
@@ -229,17 +239,21 @@ class SignalGeneratorService:
         # Setup matrix shapes (T, N) for single-asset backtest engine
         signals_mat = signals.values.reshape(-1, 1)
         prices_mat = df["close"].values.reshape(-1, 1)
-        kelly_mat = np.full_like(signals_mat, 0.10) # 10% target allocation
+        kelly_mat = np.full_like(signals_mat, 0.10)  # 10% target allocation
 
         res = run_vectorized_backtest(
             signals=signals_mat,
             prices=prices_mat,
             kelly_fraction=kelly_mat,
-            initial_capital=initial_capital
+            initial_capital=initial_capital,
         )
 
         daily_rets = res.daily_returns
-        sharpe = np.mean(daily_rets) / np.std(daily_rets) * np.sqrt(252) if np.std(daily_rets) > 0 else 0.0
+        sharpe = (
+            np.mean(daily_rets) / np.std(daily_rets) * np.sqrt(252)
+            if np.std(daily_rets) > 0
+            else 0.0
+        )
         win_rate = float(np.mean(daily_rets > 0))
 
         # Calculate max drawdown
@@ -248,8 +262,4 @@ class SignalGeneratorService:
         drawdown = (equity - peak) / peak
         max_dd = float(np.min(drawdown))
 
-        return {
-            "sharpe": float(sharpe),
-            "win_rate": float(win_rate),
-            "max_drawdown": float(max_dd)
-        }
+        return {"sharpe": float(sharpe), "win_rate": float(win_rate), "max_drawdown": float(max_dd)}

@@ -1,67 +1,131 @@
-# NeuroQuant
+# NeuroQuant (QuantEdge) - Intelligent Trading Platform
 
-NeuroQuant is an AI-powered stock market intelligence system built with a modern stack: Next.js 14 App Router, React 18, TailwindCSS, and FastAPI. It integrates real-time free market data, interactive financial charts, predictive modeling, and paper trading capabilities into a high-performance single-page application dashboard.
+NeuroQuant is a full-stack, ML-driven educational paper-trading platform. It executes statistical models (GARCH, HMM) and gradient boosted trees (XGBoost) to forecast market direction without requiring any paid API keys or subscriptions.
 
-## Key Features
-- **Real-time Free Data**: Connects exclusively to free market data sources (Yahoo Finance, NSE) — no paid keys required.
-- **Predictive AI Models**: Uses statistical and ML models (HMM, TFT) located in `backend/research/` to generate trading signals and regimes.
-- **Portfolio & Paper Trading**: Manage watchlists, track active simulated positions, and execute virtual trades based on ML signals.
-- **Responsive Web Dashboard**: Clean hierarchy and dark mode Radix/Tailwind components via `@neuroquant/ui`. 
-- **Graceful Degradation**: Truthful representation of data. If models haven't converged or the market is closed, the UI accurately reflects the empty state instead of faking data.
+## 🌟 Key Features
 
-## Monorepo Structure
-- `apps/web/`: Next.js 14 App Router frontend.
-- `packages/ui/`: Radix-based design system and UI components.
-- `packages/types/`: Shared TypeScript definitions.
-- `backend/`: FastAPI backend with SQLAlchemy (SQLite/Postgres), Redis, and WebSockets.
-  - `backend/app/`: Core FastAPI server, routers, WebSocket tickers.
-  - `backend/research/`: ML pipelines, backtesting engine, statistical tests.
+- **Local AI & ML Pipelines**: Advanced tree models (XGBoost, LightGBM) trained via walk-forward cross-validation.
+- **Regime & Volatility Modeling**: 3-State Gaussian Hidden Markov Models (HMM) + GARCH(1,1) for market regime detection.
+- **Transparent Explainability**: Real-time SHAP values visualization.
+- **Zero Paid Keys Required**: Ingests data securely via public sources (`yfinance`) and tests via simulated gateways (Razorpay test mode).
 
-## Requirements
-- Node.js 20+, pnpm 8+
-- Python 3.12+ (or your preferred Python 3 environment)
-- Redis server (for WebSocket PubSub and task queue caching)
+---
 
-## Quick Start (Local Development)
+## 🏗️ Architecture & Data Collection
 
-### 1. Frontend Setup
-```bash
-# Install dependencies from the monorepo root
-pnpm install
+### **Data Ingestion**
+- Data is dynamically collected from public APIs (Yahoo Finance via `yfinance`). 
+- Feature generation includes 14-day RSI, MACD, Bollinger Bands, ATR, ADX, and Candlestick Patterns.
 
-# Start the Next.js development server
-pnpm --filter @neuroquant/web dev
+### **ML Fusion Rule**
+The system uses an explicit fusion mechanism to generate trading signals:
+`Final Signal = (0.4 * Technicals) + (0.6 * ML Probability) + Sentiment Tilt + Regime Gate`
+The Regime Gate suppresses specific directional signals during BEAR/CRISIS regimes.
+
+---
+
+## 💻 Pages & User Workflows
+
+### **1. Registration & Authentication (`/register` & `/login`)**
+- **User Flow**: Users can safely register an account. Authentication is handled securely, granting access to the primary dashboard. By default, user accounts operate in **Paper Trading Mode**.
+- **Admin Flow**: Admins log in via the same portal but are routed to the Admin Dashboard (Role-Based Access Control) to monitor system health, database pipelines, and trigger manual ML pipeline retrains.
+
+### **2. Main Dashboard & Portfolio (`/dashboard`)**
+- High-level overview of portfolio value, unrealized P&L, and open paper-trading positions.
+- Connects directly to the backend to fetch live holdings using `Instrument.symbol`.
+
+### **3. Trading Terminal (`/terminal`)**
+- Live OHLCV chart interface powered by a custom grid layout.
+- **Order Execution Panel**: Place paper trades mapped against real-time quotes.
+- **Prediction Overlay**: Visualizes the AI's expected-move directly on the terminal.
+
+### **4. Explainability & Research (`/research/explainability`)**
+- Breaks down the ML engine's decision-making process.
+- Visualizes the SHAP waterfall for the current prediction.
+
+### **5. Regime Analysis (`/research/regime-analysis`)**
+- Real-time HMM regime timelines (BULL, BEAR, CRISIS).
+
+---
+
+## 🚀 Setup & Execution Guide (End-to-End)
+
+### **Prerequisites**
+- Node.js (v18+) & `npm` or `pnpm`
+- Python 3.10+
+- (Optional) Docker for Redis/Postgres if not using SQLite
+
+### **1. Environment Configuration**
+You will need to configure `.env` files for both the backend and frontend.
+
+**Backend (`backend/.env`)**:
+```env
+# Database
+DATABASE_URL=sqlite+aiosqlite:///./dev.db
+# Redis/Celery (For background tasks)
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+# Trading Mode
+PAPER_TRADING_MODE=true
+# Secret Keys
+SECRET_KEY=your-super-secret-jwt-key
+# External APIs (Optional for testing)
+RAZORPAY_KEY_ID=
+ANGEL_ONE_CLIENT_ID=
 ```
 
-### 2. Backend Setup
+**Frontend (`apps/web/.env.local`)**:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+```
+
+### **2. Start the Backend API (FastAPI)**
+Navigate to the `backend` directory, install requirements, and boot FastAPI:
+
 ```bash
 cd backend
 
 # Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .\.venv\Scripts\Activate.ps1
+# On Windows:
+.venv\Scripts\activate
+# On Mac/Linux:
+source .venv/bin/activate
 
-# Install requirements
+# Install dependencies
 pip install -r requirements.txt
 
-# Start the FastAPI backend
-python -m uvicorn app.main:app --reload --port 8000
+# Start the API on port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
+*The Backend API is now running at `http://localhost:8000/api/v1`*
 
-### 3. Environment Variables
-Copy `.env.example` to `.env` in both the root and `backend/` directories.
-```bash
-cp .env.example .env
-```
-Broker keys (Razorpay, Upstox, AngelOne) are strictly optional. The application is designed to function comprehensively without them.
+### **3. Start the Frontend UI (Next.js)**
+In a new terminal window, boot the Next.js application:
 
-## Testing & Validation
-To run the unified test gate that validates the frontend build and backend tests:
 ```bash
-pnpm test
+cd apps/web
+
+# Install dependencies
+npm install
+
+# Start the development server
+npm run dev
 ```
-The backend tests run using `pytest` inside the `backend/` directory:
-```bash
-cd backend
-pytest tests/ -v
-```
+*The web UI is now running at `http://localhost:3000`*
+
+---
+
+## 🛠️ Helpful Commands & Scripts
+
+- **Run Frontend Build**: `cd apps/web && npm run build`
+- **Run Backend Tests**: `cd backend && pytest`
+- **Start Celery Worker**: `cd backend && celery -A app.core.celery_app worker --loglevel=info`
+
+---
+
+## 📜 Troubleshooting
+
+If you encounter **UI Errors** such as `Attempted import error: 'PanelGroup' is not exported` or **Backend Database Errors** such as `AttributeError: type object 'Instrument' has no attribute 'ticker'`:
+1. Ensure you have the latest code pulled (these bugs were resolved by mapping `PanelGroup` -> `Group` and `Instrument.ticker` -> `Instrument.symbol`).
+2. **CRITICAL**: Completely stop your Next.js frontend (`Ctrl+C`), delete the `.next` folder (`rm -rf .next`), and restart the dev server (`npm run dev`) to clear cached errors.

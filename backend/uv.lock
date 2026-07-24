@@ -244,6 +244,18 @@ wheels = [
 ]
 
 [[package]]
+name = "apscheduler"
+version = "3.11.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tzlocal", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8c/6b/eeff360196bb20b312c9e762a820fd1b2c6d809466c755ef57863478e454/apscheduler-3.11.3.tar.gz", hash = "sha256:cd2fcc9330039a81a5893472ad49facf23a6d5604cbe1d918c835c6de7834d5a", size = 110312 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/c9/8638db32514dbb9157b3d82680c6faea89283523edf9ed2415ea3884f2ae/apscheduler-3.11.3-py3-none-any.whl", hash = "sha256:bbeb2ec02d23d3c06a6c07ed7f0f3939ada6680eb121fae809a69bb42c537a30", size = 66024 },
+]
+
+[[package]]
 name = "argon2-cffi"
 version = "25.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3001,6 +3013,7 @@ dependencies = [
     { name = "aiosqlite", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "alembic", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "alpha-vantage", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
+    { name = "apscheduler", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "argon2-cffi", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "asyncpg", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "ccxt", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
@@ -3045,6 +3058,7 @@ dependencies = [
     { name = "statsmodels", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "structlog", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "ta", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
+    { name = "tenacity", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "torch", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "torch-geometric", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
     { name = "transformers", marker = "platform_machine == 'x86_64' or platform_system != 'Linux' or sys_platform != 'darwin'" },
@@ -3081,6 +3095,7 @@ requires-dist = [
     { name = "aiosqlite" },
     { name = "alembic", specifier = ">=1.13.1" },
     { name = "alpha-vantage", specifier = ">=2.3.1" },
+    { name = "apscheduler", specifier = ">=3.11.3" },
     { name = "argon2-cffi" },
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.12.1" },
@@ -3139,6 +3154,7 @@ requires-dist = [
     { name = "statsmodels", specifier = ">=0.14.0" },
     { name = "structlog", specifier = ">=23.3.0" },
     { name = "ta", specifier = ">=0.11.0" },
+    { name = "tenacity", specifier = ">=9.1.4" },
     { name = "torch", specifier = ">=2.2.0" },
     { name = "torch-geometric", specifier = ">=2.4.0" },
     { name = "transformers", specifier = ">=5.14.1" },
@@ -5461,6 +5477,15 @@ dependencies = [
     { name = "pandas", version = "3.0.3", source = { registry = "https://pypi.org/simple" }, marker = "(python_full_version < '3.14' and platform_machine == 'x86_64') or (python_full_version < '3.14' and platform_system != 'Linux') or (python_full_version < '3.14' and sys_platform != 'darwin')" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/e0/9a/37d92a6b470dc9088612c2399a68f1a9ac22872d4e1eff416818e22ab11b/ta-0.11.0.tar.gz", hash = "sha256:de86af43418420bd6b088a2ea9b95483071bf453c522a8441bc2f12bcf8493fd", size = 25308 }
+
+[[package]]
+name = "tenacity"
+version = "9.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/47/c6/ee486fd809e357697ee8a44d3d69222b344920433d3b6666ccd9b374630c/tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a", size = 49413 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/c1/eb8f9debc45d3b7918a32ab756658a0904732f75e555402972246b0b8e71/tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55", size = 28926 },
+]
 
 [[package]]
 name = "terminado"

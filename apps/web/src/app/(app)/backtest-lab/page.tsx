@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Badge } from "@neuroquant/ui";
-import { Card, CardHeader, CardTitle } from "@/components/dashboard/premium";
+import { Card, CardHeader, CardTitle } from "@neuroquant/ui";
 import {
   contractsApi,
   type BacktestRunRequest,

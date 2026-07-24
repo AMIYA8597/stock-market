@@ -15,7 +15,9 @@ class CPCVSplit:
     test_idx: np.ndarray
 
 
-def generate_cpcv_splits(n_samples: int, n_splits: int, purge_days: int, embargo_days: int) -> list[CPCVSplit]:
+def generate_cpcv_splits(
+    n_samples: int, n_splits: int, purge_days: int, embargo_days: int
+) -> list[CPCVSplit]:
     """Generate CPCV splits using all C(k, 2) fold-pair test combinations."""
     if n_splits < 2:
         raise ValueError("n_splits must be >= 2")

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class RegimeCurrentResponse(BaseModel):
     """GET /regime/current response."""
+
     state: str = Field(..., description="bull|bear|sideways|crisis")
     state_index: int = Field(..., ge=0, le=3)
     probs: list[Decimal] = Field(..., description="[P(bull), P(bear), P(sideways), P(crisis)]")
@@ -22,6 +23,7 @@ class RegimeCurrentResponse(BaseModel):
 
 class RegimeHistoryPoint(BaseModel):
     """Single point in regime history."""
+
     time: datetime
     state: str
     state_index: int
@@ -33,6 +35,7 @@ class RegimeHistoryPoint(BaseModel):
 
 class RegimeHistoryResponse(BaseModel):
     """GET /regime/history response."""
+
     period_days: int
     start_date: datetime
     end_date: datetime
@@ -42,6 +45,7 @@ class RegimeHistoryResponse(BaseModel):
 
 class RegimeStatistics(BaseModel):
     """Per-state statistics."""
+
     state: str
     state_index: int
     avg_duration_days: Decimal = Field(...)
@@ -56,6 +60,7 @@ class RegimeStatistics(BaseModel):
 
 class RegimeStatisticsResponse(BaseModel):
     """GET /regime/statistics response."""
+
     period_days: int = Field(..., description="analysis period")
     statistics: list[RegimeStatistics] = Field(..., description="one per state")
     most_common_state: str

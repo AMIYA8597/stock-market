@@ -17,6 +17,7 @@ from typing import Any
 
 import httpx
 import pandas as pd
+
 try:
     import upstox_client
 except ImportError:
@@ -26,15 +27,18 @@ logger = logging.getLogger(__name__)
 
 # Cache for ticks: symbol (e.g. "RELIANCE") -> tick dict
 UPSTOX_TICK_CACHE: dict[str, dict] = {}
-# Symbol mappings
+# Instrument mappings
 SYMBOL_TO_KEY: dict[str, str] = {}
 KEY_TO_SYMBOL: dict[str, str] = {}
+
 
 class UpstoxService:
     TRADING_MODE: str = "PAPER"  # ALWAYS defaults to PAPER, not persisted
     ACCESS_TOKEN: str | None = None
     STREAMER: Any | None = None
-    CONNECTION_STATUS: str = "disconnected"  # disconnected, connecting, connected, reconnecting, error
+    CONNECTION_STATUS: str = (
+        "disconnected"  # disconnected, connecting, connected, reconnecting, error
+    )
     USER_PROFILE: dict | None = None
     LOOP: asyncio.AbstractEventLoop | None = None
 
@@ -74,6 +78,7 @@ class UpstoxService:
     def get_login_url(cls) -> str:
         """Generates Upstox login dialog URL."""
         from app.core.config import get_settings
+
         settings = get_settings()
 
         if not settings.UPSTOX_API_KEY:
@@ -90,19 +95,20 @@ class UpstoxService:
     async def exchange_code_for_token(cls, code: str) -> dict:
         """Exchanges authorization code for access token and caches it."""
         from app.core.config import get_settings
+
         settings = get_settings()
 
         url = "https://api.upstox.com/v2/login/authorization/token"
         headers = {
             "Accept": "application/json",
-            "Content-Type": "application/x-www-form-urlencoded"
+            "Content-Type": "application/x-www-form-urlencoded",
         }
         data = {
             "code": code,
             "client_id": settings.UPSTOX_API_KEY,
             "client_secret": settings.UPSTOX_API_SECRET,
             "redirect_uri": settings.UPSTOX_REDIRECT_URI,
-            "grant_type": "authorization_code"
+            "grant_type": "authorization_code",
         }
 
         async with httpx.AsyncClient() as client:
@@ -127,7 +133,9 @@ class UpstoxService:
             # Fetch profile details
             profile = await cls.fetch_profile()
             cls.USER_PROFILE = profile
-            cls.log_audit(f"Successfully authenticated Upstox user: {profile.get('user_name', 'Unknown')}")
+            cls.log_audit(
+                f"Successfully authenticated Upstox user: {profile.get('user_name', 'Unknown')}"
+            )
 
             # Start streamer feed
             cls.LOOP = asyncio.get_running_loop()
@@ -139,10 +147,7 @@ class UpstoxService:
     async def fetch_profile(cls) -> dict:
         """Fetches profile details of the authenticated user."""
         url = "https://api.upstox.com/v2/user/profile"
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {cls.ACCESS_TOKEN}"
-        }
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {cls.ACCESS_TOKEN}"}
         async with httpx.AsyncClient() as client:
             r = await client.get(url, headers=headers, timeout=10.0)
             if r.status_code == 200:
@@ -201,10 +206,7 @@ class UpstoxService:
 
         # Search using instruments API
         url = f"https://api.upstox.com/v2/instruments/search?query={sym}"
-        headers = {
-            "Accept": "application/json",
-            "Authorization": f"Bearer {cls.ACCESS_TOKEN}"
-        }
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {cls.ACCESS_TOKEN}"}
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.get(url, headers=headers, timeout=10.0)
@@ -247,8 +249,14 @@ class UpstoxService:
         await cls.stop_websocket_feed()
 
         default_symbols = [
-            "RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK", "SBIN",
-            "NIFTY 50", "NIFTY BANK"
+            "RELIANCE",
+            "TCS",
+            "INFY",
+            "HDFCBANK",
+            "ICICIBANK",
+            "SBIN",
+            "NIFTY 50",
+            "NIFTY BANK",
         ]
 
         keys_to_subscribe = []
@@ -270,7 +278,9 @@ class UpstoxService:
             api_client = upstox_client.ApiClient(cfg)
 
             # Instantiate MarketDataStreamerV3
-            cls.STREAMER = upstox_client.MarketDataStreamerV3(api_client, keys_to_subscribe, mode="full")
+            cls.STREAMER = upstox_client.MarketDataStreamerV3(
+                api_client, keys_to_subscribe, mode="full"
+            )
 
             # Wire up callbacks
             cls.STREAMER.on("open", cls.on_open)
@@ -377,7 +387,7 @@ class UpstoxService:
                         "previous_close": float(prev_close),
                         "source": "upstox",
                         "live": True,
-                        "timestamp": datetime.now(UTC).isoformat()
+                        "timestamp": datetime.now(UTC).isoformat(),
                     }
 
                     # Store both basic symbol and suffix versions
@@ -387,10 +397,7 @@ class UpstoxService:
 
                     # Schedule Redis publish in main loop
                     if cls.LOOP and cls.LOOP.is_running():
-                        asyncio.run_coroutine_threadsafe(
-                            cls.publish_tick_to_redis(tick),
-                            cls.LOOP
-                        )
+                        asyncio.run_coroutine_threadsafe(cls.publish_tick_to_redis(tick), cls.LOOP)
         except Exception as e:
             logger.error(f"Error in Upstox message handler: {e}")
 
@@ -399,6 +406,7 @@ class UpstoxService:
         """Calculates indicators, enriches tick, and publishes to Redis channel 'prices.ticks'."""
         try:
             from app.database.redis_client import get_redis_client
+
             redis_client = await get_redis_client()
 
             # Enrich tick with overlay indicators
@@ -411,11 +419,10 @@ class UpstoxService:
             try:
                 from app.database.connection import async_session_factory
                 from app.services.paper_trading import PaperTradingService
+
                 async with async_session_factory() as session:
                     await PaperTradingService.check_and_execute_limit_orders(
-                        session,
-                        tick["symbol"],
-                        Decimal(str(tick["price"]))
+                        session, tick["symbol"], Decimal(str(tick["price"]))
                     )
             except Exception as err:
                 logger.error(f"Limit order validation error for {tick['symbol']}: {err}")
@@ -427,11 +434,26 @@ class UpstoxService:
     async def enrich_tick_with_indicators(cls, tick: dict) -> dict:
         """Helper to compute technical indicators on-the-fly via pandas_ta for streaming."""
         from app.services.market_data_service import MarketDataService
+
         symbol = tick["symbol"]
         price = tick["price"]
 
         # Set baseline keys
-        keys = ["ema9", "ema21", "ema50", "ema200", "rsi", "macd", "macd_signal", "macd_hist", "vwap", "supertrend", "bb_basis", "bb_upper", "bb_lower"]
+        keys = [
+            "ema9",
+            "ema21",
+            "ema50",
+            "ema200",
+            "rsi",
+            "macd",
+            "macd_signal",
+            "macd_hist",
+            "vwap",
+            "supertrend",
+            "bb_basis",
+            "bb_upper",
+            "bb_lower",
+        ]
         for k in keys:
             tick[k] = None
 
@@ -447,13 +469,9 @@ class UpstoxService:
                 opens = [float(h["open"]) for h in hist] + [float(tick.get("open", price))]
                 volumes = [int(h["volume"]) for h in hist] + [int(tick.get("volume", 0))]
 
-                df = pd.DataFrame({
-                    "open": opens,
-                    "high": highs,
-                    "low": lows,
-                    "close": closes,
-                    "volume": volumes
-                })
+                df = pd.DataFrame(
+                    {"open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes}
+                )
 
                 # Append indicators
                 df.ta.ema(length=9, append=True)
@@ -477,32 +495,44 @@ class UpstoxService:
                     elif col_lower.startswith("ema_50") or col_lower == "ema_50":
                         tick["ema50"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
                     elif col_lower.startswith("ema_200") or col_lower == "ema_200":
-                        tick["ema200"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["ema200"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
                     elif "rsi_14" in col_lower:
                         tick["rsi"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
-                    elif col_lower.startswith("macd_12") and not col_lower.startswith("macdh") and not col_lower.startswith("macds"):
+                    elif (
+                        col_lower.startswith("macd_12")
+                        and not col_lower.startswith("macdh")
+                        and not col_lower.startswith("macds")
+                    ):
                         tick["macd"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
                     elif col_lower.startswith("macdh_12"):
-                        tick["macd_hist"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["macd_hist"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
                     elif col_lower.startswith("macds_12"):
-                        tick["macd_signal"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["macd_signal"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
                     elif "vwap" in col_lower:
                         tick["vwap"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
                     elif col_lower.startswith("supert_10_3.0"):
-                        tick["supertrend"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["supertrend"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
                     elif "bbm_20_2" in col_lower:
-                        tick["bb_basis"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["bb_basis"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
                     elif "bbu_20_2" in col_lower:
-                        tick["bb_upper"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["bb_upper"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
                     elif "bbl_20_2" in col_lower:
-                        tick["bb_lower"] = float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        tick["bb_lower"] = (
+                            float(last_row[col]) if not pd.isna(last_row[col]) else None
+                        )
         except Exception as e:
             logger.debug(f"Error enriching tick for {symbol}: {e}")
 
         return tick
-
-
-
-
-
-
