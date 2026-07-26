@@ -27,3 +27,4 @@ export const Meta = ({ title = 'NeuroQuant', description = 'Advanced stock marke
     </Head>
   );
 };
+

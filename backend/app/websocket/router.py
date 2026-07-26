@@ -62,10 +62,15 @@ async def ws_prices(websocket: WebSocket):
                 action = str(payload.get("action", "")).lower()
                 symbols = [str(s).upper().strip() for s in payload.get("symbols", [])]
                 if action == "subscribe":
-                    subscribed_symbols.update(symbols)
                     logger.info(f"ws_prices: client subscribed to symbols={symbols}")
                     for sym in symbols:
-                        await manager.subscribe(websocket, f"market:{sym}")
+                        if sym not in subscribed_symbols:
+                            subscribed_symbols.add(sym)
+                            await manager.subscribe(websocket, f"market:{sym}")
+                            count = await redis_client.hincrby("active_symbol_counts", sym, 1)
+                            if count == 1:
+                                await redis_client.sadd("active_symbols", sym)
+                            
                         try:
                             q = await MarketDataService.get_quote(sym)
                             if q and q.get("price") is not None:
@@ -86,9 +91,14 @@ async def ws_prices(websocket: WebSocket):
                         except Exception as q_err:
                             logger.debug(f"Error sending initial quote snapshot for {sym}: {q_err}")
                 elif action == "unsubscribe":
-                    subscribed_symbols.difference_update(symbols)
                     for sym in symbols:
-                        await manager.unsubscribe(websocket, f"market:{sym}")
+                        if sym in subscribed_symbols:
+                            subscribed_symbols.remove(sym)
+                            await manager.unsubscribe(websocket, f"market:{sym}")
+                            count = await redis_client.hincrby("active_symbol_counts", sym, -1)
+                            if count <= 0:
+                                await redis_client.srem("active_symbols", sym)
+                                await redis_client.hdel("active_symbol_counts", sym)
                     logger.info(f"ws_prices: client unsubscribed from symbols={symbols}")
         except Exception as e:
             logger.debug(f"Error reading client message: {e}")
@@ -121,6 +131,15 @@ async def ws_prices(websocket: WebSocket):
     finally:
         t1.cancel()
         t2.cancel()
+        try:
+            for sym in list(subscribed_symbols):
+                count = await redis_client.hincrby("active_symbol_counts", sym, -1)
+                if count <= 0:
+                    await redis_client.srem("active_symbols", sym)
+                    await redis_client.hdel("active_symbol_counts", sym)
+        except Exception as e:
+            logger.debug(f"Error decrementing active symbols on disconnect: {e}")
+            
         try:
             await pubsub.unsubscribe("prices.ticks")
             await pubsub.close()
