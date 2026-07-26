@@ -22,7 +22,7 @@ import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, resolve_user_id
 from app.services.broker_adapter import BrokerAdapter
 from app.services.market_data_service import MarketDataService
 from app.services.paper_trading import PaperTradingService
@@ -303,7 +303,7 @@ async def post_paper_trade(
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
     """Submit simulated paper order."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         res = await BrokerAdapter.place_order(
             db=db,
@@ -327,7 +327,7 @@ async def get_paper_portfolio(
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
     """Get active positions, cash holdings, and mark-to-market P&L summary."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         pnl = await PaperTradingService.get_pnl(db, user_id)
         positions = await PaperTradingService.get_positions(db, user_id)

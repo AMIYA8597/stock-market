@@ -14,6 +14,7 @@ from datetime import UTC, date, datetime, timedelta
 
 import numpy as np
 
+from app.core.async_utils import run_coroutine_sync
 from app.schemas.intelligence import (
     CorrelationEdge,
     CorrelationGraphResponse,
@@ -52,6 +53,18 @@ MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
 
 @dataclass(frozen=True)
 class IntelligenceService:
+    def _load_prediction(self, symbol: str) -> dict:
+        """Full model prediction for ``symbol``, or an empty dict when unavailable."""
+        return run_coroutine_sync(lambda: get_full_prediction(symbol), timeout=15, default={})
+
+    def _load_history(self, symbol: str, period: str) -> list[dict]:
+        """Daily OHLCV bars for ``symbol``, or an empty list when unavailable."""
+        return run_coroutine_sync(
+            lambda: MarketDataService.get_history(symbol, "1d", period),
+            timeout=10,
+            default=[],
+        )
+
     def _direction(self, score: float) -> str:
         if score > 0.35:
             return "STRONG_BUY"
@@ -70,22 +83,11 @@ class IntelligenceService:
         return {k: round(v / total, 4) for k, v in raw.items()}
 
     def get_signal(self, symbol: str) -> SignalResponse:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    result = future.result(timeout=45)
-            else:
-                result = asyncio.run(get_full_prediction(symbol))
-        except Exception as e:
-            result = {"is_computed": False, "message": str(e), "symbol": symbol}
+        result = run_coroutine_sync(
+            lambda: get_full_prediction(symbol),
+            timeout=45,
+            on_error=lambda exc: {"is_computed": False, "message": str(exc), "symbol": symbol},
+        )
 
         if not result.get("is_computed", True):
             # Fallback result dictionary
@@ -248,25 +250,7 @@ class IntelligenceService:
         return [self.get_signal(symbol) for symbol in symbols]
 
     def get_signal_history(self, symbol: str, model: str, days: int) -> list[SignalHistoryPoint]:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            hist_days = days + 10
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{hist_days}d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{hist_days}d"))
-        except Exception:
-            bars = []
+        bars = self._load_history(symbol, f"{days + 10}d")
 
         points: list[SignalHistoryPoint] = []
         if len(bars) >= 2:
@@ -300,23 +284,7 @@ class IntelligenceService:
         return points
 
     def get_regime_current(self) -> RegimeCurrentResponse:
-        symbol = "^NSEI"
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
-        except Exception:
-            pred = {}
+        pred = self._load_prediction("^NSEI")
 
         ens = pred.get("ensemble", {})
         reg_sub = ens.get("regime", {})
@@ -347,25 +315,7 @@ class IntelligenceService:
         )
 
     def get_regime_history(self, days: int) -> list[RegimeHistoryPoint]:
-        symbol = "^NSEI"
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 30}d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 30}d"))
-        except Exception:
-            bars = []
+        bars = self._load_history("^NSEI", f"{days + 30}d")
 
         rows: list[RegimeHistoryPoint] = []
         if len(bars) >= 2:
@@ -448,22 +398,7 @@ class IntelligenceService:
         ]
 
     def get_shap(self, symbol: str) -> ExplainShapResponse:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
-        except Exception:
-            pred = {}
+        pred = self._load_prediction(symbol)
 
         ens = pred.get("ensemble", {})
         xgb_sub = ens.get("xgboost", {})
@@ -514,24 +449,7 @@ class IntelligenceService:
 
     def get_attention(self, symbol: str, model: str) -> ExplainAttentionResponse:
         model_name = "tft" if model not in {"tft", "lstm_attn"} else model
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", "60d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "60d"))
-        except Exception:
-            bars = []
+        bars = self._load_history(symbol, "60d")
 
         if len(bars) >= 5:
             closes = [b["close"] for b in bars]
@@ -570,22 +488,7 @@ class IntelligenceService:
     def get_counterfactuals(
         self, symbol: str, payload: CounterfactualRequest
     ) -> list[CounterfactualResponse]:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
-        except Exception:
-            pred = {}
+        pred = self._load_prediction(symbol)
 
         ens = pred.get("ensemble", {})
         tech_sub = ens.get("technical", {})
@@ -634,25 +537,7 @@ class IntelligenceService:
         return rows
 
     def get_drift(self) -> list[DriftItem]:
-        symbol = "^NSEI"
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", "126d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "126d"))
-        except Exception:
-            bars = []
+        bars = self._load_history("^NSEI", "126d")
 
         rows: list[DriftItem] = []
         if len(bars) >= 42:
@@ -692,25 +577,7 @@ class IntelligenceService:
         return rows
 
     def get_ensemble_weights_history(self, days: int) -> list[EnsembleWeightPoint]:
-        symbol = "^NSEI"
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 1}d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 1}d"))
-        except Exception:
-            bars = []
+        bars = self._load_history("^NSEI", f"{days + 1}d")
 
         rows: list[EnsembleWeightPoint] = []
         if bars:
@@ -803,30 +670,17 @@ class IntelligenceService:
             ("ETH-USD", "Crypto"),
         ]
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-
-            async def fetch_all():
-                tasks = [
+        async def fetch_all():
+            return await asyncio.gather(
+                *[
                     MarketDataService.get_history(sym[0], "1d", f"{window_days + 5}d")
                     for sym in symbols
                 ]
-                return await asyncio.gather(*tasks)
+            )
 
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, fetch_all())
-                    all_hist = future.result(timeout=20)
-            else:
-                all_hist = asyncio.run(fetch_all())
-        except Exception:
-            all_hist = [[] for _ in symbols]
+        all_hist = run_coroutine_sync(
+            fetch_all, timeout=20, default=[[] for _ in symbols]
+        )
 
         import pandas as pd
 
@@ -902,28 +756,13 @@ class IntelligenceService:
         ticker = symbol.upper()
         market_symbol = "^NSEI"
 
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
+        async def fetch_both():
+            return await asyncio.gather(
+                MarketDataService.get_history(ticker, "1d", f"{window_days + 5}d"),
+                MarketDataService.get_history(market_symbol, "1d", f"{window_days + 5}d"),
+            )
 
-        try:
-
-            async def fetch_both():
-                t1 = MarketDataService.get_history(ticker, "1d", f"{window_days + 5}d")
-                t2 = MarketDataService.get_history(market_symbol, "1d", f"{window_days + 5}d")
-                return await asyncio.gather(t1, t2)
-
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, fetch_both())
-                    hist_sym, hist_mkt = future.result(timeout=15)
-            else:
-                hist_sym, hist_mkt = asyncio.run(fetch_both())
-        except Exception:
-            hist_sym, hist_mkt = [], []
+        hist_sym, hist_mkt = run_coroutine_sync(fetch_both, timeout=15, default=([], []))
 
         beta_mkt = 0.85
         alpha = 0.015

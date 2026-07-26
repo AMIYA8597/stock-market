@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, resolve_user_id
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.services.paper_trading import PaperTradingService
 
@@ -32,7 +32,7 @@ async def submit_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         order = await PaperTradingService.place_order(
             db=db,
@@ -82,7 +82,7 @@ async def get_positions(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         positions = await PaperTradingService.get_positions(db, user_id)
         return positions
@@ -101,7 +101,7 @@ async def get_history(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         history = await PaperTradingService.get_history(db, user_id)
         return history
@@ -120,7 +120,7 @@ async def get_pnl(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         pnl_stats = await PaperTradingService.get_pnl(db, user_id)
         return pnl_stats
@@ -139,7 +139,7 @@ async def reset_wallet(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     try:
         pnl_stats = await PaperTradingService.reset_wallet(db, user_id)
         return {

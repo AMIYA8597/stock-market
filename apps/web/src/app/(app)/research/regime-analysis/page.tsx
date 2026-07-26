@@ -6,15 +6,9 @@ import { Badge } from "@neuroquant/ui";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@neuroquant/ui";
 import { contractsApi, type RegimeCurrentResponse, type RegimeHistoryPoint, type RegimeStatisticsItem } from "@/lib/contracts-api";
 import { ChartCard, SimpleLineAreaChart, type LineAreaPoint, SimpleHeatGrid, type HeatCell } from "@/components/charts";
+import { formatRatioPercent } from "@/lib/formatters";
 
 const STATE_ORDER = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"] as const;
-
-function pct(value: number | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "--";
-  }
-  return `${(value * 100).toFixed(2)}%`;
-}
 
 export default function RegimeAnalysisPage(): JSX.Element {
   const [current, setCurrent] = useState<RegimeCurrentResponse | null>(null);
@@ -178,7 +172,7 @@ export default function RegimeAnalysisPage(): JSX.Element {
             <CardContent>
               <div className="rounded-[1rem] border border-[rgba(0,230,118,0.4)] bg-[rgba(0,230,118,0.08)] p-3">
                 <div className="text-lg font-semibold text-[var(--nq-accent-green)]">{loading ? "..." : current?.state ?? "--"}</div>
-                <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">Confidence: {loading ? "..." : pct(currentStateProb)}</div>
+                <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">Confidence: {loading ? "..." : formatRatioPercent(currentStateProb)}</div>
                 <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">Days in state: {loading ? "..." : (current?.days_in_state ?? "--")}</div>
                 <div className="mt-1 text-xs text-[var(--nq-text-secondary)]">Last transition: {loading ? "..." : (current?.last_transition_date ?? "--")}</div>
               </div>
@@ -219,9 +213,9 @@ export default function RegimeAnalysisPage(): JSX.Element {
                     <tr key={row.state} className="border-t border-[var(--nq-border)]">
                       <td className="py-2">{row.state}</td>
                       <td className="py-2 text-right">{row.avg_duration.toFixed(1)}</td>
-                      <td className="py-2 text-right">{pct(row.freq)}</td>
-                      <td className="py-2 text-right">{pct(row.avg_return)}</td>
-                      <td className="py-2 text-right">{pct(row.avg_vol)}</td>
+                      <td className="py-2 text-right">{formatRatioPercent(row.freq)}</td>
+                      <td className="py-2 text-right">{formatRatioPercent(row.avg_return)}</td>
+                      <td className="py-2 text-right">{formatRatioPercent(row.avg_vol)}</td>
                     </tr>
                   ))}
                   {!loading && statistics.length === 0 ? (

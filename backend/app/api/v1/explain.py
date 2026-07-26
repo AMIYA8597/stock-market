@@ -13,9 +13,12 @@ from decimal import Decimal
 from uuid import NAMESPACE_DNS, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
+from app.models.instrument import Instrument
+from app.models.model_artifact import ModelArtifact
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.explain import (
     AttentionResponse,
@@ -40,26 +43,43 @@ def safe_round(val: float, places: int) -> float:
     return round(float(val), places)
 
 
+async def load_active_artifact(db: AsyncSession, symbol: str) -> ModelArtifact | None:
+    """Return the active model artifact trained for ``symbol``, if any."""
+    stmt = (
+        select(ModelArtifact)
+        .join(Instrument)
+        .where(
+            Instrument.symbol == MarketDataService._normalize_symbol(symbol),
+            ModelArtifact.is_active,
+        )
+    )
+    result = await db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+def explain_error(exc: Exception, resource: str) -> HTTPException:
+    """Map an unexpected failure onto the standard error envelope."""
+    if isinstance(exc, ValueError):
+        return HTTPException(
+            status_code=422,
+            detail=ErrorResponse.create(
+                code=ErrorCode.VALIDATION_ERROR,
+                message=str(exc),
+            ).dict(),
+        )
+    return HTTPException(
+        status_code=500,
+        detail=ErrorResponse.create(
+            code=ErrorCode.INTERNAL_SERVER_ERROR,
+            message=f"Failed to fetch {resource}: {str(exc)}",
+        ).dict(),
+    )
+
+
 @router.get("/shap/{symbol}", response_model=SHAPResponse)
 async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) -> SHAPResponse:
     try:
-        norm_symbol = MarketDataService._normalize_symbol(symbol)
-
-        from sqlalchemy import select
-
-        from app.models.instrument import Instrument
-        from app.models.model_artifact import ModelArtifact
-
-        stmt = (
-            select(ModelArtifact)
-            .join(Instrument)
-            .where(
-                Instrument.symbol == norm_symbol,
-                ModelArtifact.is_active,
-            )
-        )
-        result = await db.execute(stmt)
-        artifact = result.scalar_one_or_none()
+        artifact = await load_active_artifact(db, symbol)
 
         if not artifact:
             # Return an empty response so the UI doesn't break
@@ -177,22 +197,8 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
 
     except HTTPException:
         raise
-    except ValueError as val_err:
-        raise HTTPException(
-            status_code=422,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=str(val_err),
-            ).dict(),
-        ) from val_err
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=ErrorResponse.create(
-                code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message=f"Failed to fetch SHAP explanation: {str(exc)}",
-            ).dict(),
-        ) from exc
+        raise explain_error(exc, "SHAP explanation") from exc
 
 
 @router.get("/attention/{symbol}", response_model=AttentionResponse)
@@ -370,13 +376,7 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
     except HTTPException:
         raise
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=ErrorResponse.create(
-                code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message=f"Failed to fetch attention explanation: {str(exc)}",
-            ).dict(),
-        ) from exc
+        raise explain_error(exc, "attention explanation") from exc
 
 
 @router.post("/counterfactual/{symbol}", response_model=CounterfactualResponse)
@@ -386,23 +386,7 @@ async def post_counterfactual_explanation(
     db: AsyncSession = Depends(get_db)
 ) -> CounterfactualResponse:
     try:
-        norm_symbol = MarketDataService._normalize_symbol(symbol)
-
-        from sqlalchemy import select
-
-        from app.models.instrument import Instrument
-        from app.models.model_artifact import ModelArtifact
-
-        stmt = (
-            select(ModelArtifact)
-            .join(Instrument)
-            .where(
-                Instrument.symbol == norm_symbol,
-                ModelArtifact.is_active,
-            )
-        )
-        result = await db.execute(stmt)
-        artifact = result.scalar_one_or_none()
+        artifact = await load_active_artifact(db, symbol)
 
         if not artifact:
             raise HTTPException(
@@ -513,19 +497,5 @@ async def post_counterfactual_explanation(
 
     except HTTPException:
         raise
-    except ValueError as val_err:
-        raise HTTPException(
-            status_code=422,
-            detail=ErrorResponse.create(
-                code=ErrorCode.VALIDATION_ERROR,
-                message=str(val_err),
-            ).dict(),
-        ) from val_err
     except Exception as exc:
-        raise HTTPException(
-            status_code=500,
-            detail=ErrorResponse.create(
-                code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message=f"Failed to fetch counterfactual: {str(exc)}",
-            ).dict(),
-        ) from exc
+        raise explain_error(exc, "counterfactual") from exc

@@ -9,14 +9,7 @@ import {
 } from "@/lib/contracts-api";
 import { Badge } from "@neuroquant/ui";
 import { ChartCard } from "@/components/charts";
-import { safeFormat } from "@/lib/formatters";
-
-function pct(value: unknown): string {
-  if (value === null || value === undefined) return "--";
-  const num = Number(value);
-  if (Number.isNaN(num)) return "--";
-  return `${(num * 100).toFixed(2)}%`;
-}
+import { formatRatioPercent, safeFormat } from "@/lib/formatters";
 
 export default function BacktestResultPage(): JSX.Element {
   const params = useParams<{ jobId: string }>();
@@ -162,10 +155,10 @@ export default function BacktestResultPage(): JSX.Element {
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          ["Total Return", result ? pct(result.metrics.total_return) : "--"],
-          ["CAGR", result ? pct(result.metrics.cagr) : "--"],
+          ["Total Return", result ? formatRatioPercent(result.metrics.total_return) : "--"],
+          ["CAGR", result ? formatRatioPercent(result.metrics.cagr) : "--"],
           ["Sharpe", result ? safeFormat(result.metrics.sharpe, 3) : "--"],
-          ["Max Drawdown", result ? pct(result.metrics.max_drawdown) : "--"],
+          ["Max Drawdown", result ? formatRatioPercent(result.metrics.max_drawdown) : "--"],
         ].map(([label, value]) => (
           <div
             key={label}
@@ -299,9 +292,9 @@ export default function BacktestResultPage(): JSX.Element {
                     key={idx}
                     className="h-8 rounded flex items-center justify-center font-mono text-[10px] text-white"
                     style={{ backgroundColor: bgColor }}
-                    title={`${row.year}-${String(idx + 1).padStart(2, "0")}: ${pct(ret)}`}
+                    title={`${row.year}-${String(idx + 1).padStart(2, "0")}: ${formatRatioPercent(ret)}`}
                   >
-                    {pct(ret)}
+                    {formatRatioPercent(ret)}
                   </div>
                 );
               })}

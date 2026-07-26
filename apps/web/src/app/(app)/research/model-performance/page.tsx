@@ -2,10 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type DriftItem, type ModelAccuracyItem } from "@/lib/contracts-api";
-
-function pct(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
-}
+import { formatRatioPercent } from "@/lib/formatters";
 
 export default function ModelPerformancePage(): JSX.Element {
   const [accuracy, setAccuracy] = useState<ModelAccuracyItem[]>([]);
@@ -102,7 +99,7 @@ export default function ModelPerformancePage(): JSX.Element {
             {tableRows.map((row) => (
               <tr key={row.model} className="border-t border-[var(--nq-border)]">
                 <td className="px-4 py-2 uppercase">{row.model}</td>
-                <td className="px-4 py-2">{pct(row.directional_accuracy)}</td>
+                <td className="px-4 py-2">{formatRatioPercent(row.directional_accuracy)}</td>
                 <td className="px-4 py-2">{row.p50_rmse.toFixed(4)}</td>
                 <td className="px-4 py-2">{row.winkler_coverage_score.toFixed(4)}</td>
                 <td className="px-4 py-2">{typeof row.ks_stat === "number" ? row.ks_stat.toFixed(4) : "--"}</td>

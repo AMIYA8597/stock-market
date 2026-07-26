@@ -17,6 +17,27 @@ export function formatPercent(value: number, decimals = 2): string {
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
+interface RatioPercentOptions {
+  decimals?: number;
+  /** Prefix non-negative values with "+". */
+  signed?: boolean;
+  fallback?: string;
+}
+
+/**
+ * Format a ratio (0.1234) as a percentage, tolerating null/undefined/NaN input
+ */
+export function formatRatioPercent(
+  value: unknown,
+  { decimals = 2, signed = false, fallback = '--' }: RatioPercentOptions = {},
+): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  const num = Number(value);
+  if (Number.isNaN(num)) return fallback;
+  const sign = signed && num >= 0 ? '+' : '';
+  return `${sign}${(num * 100).toFixed(decimals)}%`;
+}
+
 /**
  * Format large numbers with compact notation
  */

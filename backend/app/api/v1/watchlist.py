@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, resolve_user_id
 from app.models.watchlist import UserWatchlist
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
@@ -23,22 +23,23 @@ class WatchlistResponse(BaseModel):
     symbols: list[str]
 
 
+async def _load_watchlist(db: AsyncSession, user_id: str) -> WatchlistResponse:
+    """Return the user's watchlist, most recently added first."""
+    result = await db.execute(
+        select(UserWatchlist.symbol)
+        .where(UserWatchlist.user_id == user_id)
+        .order_by(UserWatchlist.added_at.desc())
+    )
+    return WatchlistResponse(symbols=list(result.scalars().all()))
+
+
 @router.get("", response_model=WatchlistResponse, summary="Get user watchlist")
 async def get_watchlist(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> Any:
     """Retrieve the current user's watchlist."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
-
-    result = await db.execute(
-        select(UserWatchlist.symbol)
-        .where(UserWatchlist.user_id == user_id)
-        .order_by(UserWatchlist.added_at.desc())
-    )
-    symbols = result.scalars().all()
-
-    return WatchlistResponse(symbols=list(symbols))
+    return await _load_watchlist(db, resolve_user_id(current_user))
 
 
 @router.post("", response_model=WatchlistResponse, summary="Add symbol to watchlist")
@@ -48,7 +49,7 @@ async def add_to_watchlist(
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> Any:
     """Add a symbol to the current user's watchlist."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     symbol = request.symbol.upper()
 
     # Validate symbol format somewhat
@@ -67,14 +68,7 @@ async def add_to_watchlist(
         db.add(new_item)
         await db.commit()
 
-    # Fetch updated list
-    result = await db.execute(
-        select(UserWatchlist.symbol)
-        .where(UserWatchlist.user_id == user_id)
-        .order_by(UserWatchlist.added_at.desc())
-    )
-    symbols = result.scalars().all()
-    return WatchlistResponse(symbols=list(symbols))
+    return await _load_watchlist(db, user_id)
 
 
 @router.delete("/{symbol}", response_model=WatchlistResponse, summary="Remove symbol from watchlist")
@@ -84,7 +78,7 @@ async def remove_from_watchlist(
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> Any:
     """Remove a symbol from the current user's watchlist."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = resolve_user_id(current_user)
     target_symbol = symbol.upper()
 
     await db.execute(
@@ -93,11 +87,4 @@ async def remove_from_watchlist(
     )
     await db.commit()
 
-    # Fetch updated list
-    result = await db.execute(
-        select(UserWatchlist.symbol)
-        .where(UserWatchlist.user_id == user_id)
-        .order_by(UserWatchlist.added_at.desc())
-    )
-    symbols = result.scalars().all()
-    return WatchlistResponse(symbols=list(symbols))
+    return await _load_watchlist(db, user_id)

@@ -217,6 +217,14 @@ async def get_current_user_or_none(
         return None
 
 
+ANONYMOUS_USER_ID = "test-user-id"
+
+
+def resolve_user_id(current_user: User | None) -> str:
+    """Identifier used to scope per-user data, falling back to the anonymous id."""
+    return str(current_user.id) if current_user else ANONYMOUS_USER_ID
+
+
 # ─── Role-Based Access Control ───────────────────────────────────────────
 def require_role(required_role: str):
     """Dependency factory for role-based access control.

@@ -4,13 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type FactorExposureResponse } from "@/lib/contracts-api";
 
 import { SYMBOLS as DEFAULT_SYMBOLS } from "@/shared/constants/symbols";
-
-function pct(value: number | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "--";
-  }
-  return `${value >= 0 ? "+" : ""}${(value * 100).toFixed(2)}%`;
-}
+import { formatRatioPercent } from "@/lib/formatters";
 
 export default function FactorExposurePage(): JSX.Element {
   const [symbol, setSymbol] = useState<string>("");
@@ -110,12 +104,12 @@ export default function FactorExposurePage(): JSX.Element {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {[
-          ["Alpha (annualized)", pct(metrics.alpha_annualized)],
-          ["Tracking Error", pct(metrics.tracking_error)],
+          ["Alpha (annualized)", formatRatioPercent(metrics.alpha_annualized, { signed: true })],
+          ["Tracking Error", formatRatioPercent(metrics.tracking_error, { signed: true })],
           ["Information Ratio", typeof metrics.information_ratio === "number" ? metrics.information_ratio.toFixed(2) : "--"],
           ["Factor Concentration", typeof metrics.factor_concentration === "number" ? metrics.factor_concentration.toFixed(2) : "--"],
-          ["Residual Volatility", pct(metrics.residual_volatility)],
-          ["Active Share", pct(metrics.active_share)],
+          ["Residual Volatility", formatRatioPercent(metrics.residual_volatility, { signed: true })],
+          ["Active Share", formatRatioPercent(metrics.active_share, { signed: true })],
         ].map(([label, value]) => (
           <div key={label} className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-4 py-3 text-sm">
             <div className="text-xs text-[var(--nq-text-secondary)]">{label}</div>

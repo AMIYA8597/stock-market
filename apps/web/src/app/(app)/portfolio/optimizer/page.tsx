@@ -10,10 +10,7 @@ import {
   SimpleDonutChart,
   type DonutSlice,
 } from "@/components/charts";
-
-function formatPercent(value: number): string {
-  return `${(value * 100).toFixed(2)}%`;
-}
+import { formatRatioPercent } from "@/lib/formatters";
 
 export default function PortfolioOptimizerPage(): JSX.Element {
   const [method, setMethod] = useState<"hrp" | "max_sharpe" | "min_volatility" | "efficient_risk">("max_sharpe");
@@ -144,7 +141,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
               <div className="rounded-[1rem] border border-white/10 bg-[rgba(255,255,255,0.04)] p-3 text-xs">
                 <label className="mb-2 flex items-center justify-between">
                   <span className="text-[var(--nq-text-secondary)]">Target Return</span>
-                  <span>{formatPercent(targetReturn)}</span>
+                  <span>{formatRatioPercent(targetReturn)}</span>
                 </label>
                 <input
                   type="range"
@@ -196,7 +193,7 @@ export default function PortfolioOptimizerPage(): JSX.Element {
                             </div>
                           </td>
                           <td className="py-2.5 text-right font-mono text-[var(--nq-text-primary)]">
-                            {formatPercent(weight)}
+                            {formatRatioPercent(weight)}
                           </td>
                         </tr>
                       ))}
@@ -217,13 +214,13 @@ export default function PortfolioOptimizerPage(): JSX.Element {
                   <div className="flex justify-between border-b border-white/5 pb-2">
                     <span className="text-[var(--nq-text-secondary)]">Exp. Return</span>
                     <span className="font-semibold text-[var(--nq-bull)]">
-                      {formatPercent(result.expected_return)}
+                      {formatRatioPercent(result.expected_return)}
                     </span>
                   </div>
                   <div className="flex justify-between border-b border-white/5 pb-2">
                     <span className="text-[var(--nq-text-secondary)]">Exp. Volatility</span>
                     <span className="font-semibold text-[var(--nq-accent-cyan)]">
-                      {formatPercent(result.expected_volatility)}
+                      {formatRatioPercent(result.expected_volatility)}
                     </span>
                   </div>
                   <div className="flex justify-between border-b border-white/5 pb-2">

@@ -1,55 +1,26 @@
 """Stooq market data provider."""
 
-import asyncio
 import csv
 import io
 import logging
 from datetime import UTC, datetime
 
-import aiohttp
-from tenacity import (
-    retry,
-    retry_if_exception_type,
-    stop_after_attempt,
-    wait_exponential,
-)
-
 from app.models.instrument import Instrument
 from app.services.data_ingestion.base import (
     DataUnavailableError,
+    HttpMarketDataProvider,
     Interval,
-    MarketDataProvider,
     OHLCVBar,
     Quote,
-    RateLimitExceededError,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class StooqProvider(MarketDataProvider):
+class StooqProvider(HttpMarketDataProvider):
     """Stooq provider implementation."""
 
     name = "stooq"
-
-    def __init__(self, timeout: int = 15):
-        self.timeout = aiohttp.ClientTimeout(total=timeout)
-
-    @retry(
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError)),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True,
-    )
-    async def _fetch_csv(self, url: str) -> str:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        async with aiohttp.ClientSession(timeout=self.timeout) as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status == 429:
-                    raise RateLimitExceededError(f"{self.name} rate limit exceeded.")
-                if response.status >= 400:
-                    raise DataUnavailableError(f"{self.name} returned {response.status}")
-                return await response.text()
 
     def _map_symbol(self, symbol: str) -> str:
         stooq_symbol = Instrument.normalize_symbol(symbol).upper()
@@ -64,7 +35,7 @@ class StooqProvider(MarketDataProvider):
         stooq_symbol = self._map_symbol(symbol)
         url = f"https://stooq.com/q/d/l/?s={stooq_symbol}&f=sd2t2ohlcv&a=dn"
         try:
-            csv_data = await self._fetch_csv(url)
+            csv_data = await self._request(url)
             f = io.StringIO(csv_data)
             reader = list(csv.DictReader(f))
             if not reader or "Date" not in reader[0]:
@@ -97,7 +68,7 @@ class StooqProvider(MarketDataProvider):
         url = f"https://stooq.com/q/d/l/?s={stooq_symbol}&f=sd2t2ohlcv&a=dn"
 
         try:
-            csv_data = await self._fetch_csv(url)
+            csv_data = await self._request(url)
             f = io.StringIO(csv_data)
             reader = csv.DictReader(f)
 
@@ -130,13 +101,3 @@ class StooqProvider(MarketDataProvider):
             return bars
         except Exception as e:
             raise DataUnavailableError(f"{self.name} ohlcv failed for {symbol}: {e}") from e
-
-    async def get_universe(self) -> list[dict]:
-        return []
-
-    async def health(self) -> dict:
-        try:
-            await self.get_quote("^NSEI")
-            return {"status": "ok", "provider": self.name}
-        except Exception as e:
-            return {"status": "down", "provider": self.name, "error": str(e)}

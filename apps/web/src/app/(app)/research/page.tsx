@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type DriftItem, type ModelAccuracyItem, type RegimeCurrentResponse } from "@/lib/contracts-api";
+import { formatRatioPercent } from "@/lib/formatters";
 
 const links = [
   { href: "/research/regime-analysis", label: "Regime Analysis" },
@@ -11,13 +12,6 @@ const links = [
   { href: "/research/model-performance", label: "Model Performance" },
   { href: "/research/explainability", label: "Explainability" },
 ];
-
-function pct(value: number | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "--";
-  }
-  return `${(value * 100).toFixed(2)}%`;
-}
 
 export default function ResearchHomePage(): JSX.Element {
   const [regime, setRegime] = useState<RegimeCurrentResponse | null>(null);
@@ -129,8 +123,8 @@ export default function ResearchHomePage(): JSX.Element {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           ["Current Regime", loading ? "..." : regime?.state ?? "--", "rgba(0,230,118,0.16)"],
-          ["Regime Confidence", loading ? "..." : pct(regimeConfidence), "rgba(0,212,245,0.16)"],
-          ["Ensemble Accuracy", loading ? "..." : pct(ensemble?.directional_accuracy), "rgba(139,92,246,0.16)"],
+          ["Regime Confidence", loading ? "..." : formatRatioPercent(regimeConfidence), "rgba(0,212,245,0.16)"],
+          ["Ensemble Accuracy", loading ? "..." : formatRatioPercent(ensemble?.directional_accuracy), "rgba(139,92,246,0.16)"],
           ["Drift Alerts", loading ? "..." : `${activeDrifts} ACTIVE`, "rgba(255,184,0,0.16)"],
         ].map(([k, v, bg]) => (
           <div key={k} className="rounded border border-[var(--nq-border)] px-4 py-3" style={{ background: String(bg) }}>
