@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, require_user_id
 from app.models.watchlist import UserWatchlist
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
@@ -29,7 +29,7 @@ async def get_watchlist(
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> Any:
     """Retrieve the current user's watchlist."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = require_user_id(current_user)
 
     result = await db.execute(
         select(UserWatchlist.symbol)
@@ -48,7 +48,7 @@ async def add_to_watchlist(
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> Any:
     """Add a symbol to the current user's watchlist."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = require_user_id(current_user)
     symbol = request.symbol.upper()
 
     # Validate symbol format somewhat
@@ -84,7 +84,7 @@ async def remove_from_watchlist(
     current_user: dict | None = Depends(get_current_user_or_none),
 ) -> Any:
     """Remove a symbol from the current user's watchlist."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    user_id = require_user_id(current_user)
     target_symbol = symbol.upper()
 
     await db.execute(

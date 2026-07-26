@@ -217,6 +217,40 @@ async def get_current_user_or_none(
         return None
 
 
+def require_user_id(current_user: User | dict | None) -> str:
+    """Resolve the authenticated user's ID or reject the request.
+
+    Accepts either a ``User`` model (runtime) or a dict payload (used by some
+    tests/overrides). Raises 401 when no authenticated principal is present so
+    that user-scoped endpoints never fall back to a shared/anonymous identity.
+
+    Args:
+        current_user: The resolved user from ``get_current_user_or_none``.
+
+    Returns:
+        str: The authenticated user's ID.
+
+    Raises:
+        HTTPException: 401 if the request is unauthenticated.
+    """
+    user_id: str | None = None
+    if current_user is not None:
+        if isinstance(current_user, dict):
+            raw = current_user.get("id") or current_user.get("sub")
+            user_id = str(raw) if raw else None
+        else:
+            raw = getattr(current_user, "id", None)
+            user_id = str(raw) if raw else None
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user_id
+
+
 # ─── Role-Based Access Control ───────────────────────────────────────────
 def require_role(required_role: str):
     """Dependency factory for role-based access control.

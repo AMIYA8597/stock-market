@@ -36,6 +36,12 @@ backend/.env.*
 !backend/.env.example
 keys/
 
+# Ad-hoc secret/env dumps (NEVER COMMIT THESE)
+*llm-env*.txt
+LLM-ENVVV-ALL-KEYS-.txt
+*-ALL-KEYS-*.txt
+*secrets*.txt
+
 # ───────────────────────────────────────────────────
 # Database files
 # ───────────────────────────────────────────────────

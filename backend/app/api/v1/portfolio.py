@@ -8,7 +8,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, require_user_id
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
@@ -34,12 +34,13 @@ async def list_portfolios(
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ):
+    user_id = require_user_id(current_user)
     holdings = await get_holdings(current_user=current_user, db=db)
 
     return [
         {
             "id": 1,
-            "user_id": str(current_user.id) if current_user else "test-user-id",
+            "user_id": user_id,
             "name": "Main Portfolio",
             "description": "Primary trading portfolio",
             "initial_capital": 100000.0,
@@ -61,11 +62,12 @@ async def get_portfolio(
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ):
+    user_id = require_user_id(current_user)
     holdings = await get_holdings(current_user=current_user, db=db)
 
     return {
         "id": portfolio_id,
-        "user_id": str(current_user.id) if current_user else "test-user-id",
+        "user_id": user_id,
         "name": "Main Portfolio",
         "description": "Primary trading portfolio",
         "initial_capital": 100000.0,
@@ -98,7 +100,7 @@ async def get_holdings(
         from app.models.transactions import Transaction
         from app.services.market_data_service import MarketDataService
 
-        user_id_str = str(current_user.id) if current_user else "test-user-id"
+        user_id_str = require_user_id(current_user)
 
         def _empty_holdings(cb: Decimal = Decimal("0.00")) -> HoldingsResponse:
             return HoldingsResponse(
@@ -236,7 +238,7 @@ async def post_transaction(
         from app.models.portfolio import PortfolioHolding
         from app.models.transactions import Transaction
 
-        user_id_str = str(current_user.id) if current_user else "test-user-id"
+        user_id_str = require_user_id(current_user)
         tx_type = request.type.upper()
 
         if tx_type not in {"BUY", "SELL"}:
@@ -408,6 +410,7 @@ async def get_performance(
     db: AsyncSession = Depends(get_db),
 ) -> PerformanceResponse:
     """Return time-series portfolio performance based on live data and current holdings."""
+    require_user_id(current_user)
     try:
         from app.services.market_data_service import MarketDataService
 
