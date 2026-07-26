@@ -52,11 +52,41 @@ async def run_price_ticker(redis: Redis) -> None:
     # 3 req/sec limit to avoid NSE bans
     bucket = TokenBucket(rate=3.0, capacity=3.0)
 
+    from sqlalchemy import select
+    from app.models.watchlist import UserWatchlist
+    from app.models.portfolio import PortfolioHolding
+    from app.models.paper_trading import PaperPosition
+
     while True:
         try:
             market_open = is_market_hours()
 
-            for sym in WATCHLIST_SYMBOLS:
+            # 1. Gather all active symbols dynamically
+            symbols_to_poll = set(MarketDataService.NSE_NIFTY50[:5]) # poll top 5 always just to keep it alive
+            
+            # Fetch from DB: Watchlists, Portfolios, Paper Positions
+            try:
+                async with async_session_factory() as session:
+                    wl_res = await session.execute(select(UserWatchlist.symbol))
+                    symbols_to_poll.update([s for s in wl_res.scalars().all()])
+                    
+                    pf_res = await session.execute(select(PortfolioHolding.symbol))
+                    symbols_to_poll.update([s for s in pf_res.scalars().all()])
+                    
+                    pp_res = await session.execute(select(PaperPosition.symbol))
+                    symbols_to_poll.update([s for s in pp_res.scalars().all()])
+            except Exception as db_err:
+                logger.debug(f"Failed to fetch symbols from DB: {db_err}")
+                
+            # Fetch from Redis active subscriptions
+            try:
+                active_from_redis = await redis.smembers("active_symbols")
+                if active_from_redis:
+                    symbols_to_poll.update([s.decode('utf-8') for s in active_from_redis])
+            except Exception as redis_err:
+                logger.debug(f"Failed to fetch active_symbols from Redis: {redis_err}")
+
+            for sym in list(symbols_to_poll):
                 try:
                     await bucket.consume(1)
 
