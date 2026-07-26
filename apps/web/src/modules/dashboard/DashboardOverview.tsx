@@ -102,7 +102,7 @@ export function DashboardOverview(): JSX.Element {
   })) : [];
   const allocationSeries = positionsData ? positionsData.map((h: any) => ({ name: h.symbol, value: h.quantity * h.current_price, color: "#00E676" })) : [];
   
-  const modelSignals = signal
+  const modelSignals = signal?.models
     ? Object.entries(signal.models)
         .filter(([k]) => k !== "technical" && k !== "regime")
         .map(([key, m]: [string, any]) => {
@@ -230,7 +230,7 @@ export function DashboardOverview(): JSX.Element {
 
                 <div className="grid gap-3 sm:grid-cols-3">
                   {[
-                    { label: "Active Signals", value: signal ? Object.keys(signal.models).length : 0, detail: "Across watchlists" },
+                    { label: "Active Signals", value: signal?.models ? Object.keys(signal.models).length : 0, detail: "Across watchlists" },
                     { label: "Win Rate", value: "--", detail: "Trailing 30D" },
                     { label: "Sharpe", value: riskMetrics?.sharpe_ratio != null ? riskMetrics.sharpe_ratio.toFixed(2) : "--", detail: "Risk adj return" }
                   ].map((item: any) => (
