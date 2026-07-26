@@ -6,6 +6,7 @@ Provides REST endpoint `/api/v1/market/quote/{symbol}` and WebSocket `/api/v1/ma
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -15,6 +16,8 @@ from pydantic import BaseModel, Field
 from app.core.config import get_settings
 from app.core.dependencies import get_redis
 from app.providers.market_data_provider import MarketDataProvider
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/market")
 
@@ -36,7 +39,8 @@ async def get_cached_quote(redis, symbol: str) -> dict[str, Any] | None:
             payload = json.loads(raw)
             payload["timestamp"] = datetime.fromisoformat(payload["timestamp"])
             return payload
-        except Exception:
+        except (ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+            logger.warning(f"Discarding corrupt cached quote for {symbol}: {exc}")
             return None
     return None
 
@@ -66,10 +70,11 @@ async def get_quote(symbol: str, redis=Depends(get_redis)) -> QuoteResponse:
         await set_cached_quote(redis, symbol, result)
         return QuoteResponse(symbol=symbol, **result)
     except Exception as exc:
+        logger.warning(f"Quote fetch failed for {symbol}: {exc}")
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Unable to fetch quote for {symbol}: {exc}",
-        )
+        ) from exc
 
 
 # Simple WebSocket manager for broadcasting quotes to subscribed clients
@@ -105,7 +110,8 @@ async def ws_quotes(ws: WebSocket, redis=Depends(get_redis)):
                 payload = json.loads(raw)
                 symbols = [s.upper() for s in payload.get("symbols", [])]
                 manager.subscriptions[ws] = symbols
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Invalid subscription message: {exc}")
                 await manager.send(ws, {"error": "Invalid subscription message"})
                 continue
             # Push updates every 5 s for this connection's subscriptions
@@ -120,5 +126,6 @@ async def ws_quotes(ws: WebSocket, redis=Depends(get_redis)):
     except WebSocketDisconnect:
         manager.disconnect(ws)
     except Exception:
+        logger.exception("ws_quotes connection error")
         manager.disconnect(ws)
         raise

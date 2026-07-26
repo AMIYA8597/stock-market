@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -18,6 +19,8 @@ from app.schemas.screener import (
     ScreenerRunResponse,
 )
 from app.services.market_data_service import MarketDataService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/screener", tags=["screener"])
 
@@ -132,8 +135,9 @@ async def post_screener_run(
                     pe_ratio = float(pe_raw)
                 if mc_raw is not None:
                     mcap = float(mc_raw) / 1e7  # convert to crores for display
-            except Exception:
-                pass  # Leave pe_ratio and mcap as None — never fabricate values
+            except Exception as exc:
+                # Leave pe_ratio and mcap as None — never fabricate values
+                logger.warning("ticker_info_unavailable: symbol=%s: %s", s.ticker, exc)
 
             results.append(
                 {

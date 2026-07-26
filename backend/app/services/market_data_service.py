@@ -230,7 +230,8 @@ class MarketDataService:
             try:
                 info = ticker.fast_info
                 price = getattr(info, "last_price", None)
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"fast_info unavailable for {sym}: {exc}")
                 info = None
                 price = None
 
@@ -357,25 +358,15 @@ class MarketDataService:
             except Exception as fe:
                 logger.debug(f"IndianStockAPI fallback failed for {sym}: {fe}")
 
+            logger.warning(f"Quote fetch failed for {sym}: {e}")
+
             # Tombstone / cache the failure so we don't spam network
-            datetime.now(UTC).timestamp()
             failure_dict = {"error": True, "message": str(e)}
             if redis:
                 try:
                     await redis.setex(cache_key, 60, json.dumps(failure_dict))
-                except Exception:
-                    pass
-            if isinstance(e, ValueError):
-                raise
-            raise ValueError(sym) from e
-            # Tombstone / cache the failure so we don't spam network
-            datetime.now(UTC).timestamp()
-            failure_dict = {"error": True, "message": str(e)}
-            if redis:
-                try:
-                    await redis.setex(cache_key, 60, json.dumps(failure_dict))
-                except Exception:
-                    pass
+                except Exception as se:
+                    logger.warning(f"Redis tombstone set failed for key={cache_key}: {se}")
             if isinstance(e, ValueError):
                 raise
             raise ValueError(sym) from e
@@ -568,8 +559,8 @@ class MarketDataService:
             if redis:
                 try:
                     await redis.setex(cache_key, 300, json.dumps(failure_dict))
-                except Exception:
-                    pass
+                except Exception as se:
+                    logger.warning(f"Redis tombstone set failed for key={cache_key}: {se}")
         else:
             cache_payload = {"source": result.source, "bars": list(result)}
             if redis:
@@ -717,7 +708,8 @@ class MarketDataService:
                     "marketCap": info.get("marketCap"),
                     "shortName": info.get("shortName"),
                 }
-            except Exception:
+            except Exception as exc:
+                logger.warning(f"Ticker info fetch failed for {sym}: {exc}")
                 return {}
 
         async with MarketDataService._semaphore:
@@ -796,8 +788,8 @@ class MarketDataService:
             cached = await redis.get(cache_key)
             if cached:
                 return json.loads(cached)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Cached quote lookup failed for key={cache_key}: {exc}")
 
         # If cache fails too, raise a 503 since we have no real data
         from fastapi import HTTPException
@@ -917,7 +909,8 @@ class MarketDataService:
                             "change_pct": round(chg_pct, 2),
                         }
                     )
-            except Exception:
+            except Exception as exc:
+                logger.warning(f"Movers computation failed for {sym}: {exc}")
                 continue
 
         movers_sorted = sorted(movers, key=lambda x: x["change_pct"], reverse=True)

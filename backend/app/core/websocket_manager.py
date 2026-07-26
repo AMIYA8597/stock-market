@@ -58,10 +58,11 @@ class ConnectionManager:
                             "source": "system"
                         }
                     )
-                except Exception:
+                except Exception as exc:
+                    logger.debug(f"Heartbeat send failed, closing connection: {exc}")
                     break
         except asyncio.CancelledError:
-            pass
+            logger.debug("Heartbeat task cancelled")
         finally:
             await self.disconnect(websocket)
 
@@ -114,7 +115,8 @@ class ConnectionManager:
         for ws in connections:
             try:
                 await ws.send_text(message)
-            except Exception:
+            except Exception as exc:
+                logger.debug(f"Broadcast to channel {channel} failed, dropping connection: {exc}")
                 dead.append(ws)
 
         if dead:

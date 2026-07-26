@@ -105,6 +105,7 @@ async def _check_model_drift_async(symbol: str) -> dict:
         try:
             psi = calculate_psi(expected, actual)
         except Exception:
+            logger.warning(f"PSI computation failed for feature {feature}", exc_info=True)
             psi = 0.0
 
         max_psi = max(max_psi, psi)

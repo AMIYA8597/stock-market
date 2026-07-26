@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user, get_db, resolve_user_uuid
 from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.errors import ErrorCode, ErrorResponse
@@ -29,11 +29,7 @@ class NotificationCreate(BaseModel):
 async def list_notifications(
     current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> dict[str, object]:
-    user_id_str = str(current_user.id)
-    try:
-        uid = uuid.UUID(user_id_str)
-    except Exception:
-        return {"items": []}
+    uid = resolve_user_uuid(current_user)
 
     result = await db.execute(
         select(Notification)
@@ -74,8 +70,8 @@ async def create_notification(
 
     try:
         uid = uuid.UUID(payload.user_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid user ID format.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid user ID format.") from exc
 
     user_result = await db.execute(select(User).where(User.id == uid))
     if user_result.scalar_one_or_none() is None:
@@ -105,12 +101,11 @@ async def mark_read(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    user_id_str = str(current_user.id)
+    uid = resolve_user_uuid(current_user)
     try:
-        uid = uuid.UUID(user_id_str)
         nid = uuid.UUID(notification_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ID format")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid notification ID format") from exc
 
     result = await db.execute(
         select(Notification).where(Notification.id == nid, Notification.user_id == uid)

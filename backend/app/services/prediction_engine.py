@@ -458,11 +458,12 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     online_prob = 0.5
     try:
         from research.models.online_learner import OnlineAdaptiveLearner
-    except ImportError:
-        pass
+    except ImportError as e:
+        logger.warning(f"OnlineAdaptiveLearner unavailable, skipping online model for {symbol}: {e}")
+        OnlineAdaptiveLearner = None
 
     online_checkpoint = MODEL_DIR / f"online_learner_{symbol.upper()}.pkl"
-    if online_checkpoint.exists():
+    if OnlineAdaptiveLearner is not None and online_checkpoint.exists():
         try:
             learner = OnlineAdaptiveLearner.load(online_checkpoint)
             if learner is not None:

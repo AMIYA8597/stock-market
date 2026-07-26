@@ -147,5 +147,10 @@ def parse_rate_limit(value: str | None) -> RateLimitConfig:
             60 if unit in {"minute", "min", "m"} else 1 if unit in {"second", "sec", "s"} else 3600
         )
         return RateLimitConfig(max_requests=max(1, max_requests), window_seconds=window)
-    except Exception:
+    except (ValueError, IndexError) as exc:
+        from app.core.logging import get_logger
+
+        get_logger(__name__).warning(
+            f"Invalid rate limit config {value!r}, using defaults: {exc}"
+        )
         return RateLimitConfig()

@@ -124,8 +124,8 @@ async def ws_prices(websocket: WebSocket):
         try:
             await pubsub.unsubscribe("prices.ticks")
             await pubsub.close()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Error closing prices pubsub: {e}")
         await manager.disconnect(websocket)
 
 
@@ -155,8 +155,8 @@ async def ws_signals(websocket: WebSocket):
                     subscribed_symbols.difference_update(symbols)
             except TimeoutError:
                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"ws_signals: ignoring malformed client message: {e}")
 
             now_ts = asyncio.get_event_loop().time()
 
@@ -249,8 +249,8 @@ async def ws_backtest_progress(websocket: WebSocket):
                     subscribed_job_id = msg.get("job_id")
             except TimeoutError:
                 pass
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug(f"ws_backtest: ignoring malformed client message: {e}")
 
             if not subscribed_job_id:
                 if BACKTEST_PROGRESS:
@@ -281,7 +281,10 @@ async def ws_backtest_progress(websocket: WebSocket):
                                     pct = 0
                             else:
                                 pct = 0
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(
+                            f"Progress lookup failed for job {subscribed_job_id}: {e}"
+                        )
                         pct = 0
 
                 await manager.send_personal(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 
 # import random  # removed per policy
@@ -14,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, resolve_user_uuid
 from app.database.connection import async_session_factory
 from app.models.backtest import BacktestJob
 from app.models.instrument import Instrument
@@ -56,7 +57,12 @@ from research.backtesting.statistical_tests import (
 )
 from research.backtesting.walk_forward import evaluate_cpcv
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/backtest", tags=["backtest"])
+
+# Owner of backtests submitted without authentication.
+ANONYMOUS_BACKTEST_USER_ID = "3b79b787-f2a8-4a48-abf1-0268d6131a5b"
 
 # Memory store for active job progress tracking
 BACKTEST_PROGRESS: dict[str, int] = {}
@@ -344,6 +350,7 @@ async def execute_backtest_job(job_id: UUID) -> None:
         else:
             fold_sharpes = [float(sharpe_ratio(res_backtest.daily_returns)) for _ in range(5)]
     except Exception:
+        logger.warning("cpcv_evaluation_failed; falling back to full-sample Sharpe", exc_info=True)
         fold_sharpes = [float(sharpe_ratio(res_backtest.daily_returns)) for _ in range(5)]
 
     mean_sharpe = float(np.mean(fold_sharpes)) if fold_sharpes else 0.0
@@ -462,18 +469,16 @@ async def post_backtest_run(
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ) -> BacktestRunResponse:
-    user_id_str = "3b79b787-f2a8-4a48-abf1-0268d6131a5b"
-    if current_user and "sub" in current_user:
-        try:
-            UUID(current_user["sub"])
-            user_id_str = current_user["sub"]
-        except ValueError:
-            pass
+    user_id = (
+        resolve_user_uuid(current_user)
+        if current_user is not None
+        else UUID(ANONYMOUS_BACKTEST_USER_ID)
+    )
 
     job_id = uuid4()
     new_job = BacktestJob(
         id=job_id,
-        user_id=UUID(user_id_str),
+        user_id=user_id,
         strategy_name=request.strategy_name,
         strategy_params=request.strategy_params or {},
         universe=request.universe,

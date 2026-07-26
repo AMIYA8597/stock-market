@@ -64,7 +64,8 @@ async def _update_news_sentiment_async() -> dict[str, Any]:
                 dt_str = hl.get("date", "")
                 try:
                     dt = dateutil.parser.parse(dt_str) if dt_str else datetime.now(UTC)
-                except Exception:
+                except (ValueError, OverflowError) as exc:
+                    logger.warning(f"Unparsable headline date {dt_str!r}, using now(): {exc}")
                     dt = datetime.now(UTC)
 
                 score = sent["positive"] - sent["negative"]
@@ -107,7 +108,8 @@ async def _update_news_sentiment_async() -> dict[str, Any]:
                 dt_str = hl.get("date", "")
                 try:
                     dt = dateutil.parser.parse(dt_str) if dt_str else datetime.now(UTC)
-                except Exception:
+                except (ValueError, OverflowError) as exc:
+                    logger.warning(f"Unparsable headline date {dt_str!r}, using now(): {exc}")
                     dt = datetime.now(UTC)
 
                 score = sent["positive"] - sent["negative"]

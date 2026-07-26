@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, resolve_user_uuid
 from app.models.payment import PaymentTransaction, Plan, Subscription, WalletLedger
 
 logger = logging.getLogger(__name__)
@@ -24,16 +24,12 @@ router = APIRouter(prefix="/payments", tags=["payments"])
 try:
     razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
 except Exception:
+    logger.exception("razorpay_client_init_failed; falling back to test-mode orders")
     razorpay_client = None
 
 
 def _resolve_user_id(current_user: dict | None) -> uuid.UUID:
-    if not current_user or not str(current_user.id):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        return uuid.UUID(str(current_user["sub"]))
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid User ID")
+    return resolve_user_uuid(current_user)
 
 
 @router.get("/plans")
@@ -94,15 +90,21 @@ async def create_intent(
         # Test-mode payment gateway for local setup
         order_id = f"order_{uuid4().hex[:14]}"
     else:
-        order = razorpay_client.order.create(
-            {
-                "amount": amount_paise,
-                "currency": payload.currency.upper(),
-                "receipt": receipt_id,
-                "notes": {"user_id": user_id, "description": payload.description},
-            }
-        )
-        order_id = order["id"]
+        try:
+            order = razorpay_client.order.create(
+                {
+                    "amount": amount_paise,
+                    "currency": payload.currency.upper(),
+                    "receipt": receipt_id,
+                    "notes": {"user_id": str(user_id), "description": payload.description},
+                }
+            )
+            order_id = order["id"]
+        except Exception as exc:
+            logger.exception("razorpay_order_create_failed: receipt=%s", receipt_id)
+            raise HTTPException(
+                status_code=502, detail="Payment provider is unavailable. Please retry."
+            ) from exc
 
     # 2. Record transaction intent in DB
     intent_id = f"pi_{uuid4().hex}"
@@ -170,7 +172,7 @@ async def confirm_intent(
             razorpay_client.utility.verify_payment_signature(params_dict)
         except Exception as e:
             logger.error(f"Razorpay signature verification failed: {e}")
-            raise HTTPException(status_code=400, detail="Signature verification failed.")
+            raise HTTPException(status_code=400, detail="Signature verification failed.") from e
 
     # Mark transaction as succeeded
     tx.status = "succeeded"

@@ -1,9 +1,12 @@
+import logging
 import os
 from datetime import datetime
 from functools import lru_cache
 
 import requests
 import yfinance as yf
+
+logger = logging.getLogger(__name__)
 
 ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")
 ALPHA_VANTAGE_URL = "https://www.alphavantage.co/query"
@@ -72,8 +75,8 @@ def get_latest_price(ticker: str):
     """
     try:
         data = fetch_alpha_vantage(ticker)
-    except Exception:
-        # fallback
+    except Exception as exc:
+        logger.warning(f"Alpha Vantage fetch failed for {ticker}, falling back to yfinance: {exc}")
         data = fetch_yfinance(ticker, period="1d", interval="5m")
     return data[-1] if data else None
 

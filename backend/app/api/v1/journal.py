@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, resolve_user_uuid
 from app.models.journal import TradeJournal
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.journal import JournalCreate, JournalResponse
@@ -17,13 +17,8 @@ router = APIRouter(prefix="/journal", tags=["journal"])
 
 
 async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UUID:
-    """Resolve current user's UUID from token or database."""
-    if not current_user or "sub" not in current_user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        return uuid.UUID(str(current_user["sub"]))
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    """Resolve current user's UUID from token payload or user model."""
+    return resolve_user_uuid(current_user)
 
 
 @router.get("", response_model=list[JournalResponse])

@@ -65,7 +65,10 @@ class PaperTradingService:
             try:
                 q = await MarketDataService.get_quote(symbol)
                 curr_price = Decimal(str(q["price"]))
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    f"Quote unavailable for {symbol}, using average buy price instead: {exc}"
+                )
                 curr_price = avg_price
 
             unrealized_pnl = (curr_price - avg_price) * qty

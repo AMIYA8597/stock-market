@@ -124,7 +124,8 @@ class StooqProvider(MarketDataProvider):
                         adjusted_close=None,
                         interval=interval
                     ))
-                except Exception:
+                except (TypeError, ValueError, KeyError) as exc:
+                    logger.warning(f"{self.name}: skipping unparsable bar for {symbol}: {exc}")
                     continue
             bars.reverse()
             return bars

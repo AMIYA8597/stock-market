@@ -189,7 +189,7 @@ class NSESource(MarketDataProvider):
                     })
             return universe
         except Exception as e:
-            raise DataUnavailableError(f"NSE universe fetch failed: {e}")
+            raise DataUnavailableError(f"NSE universe fetch failed: {e}") from e
 
     async def health(self) -> dict:
         try:

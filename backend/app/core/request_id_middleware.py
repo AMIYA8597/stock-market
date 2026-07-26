@@ -46,8 +46,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
                 if isinstance(user, dict):
                     user_id_var.set(user.get("sub") or user.get("user_id"))
                     user_email_var.set(user.get("email"))
-        except Exception:
-            pass  # User not yet available in request lifecycle
+        except Exception as exc:
+            # User not yet available in request lifecycle
+            logger.debug("request_user_context_unavailable: %s", exc)
 
         # Time the request
         start_time = time.monotonic()

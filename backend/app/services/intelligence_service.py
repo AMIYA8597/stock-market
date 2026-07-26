@@ -8,6 +8,7 @@ real mathematical calculations on real market and symbol OHLCV data.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -45,6 +46,8 @@ from app.schemas.intelligence import (
 )
 from app.services.market_data_service import MarketDataService
 from app.services.prediction_engine import get_full_prediction
+
+logger = logging.getLogger(__name__)
 
 REGIME_STATES = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
 MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
@@ -85,6 +88,7 @@ class IntelligenceService:
             else:
                 result = asyncio.run(get_full_prediction(symbol))
         except Exception as e:
+            logger.warning(f"Prediction failed for {symbol}: {e}", exc_info=True)
             result = {"is_computed": False, "message": str(e), "symbol": symbol}
 
         if not result.get("is_computed", True):
@@ -266,6 +270,7 @@ class IntelligenceService:
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{hist_days}d"))
         except Exception:
+            logger.warning(f"Signal history fetch failed for {symbol}", exc_info=True)
             bars = []
 
         points: list[SignalHistoryPoint] = []
@@ -316,6 +321,7 @@ class IntelligenceService:
             else:
                 pred = asyncio.run(get_full_prediction(symbol))
         except Exception:
+            logger.warning(f"Prediction fetch failed for {symbol}", exc_info=True)
             pred = {}
 
         ens = pred.get("ensemble", {})
@@ -365,6 +371,7 @@ class IntelligenceService:
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 30}d"))
         except Exception:
+            logger.warning(f"Regime history fetch failed for {symbol}", exc_info=True)
             bars = []
 
         rows: list[RegimeHistoryPoint] = []
@@ -463,6 +470,7 @@ class IntelligenceService:
             else:
                 pred = asyncio.run(get_full_prediction(symbol))
         except Exception:
+            logger.warning(f"Prediction fetch failed for {symbol}", exc_info=True)
             pred = {}
 
         ens = pred.get("ensemble", {})
@@ -531,6 +539,7 @@ class IntelligenceService:
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "60d"))
         except Exception:
+            logger.warning(f"Attention history fetch failed for {symbol}", exc_info=True)
             bars = []
 
         if len(bars) >= 5:
@@ -585,6 +594,7 @@ class IntelligenceService:
             else:
                 pred = asyncio.run(get_full_prediction(symbol))
         except Exception:
+            logger.warning(f"Prediction fetch failed for {symbol}", exc_info=True)
             pred = {}
 
         ens = pred.get("ensemble", {})
@@ -652,6 +662,7 @@ class IntelligenceService:
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "126d"))
         except Exception:
+            logger.warning(f"Drift history fetch failed for {symbol}", exc_info=True)
             bars = []
 
         rows: list[DriftItem] = []
@@ -710,6 +721,7 @@ class IntelligenceService:
             else:
                 bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 1}d"))
         except Exception:
+            logger.warning(f"Ensemble weight history fetch failed for {symbol}", exc_info=True)
             bars = []
 
         rows: list[EnsembleWeightPoint] = []
@@ -826,6 +838,7 @@ class IntelligenceService:
             else:
                 all_hist = asyncio.run(fetch_all())
         except Exception:
+            logger.warning("Correlation graph history fetch failed", exc_info=True)
             all_hist = [[] for _ in symbols]
 
         import pandas as pd
@@ -923,6 +936,7 @@ class IntelligenceService:
             else:
                 hist_sym, hist_mkt = asyncio.run(fetch_both())
         except Exception:
+            logger.warning(f"Factor exposure history fetch failed for {symbol}", exc_info=True)
             hist_sym, hist_mkt = [], []
 
         beta_mkt = 0.85

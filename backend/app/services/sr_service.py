@@ -9,6 +9,7 @@ Provides out-of-sample Precision, Recall, and F1 metrics on historical zone touc
 
 from __future__ import annotations
 
+import logging
 import pickle
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,8 @@ except ImportError:
     DBSCAN = None
 
 from app.core.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 settings = get_settings()
 MODEL_DIR = Path("d:/work/stock-market/backend/data/models")
@@ -331,7 +334,7 @@ class SupportResistanceEngine:
             with open(metrics_path, "wb") as f:
                 pickle.dump({"precision": precision, "recall": recall, "f1": f1}, f)
         except Exception:
-            pass
+            logger.warning(f"Failed to persist S/R model artifacts for {symbol}", exc_info=True)
 
         return {
             "precision": float(round(precision, 4)),

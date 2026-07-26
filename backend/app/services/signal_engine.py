@@ -63,8 +63,8 @@ class TechnicalSignalEngine:
         df.ta.psar(append=True)
         try:
             df.ta.ichimoku(append=True)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning(f"Ichimoku computation failed, continuing without it: {exc}")
 
         # 2. Momentum
         df.ta.rsi(append=True)

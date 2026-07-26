@@ -3,7 +3,11 @@
 
 from __future__ import annotations
 
+import logging
+
 import httpx
+
+logger = logging.getLogger(__name__)
 
 NSE_BASE = "https://www.nseindia.com/api"
 NSE_HEADERS = {
@@ -26,9 +30,9 @@ class NSEService:
             # Warm up session with homepage visit (required by NSE to get cookies)
             try:
                 await cls._session.get("https://www.nseindia.com")
-            except Exception:
-                # Silently ignore warm-up failures, will retry on request
-                pass
+            except Exception as exc:
+                # Warm-up is best effort; the next request retries it
+                logger.warning("nse_session_warmup_failed: %s", exc)
         return cls._session
 
     @classmethod

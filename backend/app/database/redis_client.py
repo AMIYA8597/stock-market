@@ -134,7 +134,8 @@ async def _redis_pool_singleton() -> Redis:
         try:
             await _redis_client.ping()
             return _redis_client
-        except Exception:
+        except Exception as exc:
+            logger.warning("redis_ping_failed_recreating_client: %s", exc)
             _redis_client = None
 
     async with _redis_lock:

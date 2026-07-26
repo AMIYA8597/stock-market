@@ -9,10 +9,14 @@ This service provides:
 The implementation uses existing models (`EnsembleSignal`) and the `SignalEngine` from `app.services.signal_engine`.
 """
 
+import logging
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.signal import EnsembleSignal
 from app.services.signal_engine import SignalEngine
+
+logger = logging.getLogger(__name__)
 
 
 async def list_signals(db: AsyncSession) -> list[EnsembleSignal]:
@@ -55,4 +59,5 @@ async def explain_signal(db: AsyncSession, signal_id: int) -> str | None:
         resp = await ai_predict(db, {"prompt": prompt, "symbol": str(signal.symbol_id)})
         return resp.get("explanation") if isinstance(resp, dict) else None
     except Exception:  # noqa: BLE001
+        logger.warning(f"Signal explanation generation failed for signal {signal_id}", exc_info=True)
         return None

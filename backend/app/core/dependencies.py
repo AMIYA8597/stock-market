@@ -16,6 +16,7 @@ from __future__ import annotations
 import time
 from collections.abc import AsyncGenerator
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -153,7 +154,6 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        from uuid import UUID
         result = await db.execute(select(User).where(User.id == UUID(user_id)))
         user = result.scalar_one_or_none()
         if not user:
@@ -215,6 +215,52 @@ async def get_current_user_or_none(
     except Exception as e:
         logger.debug("get_current_user_or_none_error: %s", str(e))
         return None
+
+
+def resolve_user_uuid(current_user: User | dict | None) -> UUID:
+    """Resolve the authenticated user's UUID from a ``User`` model or token payload.
+
+    Args:
+        current_user: ``User`` model, decoded token payload, or None.
+
+    Returns:
+        UUID: The authenticated user's identifier.
+
+    Raises:
+        HTTPException: 401 if the user is missing or carries an unusable identifier.
+    """
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if isinstance(current_user, dict):
+        raw_id = current_user.get("sub") or current_user.get("user_id")
+    else:
+        raw_id = getattr(current_user, "id", None)
+
+    if raw_id is None:
+        logger.warning("missing_user_identifier: type=%s", type(current_user).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if isinstance(raw_id, UUID):
+        return raw_id
+
+    try:
+        return UUID(str(raw_id))
+    except (ValueError, AttributeError, TypeError) as exc:
+        logger.warning("invalid_user_identifier: %s", raw_id)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid user identifier",
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
 
 
 # ─── Role-Based Access Control ───────────────────────────────────────────

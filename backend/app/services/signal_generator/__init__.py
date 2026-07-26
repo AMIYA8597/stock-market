@@ -183,6 +183,7 @@ class StatisticalArbitrageStrategy:
             score, pvalue, _ = ts.coint(close_a.iloc[-self.window :], close_b.iloc[-self.window :])
             self.is_active = pvalue < 0.05
         except Exception:
+            logger.warning("Cointegration test failed, deactivating pair", exc_info=True)
             self.is_active = False
 
         if not self.is_active:

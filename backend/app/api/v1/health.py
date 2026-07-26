@@ -44,8 +44,10 @@ async def health_live_data():
             )
             if resp.status_code == 200:
                 status["yfinance"] = "up"
-        except Exception:
-            pass
+            else:
+                logger.warning("yfinance_probe_unhealthy: status=%s", resp.status_code)
+        except Exception as exc:
+            logger.warning("yfinance_probe_failed: %s", exc)
 
         # 2. Ping NSE
         try:
@@ -60,9 +62,11 @@ async def health_live_data():
                 if resp2.status_code == 200:
                     status["nse"] = "up"
                 else:
-                    status["nse"] = "up"
-        except Exception:
-            pass
+                    logger.warning("nse_probe_unhealthy: status=%s", resp2.status_code)
+            else:
+                logger.warning("nse_probe_unhealthy: status=%s", resp1.status_code)
+        except Exception as exc:
+            logger.warning("nse_probe_failed: %s", exc)
 
         # 3. Ping CoinGecko
         try:
@@ -73,8 +77,10 @@ async def health_live_data():
             resp = await client.get(cg_url, headers=cg_headers)
             if resp.status_code == 200:
                 status["coingecko"] = "up"
-        except Exception:
-            pass
+            else:
+                logger.warning("coingecko_probe_unhealthy: status=%s", resp.status_code)
+        except Exception as exc:
+            logger.warning("coingecko_probe_failed: %s", exc)
 
         # 4. Ping FRED
         try:
@@ -87,8 +93,8 @@ async def health_live_data():
                 resp = await client.get("https://api.stlouisfed.org")
                 if resp.status_code == 200 or resp.status_code == 403:
                     status["fred"] = "up"
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("fred_probe_failed: %s", exc)
 
     return status
 
@@ -132,7 +138,8 @@ async def readiness_check():
     try:
         redis = await get_redis()
         redis_ok = bool(await redis.ping())
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Redis health check failed: {e}")
         redis_ok = False
 
     dependencies["database"] = "up" if db_ok else "down"

@@ -408,6 +408,9 @@ class ChartPatternDetector:
             zones_res = SupportResistanceEngine.detect_classical_zones(df)
             sr_zones = [z["avg"] for z in zones_res]
         except Exception:
+            logger.warning(
+                "S/R engine unavailable, falling back to histogram density zones", exc_info=True
+            )
             all_swings = [s[1] for s in sh] + [s[1] for s in sl]
             if all_swings:
                 hist, bin_edges = np.histogram(all_swings, bins=10)

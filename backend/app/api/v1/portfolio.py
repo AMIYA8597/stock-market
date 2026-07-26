@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -22,6 +23,8 @@ from app.schemas.portfolio import (
     TransactionRequest,
     TransactionResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["portfolio"])
 
@@ -163,7 +166,12 @@ async def get_holdings(
                 quote = await MarketDataService.get_quote(ticker)
                 curr_p_val = quote.get("price")
                 curr_p = Decimal(str(curr_p_val)) if curr_p_val else avg_p
-            except Exception:
+            except Exception as exc:
+                logger.warning(
+                    "quote_unavailable_for_holding: symbol=%s; using average buy price: %s",
+                    ticker,
+                    exc,
+                )
                 curr_p = avg_p
 
             unrealized_pnl = (curr_p - avg_p) * qty
@@ -206,6 +214,7 @@ async def get_holdings(
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("get_holdings_failed")
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(
@@ -388,6 +397,7 @@ async def post_transaction(
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("portfolio_transaction_failed")
         await db.rollback()
         raise HTTPException(
             status_code=500,
@@ -422,12 +432,13 @@ async def get_performance(
             try:
                 hist = await MarketDataService.get_history(h.symbol, interval="1d", period="1mo")
                 histories[h.symbol] = hist
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("history_unavailable: symbol=%s: %s", h.symbol, exc)
 
         try:
             bench_hist = await MarketDataService.get_history("^NSEI", interval="1d", period="1mo")
-        except Exception:
+        except Exception as exc:
+            logger.warning("benchmark_history_unavailable: symbol=^NSEI: %s", exc)
             bench_hist = []
 
         # Find the last 10 valid market dates from the benchmark
@@ -446,8 +457,8 @@ async def get_performance(
                     date_str = dt.strftime("%Y-%m-%d")
                     bench_dates.append((dt, date_str, float(b.get("close", 0))))
                     bench_prices[date_str] = float(b.get("close", 0))
-                except Exception:
-                    pass
+                except (TypeError, ValueError, OSError) as exc:
+                    logger.warning("unparsable_benchmark_bar: value=%r: %s", d, exc)
 
         bench_dates.sort(key=lambda x: x[0])
         last_10 = bench_dates[-10:] if bench_dates else []
@@ -473,8 +484,10 @@ async def get_performance(
                             dt = datetime.fromisoformat(str(d).replace("Z", "+00:00"))
                         date_str = dt.strftime("%Y-%m-%d")
                         sym_prices[sym][date_str] = float(b.get("close", 0))
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError, OSError) as exc:
+                        logger.warning(
+                            "unparsable_history_bar: symbol=%s value=%r: %s", sym, d, exc
+                        )
 
         cash = float(holdings_res.cash_balance)
         Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
@@ -547,6 +560,7 @@ async def get_performance(
             excess_return=(total_return - benchmark_return).quantize(Decimal("0.0001")),
         )
     except Exception as exc:
+        logger.exception("get_performance_failed")
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(
@@ -582,6 +596,7 @@ async def get_risk_metrics(
             benchmark_volatility=Decimal("0.1530"),
         )
     except Exception as exc:
+        logger.exception("get_risk_metrics_failed")
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(
@@ -814,6 +829,7 @@ async def post_optimize(
 
                 hrp_dendrogram = to_dendrogram_node(root_node).dict()
             except Exception:
+                logger.warning("hrp_dendrogram_build_failed", exc_info=True)
                 hrp_dendrogram = None
 
         elif method == "cvar":
@@ -904,6 +920,7 @@ async def post_optimize(
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception("portfolio_optimization_failed")
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(

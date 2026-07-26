@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user, get_db, resolve_user_uuid
 from app.models.alert import Alert
 from app.models.instrument import Instrument
 from app.schemas.errors import ErrorCode, ErrorResponse
@@ -25,17 +25,20 @@ from app.schemas.screener import (
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 
+def _parse_alert_id(alert_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(alert_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid alert ID format") from exc
+
+
 @router.get("/history")
 async def get_alerts_history(
     limit: int = 5,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    user_id_str = str(current_user.id)
-    try:
-        uid = uuid.UUID(user_id_str)
-    except Exception:
-        return []
+    uid = resolve_user_uuid(current_user)
 
     stmt = (
         select(Alert, Instrument.symbol)
@@ -74,11 +77,7 @@ async def get_alerts(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertListResponse:
-    user_id_str = str(current_user.id)
-    try:
-        uid = uuid.UUID(user_id_str)
-    except Exception:
-        return AlertListResponse(alerts=[], total_count=0)
+    uid = resolve_user_uuid(current_user)
 
     stmt = (
         select(Alert, Instrument.symbol)
@@ -113,8 +112,6 @@ async def post_alert(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertData:
-    user_id_str = str(current_user.id)
-
     if request.alert_type not in {
         "PRICE_ABOVE",
         "PRICE_BELOW",
@@ -131,10 +128,7 @@ async def post_alert(
             ).dict(),
         )
 
-    try:
-        uid = uuid.UUID(user_id_str)
-    except Exception:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    uid = resolve_user_uuid(current_user)
 
     symbol_id = None
     symbol_ticker = None
@@ -188,12 +182,8 @@ async def patch_alert(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertUpdateResponse:
-    user_id_str = str(current_user.id)
-    try:
-        uid = uuid.UUID(user_id_str)
-        a_id = uuid.UUID(alert_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ID format")
+    uid = resolve_user_uuid(current_user)
+    a_id = _parse_alert_id(alert_id)
 
     stmt = (
         select(Alert, Instrument.symbol)
@@ -238,12 +228,8 @@ async def delete_alert(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> AlertDeleteResponse:
-    user_id_str = str(current_user.id)
-    try:
-        uid = uuid.UUID(user_id_str)
-        a_id = uuid.UUID(alert_id)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid ID format")
+    uid = resolve_user_uuid(current_user)
+    a_id = _parse_alert_id(alert_id)
 
     stmt = delete(Alert).where(and_(Alert.id == a_id, Alert.user_id == uid))
     res = await db.execute(stmt)
