@@ -458,14 +458,14 @@ class RiskCalculator:
         Returns:
             Shrunk correlation matrix
         """
-        cov_matrix = returns.cov()
+        cov_matrix = returns.cov().to_numpy()
         n_assets = cov_matrix.shape[0]
 
         # Target: scaled identity
-        target = np.eye(n_assets) * cov_matrix.values.diagonal().mean()
+        target = np.eye(n_assets) * cov_matrix.diagonal().mean()
 
         # Optimal shrinkage intensity
-        delta = np.sum((cov_matrix - target) ** 2) / np.sum(cov_matrix**2)
+        delta = float(np.sum((cov_matrix - target) ** 2) / np.sum(cov_matrix**2))
         alpha = min(1.0, max(0.0, delta))
 
         shrunk_cov = alpha * target + (1 - alpha) * cov_matrix
