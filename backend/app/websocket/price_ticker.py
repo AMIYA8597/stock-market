@@ -54,6 +54,7 @@ async def run_price_ticker(redis: Redis) -> None:
 
     from sqlalchemy import select
     from app.models.watchlist import UserWatchlist
+    from app.models.instrument import Instrument
     from app.models.portfolio import PortfolioHolding
     from app.models.paper_trading import PaperPosition
 
@@ -70,7 +71,10 @@ async def run_price_ticker(redis: Redis) -> None:
                     wl_res = await session.execute(select(UserWatchlist.symbol))
                     symbols_to_poll.update([s for s in wl_res.scalars().all()])
                     
-                    pf_res = await session.execute(select(PortfolioHolding.symbol))
+                    pf_res = await session.execute(
+                        select(Instrument.symbol)
+                        .join(PortfolioHolding, PortfolioHolding.symbol_id == Instrument.id)
+                    )
                     symbols_to_poll.update([s for s in pf_res.scalars().all()])
                     
                     pp_res = await session.execute(select(PaperPosition.symbol))

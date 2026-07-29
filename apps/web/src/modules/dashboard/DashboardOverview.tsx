@@ -1,1042 +1,475 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { portfolioApi, alertsApi, paperTradingApi } from "@/lib/api-client";
+import { motion } from "framer-motion";
+import { AlertTriangle, BellRing, BrainCircuit, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Modal, Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
+import { alertsApi, paperTradingApi, portfolioApi } from "@/lib/api-client";
 import { useSignalQuery } from "@/hooks/queries/useSignals";
 
-import { motion } from "framer-motion";
-import {
-  ArrowRight,
-  BarChart3,
-  BellRing,
-  BrainCircuit,
-  Download,
-  Eye,
-  Gauge,
-  LineChart,
-  Megaphone,
-  ShieldCheck,
-  Sparkles,
-  TrendingUp,
-  Workflow,
-  Zap,
-} from "lucide-react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Badge } from "@neuroquant/ui";
-import { Input } from "@neuroquant/ui";
-import { Modal } from "@neuroquant/ui";
-import { Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-  StatCard,
-} from "@neuroquant/ui";
+type PaperPnl = {
+  cash_balance?: number;
+  daily_realized_loss?: number;
+  realized_pnl?: number;
+  total_equity?: number;
+  unrealized_pnl?: number;
+};
 
+type PositionRow = {
+  current_price?: number;
+  market_value?: number;
+  model_signal?: string;
+  pnl?: number;
+  quantity?: number;
+  symbol: string;
+};
 
+function formatCurrency(value: number | null | undefined): string {
+  const safeValue = Number.isFinite(value) ? Number(value) : 0;
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(safeValue);
+}
 
+function formatPercent(value: number | null | undefined): string {
+  const safeValue = Number.isFinite(value) ? Number(value) : 0;
+  return `${safeValue.toFixed(1)}%`;
+}
 
-
-
-const signalGradient = ["#00D4F5", "#00E676", "#8B5CF6", "#FFB800"];
-
-function scoreLabel(score: number): string {
-  return `${score.toString().padStart(2, "0")}%`;
+function formatRatio(value: number | null | undefined): string {
+  if (!Number.isFinite(value)) {
+    return "--";
+  }
+  return Number(value).toFixed(2);
 }
 
 export function DashboardOverview(): JSX.Element {
   const [createAlertOpen, setCreateAlertOpen] = useState(false);
 
-  const { data: pnl, isLoading: isLoadingPnl, isError: isErrorPnl } = useQuery({ queryKey: ["paper-trade", "pnl"], queryFn: () => paperTradingApi.getPnl() });
-  const { data: positions, isLoading: isLoadingPositions, isError: isErrorPositions } = useQuery({ queryKey: ["paper-trade", "positions"], queryFn: () => paperTradingApi.getPositions() });
-  const { data: portfolios, isLoading: isLoadingPortfolios, isError: isErrorPortfolios } = useQuery({ queryKey: ["portfolios"], queryFn: () => portfolioApi.list() });
-  const portfolio = portfolios?.[0];
-  const { data: riskMetrics, isLoading: isLoadingRisk, isError: isErrorRisk } = useQuery({ queryKey: ["risk", portfolio?.id], queryFn: () => portfolioApi.getRisk(portfolio!.id), enabled: !!portfolio?.id });
-  const { data: signal, isLoading: isLoadingSignal, isError: isErrorSignal } = useSignalQuery("NIFTY50");
-  const { data: alertsHistory, isLoading: isLoadingAlerts } = useQuery({ queryKey: ["alerts", "history"], queryFn: () => alertsApi.getHistory(5) });
-  const { data: performance, isLoading: isLoadingPerf } = useQuery({ queryKey: ["performance", portfolio?.id], queryFn: () => portfolioApi.getPerformance(), enabled: !!portfolio?.id });
+  const {
+    data: pnl,
+    isLoading: isLoadingPnl,
+    isError: isErrorPnl,
+  } = useQuery({
+    queryKey: ["paper-trade", "pnl"],
+    queryFn: () => paperTradingApi.getPnl() as Promise<PaperPnl>,
+  });
 
-  if (isLoadingPnl || isLoadingPositions || isLoadingSignal) {
+  const {
+    data: positions,
+    isLoading: isLoadingPositions,
+    isError: isErrorPositions,
+  } = useQuery({
+    queryKey: ["paper-trade", "positions"],
+    queryFn: () => paperTradingApi.getPositions() as Promise<PositionRow[]>,
+  });
+
+  const {
+    data: portfolios,
+    isLoading: isLoadingPortfolios,
+    isError: isErrorPortfolios,
+  } = useQuery({
+    queryKey: ["portfolios"],
+    queryFn: () => portfolioApi.list(),
+  });
+
+  const portfolio = portfolios?.[0] ?? null;
+
+  const {
+    data: riskMetrics,
+    isLoading: isLoadingRisk,
+    isError: isErrorRisk,
+  } = useQuery({
+    queryKey: ["risk", portfolio?.id],
+    queryFn: () => portfolioApi.getRisk(portfolio!.id),
+    enabled: Boolean(portfolio?.id),
+  });
+
+  const {
+    data: performance,
+    isLoading: isLoadingPerformance,
+    isError: isErrorPerformance,
+  } = useQuery({
+    queryKey: ["performance", portfolio?.id],
+    queryFn: () => portfolioApi.getPerformance(),
+    enabled: Boolean(portfolio?.id),
+  });
+
+  const {
+    data: alertsHistory,
+    isLoading: isLoadingAlerts,
+    isError: isErrorAlerts,
+  } = useQuery({
+    queryKey: ["alerts", "history"],
+    queryFn: () => alertsApi.getHistory(6),
+  });
+
+  const {
+    data: signal,
+    isLoading: isLoadingSignal,
+    isError: isErrorSignal,
+  } = useSignalQuery("NIFTY50");
+
+  const isLoading =
+    isLoadingPnl ||
+    isLoadingPositions ||
+    isLoadingPortfolios ||
+    isLoadingRisk ||
+    isLoadingPerformance ||
+    isLoadingAlerts ||
+    isLoadingSignal;
+
+  const hasBlockingError =
+    isErrorPnl ||
+    isErrorPositions ||
+    isErrorPortfolios ||
+    isErrorRisk ||
+    isErrorPerformance ||
+    isErrorAlerts ||
+    isErrorSignal;
+
+  if (isLoading) {
     return <div className="p-8 text-center text-sm text-[var(--nq-text-secondary)]">Loading dashboard data...</div>;
   }
-  
-  if (isErrorPnl || isErrorPositions || isErrorSignal) {
-    return <div className="p-8 text-center text-sm text-[var(--nq-bear)]">Error loading dashboard data. Please try again.</div>;
+
+  if (hasBlockingError) {
+    return (
+      <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-[1.5rem] border border-[rgba(255,91,92,0.28)] bg-[rgba(255,91,92,0.08)] p-8 text-center">
+        <AlertTriangle className="h-6 w-6 text-[var(--nq-bear)]" />
+        <div>
+          <p className="text-base font-semibold text-[var(--nq-text-primary)]">Dashboard data could not be loaded.</p>
+          <p className="mt-1 text-sm text-[var(--nq-text-secondary)]">The UI is stable now, but one or more backend contracts still need attention.</p>
+        </div>
+      </div>
+    );
   }
 
-  const pnlData = pnl as any;
-  const positionsData = positions as any[];
-
-  const kpis: any[] = pnlData ? [
-    { title: "Total Equity", value: `$${(pnlData.total_equity || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: `Cash: $${(pnlData.cash_balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: BarChart3 },
-    { title: "Unrealized P&L", value: `$${(pnlData.unrealized_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: pnlData.unrealized_pnl >= 0 ? "Profit" : "Loss", icon: TrendingUp },
-    { title: "Realized P&L", value: `$${(pnlData.realized_pnl || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, trend: `Daily Loss: $${(pnlData.daily_realized_loss || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, icon: ShieldCheck },
-    { title: "Model Status", value: "Online", trend: "Latest", icon: BrainCircuit },
-  ] : [];
-
-  const equitySeries = performance?.series ? performance.series.map((p: any) => ({
-    day: new Date(p.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-    equity: Number(p.portfolio_value),
-    benchmark: Number(p.benchmark_value),
-    drawdown: Number(p.portfolio_value) < 100000 ? 100000 - Number(p.portfolio_value) : 0,
-  })) : [];
-  const allocationSeries = positionsData ? positionsData.map((h: any) => ({ name: h.symbol, value: h.quantity * h.current_price, color: "#00E676" })) : [];
-  
-  const modelSignals = signal?.models
-    ? Object.entries(signal.models)
-        .filter(([k]) => k !== "technical" && k !== "regime")
-        .map(([key, m]: [string, any]) => {
-          let val = 50;
-          if (m.raw_signal !== undefined) val = Math.round(Number(m.raw_signal) * 100);
-          else if (m.regime_signal !== undefined) val = Math.round(Number(m.regime_signal) * 100);
-          else if (m.spillover_risk !== undefined) val = Math.round(Number(m.spillover_risk) * 100);
-          
-          return {
-            label: key.toUpperCase(),
-            value: Math.abs(val),
-            tone: val >= 0 ? "text-[var(--nq-bull)]" : "text-[var(--nq-bear)]",
-          };
-        })
-    : [];
-  const newsFeed: any[] = [];
-  const activityFeed = alertsHistory ? alertsHistory.map((a: any) => ({ id: a.id, title: a.alert_name, description: a.message, time: new Date(a.triggered_at).toLocaleTimeString(), icon: Zap })) : [];
-  const openPositions = positionsData ? positionsData : [];
-
-
-  
-  const quickActions = [
-    { title: "Review Models", description: "Audit ensemble weighting", icon: BrainCircuit },
-    { title: "Risk Report", description: "VaR limits & drawdowns", icon: ShieldCheck },
-    { title: "Alerts", description: "Triggered conditions", icon: BellRing },
-  ];
-
-  
-  const regimeData = signal?.regime?.probs || { BULL: 0, BEAR: 0, SIDEWAYS: 0 };
-  const bullProb = Math.round((regimeData.BULL ?? 0) * 100);
-  const bearProb = Math.round((regimeData.BEAR ?? 0) * 100);
-  const sideProb = Math.round((regimeData.SIDEWAYS ?? 0) * 100);
-
-  const regimeScores = [
-    { label: "BULL", value: bullProb, detail: "Bull regime probability", color: "#00E676" },
-    { label: "BEAR", value: bearProb, detail: "Bear regime probability", color: "#FF3B5C" },
-    { label: "SIDEWAYS", value: sideProb, detail: "Sideways regime probability", color: "#F7C948" },
-  ];
-
-  const modelWeights = signal?.model_weights
-    ? Object.entries(signal.model_weights).map(([k, v]) => ({
-        name: k.toUpperCase(),
-        weight: Math.round(Number(v) * 100),
+  const pnlData = pnl ?? {};
+  const openPositions = positions ?? [];
+  const alerts = alertsHistory ?? [];
+  const performanceSeries = Array.isArray(performance?.series)
+    ? performance.series.map((point) => ({
+        day: new Date(point.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        value: Number(point.portfolio_value ?? 0),
+        benchmark: Number(point.benchmark_value ?? 0),
       }))
     : [];
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35 }}
-      className="space-y-6 pb-8"
-    >
-      {/* QuantEdge Academic Disclaimer Banner */}
-      <div className="rounded-lg border border-[rgba(239,68,68,0.25)] bg-[rgba(239,68,68,0.08)] p-3 text-center text-xs text-[#FF5A60] font-mono">
-        <span className="font-bold uppercase mr-2">
-          Academic Research Output:
-        </span>
-        Research output only, not investment advice. Data may be delayed. All
-        signals are paper-trading suggestions.
-      </div>
+  const modelBreakdown = useMemo(() => {
+    if (!signal?.models) {
+      return [];
+    }
 
-      <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] xl:grid-cols-[1.35fr_0.85fr]">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45 }}
-        >
-          <Card
-           className="relative overflow-hidden px-6 py-6 sm:px-8"
-          >
-            <div className="absolute inset-0 bg-[radial-gradient(1200px_520px_at_0%_0%,rgba(0,212,245,0.16),transparent_42%),radial-gradient(900px_420px_at_100%_0%,rgba(139,92,246,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),transparent_38%)]" />
-            <div className="relative grid gap-8 lg:grid-cols-2 lg:items-start xl:grid-cols-[1.1fr_0.9fr]">
-              <div className="space-y-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge
-                    variant="bull"
-                    className="px-3 py-1.5 text-[10px] uppercase tracking-[0.16em]"
-                  >
-                    Live market state
-                  </Badge>
-                  <Badge
-                    variant="outline"
-                    className="px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]"
-                  >
-                    Terminal ready
-                  </Badge>
-                  <Badge
-                    variant="secondary"
-                    className="px-3 py-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]"
-                  >
-                    Desk synced 30s ago
-                  </Badge>
-                </div>
+    return Object.entries(signal.models)
+      .filter(([key]) => key !== "technical" && key !== "regime")
+      .map(([key, model]) => {
+        const value =
+          typeof model === "object" && model !== null
+            ? Number(
+                (model as { raw_signal?: number; regime_signal?: number; spillover_risk?: number }).raw_signal ??
+                  (model as { regime_signal?: number }).regime_signal ??
+                  (model as { spillover_risk?: number }).spillover_risk ??
+                  0,
+              )
+            : 0;
 
-                <div className="max-w-3xl space-y-4">
-                  <h1 className="text-4xl font-semibold tracking-tight text-[var(--nq-text-primary)] sm:text-5xl xl:text-6xl">
-                    A premium trading cockpit for signals, risk, and execution.
-                  </h1>
-                  <p className="max-w-2xl text-sm leading-7 text-[var(--nq-text-secondary)] sm:text-base">
-                    Clean hierarchy, strong contrast, and responsive composition
-                    built for local verification. The layout keeps the market
-                    state, portfolio health, and model output visible without
-                    crowding the screen.
-                  </p>
-                </div>
+        return {
+          label: key.toUpperCase(),
+          confidence: Math.min(100, Math.round(Math.abs(value) * 100)),
+        };
+      });
+  }, [signal]);
 
-                <div className="flex flex-wrap gap-3">
-                  <Button
-                    onClick={() => setCreateAlertOpen(true)}
-                  >
-                    Create alert
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    >
-                    Rebalance sleeve
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    >
-                    Preview signal stack
-                  </Button>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    { label: "Active Signals", value: signal?.models ? Object.keys(signal.models).length : 0, detail: "Across watchlists" },
-                    { label: "Win Rate", value: "--", detail: "Trailing 30D" },
-                    { label: "Sharpe", value: riskMetrics?.sharpe_ratio != null ? riskMetrics.sharpe_ratio.toFixed(2) : "--", detail: "Risk adj return" }
-                  ].map((item: any) => (
-                    <div
-                      key={item.label}
-                      className="rounded-2xl border border-white/10 bg-white/5 p-4"
-                    >
-                      <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                        {item.label}
-                      </p>
-                      <p className="mt-2 text-xl font-semibold tracking-tight text-[var(--nq-text-primary)]">
-                        {item.value}
-                      </p>
-                      <p className="mt-1 text-xs text-[var(--nq-text-secondary)]">
-                        {item.detail}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-4">
-                <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.09),rgba(255,255,255,0.03))] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.18)]">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                        Model snapshot
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">
-                        Next best action
-                      </p>
-                    </div>
-                    <Badge variant="buy">Bullish</Badge>
-                  </div>
-
-                  <div className="mt-5 grid gap-5 sm:grid-cols-[0.92fr_1.08fr]">
-                    <div className="flex items-center justify-center">
-                      <div className="relative flex h-36 w-36 items-center justify-center rounded-full border border-white/10 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.12),rgba(255,255,255,0.02)_58%,transparent_60%)]">
-                        <div
-                          className="absolute inset-0 rounded-full"
-                          style={{
-                            background: `conic-gradient(var(--nq-accent) 0% 92%, rgba(255,255,255,0.08) 92% 100%)`,
-                          }}
-                        />
-                        <div className="relative flex h-[7.5rem] w-[7.5rem] flex-col items-center justify-center rounded-full border border-white/10 bg-[var(--nq-bg-surface)] text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-                          <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]">
-                            Confidence
-                          </span>
-                          <span className="mt-1 text-3xl font-semibold text-[var(--nq-text-primary)]">
-                            92%
-                          </span>
-                          <span className="mt-1 text-[11px] text-[var(--nq-text-secondary)]">
-                            High conviction
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="space-y-4">
-                      {modelSignals.map((signal) => (
-                        <div key={signal.label} className="space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-[var(--nq-text-secondary)]">
-                              {signal.label}
-                            </span>
-                            <span className={signal.tone}>{signal.value}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-white/[0.08]">
-                            <div
-                              className="h-2 rounded-full bg-[linear-gradient(90deg,var(--nq-accent),#69f5ff)]"
-                              style={{ width: `${signal.value}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-
-                      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(0,230,118,0.14),rgba(255,255,255,0.05))] p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                              Regime
-                            </p>
-                            <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">
-                              Risk-on expansion
-                            </p>
-                          </div>
-                          <div className="rounded-full bg-[rgba(0,230,118,0.16)] px-3 py-1 text-xs font-semibold text-[var(--nq-bull)]">
-                            Stable
-                          </div>
-                        </div>
-                        <div className="mt-4 grid gap-2">
-                          <div className="grid grid-cols-[72px_1fr] items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                            <span>Bull</span>
-                            <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                              <div
-                                className="h-2 rounded-full bg-[#00E676]"
-                                style={{ width: `${regimeScores[0]?.value ?? 0}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-[72px_1fr] items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                            <span>Bear</span>
-                            <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                              <div
-                                className="h-2 rounded-full bg-[#FF3B5C]"
-                                style={{ width: `${regimeScores[1]?.value ?? 0}%` }}
-                              />
-                            </div>
-                          </div>
-                          <div className="grid grid-cols-[72px_1fr] items-center gap-3 text-[11px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                            <span>Side</span>
-                            <div className="h-2 overflow-hidden rounded-full bg-white/[0.08]">
-                              <div
-                                className="h-2 rounded-full bg-[#FFB800]"
-                                style={{ width: `${regimeScores[2]?.value ?? 0}%` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-5 grid grid-cols-3 gap-3">
-                    {[
-                      { label: "Expected Alpha", value: (riskMetrics as any)?.expected_alpha != null ? `${((riskMetrics as any).expected_alpha * 100).toFixed(1)}%` : "--" },
-                      { label: "Volatility", value: (riskMetrics as any)?.volatility != null ? `${((riskMetrics as any).volatility * 100).toFixed(1)}%` : "--" },
-                      { label: "Max Drawdown", value: (riskMetrics as any)?.max_drawdown != null ? `${-((riskMetrics as any).max_drawdown * 100).toFixed(1)}%` : "--" }
-                    ].map((item: any) => (
-                      <div
-                        key={item.label}
-                        className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center"
-                      >
-                        <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                          {item.label}
-                        </p>
-                        <p className="mt-1 text-base font-semibold text-[var(--nq-text-primary)]">
-                          {item.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "Information Ratio", value: (riskMetrics as any)?.information_ratio != null ? (riskMetrics as any).information_ratio.toFixed(1) : "--" },
-                    { label: "Sortino Ratio", value: (riskMetrics as any)?.sortino_ratio != null ? (riskMetrics as any).sortino_ratio.toFixed(1) : "--" },
-                    { label: "Beta", value: (riskMetrics as any)?.beta != null ? (riskMetrics as any).beta.toFixed(2) : "--" }
-                  ].map((item: any) => (
-                    <div
-                      key={item.label}
-                      className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center"
-                    >
-                      <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                        {item.label}
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-[var(--nq-text-primary)]">
-                        {item.value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </Card>
-        </motion.div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {kpis.map((item) => (
-          <StatCard
-            key={item.title}
-            title={item.title}
-            value={item.value}
-            trend={item.trend}
-            icon={item.icon}
-          />
-        ))}
-      </section>
-
-      <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr] xl:grid-cols-[1.25fr_0.75fr]">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.08 }}
-        >
-          <Card className="h-full">
-            <CardHeader>
-              <div>
-                <CardTitle>Performance and regime map</CardTitle>
-                <CardDescription>
-                  Equity curve, benchmark, and drawdown profile rendered in a
-                  clean, readable panel.
-                </CardDescription>
-              </div>
-              <Badge
-                variant="outline"
-                className="border-white/10 bg-white/[0.06] text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]"
-              >
-                7D live
-              </Badge>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                    Alpha
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">{riskMetrics?.alpha !== undefined && riskMetrics?.alpha !== null ? `${(riskMetrics.alpha * 100).toFixed(2)}%` : "--"}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                    Sharpe
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">{riskMetrics?.sharpe_ratio !== undefined && riskMetrics?.sharpe_ratio !== null ? riskMetrics.sharpe_ratio.toFixed(2) : "--"}</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                  <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                    Win rate
-                  </p>
-                  <p className="mt-1 text-xl font-semibold">--</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 lg:grid-cols-[1.35fr_0.9fr]">
-                <div className="min-h-[320px] rounded-[1.25rem] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={equitySeries}>
-                      <defs>
-                        <linearGradient
-                          id="equityFill"
-                          x1="0"
-                          y1="0"
-                          x2="0"
-                          y2="1"
-                        >
-                          <stop
-                            offset="0%"
-                            stopColor="#00D4F5"
-                            stopOpacity={0.45}
-                          />
-                          <stop
-                            offset="100%"
-                            stopColor="#00D4F5"
-                            stopOpacity={0.04}
-                          />
-                        </linearGradient>
-                      </defs>
-                      {equitySeries.length === 0 && (
-                         <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.45)" fontSize={14}>
-                           Real-time stream unavailable
-                         </text>
-                      )}
-                      <CartesianGrid
-                        stroke="rgba(255,255,255,0.08)"
-                        strokeDasharray="3 3"
-                      />
-                      <XAxis
-                        dataKey="day"
-                        stroke="rgba(255,255,255,0.45)"
-                        fontSize={11}
-                      />
-                      <YAxis stroke="rgba(255,255,255,0.45)" fontSize={11} />
-                      <Tooltip
-                        contentStyle={{
-                          background: "rgba(12, 16, 24, 0.96)",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: 16,
-                        }}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="equity"
-                        stroke="#00D4F5"
-                        strokeWidth={2.5}
-                        fill="url(#equityFill)"
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="benchmark"
-                        stroke="#8B5CF6"
-                        strokeWidth={2}
-                        dot={false}
-                        strokeDasharray="5 5"
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="min-h-[174px] rounded-[1.25rem] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                          Allocation
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">
-                          Sleeve mix
-                        </p>
-                      </div>
-                      <Badge variant="secondary">Balanced</Badge>
-                    </div>
-
-                    <div className="mt-3 h-[120px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Tooltip
-                            contentStyle={{
-                              background: "rgba(12, 16, 24, 0.96)",
-                              border: "1px solid rgba(255,255,255,0.08)",
-                              borderRadius: 16,
-                            }}
-                          />
-                          <Pie
-                            data={allocationSeries}
-                            dataKey="value"
-                            nameKey="name"
-                            innerRadius={40}
-                            outerRadius={58}
-                            paddingAngle={4}
-                          >
-                            {allocationSeries.map((entry) => (
-                              <Cell key={entry.name} fill={entry.color} />
-                            ))}
-                          </Pie>
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      {allocationSeries.map((entry) => (
-                        <div
-                          key={entry.name}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span className="inline-flex items-center gap-2 text-[var(--nq-text-secondary)]">
-                            <span
-                              className="h-2.5 w-2.5 rounded-full"
-                              style={{ backgroundColor: entry.color }}
-                            />
-                            {entry.name}
-                          </span>
-                          <span className="font-medium text-[var(--nq-text-primary)]">
-                            {entry.value}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="rounded-[1.25rem] border border-white/10 bg-[rgba(255,255,255,0.04)] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                          Risk curve
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">
-                          Drawdown pressure
-                        </p>
-                      </div>
-                      <LineChart className="h-4 w-4 text-[var(--nq-text-secondary)]" />
-                    </div>
-                    <div className="mt-4 h-[120px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={equitySeries}>
-                          {equitySeries.length === 0 && (
-                             <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" fill="rgba(255,255,255,0.45)" fontSize={14}>
-                               Real-time stream unavailable
-                             </text>
-                          )}
-                          <CartesianGrid
-                            stroke="rgba(255,255,255,0.08)"
-                            strokeDasharray="3 3"
-                          />
-                          <XAxis
-                            dataKey="day"
-                            stroke="rgba(255,255,255,0.45)"
-                            fontSize={11}
-                          />
-                          <YAxis
-                            stroke="rgba(255,255,255,0.45)"
-                            fontSize={11}
-                          />
-                          <Tooltip
-                            contentStyle={{
-                              background: "rgba(12, 16, 24, 0.96)",
-                              border: "1px solid rgba(255,255,255,0.08)",
-                              borderRadius: 16,
-                            }}
-                          />
-                          <Bar dataKey="drawdown" radius={[10, 10, 0, 0]}>
-                            {equitySeries.map((entry: any, index) => (
-                              <Cell
-                                key={entry.day}
-                                fill={
-                                  signalGradient[index % signalGradient.length]
-                                }
-                              />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 0.999, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.12 }}
-          className="space-y-6"
-        >
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Signal console</CardTitle>
-                <CardDescription>
-                  Model consensus, regime state, and live news in one compact
-                  column.
-                </CardDescription>
-              </div>
-              <Badge
-                variant="outline"
-                className="border-white/10 bg-white/[0.06] text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]"
-              >
-                Focus mode
-              </Badge>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <div className="rounded-[1.35rem] border border-white/10 bg-[linear-gradient(135deg,rgba(0,212,245,0.12),rgba(255,255,255,0.04))] p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                      Ensemble signal
-                    </p>
-                    <p className="mt-1 text-2xl font-semibold text-[var(--nq-text-primary)]">
-                      BUY
-                    </p>
-                  </div>
-                  <div className="rounded-full bg-[rgba(0,230,118,0.16)] px-3 py-1 text-xs font-semibold text-[var(--nq-bull)]">
-                    92% confidence
-                  </div>
-                </div>
-
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                      Kelly fraction
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">
-                      12.4%
-                    </p>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                      Regime
-                    </p>
-                    <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">
-                      Bull expansion
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                {regimeScores.map((item) => (
-                  <div key={item.label} className="space-y-2">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-[var(--nq-text-secondary)]">
-                        {item.label}
-                      </span>
-                      <span className="font-medium text-[var(--nq-text-primary)]">
-                        {scoreLabel(item.value)}
-                      </span>
-                    </div>
-                    <div className="h-2 rounded-full bg-white/[0.08]">
-                      <div
-                        className="h-2 rounded-full"
-                        style={{
-                          width: `${item.value}%`,
-                          backgroundColor: item.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                  Model weights
-                </p>
-                <div className="mt-4 space-y-3">
-                  {modelWeights.map((item, index) => (
-                    <div key={item.name} className="space-y-2">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-[var(--nq-text-secondary)]">
-                          {item.name}
-                        </span>
-                        <span className="font-medium text-[var(--nq-text-primary)]">
-                          {item.weight}%
-                        </span>
-                      </div>
-                      <div className="h-2 rounded-full bg-white/[0.08]">
-                        <div
-                          className="h-2 rounded-full bg-[linear-gradient(90deg,var(--nq-accent),#69f5ff)]"
-                          style={{
-                            width: `${item.weight}%`,
-                            opacity: 0.84 - index * 0.08,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Recent activity</CardTitle>
-                <CardDescription>
-                  Important live events from model, market, and execution
-                  layers.
-                </CardDescription>
-              </div>
-              <Badge
-                variant="outline"
-                className="border-white/10 bg-white/[0.06] text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]"
-              >
-                4 updates
-              </Badge>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {activityFeed.map((item, idx) => {
-                const Icon = item.icon;
-                return (
-                  <motion.div
-                    key={item.id}
-                    initial={{ opacity: 0, x: 12 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.12 + idx * 0.05, duration: 0.3 }}
-                    whileHover={{ y: -2 }}
-                    className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4 transition hover:bg-white/[0.08]"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(0,212,245,0.16),rgba(255,255,255,0.05))] p-2.5 text-[var(--nq-accent)]">
-                        <Icon className="h-4.5 w-4.5" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <p className="font-medium text-[var(--nq-text-primary)]">
-                            {item.title}
-                          </p>
-                          <span className="shrink-0 text-xs text-[var(--nq-text-muted)]">
-                            {item.time}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm leading-6 text-[var(--nq-text-secondary)]">
-                          {item.description}
-                        </p>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </CardContent>
-            <CardFooter>
-              <Button
-                variant="ghost"
-                >
-                View all activity
-              </Button>
-              <Badge variant="secondary">Synced 30s ago</Badge>
-            </CardFooter>
-          </Card>
-        </motion.div>
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.18 }}
-        >
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Open positions</CardTitle>
-                <CardDescription>
-                  Readable portfolio table with strong spacing, contrast, and
-                  room for expansion.
-                </CardDescription>
-              </div>
-              <Button
-                variant="secondary"
-                size="sm"
-                >
-                Export CSV
-              </Button>
-            </CardHeader>
-            <CardContent className="overflow-hidden">
-              <div className="overflow-x-auto rounded-[1.25rem] border border-white/10 bg-white/[0.04] p-2">
-                <Table>
-                  <thead>
-                    <TableRow>
-                      <TableHead>Symbol</TableHead>
-                      <TableHead>Side</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>P&amp;L</TableHead>
-                      <TableHead>Exposure</TableHead>
-                    </TableRow>
-                  </thead>
-                  <tbody>
-                    {openPositions.map((row) => (
-                      <TableRow key={row.symbol}>
-                        <TableCell className="font-semibold">
-                          {row.symbol}
-                        </TableCell>
-                        <TableCell>{row.model_signal || "BUY"}</TableCell>
-                        <TableCell>{row.quantity}</TableCell>
-                        <TableCell
-                          className={
-                            (row.pnl || 0) < 0
-                              ? "text-[var(--nq-bear)]"
-                              : "text-[var(--nq-bull)]"
-                          }
-                        >
-                          {row.pnl}
-                        </TableCell>
-                        <TableCell>{row.market_value}</TableCell>
-                      </TableRow>
-                    ))}
-                  </tbody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.22 }}
-          className="space-y-6"
-        >
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Quick actions</CardTitle>
-                <CardDescription>
-                  High-value actions that feel like a real operations cockpit.
-                </CardDescription>
-              </div>
-              <Badge
-                variant="outline"
-                className="border-white/10 bg-white/[0.06] text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]"
-              >
-                Focus mode
-              </Badge>
-            </CardHeader>
-            <CardContent className="grid gap-3">
-              {quickActions.map((action) => {
-                const Icon = action.icon;
-
-                
-  const quickActions = [
-    { title: "Review Models", description: "Audit ensemble weighting", icon: BrainCircuit },
-    { title: "Risk Report", description: "VaR limits & drawdowns", icon: ShieldCheck },
-    { title: "Alerts", description: "Triggered conditions", icon: BellRing },
+  const kpis = [
+    {
+      label: "Total Equity",
+      value: formatCurrency(pnlData.total_equity),
+      detail: `Cash ${formatCurrency(pnlData.cash_balance)}`,
+      icon: Wallet,
+    },
+    {
+      label: "Unrealized P&L",
+      value: formatCurrency(pnlData.unrealized_pnl),
+      detail: Number(pnlData.unrealized_pnl ?? 0) >= 0 ? "Open profit" : "Open loss",
+      icon: TrendingUp,
+    },
+    {
+      label: "Realized P&L",
+      value: formatCurrency(pnlData.realized_pnl),
+      detail: `Daily loss ${formatCurrency(pnlData.daily_realized_loss)}`,
+      icon: ShieldCheck,
+    },
+    {
+      label: "Signal Bias",
+      value: signal?.ensemble?.signal ?? "NEUTRAL",
+      detail: `${Math.round((signal?.ensemble?.confidence ?? 0) * 100)}% confidence`,
+      icon: BrainCircuit,
+    },
   ];
 
-  
-  const bullRegime = { state: "BULL", confidence: 65, color: "#00E676", value: 65 };
-  const bearRegime = { state: "BEAR", confidence: 20, color: "#FF3B5C", value: 20 };
-  const sideRegime = { state: "SIDEWAYS", confidence: 15, color: "#F7C948", value: 15 };
+  const regimeProbabilities = signal?.regime?.probs ?? {};
+  const regimeCards = [
+    { label: "Bull", value: Number(regimeProbabilities.BULL ?? 0), color: "#00E676" },
+    { label: "Bear", value: Number(regimeProbabilities.BEAR ?? 0), color: "#FF5B5C" },
+    { label: "Sideways", value: Number(regimeProbabilities.SIDEWAYS ?? 0), color: "#F7C948" },
+  ];
 
   return (
-                  <button
-                    key={action.title}
-                    type="button"
-                    className="group flex items-start gap-3 rounded-[1.25rem] border border-white/10 bg-white/5 p-4 text-left transition hover:-translate-y-0.5 hover:bg-white/[0.08]"
-                  >
-                    <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(255,255,255,0.12),rgba(255,255,255,0.04))] p-2.5 text-[var(--nq-text-primary)] transition group-hover:text-[var(--nq-accent)]">
-                      <Icon className="h-4.5 w-4.5" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-[var(--nq-text-primary)]">
-                        {action.title}
-                      </p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--nq-text-secondary)]">
-                        {action.description}
-                      </p>
-                    </div>
-                  </button>
-                );
-              })}
-            </CardContent>
-          </Card>
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6 pb-8"
+    >
+      <div className="rounded-[1.4rem] border border-white/10 bg-[linear-gradient(135deg,rgba(0,212,245,0.12),rgba(255,255,255,0.03))] px-6 py-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-2">
+            <Badge variant="outline" className="border-white/10 bg-white/[0.06] text-[10px] uppercase tracking-[0.16em] text-[var(--nq-text-secondary)]">
+              Desk Overview
+            </Badge>
+            <h1 className="text-3xl font-semibold tracking-tight text-[var(--nq-text-primary)] sm:text-4xl">
+              Portfolio, signals, and risk on one stable dashboard.
+            </h1>
+            <p className="max-w-3xl text-sm leading-7 text-[var(--nq-text-secondary)]">
+              This view now favors reliability over noisy placeholders: fewer runtime traps, clearer fallbacks, and a direct read on account state after login.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setCreateAlertOpen(true)}>Create alert</Button>
+            <Button variant="secondary">Refresh desk</Button>
+          </div>
+        </div>
+      </div>
 
-          <Card>
-            <CardHeader>
-              <div>
-                <CardTitle>Market news</CardTitle>
-                <CardDescription>
-                  Scrollable sentiment feed aligned with the prompt’s live news
-                  rail.
-                </CardDescription>
-              </div>
-              <Badge variant="bull">FinBERT scored</Badge>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {newsFeed.map((item) => (
-                <div
-                  key={item.headline}
-                  className="flex items-start gap-3 rounded-[1.1rem] border border-white/10 bg-white/5 p-4"
-                >
-                  <span
-                    className={`mt-1 h-2.5 w-2.5 rounded-full ${item.tone === "bull" ? "bg-[var(--nq-bull)]" : "bg-[var(--nq-warning)]"}`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">
-                        {item.source}
-                      </p>
-                      <Badge
-                        variant={item.tone === "bull" ? "bull" : "secondary"}
-                        className="px-2 py-0.5 text-[10px] uppercase tracking-[0.12em]"
-                      >
-                        {item.tone === "bull" ? "Positive" : "Neutral"}
-                      </Badge>
-                    </div>
-                    <p className="mt-1 text-sm leading-6 text-[var(--nq-text-primary)]">
-                      {item.headline}
-                    </p>
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {kpis.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Card key={item.label}>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardDescription>{item.label}</CardDescription>
+                    <CardTitle className="mt-2 text-2xl">{item.value}</CardTitle>
+                  </div>
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-[var(--nq-accent)]">
+                    <Icon className="h-5 w-5" />
                   </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-[var(--nq-text-secondary)]">{item.detail}</p>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </section>
 
-          <Card>
-            <CardHeader>
+      <section className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
               <div>
-                <CardTitle>Workspace checklist</CardTitle>
-                <CardDescription>
-                  Quick confirmation that the UI is ready for local validation.
-                </CardDescription>
+                <CardTitle>Equity Curve</CardTitle>
+                <CardDescription>Live portfolio value vs benchmark, using the current backend contract.</CardDescription>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {[
-                "Premium gradients and layered depth",
-                "Readable type hierarchy and clear contrast",
-                "Responsive stacking for smaller viewports",
-                "Charts, tables, actions, and alerts are cohesive",
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="flex items-center gap-3 rounded-[1.15rem] border border-white/10 bg-white/5 px-4 py-3"
-                >
-                  <ShieldCheck className="h-4.5 w-4.5 text-[var(--nq-bull)]" />
-                  <span className="text-sm text-[var(--nq-text-secondary)]">
-                    {item}
-                  </span>
+              <Badge variant="secondary">{performanceSeries.length} points</Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={performanceSeries}>
+                  <defs>
+                    <linearGradient id="portfolio-fill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#00D4F5" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#00D4F5" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                  <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={11} />
+                  <YAxis stroke="rgba(255,255,255,0.45)" fontSize={11} />
+                  <Tooltip
+                    contentStyle={{
+                      background: "rgba(12, 16, 24, 0.96)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: 16,
+                    }}
+                  />
+                  <Area type="monotone" dataKey="benchmark" stroke="#8B9BB4" strokeWidth={2} fill="transparent" />
+                  <Area type="monotone" dataKey="value" stroke="#00D4F5" strokeWidth={2.5} fill="url(#portfolio-fill)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>Market Regime</CardTitle>
+                <CardDescription>Model probabilities from the current signal snapshot.</CardDescription>
+              </div>
+              <Badge variant="bull">{signal?.ensemble?.signal ?? "NEUTRAL"}</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {regimeCards.map((item) => (
+              <div key={item.label} className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[var(--nq-text-secondary)]">{item.label}</span>
+                  <span className="font-medium text-[var(--nq-text-primary)]">{formatPercent(item.value * 100)}</span>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
-        </motion.div>
+                <div className="h-2 rounded-full bg-white/[0.08]">
+                  <div className="h-2 rounded-full" style={{ width: `${Math.max(0, Math.min(100, item.value * 100))}%`, backgroundColor: item.color }} />
+                </div>
+              </div>
+            ))}
+
+            <div className="rounded-[1.2rem] border border-white/10 bg-white/[0.04] p-4">
+              <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Model Confidence</p>
+              <div className="mt-4 space-y-3">
+                {modelBreakdown.length === 0 ? (
+                  <p className="text-sm text-[var(--nq-text-secondary)]">No model breakdown available.</p>
+                ) : (
+                  modelBreakdown.map((item) => (
+                    <div key={item.label} className="space-y-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-[var(--nq-text-secondary)]">{item.label}</span>
+                        <span className="font-medium text-[var(--nq-text-primary)]">{item.confidence}%</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-white/[0.08]">
+                        <div className="h-2 rounded-full bg-[linear-gradient(90deg,var(--nq-accent),#69f5ff)]" style={{ width: `${item.confidence}%` }} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Sharpe</p>
+                <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">{formatRatio(riskMetrics?.sharpe_ratio ?? null)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Sortino</p>
+                <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">{formatRatio(riskMetrics?.sortino_ratio ?? null)}</p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-3 text-center">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Beta</p>
+                <p className="mt-1 text-lg font-semibold text-[var(--nq-text-primary)]">{formatRatio(riskMetrics?.beta ?? null)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>Open Positions</CardTitle>
+                <CardDescription>Lean table view that stays stable even when some backend fields are missing.</CardDescription>
+              </div>
+              <Badge variant="outline" className="border-white/10 bg-white/[0.06] text-[var(--nq-text-secondary)]">
+                {openPositions.length} active
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <Table>
+              <thead>
+                <TableRow>
+                  <TableHead>Symbol</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead>P&amp;L</TableHead>
+                  <TableHead>Signal</TableHead>
+                </TableRow>
+              </thead>
+              <tbody>
+                {openPositions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-sm text-[var(--nq-text-secondary)]">
+                      No open positions yet.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  openPositions.map((row) => (
+                    <TableRow key={row.symbol}>
+                      <TableCell className="font-semibold">{row.symbol}</TableCell>
+                      <TableCell>{row.quantity ?? 0}</TableCell>
+                      <TableCell>{formatCurrency(row.current_price)}</TableCell>
+                      <TableCell className={(row.pnl ?? 0) >= 0 ? "text-[var(--nq-bull)]" : "text-[var(--nq-bear)]"}>
+                        {formatCurrency(row.pnl)}
+                      </TableCell>
+                      <TableCell>{row.model_signal ?? signal?.ensemble?.signal ?? "NEUTRAL"}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <CardTitle>Recent Alerts</CardTitle>
+                <CardDescription>Latest system activity from the alert stream.</CardDescription>
+              </div>
+              <BellRing className="h-5 w-5 text-[var(--nq-accent)]" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {alerts.length === 0 ? (
+              <div className="rounded-[1.1rem] border border-white/10 bg-white/5 p-4 text-sm text-[var(--nq-text-secondary)]">
+                No alerts have fired yet.
+              </div>
+            ) : (
+              alerts.map((item) => (
+                <div key={item.id} className="rounded-[1.1rem] border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-[var(--nq-text-primary)]">{item.alert_name}</p>
+                      <p className="mt-1 text-sm text-[var(--nq-text-secondary)]">{item.message}</p>
+                    </div>
+                    <Badge variant="secondary">{item.symbol}</Badge>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </section>
 
       <Modal
         open={createAlertOpen}
         onOpenChange={setCreateAlertOpen}
         title="Create alert"
-        description="Set a premium signal rule for the current market setup."
+        description="Create a quick placeholder rule while the alert manager remains available for deeper setup."
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input defaultValue="AAPL" />
-            <Input defaultValue="Breakout > 1.8%" />
+            <Input defaultValue="NIFTY50" />
+            <Input defaultValue="Breakout > 1.0%" />
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input defaultValue="Trigger once" />
-            <Input defaultValue="Notify desk + email" />
-          </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
-            <Button
-              variant="ghost"
-              type="button"
-              onClick={() => setCreateAlertOpen(false)}
-            >
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setCreateAlertOpen(false)}>
               Cancel
             </Button>
-            <Button type="button">Create rule</Button>
+            <Button type="button" onClick={() => setCreateAlertOpen(false)}>
+              Save draft
+            </Button>
           </div>
         </div>
       </Modal>

@@ -36,7 +36,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         )
         response.headers.setdefault("X-XSS-Protection", "0")
         response.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
-        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        if request.url.path.startswith(settings.API_V1_PREFIX):
+            response.headers.setdefault("Cross-Origin-Resource-Policy", "cross-origin")
+        else:
+            response.headers.setdefault("Cross-Origin-Resource-Policy", "same-origin")
         response.headers.setdefault("Content-Security-Policy", settings.SECURITY_CSP_POLICY)
         if request.url.scheme == "https":
             response.headers.setdefault(

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
-from app.core.dependencies import get_redis
+from app.core.dependencies import get_redis_optional
 from app.providers.market_data_provider import MarketDataProvider
 
 router = APIRouter(prefix="/market")
@@ -48,11 +48,12 @@ async def set_cached_quote(redis, symbol: str, payload: dict[str, Any]):
 
 
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
-async def get_quote(symbol: str, redis=Depends(get_redis)) -> QuoteResponse:
+async def get_quote(symbol: str, redis=Depends(get_redis_optional)) -> QuoteResponse:
     symbol = symbol.upper()
-    cached = await get_cached_quote(redis, symbol)
-    if cached:
-        return QuoteResponse(symbol=symbol, **cached)
+    if redis:
+        cached = await get_cached_quote(redis, symbol)
+        if cached:
+            return QuoteResponse(symbol=symbol, **cached)
     try:
         candles = await MarketDataProvider.get_candle(symbol, interval="1m", period="1d")
         if not candles:
@@ -63,7 +64,8 @@ async def get_quote(symbol: str, redis=Depends(get_redis)) -> QuoteResponse:
             "timestamp": datetime.utcfromtimestamp(latest.timestamp),
             "source": "market_data_provider",
         }
-        await set_cached_quote(redis, symbol, result)
+        if redis:
+            await set_cached_quote(redis, symbol, result)
         return QuoteResponse(symbol=symbol, **result)
     except Exception as exc:
         raise HTTPException(
@@ -96,7 +98,7 @@ manager = WSManager()
 
 
 @router.websocket("/ws/quotes")
-async def ws_quotes(ws: WebSocket, redis=Depends(get_redis)):
+async def ws_quotes(ws: WebSocket, redis=Depends(get_redis_optional)):
     await manager.connect(ws)
     try:
         while True:
