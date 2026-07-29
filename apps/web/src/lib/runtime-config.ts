@@ -13,8 +13,27 @@ function normalizeHttpBaseUrl(value: string | undefined, fallback: string): stri
   return stripApiV1Suffix(candidate);
 }
 
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
+function shouldUseRelativeApiProxy(baseUrl: string): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const target = new URL(baseUrl);
+    const current = new URL(window.location.origin);
+    return isLocalHostname(target.hostname) && isLocalHostname(current.hostname);
+  } catch {
+    return false;
+  }
+}
+
 export function getApiBaseUrl(): string {
-  return normalizeHttpBaseUrl(process.env.NEXT_PUBLIC_API_URL, "http://localhost:8000");
+  const baseUrl = normalizeHttpBaseUrl(process.env.NEXT_PUBLIC_API_URL, "http://localhost:8000");
+  return shouldUseRelativeApiProxy(baseUrl) ? "" : baseUrl;
 }
 
 export function getApiV1Url(): string {
@@ -36,4 +55,3 @@ export function getWsBaseUrl(): string {
   }
   return apiBase;
 }
-

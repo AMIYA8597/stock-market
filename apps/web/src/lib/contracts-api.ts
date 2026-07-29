@@ -404,10 +404,23 @@ function normalizeRegimeProbabilities(value: unknown): Record<string, number> {
   };
 }
 
+const ACCESS_TOKEN_KEY = "nq_access_token";
+
+function getAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ACCESS_TOKEN_KEY);
+}
+
 async function getJson<T>(path: string): Promise<T> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   const response = await fetch(`${API_URL}${path}`, {
     method: "GET",
     cache: "no-store",
+    headers,
   });
   if (!response.ok) {
     throw new Error(`Request failed (${response.status}) for ${path}`);
@@ -416,12 +429,15 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 async function postJson<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
+  const token = getAccessToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
   const response = await fetch(`${API_URL}${path}`, {
     method: "POST",
     cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify(body),
   });
   if (!response.ok) {

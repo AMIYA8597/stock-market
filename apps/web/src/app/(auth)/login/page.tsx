@@ -52,7 +52,7 @@ function LoginFormContent() {
 
     try {
       const tokens = await authApi.login(data.email, data.password);
-      setTokens(tokens);
+      await setTokens(tokens);
       setStatus("success");
       pushToast({ tone: "success", title: "Signed in", message: "Redirecting..." });
       router.push(callbackUrl);

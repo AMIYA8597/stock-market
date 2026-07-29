@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.models.email_job import EmailJob
 
 # Optional email background task – use a local logger if Celery/RQ is not installed
@@ -27,6 +28,7 @@ TEMPLATES: dict[str, str] = {
     "welcome": "Hello {full_name}, welcome to NeuroQuant.",
     "password_reset": "Use token {reset_token} within {expires_minutes} minutes to reset your password.",
 }
+settings = get_settings()
 
 
 async def enqueue_email(
@@ -43,6 +45,9 @@ async def enqueue_email(
     )
     db.add(job)
     await db.flush()
+
+    if not settings.ALERT_EMAIL_ENABLED:
+        return str(job.id)
 
     import logging
     try:
