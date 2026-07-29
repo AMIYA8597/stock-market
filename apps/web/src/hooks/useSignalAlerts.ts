@@ -30,6 +30,7 @@ export function useSignalAlerts() {
   const [unread, setUnread] = useState<number>(0);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef<boolean>(true);
 
   // Mark all alerts as read
   const markAllRead = useCallback(() => {
@@ -101,6 +102,7 @@ export function useSignalAlerts() {
     };
 
     ws.onclose = () => {
+      if (!mountedRef.current) return;
       reconnectTimerRef.current = setTimeout(() => {
         connect();
       }, 5000);
@@ -115,6 +117,7 @@ export function useSignalAlerts() {
     connect();
 
     return () => {
+      mountedRef.current = false;
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
       }

@@ -72,6 +72,9 @@ class InMemoryCache:
 
     def __init__(self):
         self.store: dict[str, any] = {}
+        self.hash_store: dict[str, dict[str, int]] = {}
+        self.sorted_sets: dict[str, dict[str, float]] = {}
+        self.set_store: dict[str, set[str]] = {}
         self.active_pubsubs: set[InMemoryPubSub] = set()
 
     async def get(self, key: str):
@@ -86,7 +89,89 @@ class InMemoryCache:
         return True
 
     async def delete(self, key: str) -> int:
-        return int(self.store.pop(key, None) is not None)
+        deleted = int(self.store.pop(key, None) is not None)
+        deleted += int(self.hash_store.pop(key, None) is not None)
+        deleted += int(self.sorted_sets.pop(key, None) is not None)
+        deleted += int(self.set_store.pop(key, None) is not None)
+        return deleted
+
+    async def exists(self, key: str) -> int:
+        return int(
+            key in self.store
+            or key in self.hash_store
+            or key in self.sorted_sets
+            or key in self.set_store
+        )
+
+    async def info(self) -> dict[str, Any]:
+        return {
+            "redis_version": "in-memory",
+            "uptime_in_seconds": 0,
+            "used_memory": 0,
+            "connected_clients": 0,
+        }
+
+    async def smembers(self, key: str) -> set[str]:
+        return set(self.set_store.get(key, set()))
+
+    async def sadd(self, key: str, *values: str) -> int:
+        bucket = self.set_store.setdefault(key, set())
+        before = len(bucket)
+        bucket.update(values)
+        return len(bucket) - before
+
+    async def srem(self, key: str, *values: str) -> int:
+        bucket = self.set_store.setdefault(key, set())
+        removed = 0
+        for value in values:
+            if value in bucket:
+                bucket.remove(value)
+                removed += 1
+        return removed
+
+    async def hincrby(self, key: str, field: str, amount: int = 1) -> int:
+        bucket = self.hash_store.setdefault(key, {})
+        bucket[field] = bucket.get(field, 0) + amount
+        return bucket[field]
+
+    async def zremrangebyscore(self, key: str, min_score: str | float, max_score: float) -> int:
+        bucket = self.sorted_sets.setdefault(key, {})
+        lower = float("-inf") if min_score == "-inf" else float(min_score)
+        to_delete = [member for member, score in bucket.items() if lower <= score <= max_score]
+        for member in to_delete:
+            del bucket[member]
+        return len(to_delete)
+
+    async def zadd(self, key: str, mapping: dict[str, float]) -> int:
+        bucket = self.sorted_sets.setdefault(key, {})
+        added = 0
+        for member, score in mapping.items():
+            if member not in bucket:
+                added += 1
+            bucket[member] = score
+        return added
+
+    async def zcard(self, key: str) -> int:
+        return len(self.sorted_sets.get(key, {}))
+
+    async def expire(self, key: str, ttl: int) -> bool:
+        _ = (key, ttl)
+        return True
+
+    async def zrange(
+        self, key: str, start: int, end: int, withscores: bool = False
+    ) -> list[Any]:
+        items = sorted(self.sorted_sets.get(key, {}).items(), key=lambda item: item[1])
+        if end == -1:
+            selected = items[start:]
+        else:
+            selected = items[start : end + 1]
+        if withscores:
+            return selected
+        return [member for member, _ in selected]
+
+    def pipeline(self) -> "InMemoryPipeline":
+        return InMemoryPipeline(self)
 
     async def publish(self, channel: str, message: str) -> int:
         count = 0
@@ -104,7 +189,40 @@ class InMemoryCache:
 
     async def close(self) -> None:
         self.store.clear()
+        self.hash_store.clear()
+        self.sorted_sets.clear()
+        self.set_store.clear()
         self.active_pubsubs.clear()
+
+
+class InMemoryPipeline:
+    def __init__(self, cache: InMemoryCache):
+        self.cache = cache
+        self.operations: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+
+    def zremrangebyscore(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+        self.operations.append(("zremrangebyscore", args, kwargs))
+        return self
+
+    def zadd(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+        self.operations.append(("zadd", args, kwargs))
+        return self
+
+    def zcard(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+        self.operations.append(("zcard", args, kwargs))
+        return self
+
+    def expire(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+        self.operations.append(("expire", args, kwargs))
+        return self
+
+    async def execute(self) -> list[Any]:
+        results: list[Any] = []
+        for method_name, args, kwargs in self.operations:
+            method = getattr(self.cache, method_name)
+            results.append(await method(*args, **kwargs))
+        self.operations.clear()
+        return results
 
 
 _redis_pool: ConnectionPool | None = None

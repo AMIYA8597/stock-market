@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authApi, setAuthTokens, clearAuthTokens } from "@/lib/api-client";
+import { ApiError } from "@/lib/api-client";
 import type { UserProfile } from "@neuroquant/types";
 
 interface AuthState {
@@ -11,7 +12,7 @@ interface AuthState {
   
   // Actions
   setUser: (user: UserProfile | null) => void;
-  setTokens: (tokens: { access_token: string; refresh_token: string }) => void;
+  setTokens: (tokens: { access_token: string; refresh_token: string }) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
 }
@@ -26,11 +27,10 @@ export const useAuthStore = create<AuthState>()(
 
       setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
 
-      setTokens: (tokens) => {
+      setTokens: async (tokens) => {
         setAuthTokens(tokens);
-        set({ isAuthenticated: true });
-        // After setting tokens, fetch the user profile
-        get().fetchProfile();
+        set({ isAuthenticated: true, isLoading: true, error: null });
+        await get().fetchProfile();
       },
 
       logout: async () => {
@@ -46,7 +46,6 @@ export const useAuthStore = create<AuthState>()(
       },
 
       fetchProfile: async () => {
-        // If we know there are no tokens in localStorage, skip fetching
         if (typeof window !== "undefined" && !localStorage.getItem("nq_access_token")) {
           set({ isAuthenticated: false, isLoading: false, user: null });
           return;
@@ -58,9 +57,12 @@ export const useAuthStore = create<AuthState>()(
           set({ user: profile, isAuthenticated: true, isLoading: false });
         } catch (err: unknown) {
           console.error("fetchProfile failed:", err);
-          // If the profile fetch fails, it might be due to an expired refresh token
-          clearAuthTokens();
-          set({ user: null, isAuthenticated: false, isLoading: false, error: "Session expired. Please log in again." });
+          if (err instanceof ApiError && err.status === 401) {
+            clearAuthTokens();
+            set({ user: null, isAuthenticated: false, isLoading: false, error: "Session expired. Please log in again." });
+          } else {
+            set({ isLoading: false, error: "Unable to load profile. Please try again later." });
+          }
         }
       },
     }),
