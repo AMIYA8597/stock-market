@@ -51,6 +51,15 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     return JSONResponse(status_code=exc.status_code, content=payload, headers=exc.headers)
 
 
+async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    payload = ErrorResponse.create(
+        code=ErrorCode.INTERNAL_SERVER_ERROR,
+        message="An internal server error occurred.",
+    ).model_dump(mode="json")
+    return JSONResponse(status_code=500, content=payload)
+
+
 def register_exception_handlers(app: FastAPI):
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(Exception, generic_exception_handler)

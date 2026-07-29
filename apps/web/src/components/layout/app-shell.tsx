@@ -45,7 +45,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   const pathname = usePathname();
-  const isTerminal = pathname === "/";
+  const isTerminal = pathname === "/terminal" || pathname.startsWith("/terminal/");
 
   return (
     <div className="flex min-h-screen bg-[var(--nq-bg-base)]">

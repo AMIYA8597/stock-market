@@ -105,6 +105,32 @@ async def get_redis() -> Redis:
         ) from e
 
 
+async def get_redis_optional() -> Redis | None:
+    """Get Redis async client if available, otherwise return None.
+
+    Use this dependency for endpoints where Redis caching is optional.
+    If Redis is unavailable, the endpoint will still work without caching.
+
+    Returns:
+        Redis or None: Async Redis client if available, None otherwise.
+
+    Example:
+        @app.get("/data")
+        async def get_data(redis: Annotated[Redis | None, Depends(get_redis_optional)]):
+            if redis:
+                cached = await redis.get("key")
+                if cached:
+                    return json.loads(cached)
+            return await fetch_data_from_source()
+    """
+    try:
+        redis_client = await _redis_pool_singleton()
+        await redis_client.ping()
+        return redis_client
+    except Exception:
+        return None
+
+
 # ─── Current User ────────────────────────────────────────────────────────
 async def get_current_user(
     token: Annotated[str, Depends(oauth2_scheme)],

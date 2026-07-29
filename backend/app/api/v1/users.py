@@ -27,11 +27,10 @@ class UserProfileResponse(BaseModel):
 
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_profile(
-    current_user: dict = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
 ) -> UserProfileResponse:
-    user_id = str(current_user.id)
     if is_test_mode():
-        user = TEST_USERS_BY_ID.get(str(user_id))
+        user = TEST_USERS_BY_ID.get(str(current_user.id))
         if user is None:
             raise HTTPException(
                 status_code=404,
@@ -49,7 +48,7 @@ async def get_profile(
             is_active=bool(user.get("is_active", True)),
         )
 
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
@@ -72,12 +71,10 @@ async def get_profile(
 @router.patch("/profile", response_model=UserProfileResponse)
 async def update_profile(
     payload: UpdateProfileRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> UserProfileResponse:
-    user_id = str(current_user.id)
-
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == current_user.id))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(

@@ -22,6 +22,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectDelayRef = useRef<number>(1000);
+  const mountedRef = useRef<boolean>(true);
   const [signals, setSignals] = useState<Map<string, LiveSignalTick>>(new Map());
   const [status, setStatus] = useState<"connected" | "reconnecting" | "disconnected">("disconnected");
 
@@ -105,6 +106,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
     };
 
     ws.onclose = () => {
+      if (!mountedRef.current) return;
       setStatus("reconnecting");
       reconnectTimerRef.current = setTimeout(() => {
         reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
@@ -121,6 +123,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
     connect();
 
     return () => {
+      mountedRef.current = false;
       clearReconnect();
       setStatus("disconnected");
       if (wsRef.current) {
