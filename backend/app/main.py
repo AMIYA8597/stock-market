@@ -88,7 +88,14 @@ def create_app() -> FastAPI:
             environment=settings.ENVIRONMENT,
         )
 
-    # ─── CORS Middleware ───────────────────────────────────────
+    if settings.RATE_LIMIT_ENABLED:
+        _app.add_middleware(RateLimitMiddleware)
+
+    _app.add_middleware(SecurityHeadersMiddleware)
+
+    if settings.ALLOWED_HOSTS:
+        _app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+
     _app.add_middleware(RequestIDMiddleware)
 
     _app.add_middleware(
@@ -98,14 +105,6 @@ def create_app() -> FastAPI:
         allow_methods=settings.CORS_ALLOW_METHODS,
         allow_headers=settings.CORS_ALLOW_HEADERS,
     )
-
-    if settings.ALLOWED_HOSTS:
-        _app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
-
-    _app.add_middleware(SecurityHeadersMiddleware)
-
-    if settings.RATE_LIMIT_ENABLED:
-        _app.add_middleware(RateLimitMiddleware)
 
     register_exception_handlers(_app)
 

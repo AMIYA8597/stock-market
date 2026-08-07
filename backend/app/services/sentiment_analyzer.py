@@ -140,11 +140,14 @@ class FinBERTSentimentAnalyzer:
         if not url.startswith("https://news.google.com"):
             return url
 
-        # Simplified resolution for safety/speed: mostly we just need the headline text.
-        # Following real redirects in bulk can trigger rate limits or take too long.
-        # If a direct redirect is needed, we'd use httpx.
-        # For now, return the raw Google News URL to avoid hanging the Celery worker.
-        return url
+        try:
+            import httpx
+            with httpx.Client(follow_redirects=True, timeout=3.0) as client:
+                response = client.get(url)
+                return str(response.url)
+        except Exception as e:
+            logger.warning(f"Failed to resolve URL {url}: {e}")
+            return url
 
     def scrape_market_news(self) -> list[dict[str, Any]]:
         """Scrape market-wide headlines from public RSS feeds."""

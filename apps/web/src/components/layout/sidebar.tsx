@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Brain,
   Activity,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
@@ -29,6 +30,7 @@ const navItems = [
   { label: "Backtest Lab", href: "/backtest-lab", icon: FlaskConical },
   { label: "Portfolio", href: "/portfolio", icon: Briefcase },
   { label: "Orders", href: "/portfolio/orders", icon: Receipt },
+  { label: "Wallet & Funds", href: "/portfolio/funds", icon: Wallet },
   { label: "Screener", href: "/screener", icon: Search },
   { label: "Alerts", href: "/alerts", icon: Bell },
   { label: "Model Monitor", href: "/model-monitor", icon: Monitor },

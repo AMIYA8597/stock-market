@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any
 
 import pandas as pd
+import numpy as np
 from celery import shared_task
 from sqlalchemy import select
 

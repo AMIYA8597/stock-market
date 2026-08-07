@@ -1,7 +1,7 @@
 """clean_init
 
 Revision ID: 7bce530f6a39
-Revises: 
+Revises:
 Create Date: 2026-07-23 20:15:42.501777
 
 """
