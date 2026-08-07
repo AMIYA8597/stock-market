@@ -70,6 +70,11 @@ class FeatureVector(Base):
         default="v1",
         doc="Feature schema version for tracking",
     )
+    target_direction_1d: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        doc="Next-day return direction (1, 0, -1). Isolated to prevent leakage.",
+    )
 
     def __repr__(self) -> str:
         return f"<FeatureVector(symbol_id={self.symbol_id}, time='{self.time}', version='{self.feature_version}')>"

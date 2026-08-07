@@ -16,7 +16,7 @@ Final Ensemble = Classical Composite ⊕ ML Probability ⊕ Regime Gate ⊕ Sent
 - Range: `[-1.0, 1.0]`
 
 #### 2. ML Probability (60% Weight)
-- Source: `XGBoostDirectionalClassifier`
+- Source: `Active ML Classifier` (e.g., `LSTMAttentionClassifier` or `XGBoostDirectionalClassifier`)
 - Description: Real-time probability of the asset moving upward (or downward) in the designated forecast window, transformed into a continuous scalar.
 - Range: `[-1.0, 1.0]`
 

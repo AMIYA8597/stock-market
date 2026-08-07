@@ -65,18 +65,17 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data as string) as {
-          type?: string;
-          symbol?: string;
-          price?: number;
-          change_pct?: number;
-          timestamp?: string;
-          source?: string;
-        };
-        if (payload.type !== "tick" || !payload.symbol || typeof payload.price !== "number") {
+        const message = JSON.parse(event.data as string);
+        if (message.type !== "tick") {
           return;
         }
-        const symbol = payload.symbol.toUpperCase();
+        
+        const payload = message.payload || {};
+        
+        if (!message.symbol || typeof payload.price !== "number") {
+          return;
+        }
+        const symbol = message.symbol.toUpperCase();
         const price = payload.price;
         setTicks((prev) => {
           const next = new Map(prev);
@@ -84,8 +83,8 @@ export function usePriceFeed(symbols: string[]): UsePriceFeedState {
             symbol,
             price,
             change_pct: payload.change_pct ?? 0,
-            timestamp: payload.timestamp ?? new Date().toISOString(),
-            source: payload.source,
+            timestamp: message.timestamp ?? new Date().toISOString(),
+            source: message.source,
           });
           return next;
         });

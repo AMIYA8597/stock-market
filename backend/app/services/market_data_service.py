@@ -185,6 +185,24 @@ class MarketDataService:
         return s
 
     @staticmethod
+    async def get_batch_quotes(symbols: list[str]) -> dict[str, dict]:
+        """Fetch quotes for multiple symbols concurrently."""
+        import asyncio
+        tasks = []
+        for sym in symbols:
+            tasks.append(MarketDataService.get_quote(sym))
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        batch_res = {}
+        for sym, res in zip(symbols, results, strict=False):
+            if isinstance(res, Exception):
+                batch_res[sym] = None
+            else:
+                batch_res[sym] = res
+        return batch_res
+
+    @staticmethod
     async def get_quote(symbol: str) -> dict:
         """Fetch live quote using yfinance Ticker.
 

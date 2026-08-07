@@ -34,12 +34,15 @@ async def list_portfolios(
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     holdings = await get_holdings(current_user=current_user, db=db)
 
     return [
         {
             "id": 1,
-            "user_id": str(current_user.id) if current_user else "test-user-id",
+            "user_id": str(current_user.id),
             "name": "Main Portfolio",
             "description": "Primary trading portfolio",
             "initial_capital": 100000.0,
@@ -51,30 +54,6 @@ async def list_portfolios(
         }
     ]
 
-
-@router.get(
-    "/{portfolio_id}",
-    summary="Get portfolio by ID",
-)
-async def get_portfolio(
-    portfolio_id: int,
-    current_user: dict | None = Depends(get_current_user_or_none),
-    db: AsyncSession = Depends(get_db),
-):
-    holdings = await get_holdings(current_user=current_user, db=db)
-
-    return {
-        "id": portfolio_id,
-        "user_id": str(current_user.id) if current_user else "test-user-id",
-        "name": "Main Portfolio",
-        "description": "Primary trading portfolio",
-        "initial_capital": 100000.0,
-        "total_value": float(holdings.portfolio_value),
-        "cash_balance": float(holdings.cash_balance),
-        "holdings": [h.model_dump() for h in holdings.holdings],
-        "created_at": holdings.timestamp.isoformat(),
-        "updated_at": holdings.timestamp.isoformat(),
-    }
 
 
 @router.get(
@@ -98,7 +77,9 @@ async def get_holdings(
         from app.models.transactions import Transaction
         from app.services.market_data_service import MarketDataService
 
-        user_id_str = str(current_user.id) if current_user else "test-user-id"
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id_str = str(current_user.id)
 
         def _empty_holdings(cb: Decimal = Decimal("0.00")) -> HoldingsResponse:
             return HoldingsResponse(
@@ -211,189 +192,6 @@ async def get_holdings(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to fetch holdings: {str(exc)}"[:500],
-            ).dict(),
-        ) from exc
-
-
-@router.post(
-    "/transaction",
-    response_model=TransactionResponse,
-    summary="Record BUY/SELL transaction",
-)
-async def post_transaction(
-    request: TransactionRequest,
-    current_user: dict | None = Depends(get_current_user_or_none),
-    db: AsyncSession = Depends(get_db),
-) -> TransactionResponse:
-    """Record a transaction and update cash/holdings inside SQLAlchemy."""
-    try:
-        import uuid
-
-        from sqlalchemy import and_, func, select
-
-        from app.models.instrument import Instrument
-        from app.models.payment import PaymentTransaction
-        from app.models.portfolio import PortfolioHolding
-        from app.models.transactions import Transaction
-
-        user_id_str = str(current_user.id) if current_user else "test-user-id"
-        tx_type = request.type.upper()
-
-        if tx_type not in {"BUY", "SELL"}:
-            raise HTTPException(
-                status_code=400,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.VALIDATION_ERROR,
-                    message="type must be BUY or SELL.",
-                ).dict(),
-            )
-
-        try:
-            uid = uuid.UUID(user_id_str)
-        except ValueError:
-            raise HTTPException(
-                status_code=401,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.UNAUTHORIZED,
-                    message="Invalid user ID format.",
-                ).dict(),
-            )
-
-        symbol_ticker = request.symbol.upper().strip()
-        qty = Decimal(str(request.quantity))
-        price = Decimal(str(request.price))
-
-        gross = qty * price
-        brokerage = request.brokerage or Decimal("0")
-        stt = request.stt or Decimal("0")
-
-        if tx_type == "BUY":
-            net_amount = gross + brokerage + stt
-        else:
-            net_amount = gross - brokerage - stt
-
-        # Resolve symbol_id
-        symbol_res = await db.execute(select(Instrument).where(Instrument.symbol == symbol_ticker))
-        symbol_row = symbol_res.scalar_one_or_none()
-        if symbol_row is None:
-            raise HTTPException(
-                status_code=400,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.VALIDATION_ERROR,
-                    message=f"Instrument {symbol_ticker} not found in database.",
-                ).dict(),
-            )
-        symbol_id = symbol_row.id
-
-        # Lock holding record
-        holding_res = await db.execute(
-            select(PortfolioHolding)
-            .where(and_(PortfolioHolding.user_id == uid, PortfolioHolding.symbol_id == symbol_id))
-            .with_for_update()
-        )
-        holding = holding_res.scalar_one_or_none()
-
-        if tx_type == "BUY":
-            deposits_res = await db.execute(
-                select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
-                    and_(
-                        PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded"
-                    )
-                )
-            )
-            total_deposits = Decimal(str(deposits_res.scalar_one()))
-            buys_res = await db.execute(
-                select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
-                    and_(Transaction.user_id == uid, Transaction.type == "BUY")
-                )
-            )
-            total_buys = Decimal(str(buys_res.scalar_one()))
-            sells_res = await db.execute(
-                select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
-                    and_(Transaction.user_id == uid, Transaction.type == "SELL")
-                )
-            )
-            total_sells = Decimal(str(sells_res.scalar_one()))
-
-            cash_balance = total_deposits - total_buys + total_sells
-
-            if cash_balance < net_amount:
-                raise HTTPException(
-                    status_code=400,
-                    detail=ErrorResponse.create(
-                        code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Insufficient cash balance. Required: {net_amount}, Available: {cash_balance}",
-                    ).dict(),
-                )
-
-            if holding is None:
-                holding = PortfolioHolding(
-                    user_id=uid,
-                    symbol_id=symbol_id,
-                    quantity=qty,
-                    avg_buy_price=price,
-                    realized_pnl=Decimal("0.00"),
-                )
-                db.add(holding)
-            else:
-                old_qty = holding.quantity
-                old_avg = holding.avg_buy_price
-                new_qty = old_qty + qty
-                new_avg = ((old_qty * old_avg) + (qty * price)) / new_qty
-                holding.quantity = new_qty
-                holding.avg_buy_price = new_avg
-
-        else:  # SELL
-            if holding is None or holding.quantity < qty:
-                raise HTTPException(
-                    status_code=400,
-                    detail=ErrorResponse.create(
-                        code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Insufficient holdings of {symbol_ticker} to sell.",
-                    ).dict(),
-                )
-
-            realized_profit = (price - holding.avg_buy_price) * qty
-            holding.quantity -= qty
-            holding.realized_pnl += realized_profit
-
-            if holding.quantity <= 0:
-                await db.delete(holding)
-
-        # Record transaction
-        tx = Transaction(
-            user_id=uid,
-            symbol_id=symbol_id,
-            type=tx_type,
-            quantity=qty,
-            price=price,
-            brokerage=brokerage,
-            stt=stt,
-            net_amount=net_amount,
-        )
-        db.add(tx)
-
-        await db.commit()
-
-        return TransactionResponse(
-            transaction_id=str(tx.id),
-            symbol=symbol_ticker,
-            type=tx_type,
-            quantity=qty,
-            price=price,
-            net_amount=net_amount.quantize(Decimal("0.01")),
-            timestamp=datetime.now(UTC),
-            portfolio_updated=True,
-        )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        await db.rollback()
-        raise HTTPException(
-            status_code=500,
-            detail=ErrorResponse.create(
-                code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message=f"Transaction failed: {str(exc)}"[:500],
             ).dict(),
         ) from exc
 
@@ -552,6 +350,191 @@ async def get_performance(
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
                 message=f"Failed to fetch performance data: {str(exc)}",
+            ).dict(),
+        ) from exc
+
+
+@router.post(
+    "/transaction",
+    response_model=TransactionResponse,
+    summary="Record BUY/SELL transaction",
+)
+async def post_transaction(
+    request: TransactionRequest,
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+) -> TransactionResponse:
+    """Record a transaction and update cash/holdings inside SQLAlchemy."""
+    try:
+        import uuid
+
+        from sqlalchemy import and_, func, select
+
+        from app.models.instrument import Instrument
+        from app.models.payment import PaymentTransaction
+        from app.models.portfolio import PortfolioHolding
+        from app.models.transactions import Transaction
+
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        user_id_str = str(current_user.id)
+        tx_type = request.type.upper()
+
+        if tx_type not in {"BUY", "SELL"}:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message="type must be BUY or SELL.",
+                ).dict(),
+            )
+
+        try:
+            uid = uuid.UUID(user_id_str)
+        except ValueError:
+            raise HTTPException(
+                status_code=401,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.UNAUTHORIZED,
+                    message="Invalid user ID format.",
+                ).dict(),
+            )
+
+        symbol_ticker = request.symbol.upper().strip()
+        qty = Decimal(str(request.quantity))
+        price = Decimal(str(request.price))
+
+        gross = qty * price
+        brokerage = request.brokerage or Decimal("0")
+        stt = request.stt or Decimal("0")
+
+        if tx_type == "BUY":
+            net_amount = gross + brokerage + stt
+        else:
+            net_amount = gross - brokerage - stt
+
+        # Resolve symbol_id
+        symbol_res = await db.execute(select(Instrument).where(Instrument.symbol == symbol_ticker))
+        symbol_row = symbol_res.scalar_one_or_none()
+        if symbol_row is None:
+            raise HTTPException(
+                status_code=400,
+                detail=ErrorResponse.create(
+                    code=ErrorCode.VALIDATION_ERROR,
+                    message=f"Instrument {symbol_ticker} not found in database.",
+                ).dict(),
+            )
+        symbol_id = symbol_row.id
+
+        # Lock holding record
+        holding_res = await db.execute(
+            select(PortfolioHolding)
+            .where(and_(PortfolioHolding.user_id == uid, PortfolioHolding.symbol_id == symbol_id))
+            .with_for_update()
+        )
+        holding = holding_res.scalar_one_or_none()
+
+        if tx_type == "BUY":
+            deposits_res = await db.execute(
+                select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
+                    and_(
+                        PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded"
+                    )
+                )
+            )
+            total_deposits = Decimal(str(deposits_res.scalar_one()))
+            buys_res = await db.execute(
+                select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
+                    and_(Transaction.user_id == uid, Transaction.type == "BUY")
+                )
+            )
+            total_buys = Decimal(str(buys_res.scalar_one()))
+            sells_res = await db.execute(
+                select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
+                    and_(Transaction.user_id == uid, Transaction.type == "SELL")
+                )
+            )
+            total_sells = Decimal(str(sells_res.scalar_one()))
+
+            cash_balance = total_deposits - total_buys + total_sells
+
+            if cash_balance < net_amount:
+                raise HTTPException(
+                    status_code=400,
+                    detail=ErrorResponse.create(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=f"Insufficient cash balance. Required: {net_amount}, Available: {cash_balance}",
+                    ).dict(),
+                )
+
+            if holding is None:
+                holding = PortfolioHolding(
+                    user_id=uid,
+                    symbol_id=symbol_id,
+                    quantity=qty,
+                    avg_buy_price=price,
+                    realized_pnl=Decimal("0.00"),
+                )
+                db.add(holding)
+            else:
+                old_qty = holding.quantity
+                old_avg = holding.avg_buy_price
+                new_qty = old_qty + qty
+                new_avg = ((old_qty * old_avg) + (qty * price)) / new_qty
+                holding.quantity = new_qty
+                holding.avg_buy_price = new_avg
+
+        else:  # SELL
+            if holding is None or holding.quantity < qty:
+                raise HTTPException(
+                    status_code=400,
+                    detail=ErrorResponse.create(
+                        code=ErrorCode.VALIDATION_ERROR,
+                        message=f"Insufficient holdings of {symbol_ticker} to sell.",
+                    ).dict(),
+                )
+
+            realized_profit = (price - holding.avg_buy_price) * qty
+            holding.quantity -= qty
+            holding.realized_pnl += realized_profit
+
+            if holding.quantity <= 0:
+                await db.delete(holding)
+
+        # Record transaction
+        tx = Transaction(
+            user_id=uid,
+            symbol_id=symbol_id,
+            type=tx_type,
+            quantity=qty,
+            price=price,
+            brokerage=brokerage,
+            stt=stt,
+            net_amount=net_amount,
+        )
+        db.add(tx)
+
+        await db.commit()
+
+        return TransactionResponse(
+            transaction_id=str(tx.id),
+            symbol=symbol_ticker,
+            type=tx_type,
+            quantity=qty,
+            price=price,
+            net_amount=net_amount.quantize(Decimal("0.01")),
+            timestamp=datetime.now(UTC),
+            portfolio_updated=True,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message=f"Transaction failed: {str(exc)}"[:500],
             ).dict(),
         ) from exc
 
@@ -911,3 +894,31 @@ async def post_optimize(
                 message=f"Optimization failed: {str(exc)}",
             ).dict(),
         ) from exc
+
+@router.get(
+    "/{portfolio_id}",
+    summary="Get portfolio by ID",
+)
+async def get_portfolio(
+    portfolio_id: int,
+    current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
+):
+    holdings = await get_holdings(current_user=current_user, db=db)
+
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    return {
+        "id": portfolio_id,
+        "user_id": str(current_user.id),
+        "name": "Main Portfolio",
+        "description": "Primary trading portfolio",
+        "initial_capital": 100000.0,
+        "total_value": float(holdings.portfolio_value),
+        "cash_balance": float(holdings.cash_balance),
+        "holdings": [h.model_dump() for h in holdings.holdings],
+        "created_at": holdings.timestamp.isoformat(),
+        "updated_at": holdings.timestamp.isoformat(),
+    }
+

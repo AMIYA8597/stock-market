@@ -43,9 +43,12 @@ async def post_screener_run(
             return round(float(val), places)
 
         # 1. Fetch active symbols matching request exchange list
+        # We apply a limit here to prevent N+1 exploding with 25k records
+        # In a real system, filtering is pushed down to SQL/Elasticsearch
         stmt = select(Instrument).where(Instrument.is_active)
         if request.exchange:
             stmt = stmt.where(Instrument.exchange.in_([ex.upper() for ex in request.exchange]))
+        stmt = stmt.limit(1000) # Fetch up to 1000 candidates for screening
         res = await db.execute(stmt)
         symbols = res.scalars().all()
 
@@ -63,11 +66,10 @@ async def post_screener_run(
             records.reverse()
 
             if len(records) < 2:
-                # Insufficient data – skip this symbol, never generate invented prices
                 continue
-            else:
-                closes = [float(r.close) for r in records]
-                volumes = [float(r.volume) for r in records]
+
+            closes = [float(r.close) for r in records]
+            volumes = [float(r.volume) for r in records]
 
             latest_price = closes[-1]
             prev_price = closes[-2] if len(closes) > 1 else latest_price
@@ -120,27 +122,27 @@ async def post_screener_run(
                 sig_conf = 0.5
                 regime_state = "sideways"
 
-            # Fetch PE ratio and market cap from MarketDataService (no random fallback)
-            pe_ratio = None
-            mcap = None
-            try:
-                sym_ns = s.ticker if "." in s.ticker else f"{s.ticker}.NS"
-                info = await MarketDataService.get_ticker_info(sym_ns)
-                pe_raw = info.get("trailingPE") or info.get("forwardPE")
-                mc_raw = info.get("marketCap")
-                if pe_raw is not None:
-                    pe_ratio = float(pe_raw)
-                if mc_raw is not None:
-                    mcap = float(mc_raw) / 1e7  # convert to crores for display
-            except Exception:
-                pass  # Leave pe_ratio and mcap as None — never fabricate values
+            # Fetch PE ratio and market cap from MarketDataService ONLY if we have OHLCV (legacy path)
+                pe_ratio = None
+                mcap = None
+                try:
+                    sym_ns = s.yfinance_ticker if s.yfinance_ticker else f"{s.symbol}.NS"
+                    info = await MarketDataService.get_ticker_info(sym_ns)
+                    pe_raw = info.get("trailingPE") or info.get("forwardPE")
+                    mc_raw = info.get("marketCap")
+                    if pe_raw is not None:
+                        pe_ratio = float(pe_raw)
+                    if mc_raw is not None:
+                        mcap = float(mc_raw) / 1e7  # convert to crores for display
+                except Exception:
+                    pass
 
             results.append(
                 {
-                    "ticker": s.ticker,
-                    "name": s.name,
+                    "ticker": s.symbol,
+                    "name": s.display_name,
                     "exchange": s.exchange,
-                    "asset_type": s.asset_type,
+                    "asset_type": "EQUITY",
                     "price": latest_price,
                     "change_pct": change_pct,
                     "pe_ratio": pe_ratio,

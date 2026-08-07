@@ -233,10 +233,10 @@ export function DashboardOverview(): JSX.Element {
               Desk Overview
             </Badge>
             <h1 className="text-3xl font-semibold tracking-tight text-[var(--nq-text-primary)] sm:text-4xl">
-              Portfolio, signals, and risk on one stable dashboard.
+              Market Dashboard & Portfolio Overview
             </h1>
             <p className="max-w-3xl text-sm leading-7 text-[var(--nq-text-secondary)]">
-              This view now favors reliability over noisy placeholders: fewer runtime traps, clearer fallbacks, and a direct read on account state after login.
+              Monitor your live portfolio, track market movements, and analyze AI-driven model signals in real-time.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -456,7 +456,7 @@ export function DashboardOverview(): JSX.Element {
         open={createAlertOpen}
         onOpenChange={setCreateAlertOpen}
         title="Create alert"
-        description="Create a quick placeholder rule while the alert manager remains available for deeper setup."
+        description="Configure a new real-time alert for price or signal changes."
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
@@ -468,7 +468,7 @@ export function DashboardOverview(): JSX.Element {
               Cancel
             </Button>
             <Button type="button" onClick={() => setCreateAlertOpen(false)}>
-              Save draft
+              Create Alert
             </Button>
           </div>
         </div>

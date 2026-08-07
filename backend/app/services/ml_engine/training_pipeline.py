@@ -65,6 +65,10 @@ class TrainingPipeline:
 
         logger.info(f"Shape before dropna: {df.shape}")
 
+        # Keep a copy of regime_label before it gets potentially dropped
+        regimes = df["regime_label"].copy()
+        regimes = regimes.fillna("unknown")
+
         # Drop columns with > 10% NaNs
         cols_to_drop = df.columns[df.isna().mean() > 0.1]
         logger.info(f"Dropping high-NaN columns: {list(cols_to_drop)}")
@@ -78,7 +82,7 @@ class TrainingPipeline:
             return {}
 
 
-        features = [c for c in df.columns if c not in ["time", "symbol", "close", "target_return", "target_direction"]]
+        features = [c for c in df.columns if c not in ["time", "symbol", "close", "target_return", "target_direction", "target_direction_1d"]]
         X = df[features]
         y = df["target_direction"]
 
@@ -87,12 +91,10 @@ class TrainingPipeline:
             "ARIMA": ARIMADirectionalClassifier(order=(1,0,1)),
             "XGBoost": XGBoostDirectionalClassifier(n_estimators=50, max_depth=3), # lower estimators for speed
             "LightGBM": LightGBMDirectionalClassifier(n_estimators=50, max_depth=3),
-            # LSTMAttentionClassifier takes num_features as first param, wait, let's see its signature
         }
 
-        # Need to know LSTM signature. We will lazy load it to avoid crashing if torch is missing.
         try:
-            lstm_model = LSTMAttentionClassifier(seq_len=10, epochs=10)
+            lstm_model = LSTMAttentionClassifier(seq_len=10, epochs=20, lr=0.005)
             models_to_evaluate["LSTM"] = lstm_model
         except Exception as e:
             logger.warning(f"Could not load LSTM: {e}")
@@ -117,8 +119,56 @@ class TrainingPipeline:
 
                 try:
                     if name in ["XGBoost", "LightGBM"]:
-                        # For speed, skip Optuna in this phase if we want to run all models fast
-                        pass
+                        import optuna
+                        from sklearn.model_selection import TimeSeriesSplit
+
+                        def objective(trial):
+                            max_depth = trial.suggest_int("max_depth", 2, 6)
+                            learning_rate = trial.suggest_float("learning_rate", 1e-3, 0.1, log=True)
+
+                            if name == "XGBoost":
+                                temp_model = XGBoostDirectionalClassifier(n_estimators=50, max_depth=max_depth, learning_rate=learning_rate)
+                            else:
+                                temp_model = LightGBMDirectionalClassifier(n_estimators=50, max_depth=max_depth, learning_rate=learning_rate)
+
+                            tscv = TimeSeriesSplit(n_splits=3)
+                            scores = []
+                            for train_i, val_i in tscv.split(X_train):
+                                X_t, y_t = X_train.iloc[train_i], y_train.iloc[train_i]
+                                X_v, y_v = X_train.iloc[val_i], y_train.iloc[val_i]
+
+                                temp_model.fit(X_t, y_t)
+
+                                if hasattr(temp_model, "predict_proba_batch"):
+                                    p = temp_model.predict_proba_batch(X_v)
+                                else:
+                                    p = temp_model.predict_proba(X_v)
+
+                                if isinstance(p, float) or isinstance(p, int):
+                                    p = pd.Series(p, index=X_v.index)
+                                elif isinstance(p, pd.Series):
+                                    pass
+                                else:
+                                    if len(p.shape) > 1 and p.shape[1] == 2: p = p[:, 1]
+                                    elif len(p.shape) > 1: p = p.squeeze()
+                                    p = pd.Series(p, index=X_v.index)
+
+                                pr = (p > 0.5).astype(int)
+                                scores.append(accuracy_score(y_v, pr))
+
+                            return np.mean(scores)
+
+                        optuna.logging.set_verbosity(optuna.logging.WARNING)
+                        study = optuna.create_study(direction="maximize")
+                        study.optimize(objective, n_trials=3)
+
+                        best_params = study.best_params
+                        if name == "XGBoost":
+                            model = XGBoostDirectionalClassifier(n_estimators=50, **best_params)
+                        else:
+                            model = LightGBMDirectionalClassifier(n_estimators=50, **best_params)
+
+                        models_to_evaluate[name] = model
 
                     # fit
                     model.fit(X_train, y_train)
@@ -176,6 +226,16 @@ class TrainingPipeline:
             std_adj_ret = cost_adj_rets.std()
             cost_adj_sharpe = (np.sqrt(252) * mean_adj_ret / std_adj_ret) if std_adj_ret > 0 else 0
 
+            # Regime Breakdown
+            regime_breakdown = {}
+            eval_regimes = regimes.loc[eval_idx]
+            for reg in eval_regimes.unique():
+                reg_mask = (eval_regimes == reg)
+                if reg_mask.sum() > 0:
+                    y_reg = y_eval[reg_mask]
+                    p_reg = all_preds[reg_mask]
+                    regime_breakdown[str(reg)] = float(accuracy_score(y_reg, p_reg))
+
             logger.info(f"{name} Results - Acc: {acc:.4f}, AUC: {auc:.4f}, Sharpe: {sharpe:.4f}, AdjSharpe: {cost_adj_sharpe:.4f}")
 
             results[name] = {
@@ -185,6 +245,7 @@ class TrainingPipeline:
                 "auc": float(auc),
                 "sharpe": float(sharpe),
                 "cost_adjusted_sharpe": float(cost_adj_sharpe),
+                "regime_breakdown": regime_breakdown,
             }
 
             # Keep track of winner among tradeable ML models (not Naive/ARIMA which are just baselines)
@@ -192,6 +253,23 @@ class TrainingPipeline:
                 if cost_adj_sharpe > best_cost_adj_sharpe:
                     best_cost_adj_sharpe = cost_adj_sharpe
                     best_model_name = name
+
+        # Decision Gate (Honesty Law)
+        # If LSTM didn't beat XGBoost/LightGBM, we flag it.
+        # But wait, best_model_name handles whichever is highest.
+        # If LSTM was highest, it's best_model_name.
+        # But let's check specifically if it beats XGBoost.
+        if "LSTM" in results and "XGBoost" in results:
+            if results["LSTM"]["cost_adjusted_sharpe"] <= results["XGBoost"]["cost_adjusted_sharpe"]:
+                logger.info("Decision Gate: LSTM did NOT beat XGBoost in walk-forward Sharpe. LSTM is NOT recommended for production.")
+            else:
+                logger.info("Decision Gate: LSTM strictly beat XGBoost! It has earned its place.")
+
+        logger.info("\n### Final Walk-Forward Evaluation Metrics\n")
+        logger.info("| Model | Accuracy | AUC | Sharpe | Cost-Adj Sharpe |")
+        logger.info("|-------|----------|-----|--------|-----------------|")
+        for m, res in results.items():
+            logger.info(f"| {m} | {res['accuracy']:.4f} | {res['auc']:.4f} | {res['sharpe']:.4f} | {res['cost_adjusted_sharpe']:.4f} |")
 
         logger.info(f"Best Model Selected: {best_model_name}")
 
@@ -221,12 +299,20 @@ class TrainingPipeline:
             for m_name, metrics in results.items():
                 is_active = (m_name == best_model_name)
 
+                model_inst = models_to_evaluate[m_name]
+                hyper_params = {}
+                if hasattr(model_inst, "get_feature_importances"):
+                    try:
+                        hyper_params["feature_importances"] = model_inst.get_feature_importances()
+                    except Exception as e:
+                        logger.warning(f"Could not get feature importances for {m_name}: {e}")
+
                 artifact = ModelArtifact(
                     symbol_id=self.instrument.id,
                     model_type=m_name,
                     version_tag=f"{m_name.lower()}_{self.symbol}_{timestamp_str}",
-                    artifact_path=artifact_path if is_active else "dummy_path",
-                    hyperparameters={},
+                    artifact_path=artifact_path if is_active else "",
+                    hyperparameters=hyper_params,
                     is_active=is_active
                 )
                 session.add(artifact)
@@ -240,7 +326,7 @@ class TrainingPipeline:
                     auc=metrics["auc"],
                     sharpe=metrics["sharpe"],
                     cost_adjusted_sharpe=metrics["cost_adjusted_sharpe"],
-                    regime_breakdown={}
+                    regime_breakdown=metrics["regime_breakdown"]
                 )
                 session.add(metric)
 

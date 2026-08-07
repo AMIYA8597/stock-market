@@ -45,8 +45,7 @@ def test_anti_leakage_feature_pipeline():
     row_t_truncated = truncated_features.iloc[t_idx]
 
     # Assert that all features at time t are IDENTICAL
-    # Ignore time/ohlcv columns
-    skip_cols = ["time", "open", "high", "low", "close", "volume"]
+    skip_cols = ["time", "open", "high", "low", "close", "volume", "target_direction_1d"]
     feature_cols = [c for c in full_features.columns if c not in skip_cols]
 
     mismatches = []

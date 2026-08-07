@@ -56,6 +56,8 @@ def test_feature_pipeline_no_lookahead_leakage():
     numeric_cols = features_past.select_dtypes(include=[np.number]).columns
 
     for col in numeric_cols:
+        if col == "target_direction_1d":
+            continue
         val_past = row_past[col]
         val_future = row_future[col]
 

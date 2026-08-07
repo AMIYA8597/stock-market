@@ -1179,8 +1179,25 @@
           "watchlist"
         ],
         "summary": "Get user watchlist",
-        "description": "Retrieve the current user's watchlist.",
+        "description": "Retrieve the current user's watchlist for a specific tab.",
         "operationId": "get_watchlist_api_v1_watchlist_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "list_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "List Id"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1191,30 +1208,40 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
           "watchlist"
         ],
         "summary": "Add symbol to watchlist",
-        "description": "Add a symbol to the current user's watchlist.",
+        "description": "Add a symbol to the current user's watchlist for a specific tab.",
         "operationId": "add_to_watchlist_api_v1_watchlist_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/WatchlistAddRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -1237,12 +1264,7 @@
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/watchlist/{symbol}": {
@@ -1251,7 +1273,7 @@
           "watchlist"
         ],
         "summary": "Remove symbol from watchlist",
-        "description": "Remove a symbol from the current user's watchlist.",
+        "description": "Remove a symbol from the current user's watchlist tab.",
         "operationId": "remove_from_watchlist_api_v1_watchlist__symbol__delete",
         "security": [
           {
@@ -1266,6 +1288,16 @@
             "schema": {
               "type": "string",
               "title": "Symbol"
+            }
+          },
+          {
+            "name": "list_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "List Id"
             }
           }
         ],
@@ -2309,51 +2341,6 @@
         ]
       }
     },
-    "/api/v1/portfolio/{portfolio_id}": {
-      "get": {
-        "tags": [
-          "portfolio"
-        ],
-        "summary": "Get portfolio by ID",
-        "operationId": "get_portfolio_api_v1_portfolio__portfolio_id__get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "portfolio_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Portfolio Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/portfolio/holdings": {
       "get": {
         "tags": [
@@ -2369,6 +2356,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HoldingsResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/portfolio/performance": {
+      "get": {
+        "tags": [
+          "portfolio"
+        ],
+        "summary": "Time-series portfolio P&L vs benchmark",
+        "description": "Return time-series portfolio performance based on live data and current holdings.",
+        "operationId": "get_performance_api_v1_portfolio_performance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PerformanceResponse"
                 }
               }
             }
@@ -2416,33 +2430,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/portfolio/performance": {
-      "get": {
-        "tags": [
-          "portfolio"
-        ],
-        "summary": "Time-series portfolio P&L vs benchmark",
-        "description": "Return time-series portfolio performance based on live data and current holdings.",
-        "operationId": "get_performance_api_v1_portfolio_performance_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PerformanceResponse"
                 }
               }
             }
@@ -2527,6 +2514,51 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/portfolio/{portfolio_id}": {
+      "get": {
+        "tags": [
+          "portfolio"
+        ],
+        "summary": "Get portfolio by ID",
+        "operationId": "get_portfolio_api_v1_portfolio__portfolio_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "portfolio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/paper-trade/order": {
@@ -9609,6 +9641,11 @@
           "symbol": {
             "type": "string",
             "title": "Symbol"
+          },
+          "list_id": {
+            "type": "integer",
+            "title": "List Id",
+            "default": 0
           }
         },
         "type": "object",
@@ -9625,6 +9662,11 @@
             },
             "type": "array",
             "title": "Symbols"
+          },
+          "list_id": {
+            "type": "integer",
+            "title": "List Id",
+            "default": 0
           }
         },
         "type": "object",
