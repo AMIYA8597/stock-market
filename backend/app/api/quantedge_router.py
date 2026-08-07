@@ -222,13 +222,15 @@ async def get_regime(symbol: str):
         df.columns = [c.lower() for c in df.columns]
         regime_info = detect_regime(df)
 
-        # Consolidate standard return transition matrix structure
-        transition_matrix = [
-            [0.912, 0.042, 0.036, 0.010],
-            [0.180, 0.724, 0.072, 0.024],
-            [0.210, 0.110, 0.640, 0.040],
-            [0.080, 0.390, 0.180, 0.350],
-        ]
+        transition_matrix = regime_info.get("transition_matrix")
+        if not transition_matrix:
+            # Fallback uniform matrix if HMM failed
+            transition_matrix = [
+                [0.25, 0.25, 0.25, 0.25],
+                [0.25, 0.25, 0.25, 0.25],
+                [0.25, 0.25, 0.25, 0.25],
+                [0.25, 0.25, 0.25, 0.25],
+            ]
 
         return {
             "symbol": symbol.upper(),
@@ -303,7 +305,9 @@ async def post_paper_trade(
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
     """Submit simulated paper order."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         res = await BrokerAdapter.place_order(
             db=db,
@@ -327,7 +331,9 @@ async def get_paper_portfolio(
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
     """Get active positions, cash holdings, and mark-to-market P&L summary."""
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         pnl = await PaperTradingService.get_pnl(db, user_id)
         positions = await PaperTradingService.get_positions(db, user_id)

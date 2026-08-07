@@ -83,15 +83,33 @@ export function PricingPage(): JSX.Element {
   );
 }
 
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    if (document.getElementById("razorpay-script")) {
+      return resolve(true);
+    }
+    const script = document.createElement("script");
+    script.id = "razorpay-script";
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
+
 export function CheckoutPage(): JSX.Element {
   const pushToast = useToastStore((state) => state.pushToast);
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState<string>("499");
+  const [step, setStep] = useState<"input" | "processing" | "success">("input");
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setLoading(true);
+      setStep("processing");
+
+      // 1. Create intent
       const intent = await paymentsApi.createIntent({
         amount: parseFloat(amount),
         method: "RAZORPAY",
@@ -99,30 +117,25 @@ export function CheckoutPage(): JSX.Element {
         description: "Wallet Top-up",
       });
 
-      // Normally here you'd open Razorpay Checkout:
-      // const options = {
-      //   key: intent.razorpay_key_id,
-      //   amount: parseFloat(intent.amount) * 100,
-      //   currency: intent.currency,
-      //   order_id: intent.provider_ref,
-      //   handler: async (response) => {
-      //      await paymentsApi.confirmIntent(intent.intent_id, response.razorpay_payment_id, ...);
-      //   }
-      // }
-      // const rzp = new (window as any).Razorpay(options);
-      // rzp.open();
+      // 2. Simulate user interacting with a payment gateway
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      // 3. Confirm intent
+      await paymentsApi.confirmIntent(intent.intent_id, `paper_txn_${Date.now().toString(36)}`);
       
-      // Removed success state to ensure truthful system state
+      setStep("success");
       pushToast({
-        tone: "error",
-        title: "Payment Gateway Offline",
-        message: "Razorpay SDK not loaded in this environment.",
+        tone: "success",
+        title: "Payment Successful",
+        message: `Added ₹${amount} to your wallet.`,
       });
-    } catch {
+      
+    } catch (err: any) {
+      setStep("input");
       pushToast({
         tone: "error",
         title: "Payment failed",
-        message: "Please retry the checkout.",
+        message: err?.message || "Please retry the checkout.",
       });
     } finally {
       setLoading(false);
@@ -134,25 +147,52 @@ export function CheckoutPage(): JSX.Element {
       <CardHeader>
         <CardTitle>Top Up Wallet</CardTitle>
         <CardDescription>
-          Add funds to your wallet using Razorpay.
+          Add funds to your paper-trading wallet.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form className="space-y-3" onSubmit={handleCheckout}>
-          <div>
-            <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
-              Amount (INR)
-            </label>
-            <Input required type="number" min="100" value={amount} onChange={(e) => setAmount(e.target.value)} />
+        {step === "input" && (
+          <form className="space-y-3" onSubmit={handleCheckout}>
+            <div>
+              <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
+                Amount (INR)
+              </label>
+              <Input required type="number" min="100" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </div>
+            
+            <Button className="w-full" isLoading={loading} type="submit">
+              <CreditCard className="mr-1 h-4 w-4" /> Add Paper Funds
+            </Button>
+            <p className="flex items-center justify-center gap-1 mt-3 text-xs text-[var(--ds-text-muted)]">
+              <ShieldCheck className="h-3.5 w-3.5" /> PAPER TRADING: No real money will be charged
+            </p>
+          </form>
+        )}
+        
+        {step === "processing" && (
+          <div className="flex flex-col items-center justify-center py-8 space-y-4">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--ds-border-subtle)] border-t-[var(--ds-color-primary-500)]"></div>
+            <p className="text-sm font-medium text-[var(--ds-text-secondary)]">Processing Payment...</p>
           </div>
-          
-          <Button className="w-full" isLoading={loading} type="submit">
-            <CreditCard className="mr-1 h-4 w-4" /> Pay with Razorpay
-          </Button>
-          <p className="flex items-center justify-center gap-1 mt-3 text-xs text-[var(--ds-text-muted)]">
-            <ShieldCheck className="h-3.5 w-3.5" /> TEST MODE: No real money will be charged
-          </p>
-        </form>
+        )}
+
+        {step === "success" && (
+          <div className="flex flex-col items-center justify-center py-6 space-y-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds-color-success-500)]/20 text-[var(--ds-color-success-500)]">
+              <Check className="h-6 w-6" />
+            </div>
+            <div className="text-center">
+              <h3 className="text-lg font-medium">Payment Successful</h3>
+              <p className="text-sm text-[var(--ds-text-secondary)]">₹{amount} has been added to your wallet.</p>
+            </div>
+            <Button className="w-full mt-4" variant="outline" onClick={() => {
+              setStep("input");
+              setAmount("499");
+            }}>
+              Make Another Payment
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

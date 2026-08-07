@@ -85,6 +85,7 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
     db.add(user)
     await db.flush()
     await db.refresh(user)
+    await db.commit()
 
     await enqueue_email(
         db,
@@ -180,6 +181,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
+    await db.commit()
 
     return TokenResponse(
         access_token=access_token, refresh_token=refresh_token, token_type="bearer", expires_in=900
@@ -257,6 +259,7 @@ async def refresh(payload: TokenRefresh, db: AsyncSession = Depends(get_db)) -> 
             expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
     )
+    await db.commit()
 
     return TokenResponse(
         access_token=new_access, refresh_token=new_refresh, token_type="bearer", expires_in=900
@@ -292,6 +295,7 @@ async def logout(
         .where(RefreshSession.user_id == current_user.id, RefreshSession.revoked_at.is_(None))
         .values(revoked_at=datetime.now(UTC))
     )
+    await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

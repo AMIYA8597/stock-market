@@ -102,7 +102,7 @@ async def get_quote(
         elif change_pct < -0.5:
             sig_dir = "SELL"
 
-        sig_conf = round(min(0.95, 0.50 + abs(change_pct) * 0.1), 4)
+        sig_conf = 0.50
         regime_state = "sideways"
         if change_pct > 1.0:
             regime_state = "bull"
@@ -329,7 +329,7 @@ async def get_movers(
                 change_pct=Decimal(str(m["change_pct"])),
                 volume=Decimal(str(m["volume"])),
                 signal_direction="BUY" if m["change_pct"] > 0 else "SELL",
-                signal_confidence=round(min(0.95, 0.50 + abs(m["change_pct"]) * 0.1), 4),
+                signal_confidence=0.50,
                 rank=m["rank"],
             )
             for m in movers_data

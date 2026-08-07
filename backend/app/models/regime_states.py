@@ -47,18 +47,25 @@ class RegimeState(Base):
     """
 
     __tablename__ = "regime_states"
+    __table_args__ = (
+        {"sqlite_autoincrement": True},
+    )
 
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+        doc="Primary key ID",
+    )
     time: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        primary_key=True,
         doc="Regime timestamp (UTC)",
     )
     symbol_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("instrument.id"),
         nullable=True,
-        primary_key=True,
         doc="Foreign key to symbols (nullable for market-wide regime)",
     )
     viterbi_state: Mapped[int] = mapped_column(

@@ -14,6 +14,8 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
 
+torch.set_num_threads(1)
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,17 +34,24 @@ class AttentionLayer(nn.Module):
 
 
 class LSTMAttentionNet(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1):
+    def __init__(self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1, dropout: float = 0.5):
         super().__init__()
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
+        self.lstm = nn.LSTM(
+            input_dim,
+            hidden_dim,
+            num_layers,
+            batch_first=True,
+            dropout=dropout if num_layers > 1 else 0.0
+        )
         self.attention = AttentionLayer(hidden_dim)
+        self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim, 1)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # x shape: [batch_size, seq_len, input_dim]
         lstm_out, _ = self.lstm(x)  # [batch_size, seq_len, hidden_dim]
         context, attn_weights = self.attention(lstm_out)
+        context = self.dropout(context)
         out = self.sigmoid(self.fc(context))
         return out, attn_weights
 
@@ -66,7 +75,7 @@ class LSTMAttentionClassifier:
         return np.array(X_seq), np.array(y_seq)
 
     def fit(self, df: pd.DataFrame, y: pd.Series) -> LSTMAttentionClassifier:
-        """Fit the scaler, prepare sequences, and train the model."""
+        """Fit the scaler, prepare sequences, and train the model with early stopping."""
         if not self.features:
             self.features = list(df.columns)
 
@@ -80,21 +89,56 @@ class LSTMAttentionClassifier:
 
         X_seq, y_seq = self._create_sequences(X_scaled, y_clean)
 
-        X_tensor = torch.tensor(X_seq, dtype=torch.float32)
-        y_tensor = torch.tensor(y_seq, dtype=torch.float32).unsqueeze(1)
+        # 15% validation split for early stopping
+        val_size = int(len(X_seq) * 0.15)
+        if val_size == 0:
+            val_size = 1
+
+        train_size = len(X_seq) - val_size
+        X_train, y_train = X_seq[:train_size], y_seq[:train_size]
+        X_val, y_val = X_seq[train_size:], y_seq[train_size:]
+
+        X_train_tensor = torch.tensor(X_train, dtype=torch.float32)
+        y_train_tensor = torch.tensor(y_train, dtype=torch.float32).unsqueeze(1)
+
+        X_val_tensor = torch.tensor(X_val, dtype=torch.float32)
+        y_val_tensor = torch.tensor(y_val, dtype=torch.float32).unsqueeze(1)
 
         self.model = LSTMAttentionNet(input_dim=len(self.features))
-        self.model.train()
 
         criterion = nn.BCELoss()
-        optimizer = optim.Adam(self.model.parameters(), lr=self.lr)
+        optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-4) # L2 regularized
+
+        best_val_loss = float('inf')
+        patience = 5
+        patience_counter = 0
+        best_state = None
 
         for _epoch in range(self.epochs):
+            self.model.train()
             optimizer.zero_grad()
-            outputs, _ = self.model(X_tensor)
-            loss = criterion(outputs, y_tensor)
+            outputs, _ = self.model(X_train_tensor)
+            loss = criterion(outputs, y_train_tensor)
             loss.backward()
             optimizer.step()
+
+            self.model.eval()
+            with torch.no_grad():
+                val_outputs, _ = self.model(X_val_tensor)
+                val_loss = criterion(val_outputs, y_val_tensor).item()
+
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_state = self.model.state_dict()
+                patience_counter = 0
+            else:
+                patience_counter += 1
+
+            if patience_counter >= patience:
+                break
+
+        if best_state is not None:
+            self.model.load_state_dict(best_state)
 
         return self
 
@@ -127,12 +171,24 @@ class LSTMAttentionClassifier:
         if self.model is None:
             return pd.Series(0.5, index=df.index)
 
-        probs = []
-        for i in range(len(df)):
-            # slice up to i+1
-            sub_df = df.iloc[: i + 1]
-            prob, _ = self.predict_proba(sub_df)
-            probs.append(prob)
+        X_clean = df[self.features].fillna(0)
+        X_scaled = self.scaler.transform(X_clean)
+
+        # Prepare sliding windows
+        X_seq = []
+        # We need a sequence of length seq_len for every row in df
+        # If we don't have enough history, pad with zeros.
+        padded_X = np.vstack([np.zeros((self.seq_len - 1, len(self.features))), X_scaled])
+
+        for i in range(len(X_scaled)):
+            X_seq.append(padded_X[i: i + self.seq_len])
+
+        X_tensor = torch.tensor(np.array(X_seq), dtype=torch.float32)
+
+        self.model.eval()
+        with torch.no_grad():
+            probs, _ = self.model(X_tensor)
+            probs = probs.squeeze().numpy()
 
         return pd.Series(probs, index=df.index)
 

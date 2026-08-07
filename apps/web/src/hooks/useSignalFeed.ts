@@ -66,18 +66,16 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(event.data as string) as {
-          type?: string;
-          symbol?: string;
-          signal?: number;
-          confidence?: number;
-          direction?: "STRONG_BUY" | "BUY" | "NEUTRAL" | "SELL" | "STRONG_SELL";
-          timestamp?: string;
-        };
+        const message = JSON.parse(event.data as string);
 
+        if (message.type !== "signal" && message.type !== "signal_update") {
+          return;
+        }
+        
+        const payload = message.payload || {};
+        
         if (
-          payload.type !== "signal_update" ||
-          !payload.symbol ||
+          !message.symbol ||
           typeof payload.signal !== "number" ||
           typeof payload.confidence !== "number" ||
           !payload.direction
@@ -85,7 +83,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
           return;
         }
 
-        const symbol = payload.symbol.toUpperCase();
+        const symbol = message.symbol.toUpperCase();
         const nextSignal = payload.signal;
         const nextConfidence = payload.confidence;
         const nextDirection = payload.direction;
@@ -96,7 +94,7 @@ export function useSignalFeed(symbols: string[]): UseSignalFeedState {
             signal: nextSignal,
             confidence: nextConfidence,
             direction: nextDirection,
-            timestamp: payload.timestamp ?? new Date().toISOString(),
+            timestamp: message.timestamp ?? new Date().toISOString(),
           });
           return next;
         });

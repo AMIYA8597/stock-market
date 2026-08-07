@@ -120,6 +120,8 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
         conditional_vol = float(res.conditional_vol)
         forecast_5d = res.vol_forecast_5d
         forecast_21d = res.vol_forecast_21d
+        tm = engine.get_transition_matrix()
+        transition_matrix = tm.tolist() if tm is not None else None
 
         return {
             "regime": regime,
@@ -130,6 +132,7 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
             "conditional_vol": conditional_vol,
             "vol_forecast_5d": float(forecast_5d[-1]) if len(forecast_5d) > 0 else conditional_vol,
             "vol_forecast_21d": float(forecast_21d[-1]) if len(forecast_21d) > 0 else conditional_vol,
+            "transition_matrix": transition_matrix,
         }
     except Exception as e:
         logger.warning(f"Real HMM-GARCH solver failed, falling back to threshold: {e}")
@@ -303,7 +306,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     except ImportError:
         xgb_status = "unavailable"
 
-    xgb_path = Path(artifact_path) if artifact_path else MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
+    xgb_path = Path(artifact_path) if (artifact_path and "xgboost" in artifact_path.lower()) else MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
 
     if xgb_path.exists():
         try:
@@ -339,7 +342,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     except ImportError:
         lstm_status = "unavailable"
 
-    lstm_path = MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
+    lstm_path = Path(artifact_path) if (artifact_path and "lstm" in artifact_path.lower()) else MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
 
     if lstm_path.exists():
         try:
@@ -899,7 +902,8 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
         "forecast": forecast,
         "data_points_used": len(df),
         "is_computed": True,
-        "message": reasoning_msg
+        "message": reasoning_msg,
+        "model_version": model_version or "latest"
     }
 
     await _cache_store(symbol, result)

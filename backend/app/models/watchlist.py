@@ -6,28 +6,29 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import UUID as SQLA_UUID
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database.connection import Base
 
 
 class UserWatchlist(Base):
-    """User watchlist tracking favorite symbols.
+    """User watchlist tracking favorite symbols across multiple lists.
 
     Fields:
         id (UUID): Unique watchlist item identifier.
         user_id (UUID): Foreign key to User.
         symbol (str): Ticker symbol.
+        list_id (int): ID of the watchlist tab (0-4).
         added_at (datetime): UTC timestamp when symbol was added.
 
     Constraints:
-        - UNIQUE(user_id, symbol): A user can only have a symbol once in their watchlist.
+        - UNIQUE(user_id, symbol, list_id): A user can only have a symbol once per list.
     """
 
     __tablename__ = "user_watchlist"
     __table_args__ = (
-        UniqueConstraint("user_id", "symbol", name="uq_user_watchlist_user_symbol"),
+        UniqueConstraint("user_id", "symbol", "list_id", name="uq_user_watchlist_user_symbol_list"),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -49,6 +50,13 @@ class UserWatchlist(Base):
         index=True,
         doc="Ticker symbol",
     )
+    list_id: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        index=True,
+        doc="Watchlist tab ID (0-4)",
+    )
     added_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -57,4 +65,4 @@ class UserWatchlist(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<UserWatchlist(user_id={self.user_id}, symbol='{self.symbol}')>"
+        return f"<UserWatchlist(user_id={self.user_id}, symbol='{self.symbol}', list_id={self.list_id})>"

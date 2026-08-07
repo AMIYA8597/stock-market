@@ -70,7 +70,7 @@ async def ws_prices(websocket: WebSocket):
                             count = await redis_client.hincrby("active_symbol_counts", sym, 1)
                             if count == 1:
                                 await redis_client.sadd("active_symbols", sym)
-                            
+
                         try:
                             q = await MarketDataService.get_quote(sym)
                             if q and q.get("price") is not None:
@@ -139,7 +139,7 @@ async def ws_prices(websocket: WebSocket):
                     await redis_client.hdel("active_symbol_counts", sym)
         except Exception as e:
             logger.debug(f"Error decrementing active symbols on disconnect: {e}")
-            
+
         try:
             await pubsub.unsubscribe("prices.ticks")
             await pubsub.close()

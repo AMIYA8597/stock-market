@@ -170,7 +170,7 @@ class InMemoryCache:
             return selected
         return [member for member, _ in selected]
 
-    def pipeline(self) -> "InMemoryPipeline":
+    def pipeline(self) -> InMemoryPipeline:
         return InMemoryPipeline(self)
 
     async def publish(self, channel: str, message: str) -> int:
@@ -200,19 +200,19 @@ class InMemoryPipeline:
         self.cache = cache
         self.operations: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
 
-    def zremrangebyscore(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+    def zremrangebyscore(self, *args: Any, **kwargs: Any) -> InMemoryPipeline:
         self.operations.append(("zremrangebyscore", args, kwargs))
         return self
 
-    def zadd(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+    def zadd(self, *args: Any, **kwargs: Any) -> InMemoryPipeline:
         self.operations.append(("zadd", args, kwargs))
         return self
 
-    def zcard(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+    def zcard(self, *args: Any, **kwargs: Any) -> InMemoryPipeline:
         self.operations.append(("zcard", args, kwargs))
         return self
 
-    def expire(self, *args: Any, **kwargs: Any) -> "InMemoryPipeline":
+    def expire(self, *args: Any, **kwargs: Any) -> InMemoryPipeline:
         self.operations.append(("expire", args, kwargs))
         return self
 

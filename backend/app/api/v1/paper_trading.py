@@ -32,7 +32,9 @@ async def submit_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         order = await PaperTradingService.place_order(
             db=db,
@@ -82,7 +84,9 @@ async def get_positions(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         positions = await PaperTradingService.get_positions(db, user_id)
         return positions
@@ -101,7 +105,9 @@ async def get_history(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         history = await PaperTradingService.get_history(db, user_id)
         return history
@@ -120,7 +126,9 @@ async def get_pnl(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         pnl_stats = await PaperTradingService.get_pnl(db, user_id)
         return pnl_stats
@@ -139,7 +147,9 @@ async def reset_wallet(
     db: AsyncSession = Depends(get_db),
     current_user: dict | None = Depends(get_current_user_or_none),
 ):
-    user_id = str(current_user.id) if current_user else "test-user-id"
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    user_id = str(current_user.id)
     try:
         pnl_stats = await PaperTradingService.reset_wallet(db, user_id)
         return {

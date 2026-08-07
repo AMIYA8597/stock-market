@@ -17,6 +17,7 @@ const FALLBACK_SYMBOLS = [
 
 interface TerminalDataState {
   symbols: string[];
+  wlLists: string[][];
   selectedSymbol: string;
   selectedSignal: SignalResponse | null;
   watchlistSignals: SignalResponse[];
@@ -26,12 +27,13 @@ interface TerminalDataState {
   error: string | null;
   setSelectedSymbol: (symbol: string) => void;
   refresh: () => Promise<void>;
-  addWatchlistSymbol: (symbol: string) => Promise<void>;
-  removeWatchlistSymbol: (symbol: string) => Promise<void>;
+  addWatchlistSymbol: (symbol: string, listId?: number) => Promise<void>;
+  removeWatchlistSymbol: (symbol: string, listId?: number) => Promise<void>;
 }
 
 export const useTerminalData = (): TerminalDataState => {
   const [symbols, setSymbols] = useState<string[]>([]);
+  const [wlLists, setWlLists] = useState<string[][]>([[], [], [], []]);
   const [selectedSymbol, setSelectedSymbol] = useState<string>(FALLBACK_SYMBOLS[0] ?? "RELIANCE.NS");
   const [selectedSignal, setSelectedSignal] = useState<SignalResponse | null>(null);
   const [watchlistSignals, setWatchlistSignals] = useState<SignalResponse[]>([]);
@@ -43,16 +45,26 @@ export const useTerminalData = (): TerminalDataState => {
 
   const loadSymbols = useCallback(async (): Promise<string[]> => {
     try {
-      const response = await watchlistApi.getWatchlist();
-      if (response.symbols && response.symbols.length > 0) {
-        setSymbols(response.symbols);
-        return response.symbols;
+      const [l0, l1, l2, l3] = await Promise.all([
+        watchlistApi.getWatchlist(0),
+        watchlistApi.getWatchlist(1),
+        watchlistApi.getWatchlist(2),
+        watchlistApi.getWatchlist(3),
+      ]);
+      const newLists = [l0.symbols || [], l1.symbols || [], l2.symbols || [], l3.symbols || []];
+      setWlLists(newLists);
+      
+      const combined = Array.from(new Set(newLists.flat()));
+      if (combined.length > 0) {
+        setSymbols(combined);
+        return combined;
       }
     } catch (err) {
       console.warn("Failed to load user watchlist, falling back to defaults", err);
     }
 
     setSymbols(FALLBACK_SYMBOLS);
+    setWlLists([FALLBACK_SYMBOLS, [], [], []]);
     return FALLBACK_SYMBOLS;
   }, []);
 
@@ -215,24 +227,32 @@ export const useTerminalData = (): TerminalDataState => {
     };
   }, [refreshAll]);
 
-  const addWatchlistSymbol = useCallback(async (symbol: string) => {
+  const addWatchlistSymbol = useCallback(async (symbol: string, listId: number = 0) => {
     try {
-      const res = await watchlistApi.addSymbol(symbol);
-      if (res.symbols && res.symbols.length > 0) {
-        setSymbols(res.symbols);
+      const res = await watchlistApi.addSymbol(symbol, listId);
+      if (res.symbols) {
+        setWlLists((prev) => {
+          const newLists = [...prev];
+          newLists[listId] = res.symbols;
+          return newLists;
+        });
+        setSymbols((prev) => Array.from(new Set([...prev, ...res.symbols])));
       }
     } catch (e) {
       console.error("Failed to add symbol", e);
     }
   }, []);
 
-  const removeWatchlistSymbol = useCallback(async (symbol: string) => {
+  const removeWatchlistSymbol = useCallback(async (symbol: string, listId: number = 0) => {
     try {
-      const res = await watchlistApi.removeSymbol(symbol);
-      setSymbols(res.symbols || []);
-      if (selectedSymbol === symbol && res.symbols && res.symbols.length > 0) {
-        setSelectedSymbol(res.symbols[0]!);
-      }
+      const res = await watchlistApi.removeSymbol(symbol, listId);
+      setWlLists((prev) => {
+        const newLists = [...prev];
+        newLists[listId] = res.symbols || [];
+        return newLists;
+      });
+      // Not removing from symbols array aggressively because it might be in another list. 
+      // It will just be filtered out of the view.
     } catch (e) {
       console.error("Failed to remove symbol", e);
     }
@@ -241,6 +261,7 @@ export const useTerminalData = (): TerminalDataState => {
   return useMemo(
     () => ({
       symbols,
+      wlLists,
       selectedSymbol,
       selectedSignal,
       watchlistSignals,
@@ -253,6 +274,6 @@ export const useTerminalData = (): TerminalDataState => {
       addWatchlistSymbol,
       removeWatchlistSymbol,
     }),
-    [symbols, selectedSymbol, selectedSignal, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, refreshAll, addWatchlistSymbol, removeWatchlistSymbol]
+    [symbols, wlLists, selectedSymbol, selectedSignal, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, refreshAll, addWatchlistSymbol, removeWatchlistSymbol]
   );
 };

@@ -16,7 +16,7 @@ import { useTerminalData } from "@/hooks/useTerminalData";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 
 export default function RootPage(): JSX.Element {
-  const { selectedSignal, selectedSymbol, watchlistSignals, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, addWatchlistSymbol, removeWatchlistSymbol } = useTerminalData();
+  const { selectedSignal, selectedSymbol, watchlistSignals, wlLists, loading, refreshing, signalStreamStatus, error, setSelectedSymbol, addWatchlistSymbol, removeWatchlistSymbol } = useTerminalData();
 
   return (
     <AuthGuard>
@@ -35,7 +35,7 @@ export default function RootPage(): JSX.Element {
             )}
           </div>
         }
-        watchlist={<Watchlist signals={watchlistSignals} selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} onAddSymbol={addWatchlistSymbol} onRemoveSymbol={removeWatchlistSymbol} />}
+        watchlist={<Watchlist signals={watchlistSignals} wlLists={wlLists} selectedSymbol={selectedSymbol} onSelectSymbol={setSelectedSymbol} onAddSymbol={addWatchlistSymbol} onRemoveSymbol={removeWatchlistSymbol} />}
         chartSection={<ChartSection signal={selectedSignal} onSelectSymbol={setSelectedSymbol} defaultSymbol={selectedSymbol} />}
         signalPanel={<SignalPanel signal={selectedSignal} />}
         paperTradePanel={<PaperTradePanel selectedSymbol={selectedSymbol} />}
