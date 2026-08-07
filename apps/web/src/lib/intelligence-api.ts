@@ -75,7 +75,7 @@ function normalizeRegime(raw: unknown): SignalResponse["regime"] {
 
 function normalizeSignalResponse(raw: UnknownRecord): SignalResponse {
   const ensembleRaw = raw.ensemble && typeof raw.ensemble === "object" ? (raw.ensemble as UnknownRecord) : {};
-  const modelsRaw = raw.models && typeof raw.models === "object" ? (raw.models as UnknownRecord) : {};
+  const modelsRaw = (raw.models && typeof raw.models === "object" ? raw.models : ensembleRaw) as UnknownRecord;
   const tftRaw = modelsRaw.tft && typeof modelsRaw.tft === "object" ? (modelsRaw.tft as UnknownRecord) : {};
   const hmmRaw = modelsRaw.hmm_garch && typeof modelsRaw.hmm_garch === "object" ? (modelsRaw.hmm_garch as UnknownRecord) : {};
   const gnnRaw = modelsRaw.gnn && typeof modelsRaw.gnn === "object" ? (modelsRaw.gnn as UnknownRecord) : {};
@@ -85,7 +85,7 @@ function normalizeSignalResponse(raw: UnknownRecord): SignalResponse {
   const patRaw = modelsRaw.pattern && typeof modelsRaw.pattern === "object" ? (modelsRaw.pattern as UnknownRecord) : {};
   const momRaw = modelsRaw.momentum && typeof modelsRaw.momentum === "object" ? (modelsRaw.momentum as UnknownRecord) : {};
   const regRaw = modelsRaw.regime && typeof modelsRaw.regime === "object" ? (modelsRaw.regime as UnknownRecord) : {};
-  const weightsRaw = raw.model_weights && typeof raw.model_weights === "object" ? (raw.model_weights as UnknownRecord) : {};
+  const weightsRaw = (raw.model_weights ?? ensembleRaw.model_weights) && typeof (raw.model_weights ?? ensembleRaw.model_weights) === "object" ? ((raw.model_weights ?? ensembleRaw.model_weights) as UnknownRecord) : {};
 
   return {
     symbol: String(raw.symbol ?? "UNKNOWN"),
@@ -170,15 +170,19 @@ function normalizeSignalResponse(raw: UnknownRecord): SignalResponse {
     model_weights: Object.fromEntries(
       Object.entries(weightsRaw).map(([key, value]) => [key, asNumber(value)])
     ),
-    regime: normalizeRegime(raw.regime),
-    target_price_5d: asNumber(raw.target_price_5d),
-    stop_loss: asNumber(raw.stop_loss),
-    take_profit: asNumber(raw.take_profit),
-    prob_buy: asNumber(raw.prob_buy),
-    prob_sell: asNumber(raw.prob_sell),
-    max_loss_pct: asNumber(raw.max_loss_pct),
+    regime: normalizeRegime(raw.regime ?? ensembleRaw.regime),
+    target_price_5d: asNumber(raw.target_price_5d ?? ensembleRaw.target_price_5d),
+    stop_loss: asNumber(raw.stop_loss ?? ensembleRaw.stop_loss),
+    take_profit: asNumber(raw.take_profit ?? ensembleRaw.take_profit),
+    prob_buy: asNumber(raw.prob_buy ?? ensembleRaw.prob_buy),
+    prob_sell: asNumber(raw.prob_sell ?? ensembleRaw.prob_sell),
+    max_loss_pct: asNumber(raw.max_loss_pct ?? ensembleRaw.max_loss_pct),
     is_computed: Boolean(raw.is_computed),
     message: String(raw.message ?? ""),
+    model_status: (raw.model_status as "trained" | "heuristic" | "fallback" | undefined) ?? ensembleRaw.model_status as "trained" | "heuristic" | "fallback",
+    model_version: raw.model_version ? String(raw.model_version) : undefined,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    forecast: Array.isArray(raw.forecast) ? raw.forecast as any[] : undefined,
   };
 }
 
@@ -191,7 +195,7 @@ const parseJson = async <T>(response: Response): Promise<T> => {
 
 export const intelligenceApi = {
   async getSignal(symbol: string): Promise<SignalResponse> {
-    const response = await fetch(`${API_URL}/signals/${encodeURIComponent(symbol)}`, {
+    const response = await fetch(`${API_URL}/predictions/${encodeURIComponent(symbol)}`, {
       method: "GET",
       cache: "no-store",
     });
@@ -199,19 +203,17 @@ export const intelligenceApi = {
   },
 
   async getBulkSignals(symbols: string[]): Promise<SignalResponse[]> {
-    const params = new URLSearchParams({ symbols: symbols.join(",") });
-    const response = await fetch(`${API_URL}/signals/bulk?${params.toString()}`, {
-      method: "GET",
-      cache: "no-store",
-    });
-    return parseJson<UnknownRecord[] | { signals?: UnknownRecord[] }>(response).then((data) => {
-      const items = Array.isArray(data)
-        ? data
-        : Array.isArray(data.signals)
-          ? data.signals
-          : [];
-      return items.map(normalizeSignalResponse);
-    });
+    const promises = symbols.map(symbol => 
+      fetch(`${API_URL}/predictions/${encodeURIComponent(symbol)}`, {
+        method: "GET",
+        cache: "no-store",
+      }).then(r => parseJson<UnknownRecord>(r))
+    );
+    
+    const results = await Promise.allSettled(promises);
+    return results
+      .filter((res): res is PromiseFulfilledResult<UnknownRecord> => res.status === 'fulfilled')
+      .map(res => normalizeSignalResponse(res.value));
   },
 
   async getForecast(symbol: string, horizons: number[] = [1, 5, 10, 15, 20, 25, 30]): Promise<ForecastResponse> {

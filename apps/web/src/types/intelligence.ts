@@ -120,6 +120,8 @@ export interface SignalResponse {
   is_computed?: boolean;
   message?: string;
   model_status?: "trained" | "heuristic" | "fallback";
+  model_version?: string;
+  forecast?: ForecastPoint[];
 }
 
 export interface ForecastPoint {

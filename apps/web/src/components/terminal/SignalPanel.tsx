@@ -381,15 +381,22 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
           <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)] font-mono">Conf {confidence}%</p>
           <p className="rounded bg-[rgba(255,255,255,0.03)] px-2 py-1 text-[var(--nq-text-secondary)] font-mono">Regime {signal?.regime.state ?? "-"}</p>
-          <p className={`rounded px-2 py-1 font-bold text-center uppercase font-mono ${
-            signal?.model_status === "trained"
-              ? "bg-[rgba(0,230,118,0.1)] text-[#00E676]"
-              : signal?.model_status === "heuristic"
-                ? "bg-[rgba(255,184,0,0.1)] text-[#FFB800]"
-                : "bg-[rgba(150,150,150,0.1)] text-[#9E9E9E]"
-          }`}>
-            {signal?.model_status ?? "fallback"}
-          </p>
+          <div className="flex flex-col gap-0.5">
+            <p className={`rounded px-2 py-1 font-bold text-center uppercase font-mono ${
+              signal?.model_status === "trained"
+                ? "bg-[rgba(0,230,118,0.1)] text-[#00E676]"
+                : signal?.model_status === "heuristic"
+                  ? "bg-[rgba(255,184,0,0.1)] text-[#FFB800]"
+                  : "bg-[rgba(150,150,150,0.1)] text-[#9E9E9E]"
+            }`}>
+              {signal?.model_status ?? "fallback"}
+            </p>
+            {signal?.model_version && (
+              <p className="text-center text-[8px] font-mono text-[var(--nq-text-muted)] truncate" title={signal.model_version}>
+                {signal.model_version}
+              </p>
+            )}
+          </div>
         </div>
         <div className="mt-2 grid grid-cols-[80px_1fr] items-center gap-3">
           <svg viewBox="0 0 80 80" className="h-16 w-16" aria-label="Confidence gauge">

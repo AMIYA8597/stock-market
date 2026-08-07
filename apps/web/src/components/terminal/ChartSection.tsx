@@ -16,7 +16,7 @@ import {
 } from "@/components/charts";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { useHistoryQuery } from "@/hooks/queries/useMarketData";
-import { useQuery } from "@tanstack/react-query";
+
 
 const LightweightCandlestickChart = dynamic(
   () => import("@/components/charts").then((mod) => mod.LightweightCandlestickChart),
@@ -90,31 +90,29 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   // 1. Fetch History using React Query
   const { data: historyData, error: queryError, isLoading: queryLoading } = useHistoryQuery(activeSymbol || "", timeframe);
 
-  // 2. Fetch Forecast using React Query
-  const { data: forecastData, error: qForecastError } = useQuery({
-    queryKey: ["forecast", signal?.symbol],
-    queryFn: async () => {
-      if (!signal?.symbol) return [];
-      const response = await fetch("/api/v1/predictions/forecast", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ symbol: signal.symbol, horizons: [1, 3, 5, 10, 21] }),
-      });
-      if (!response.ok) throw new Error(`Failed with status ${response.status}`);
-      const data = await response.json();
-      return (data.forecast || []).map((pt: any) => ({
+  // 2. Forecast is now available directly on the signal payload
+  useEffect(() => {
+    if (signal?.forecast) {
+      setPredictions(signal.forecast.map((pt: any) => ({
         target_date: pt.target_date,
         horizon_days: pt.horizon_days,
         predicted_price: pt.predicted_price,
         predicted_direction: pt.change_pct >= 0 ? "BUY" : "SELL",
-        confidence: data.confidence ?? 0.5,
+        confidence: signal.ensemble?.confidence ?? 0.5,
         prediction_low: pt.prediction_low,
         prediction_high: pt.prediction_high,
         change_pct: pt.change_pct,
-      }));
-    },
-    enabled: !!signal?.symbol,
-  });
+      })));
+      setForecastError(null);
+    } else {
+      setPredictions([]);
+      if (!signal?.model_version || signal?.model_version === "heuristic") {
+        setForecastError("Prediction model not yet trained");
+      } else {
+        setForecastError(null);
+      }
+    }
+  }, [signal]);
 
   const isLoading = queryLoading;
 
@@ -227,24 +225,7 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
 
   const confidence = signal ? safeFormat(Number(signal.ensemble.confidence) * 100, 1) : "--";
 
-  useEffect(() => {
-    if (forecastData) {
-      setPredictions(forecastData);
-      setForecastError(null);
-    }
-  }, [forecastData]);
 
-  useEffect(() => {
-    if (qForecastError) {
-      setPredictions([]);
-      const errMsg = qForecastError instanceof Error ? qForecastError.message : "Unable to load forecast.";
-      if (errMsg.includes("503")) {
-        setForecastError("Prediction model not yet trained");
-      } else {
-        setForecastError(errMsg);
-      }
-    }
-  }, [qForecastError]);
 
   useEffect(() => {
     if (!activeSymbol) {

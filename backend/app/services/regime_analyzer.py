@@ -62,6 +62,20 @@ class GARCHVolatilityModel:
             logger.error(f"GARCH forecasting failed: {e}")
             return [0.0] * horizon
 
+    def save_model(self, filepath: str) -> None:
+        """Save the fitted GARCH model result using joblib."""
+        import os
+
+        import joblib
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        joblib.dump(self.result, filepath)
+
+    def load_model(self, filepath: str) -> None:
+        """Load a fitted GARCH model result using joblib."""
+        import joblib
+        self.result = joblib.load(filepath)
+
+
 
 class HMMRegimeModel:
     """Hidden Markov Model for market regime detection."""
@@ -85,10 +99,10 @@ class HMMRegimeModel:
                 logger.warning("Not enough data to fit HMM securely.")
                 return
 
-            # We use a Gaussian HMM with full covariance
+            # We use a Gaussian HMM with diag covariance to avoid singularity issues
             self.model = GaussianHMM(
                 n_components=self.n_states,
-                covariance_type="full",
+                covariance_type="diag",
                 n_iter=100,
                 random_state=42,
             )
@@ -160,3 +174,16 @@ class HMMRegimeModel:
             mapping[scores[1][0]] = "sideways"
 
         return mapping
+
+    def save_model(self, filepath: str) -> None:
+        """Save the fitted HMM model using joblib."""
+        import os
+
+        import joblib
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        joblib.dump(self.model, filepath)
+
+    def load_model(self, filepath: str) -> None:
+        """Load a fitted HMM model using joblib."""
+        import joblib
+        self.model = joblib.load(filepath)

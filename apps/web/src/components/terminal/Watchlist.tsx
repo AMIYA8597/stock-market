@@ -8,10 +8,11 @@ import { usePriceFeed } from "@/hooks/usePriceFeed";
 
 interface WatchlistProps {
   signals: SignalResponse[];
+  wlLists?: string[][];
   selectedSymbol: string;
   onSelectSymbol: (symbol: string) => void;
-  onAddSymbol?: (symbol: string) => void;
-  onRemoveSymbol?: (symbol: string) => void;
+  onAddSymbol?: (symbol: string, listId?: number) => void;
+  onRemoveSymbol?: (symbol: string, listId?: number) => void;
 }
 
 
@@ -116,7 +117,7 @@ function getIsMarketClosed(): boolean {
   return !(isOpenDay && isOpenTime);
 }
 
-export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onAddSymbol, onRemoveSymbol }: WatchlistProps): JSX.Element {
+export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSelectSymbol, onAddSymbol, onRemoveSymbol }: WatchlistProps): JSX.Element {
   const [isClosed, setIsClosed] = useState<boolean>(getIsMarketClosed());
 
   useEffect(() => {
@@ -128,38 +129,6 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onA
 
   const [activeTab, setActiveTab] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
-
-  // 4 custom lists + Market default
-  const [wlLists, setWlLists] = useState<string[][]>([
-    [
-      "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "BHARTIARTL.NS", "SBIN.NS", "INFY.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
-      "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", "TATAMOTORS.NS", "TATASTEEL.NS", "ONGC.NS", "KOTAKBANK.NS", "M&M.NS",
-      "NTPC.NS", "AXISBANK.NS", "ASIANPAINT.NS", "TITAN.NS", "POWERGRID.NS", "WIPRO.NS", "ULTRACEMCO.NS", "BAJAJFINSV.NS", "NESTLEIND.NS", "TECHM.NS",
-      "GRASIM.NS", "JSWSTEEL.NS", "HDFCLIFE.NS", "SBILIFE.NS", "INDUSINDBK.NS", "ADANIENT.NS", "ADANIPORTS.NS", "COALINDIA.NS", "CIPLA.NS",
-      "BAJAJ-AUTO.NS", "HEROMOTOCO.NS", "DRREDDY.NS", "APOLLOHOSP.NS", "DIVISLAB.NS", "BRITANNIA.NS", "EICHERMOT.NS", "HINDALCO.NS", "UPL.NS", "TATACONSUM.NS"
-    ],
-    [
-      "ZOMATO.NS", "PAYTM.NS", "NYKAA.NS", "POLICYBZR.NS", "DELHIVERY.NS", "TRENT.NS", "BEL.NS", "HAL.NS", "IRFC.NS", "RVNL.NS",
-      "JIOFIN.NS", "VBL.NS", "CHOLAFIN.NS", "TVSMOTOR.NS", "BOSCHLTD.NS", "INDIGO.NS", "TORNTPHARM.NS", "PIIND.NS", "CUMMINSIND.NS", "HAVELLS.NS",
-      "PNB.NS", "BOB.NS", "CANBK.NS", "UNIONBANK.NS", "IDFCFIRSTB.NS", "YESBANK.NS", "BANDHANBNK.NS", "FEDERALBNK.NS", "AUBANK.NS", "ICICIPRULI.NS",
-      "MUTHOOTFIN.NS", "RECLTD.NS", "PFC.NS", "LODHA.NS", "DLF.NS", "GODREJPROP.NS", "OBEROIRLTY.NS", "PRESTIGE.NS", "PHOENIXLTD.NS", "BRIGADE.NS",
-      "MRF.NS", "APOLLOTYRE.NS", "CEATLTD.NS", "BALKRISIND.NS", "TATACHEM.NS", "DEEPAKNTR.NS", "AARTIIND.NS", "ATGL.NS", "AWL.NS", "SUZLON.NS"
-    ],
-    [
-      "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "TSLA", "BRK-B", "TSM", "AVGO",
-      "V", "JPM", "WMT", "JNJ", "MA", "PG", "HD", "CVX", "MRK", "ORCL",
-      "ABBV", "COST", "PEP", "BAC", "KO", "NFLX", "TMO", "CSCO", "MCD", "CRM",
-      "ADBE", "AMD", "ABT", "DHR", "DIS", "TMUS", "INTC", "TXN", "VZ", "CMCSA",
-      "QCOM", "PFE", "INTU", "IBM", "AMAT", "NOW", "UBER", "UNP", "AMGN", "CAT"
-    ],
-    [
-      "BTC-USD", "ETH-USD", "USDT-USD", "BNB-USD", "SOL-USD", "XRP-USD", "USDC-USD", "ADA-USD", "AVAX-USD", "DOGE-USD",
-      "TRX-USD", "DOT-USD", "LINK-USD", "MATIC-USD", "TON11419-USD", "WBTC-USD", "SHIB-USD", "LTC-USD", "BCH-USD", "DAI-USD",
-      "UNI7083-USD", "ATOM-USD", "ETC-USD", "XLM-USD", "XMR-USD", "OKB-USD", "ICP-USD", "KAS-USD", "FIL-USD", "INJ-USD",
-      "LDO-USD", "HBAR-USD", "APT21259-USD", "CRO-USD", "VET-USD", "MNT27075-USD", "OP-USD", "ARB11841-USD", "QNT-USD", "MKR-USD",
-      "AAVE-USD", "GRT6719-USD", "ALGO-USD", "STX4847-USD", "BSV-USD", "SNX-USD", "EGLD-USD", "RNDR-USD", "THETA-USD", "SAND-USD"
-    ]
-  ]);
 
   const activeSymbols = useMemo(() => {
     if (activeTab === 4) {
@@ -216,18 +185,8 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onA
   const handleDragOver = (e: React.DragEvent, targetIdx: number) => {
     e.preventDefault();
     if (draggedIdx === null || draggedIdx === targetIdx || activeTab === 4) return;
-
-    setWlLists((prev) => {
-      const copy = [...prev];
-      const currentList = [...(copy[activeTab] || [])];
-      const item = currentList[draggedIdx];
-      if (item) {
-        currentList.splice(draggedIdx, 1);
-        currentList.splice(targetIdx, 0, item);
-        copy[activeTab] = currentList;
-      }
-      return copy;
-    });
+    // Drag/drop ordering is currently disabled since it requires an API update to persist ordering.
+    // To implement, we would call an API like `watchlistApi.reorder(activeTab, draggedIdx, targetIdx)`
     setDraggedIdx(targetIdx);
   };
 
@@ -275,17 +234,9 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onA
     
     // Call the parent handler
     if (onAddSymbol) {
-      onAddSymbol(symbol);
+      onAddSymbol(symbol, activeTab);
     }
     
-    setWlLists((prev) => {
-      const copy = [...prev];
-      const currentList = copy[activeTab] || [];
-      if (!currentList.includes(symbol)) {
-        copy[activeTab] = [...currentList, symbol];
-      }
-      return copy;
-    });
     setSearchQuery("");
   };
 
@@ -295,15 +246,8 @@ export default function Watchlist({ signals, selectedSymbol, onSelectSymbol, onA
     
     // Call the parent handler
     if (onRemoveSymbol) {
-      onRemoveSymbol(symbol);
+      onRemoveSymbol(symbol, activeTab);
     }
-
-    setWlLists((prev) => {
-      const copy = [...prev];
-      const currentList = copy[activeTab] || [];
-      copy[activeTab] = currentList.filter(s => s !== symbol);
-      return copy;
-    });
   };
 
 

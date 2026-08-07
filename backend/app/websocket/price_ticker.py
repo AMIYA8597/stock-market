@@ -16,13 +16,11 @@ from app.database.connection import async_session_factory
 from app.services.market_data_service import MarketDataService
 from app.services.paper_trading import PaperTradingService
 from app.services.prediction_engine import get_full_prediction
-import pandas_ta as ta
 
 logger = logging.getLogger(__name__)
 
 import time
 
-from app.core.watchlist import WATCHLIST_SYMBOLS
 from app.services.data_ingestion.scheduler import is_market_hours
 
 
@@ -49,14 +47,15 @@ async def run_price_ticker(redis: Redis) -> None:
     """Infinite loop fetching and broadcasting Watchlist prices and signals, rate limited and staggered."""
     logger.info("Starting run_price_ticker background loop")
 
-    # 3 req/sec limit to avoid NSE bans
-    bucket = TokenBucket(rate=3.0, capacity=3.0)
+    # Allow up to 50 concurrent internal operations since quotes are batched
+    bucket = TokenBucket(rate=50.0, capacity=50.0)
 
     from sqlalchemy import select
-    from app.models.watchlist import UserWatchlist
+
     from app.models.instrument import Instrument
-    from app.models.portfolio import PortfolioHolding
     from app.models.paper_trading import PaperPosition
+    from app.models.portfolio import PortfolioHolding
+    from app.models.watchlist import UserWatchlist
 
     while True:
         try:
@@ -64,24 +63,24 @@ async def run_price_ticker(redis: Redis) -> None:
 
             # 1. Gather all active symbols dynamically
             symbols_to_poll = set(MarketDataService.NSE_NIFTY50[:5]) # poll top 5 always just to keep it alive
-            
+
             # Fetch from DB: Watchlists, Portfolios, Paper Positions
             try:
                 async with async_session_factory() as session:
                     wl_res = await session.execute(select(UserWatchlist.symbol))
                     symbols_to_poll.update([s for s in wl_res.scalars().all()])
-                    
+
                     pf_res = await session.execute(
                         select(Instrument.symbol)
                         .join(PortfolioHolding, PortfolioHolding.symbol_id == Instrument.id)
                     )
                     symbols_to_poll.update([s for s in pf_res.scalars().all()])
-                    
+
                     pp_res = await session.execute(select(PaperPosition.symbol))
                     symbols_to_poll.update([s for s in pp_res.scalars().all()])
             except Exception as db_err:
                 logger.debug(f"Failed to fetch symbols from DB: {db_err}")
-                
+
             # Fetch from Redis active subscriptions
             try:
                 active_from_redis = await redis.smembers("active_symbols")
@@ -90,11 +89,17 @@ async def run_price_ticker(redis: Redis) -> None:
             except Exception as redis_err:
                 logger.debug(f"Failed to fetch active_symbols from Redis: {redis_err}")
 
-            for sym in list(symbols_to_poll):
+            symbols_list = list(symbols_to_poll)
+            if not symbols_list:
+                await asyncio.sleep(10)
+                continue
+
+            batch_quotes = await MarketDataService.get_batch_quotes(symbols_list)
+
+            for sym in symbols_list:
                 try:
                     await bucket.consume(1)
-
-                    quote = await MarketDataService.get_quote(sym)
+                    quote = batch_quotes.get(sym)
 
                     if not quote or quote.get("price") is None:
                         continue

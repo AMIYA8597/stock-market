@@ -45,13 +45,15 @@ function parseNumber(value: unknown, fallback = 0): number {
 }
 
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     public status: number,
     public statusText: string,
     public body: unknown
   ) {
-    super(`API Error ${status}: ${statusText}`);
+    const bodyObj = body as Record<string, any>;
+    const detailMessage = bodyObj?.detail?.message || bodyObj?.detail || statusText;
+    super(typeof detailMessage === "string" ? detailMessage : `API Error ${status}: ${statusText}`);
     this.name = "ApiError";
   }
 }
@@ -824,20 +826,19 @@ export const signalsApi = {
 };
 
 export const watchlistApi = {
-  getWatchlist(): Promise<{ symbols: string[] }> {
-    return fetchApi<{ symbols: string[] }>("/watchlist");
+  getWatchlist(list_id: number = 0): Promise<{ symbols: string[] }> {
+    return fetchApi<{ symbols: string[] }>(`/watchlist?list_id=${list_id}`);
   },
-  addSymbol(symbol: string): Promise<{ symbols: string[] }> {
+  addSymbol(symbol: string, list_id: number = 0): Promise<{ symbols: string[] }> {
     return fetchApi<{ symbols: string[] }>("/watchlist", {
       method: "POST",
-      body: JSON.stringify({ symbol }),
+      body: JSON.stringify({ symbol, list_id }),
     });
   },
-  removeSymbol(symbol: string): Promise<{ symbols: string[] }> {
-    return fetchApi<{ symbols: string[] }>(`/watchlist/${encodeURIComponent(symbol)}`, {
+  removeSymbol(symbol: string, list_id: number = 0): Promise<{ symbols: string[] }> {
+    return fetchApi<{ symbols: string[] }>(`/watchlist/${encodeURIComponent(symbol)}?list_id=${list_id}`, {
       method: "DELETE",
     });
   },
 };
 
-export { ApiError };
