@@ -171,11 +171,14 @@ async def reset_wallet(
 async def cancel_order(
     order_id: str,
     symbol: str = Query(..., description="Ticker symbol (e.g. RELIANCE.NS)"),
+    current_user: dict | None = Depends(get_current_user_or_none),
 ):
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     try:
         from app.services.broker_adapter import BrokerAdapter
 
-        res = await BrokerAdapter.cancel_order(order_id, symbol)
+        res = await BrokerAdapter.cancel_order(order_id, symbol, user_id=str(current_user.id))
         return {"success": True, "message": "Order cancelled successfully.", "result": res}
     except Exception as exc:
         raise HTTPException(

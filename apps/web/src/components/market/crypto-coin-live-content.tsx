@@ -150,9 +150,19 @@ export function CryptoCoinLiveContent({ coin }: CryptoCoinLiveContentProps): JSX
             </div>
             <div className="h-64 rounded bg-[rgba(255,255,255,0.03)] p-2 sm:h-72">
               <div className="flex h-full items-end gap-[2px]">
-                {(loading ? Array.from({ length: 80 }, () => 20) : seriesBars).map((height, index) => (
-                  <div key={`bar-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-cyan)]/52" style={{ height: `${height}%` }} />
-                ))}
+                {loading ? (
+                  <div className="flex w-full h-full animate-pulse gap-[2px] items-end">
+                    <div className="w-full bg-[var(--nq-border)] h-[20%] rounded-sm"></div>
+                    <div className="w-full bg-[var(--nq-border)] h-[40%] rounded-sm"></div>
+                    <div className="w-full bg-[var(--nq-border)] h-[30%] rounded-sm"></div>
+                    <div className="w-full bg-[var(--nq-border)] h-[50%] rounded-sm"></div>
+                    <div className="w-full bg-[var(--nq-border)] h-[20%] rounded-sm"></div>
+                  </div>
+                ) : (
+                  seriesBars.map((height, index) => (
+                    <div key={`bar-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-cyan)]/52" style={{ height: `${height}%` }} />
+                  ))
+                )}
               </div>
             </div>
           </div>

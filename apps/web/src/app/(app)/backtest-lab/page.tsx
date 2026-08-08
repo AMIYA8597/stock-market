@@ -285,7 +285,7 @@ export default function BacktestLabPage(): JSX.Element {
             <p className="text-[var(--nq-text-secondary)] mb-6 text-sm">
               Research-grade backtesting requires a Pro subscription. Upgrade to access walk-forward and Monte Carlo simulations.
             </p>
-            <Link href="/payments">
+            <Link href="/portfolio/funds">
               <Button className="w-full">Upgrade to Pro</Button>
             </Link>
           </div>
@@ -469,7 +469,7 @@ export default function BacktestLabPage(): JSX.Element {
             <button
               onClick={() => void onRunBacktest()}
               disabled={submitting}
-              className="w-full rounded-[1rem] bg-[linear-gradient(135deg,var(--nq-accent),#69f5ff)] px-4 py-2 text-sm font-semibold text-[#07111A] shadow-[0_14px_28px_rgba(0,212,245,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-[1rem] bg-[linear-gradient(135deg,var(--nq-accent),#69f5ff)] px-4 py-3 md:py-2 min-h-[44px] md:min-h-0 text-sm font-semibold text-[#07111A] shadow-[0_14px_28px_rgba(0,212,245,0.28)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? "Submitting..." : "Run Backtest"}
             </button>

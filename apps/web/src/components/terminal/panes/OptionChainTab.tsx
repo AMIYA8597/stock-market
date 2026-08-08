@@ -45,8 +45,8 @@ export default function OptionChainTab({ currentPrice }: OptionChainTabProps): J
   };
 
   return (
-    <div className="min-w-[500px] overflow-x-auto glass-panel glow-hover rounded-md transition-all duration-300">
-      <table className="w-full text-left text-[10px] font-mono">
+    <div className="w-full overflow-x-auto glass-panel glow-hover rounded-md transition-all duration-300 custom-scrollbar">
+      <table className="min-w-[500px] w-full text-left text-[10px] font-mono">
         <thead>
           <tr className="border-b border-[var(--nq-border)] text-[var(--nq-text-muted)] uppercase tracking-wider text-[8px]">
             <th className="pb-1.5 text-center border-r border-[rgba(255,255,255,0.05)]" colSpan={3}>
@@ -77,12 +77,12 @@ export default function OptionChainTab({ currentPrice }: OptionChainTabProps): J
               key={row.strike}
               className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)] transition-colors"
             >
-              <td className={`py-1 ${row.isITM_Call ? "bg-[rgba(0,212,245,0.06)]" : ""} text-[var(--nq-text-muted)]`}>
+              <td className={`py-3 md:py-1 ${row.isITM_Call ? "bg-[rgba(0,212,245,0.06)]" : ""} text-[var(--nq-text-muted)]`}>
                 {row.callOI.toLocaleString()}
               </td>
               <td
                 onClick={() => handlePrefillOption("SELL", row.callBid)}
-                className={`py-1 cursor-pointer hover:bg-[rgba(0,230,118,0.15)] hover:text-white transition ${
+                className={`py-3 md:py-1 cursor-pointer hover:bg-[rgba(0,230,118,0.15)] hover:text-white transition ${
                   row.isITM_Call ? "bg-[rgba(0,212,245,0.06)]" : ""
                 } text-[var(--nq-accent-green)]`}
                 title="Sell Call Option at Bid"
@@ -91,19 +91,19 @@ export default function OptionChainTab({ currentPrice }: OptionChainTabProps): J
               </td>
               <td
                 onClick={() => handlePrefillOption("BUY", row.callAsk)}
-                className={`py-1 cursor-pointer hover:bg-[rgba(0,230,118,0.15)] hover:text-white transition border-r border-[rgba(255,255,255,0.05)] ${
+                className={`py-3 md:py-1 cursor-pointer hover:bg-[rgba(0,230,118,0.15)] hover:text-white transition border-r border-[rgba(255,255,255,0.05)] ${
                   row.isITM_Call ? "bg-[rgba(0,212,245,0.06)]" : ""
                 } text-[var(--nq-accent-green)]`}
                 title="Buy Call Option at Ask"
               >
                 {safeFormat(row.callAsk, 2)}
               </td>
-              <td className="py-1 text-center font-bold border-x border-[var(--nq-border)] bg-[rgba(255,255,255,0.04)] text-[var(--nq-text-primary)]">
+              <td className="py-3 md:py-1 text-center font-bold border-x border-[var(--nq-border)] bg-[rgba(255,255,255,0.04)] text-[var(--nq-text-primary)]">
                 {safeFormat(row.strike, 2)}
               </td>
               <td
                 onClick={() => handlePrefillOption("SELL", row.putBid)}
-                className={`py-1 cursor-pointer hover:bg-[rgba(255,59,92,0.15)] hover:text-white transition border-l border-[rgba(255,255,255,0.05)] ${
+                className={`py-3 md:py-1 cursor-pointer hover:bg-[rgba(255,59,92,0.15)] hover:text-white transition border-l border-[rgba(255,255,255,0.05)] ${
                   row.isITM_Put ? "bg-[rgba(0,212,245,0.06)]" : ""
                 } text-[var(--nq-accent-green)]`}
                 title="Sell Put Option at Bid"
@@ -112,14 +112,14 @@ export default function OptionChainTab({ currentPrice }: OptionChainTabProps): J
               </td>
               <td
                 onClick={() => handlePrefillOption("BUY", row.putAsk)}
-                className={`py-1 cursor-pointer hover:bg-[rgba(255,59,92,0.15)] hover:text-white transition ${
+                className={`py-3 md:py-1 cursor-pointer hover:bg-[rgba(255,59,92,0.15)] hover:text-white transition ${
                   row.isITM_Put ? "bg-[rgba(0,212,245,0.06)]" : ""
                 } text-[var(--nq-accent-green)]`}
                 title="Buy Put Option at Ask"
               >
                 {safeFormat(row.putAsk, 2)}
               </td>
-              <td className={`py-1 text-right ${row.isITM_Put ? "bg-[rgba(0,212,245,0.06)]" : ""} text-[var(--nq-text-muted)]`}>
+              <td className={`py-3 md:py-1 text-right ${row.isITM_Put ? "bg-[rgba(0,212,245,0.06)]" : ""} text-[var(--nq-text-muted)]`}>
                 {row.putOI.toLocaleString()}
               </td>
             </tr>

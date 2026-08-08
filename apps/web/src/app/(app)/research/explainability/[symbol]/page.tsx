@@ -133,8 +133,8 @@ export default function ExplainabilityPage(): JSX.Element {
               const width = Math.round(Math.min(240, Math.abs(row.shap_val) * 400));
               const positive = row.shap_val >= 0;
               return (
-                <div key={row.name} className="grid grid-cols-[170px_1fr_80px] items-center gap-3">
-                  <span className="text-[var(--nq-text-secondary)]">{row.name}</span>
+                <div key={row.name} className="grid grid-cols-[100px_1fr_60px] sm:grid-cols-[170px_1fr_80px] items-center gap-2 sm:gap-3">
+                  <span className="text-[var(--nq-text-secondary)] truncate">{row.name}</span>
                   <div className="relative h-6 rounded bg-[rgba(255,255,255,0.03)]">
                     <div
                       className="absolute top-0 h-full rounded"
@@ -169,16 +169,18 @@ export default function ExplainabilityPage(): JSX.Element {
             ))}
             {topTimesteps.length === 0 ? <span className="text-xs text-[var(--nq-text-secondary)]">No timestep metadata.</span> : null}
           </div>
-          <div className="grid grid-cols-20 gap-[3px]">
-            {(loading
-              ? Array.from({ length: 160 }, (_, i) => ({ headIndex: Math.floor(i / 20), stepIndex: i % 20, value: 0.02 }))
-              : attentionGrid
-            ).map((cell) => {
+          <div className="relative grid grid-cols-20 gap-[2px] sm:gap-[3px]">
+            {loading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-[var(--nq-bg-card)]/50 backdrop-blur-sm z-10">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-cyan)]" />
+              </div>
+            )}
+            {attentionGrid.map((cell) => {
               const alpha = 0.08 + Math.min(0.85, cell.value * 8);
               return (
                 <div
                   key={`cell-${cell.headIndex}-${cell.stepIndex}`}
-                  className="h-6 rounded"
+                  className="h-4 sm:h-6 rounded"
                   style={{ background: `rgba(255,184,0,${alpha})` }}
                   title={`Head ${cell.headIndex + 1}, T-${20 - cell.stepIndex}`}
                 />

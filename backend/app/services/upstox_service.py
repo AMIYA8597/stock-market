@@ -472,8 +472,17 @@ class UpstoxService:
                 df = pd.DataFrame(
                     {"open": opens, "high": highs, "low": lows, "close": closes, "volume": volumes}
                 )
+                
+                # Import pipeline dynamically to avoid circular dependencies
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+                from research.feature_engineering.pipeline import FeaturePipeline
+                
+                # Route live ticks through FeaturePipeline to enforce causality-safety and typed-error discipline
+                df = FeaturePipeline().run(df)
 
-                # Append indicators
+                # Append UI overlay indicators
                 df.ta.ema(length=9, append=True)
                 df.ta.ema(length=21, append=True)
                 df.ta.ema(length=50, append=True)

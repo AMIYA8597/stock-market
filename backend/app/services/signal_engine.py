@@ -10,6 +10,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pandas_ta as ta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

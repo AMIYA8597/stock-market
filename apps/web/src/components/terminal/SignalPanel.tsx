@@ -365,6 +365,31 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     return parsedQty * parsedPrice;
   }, [quantity, price, orderType, liveTick, quote]);
 
+  if (!signal || signal.model_status === "fallback") {
+    return (
+      <aside className="flex h-full flex-col items-center justify-center border-t border-[var(--nq-border)] bg-[var(--nq-bg-surface)] p-6 lg:border-l lg:border-t-0 ds-page-transition">
+        <div className="rounded-full bg-[rgba(255,193,7,0.08)] p-4 mb-4 border border-[rgba(255,193,7,0.2)]">
+          <svg className="w-8 h-8 text-[#F7C948]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+          </svg>
+        </div>
+        <h3 className="text-sm font-semibold text-[var(--nq-text-primary)] mb-1 uppercase tracking-wider font-mono">Prediction Model Not Yet Trained</h3>
+        <p className="text-[11px] text-[var(--nq-text-secondary)] text-center max-w-[250px] leading-relaxed mb-4">
+          {signal?.symbol ? `The AI ensemble model for ${signal.symbol} is currently collecting data or awaiting next batch training.` : "Select a symbol from the watchlist to view its AI trade signals."}
+        </p>
+        {signal?.symbol && (
+          <button
+            type="button"
+            className="rounded border border-[var(--nq-accent)] bg-[rgba(0,212,245,0.08)] px-4 py-2 text-xs font-semibold text-[var(--nq-accent-cyan)] transition-colors hover:bg-[rgba(0,212,245,0.15)] shadow-sm uppercase tracking-wider font-mono"
+            onClick={() => alert(`Requested training for ${signal.symbol}. This will take 2-4 hours to complete the walk-forward validation.`)}
+          >
+            Request Model Training
+          </button>
+        )}
+      </aside>
+    );
+  }
+
   return (
     <aside className="h-full overflow-y-auto border-t border-[var(--nq-border)] bg-[var(--nq-bg-surface)] p-3 lg:border-l lg:border-t-0 ds-scrollable ds-page-transition">
       {/* QuantEdge Academic Disclaimer Banner */}
@@ -608,8 +633,8 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         )}
       </div>
 
-      <div id="order-ticket" className="mt-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3 shadow-md">
-        <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Order ticket</p>
+      <div id="order-ticket" className="mt-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-2.5 shadow-md">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Order ticket</p>
         
         <div className="mb-2.5 flex items-center justify-between rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--nq-text-secondary)]">Trading Session</span>
@@ -651,12 +676,12 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           </div>
         </div>
 
-        <form className="space-y-2.5" onSubmit={submitOrder}>
-          <div className="grid grid-cols-2 gap-2 text-xs">
+        <form className="space-y-2" onSubmit={submitOrder}>
+          <div className="grid grid-cols-2 gap-1.5 text-[10px]">
             <button
               type="button"
               onClick={() => setSide("BUY")}
-              className={`rounded border px-2 py-1.5 font-bold uppercase transition ${
+              className={`rounded border px-2 py-1 font-bold uppercase transition ${
                 side === "BUY"
                   ? "border-[#00E676] bg-[rgba(0,230,118,0.15)] text-[#00E676]"
                   : "border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
@@ -667,7 +692,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
             <button
               type="button"
               onClick={() => setSide("SELL")}
-              className={`rounded border px-2 py-1.5 font-bold uppercase transition ${
+              className={`rounded border px-2 py-1 font-bold uppercase transition ${
                 side === "SELL"
                   ? "border-[#FF3B5C] bg-[rgba(255,59,92,0.15)] text-[#FF3B5C]"
                   : "border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
@@ -714,7 +739,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           </label>
 
           <div className="grid grid-cols-2 gap-2 font-mono">
-            <label className="block text-[10px] font-semibold uppercase text-[var(--nq-text-secondary)]">
+            <label className="block text-[9px] font-semibold uppercase text-[var(--nq-text-secondary)]">
               Quantity
               <input
                 type="number"
@@ -722,10 +747,10 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
                 step="0.0001"
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
-                className="mt-1 w-full rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2.5 py-1.5 text-xs text-[var(--nq-text-primary)] outline-none focus:border-[var(--nq-accent)]"
+                className="mt-1 w-full rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2 py-1 text-[10px] text-[var(--nq-text-primary)] outline-none focus:border-[var(--nq-accent)]"
               />
             </label>
-            <label className="block text-[10px] font-semibold uppercase text-[var(--nq-text-secondary)]">
+            <label className="block text-[9px] font-semibold uppercase text-[var(--nq-text-secondary)]">
               Price (INR)
               <input
                 type="number"
@@ -734,7 +759,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
                 disabled={orderType === "MARKET"}
                 value={orderType === "MARKET" ? (liveTick ? liveTick.price : (quote?.price || price)) : price}
                 onChange={(event) => setPrice(event.target.value)}
-                className="mt-1 w-full rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2.5 py-1.5 text-xs text-[var(--nq-text-primary)] outline-none focus:border-[var(--nq-accent)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="mt-1 w-full rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] px-2 py-1 text-[10px] text-[var(--nq-text-primary)] outline-none focus:border-[var(--nq-accent)] disabled:cursor-not-allowed disabled:opacity-50"
               />
             </label>
           </div>

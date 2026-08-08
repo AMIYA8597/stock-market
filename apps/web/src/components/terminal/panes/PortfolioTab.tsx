@@ -184,7 +184,7 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
           {tradingMode === "PAPER" && (
             <button
               onClick={handleResetWallet}
-              className="rounded border border-[#FF3B5C]/40 bg-[rgba(255,59,92,0.08)] px-2 py-1 text-[8px] font-bold uppercase text-[#FF3B5C] hover:bg-[rgba(255,59,92,0.18)] transition"
+              className="rounded border border-[#FF3B5C]/40 bg-[rgba(255,59,92,0.08)] px-2 py-3 md:py-1 min-h-[44px] md:min-h-0 min-w-[44px] md:min-w-0 text-[8px] font-bold uppercase text-[#FF3B5C] hover:bg-[rgba(255,59,92,0.18)] transition"
               title="Reset capital back to ₹1,00,000 and close open positions"
             >
               Reset
@@ -194,10 +194,10 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
       </div>
 
       {/* Pane Sub-Tabs selection (TradingView Style) */}
-      <div className="flex border-b border-[var(--nq-border)] gap-2 pb-1 mb-1 font-mono text-[10px]">
+      <div className="flex border-b border-[var(--nq-border)] gap-2 pb-1 mb-1 font-mono text-[10px] overflow-x-auto custom-scrollbar">
         <button
           onClick={() => setActiveTab("positions")}
-          className={`px-3 py-1 font-semibold uppercase transition-colors border-b-2 ${
+          className={`px-3 py-3 md:py-1 min-h-[44px] md:min-h-0 whitespace-nowrap font-semibold uppercase transition-colors border-b-2 ${
             activeTab === "positions"
               ? "border-[var(--nq-accent-cyan)] text-[var(--nq-text-primary)]"
               : "border-transparent text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)]"
@@ -207,7 +207,7 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
         </button>
         <button
           onClick={() => setActiveTab("orders")}
-          className={`px-3 py-1 font-semibold uppercase transition-colors border-b-2 ${
+          className={`px-3 py-3 md:py-1 min-h-[44px] md:min-h-0 whitespace-nowrap font-semibold uppercase transition-colors border-b-2 ${
             activeTab === "orders"
               ? "border-[var(--nq-accent-cyan)] text-[var(--nq-text-primary)]"
               : "border-transparent text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)]"
@@ -217,7 +217,7 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
         </button>
         <button
           onClick={() => setActiveTab("history")}
-          className={`px-3 py-1 font-semibold uppercase transition-colors border-b-2 ${
+          className={`px-3 py-3 md:py-1 min-h-[44px] md:min-h-0 whitespace-nowrap font-semibold uppercase transition-colors border-b-2 ${
             activeTab === "history"
               ? "border-[var(--nq-accent-cyan)] text-[var(--nq-text-primary)]"
               : "border-transparent text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)]"
@@ -349,7 +349,7 @@ export default function PortfolioTab({ symbol }: PortfolioTabProps): JSX.Element
                             <td className="py-2 text-center">
                               <button
                                 onClick={() => handleCancelOrder(ord.id, ord.symbol)}
-                                className="rounded bg-[rgba(255,59,92,0.15)] text-[#FF3B5C] border border-[#FF3B5C]/35 px-2 py-0.5 text-[9px] font-bold uppercase hover:bg-[rgba(255,59,92,0.25)] transition"
+                                className="rounded bg-[rgba(255,59,92,0.15)] text-[#FF3B5C] border border-[#FF3B5C]/35 px-2 py-2 md:py-0.5 min-h-[44px] md:min-h-0 text-[9px] font-bold uppercase hover:bg-[rgba(255,59,92,0.25)] transition"
                               >
                                 Cancel
                               </button>

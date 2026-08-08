@@ -69,3 +69,32 @@ def test_feature_pipeline_no_lookahead_leakage():
             f"Value at T without future: {val_past}, "
             f"Value at T with future: {val_future}"
         )
+
+import pytest
+from research.feature_engineering.base import FeatureBuilder
+
+class LeakyFeatureBuilder(FeatureBuilder):
+    name = "leaky_feature"
+
+    def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
+        data = frame.copy()
+        # Deliberately use future data: close 2 bars ahead
+        data["leaky_close"] = data["close"].shift(-2)
+        return data
+
+def test_causality_guard_rejects_leaky_feature():
+    """Test that FeaturePipeline.validate_causality() catches explicit look-ahead bias."""
+    np.random.seed(42)
+    dates = pd.date_range(start="2020-01-01", periods=50, freq="B")
+    
+    df = pd.DataFrame({
+        "time": dates,
+        "symbol": "TEST",
+        "close": np.random.uniform(100, 110, size=50),
+    })
+
+    # Initialize pipeline with the leaky builder
+    pipeline = FeaturePipeline(builders=[LeakyFeatureBuilder()])
+    
+    with pytest.raises(ValueError, match="Causality guard failed! Look-ahead bias detected in features: leaky_close"):
+        pipeline.validate_causality(df)

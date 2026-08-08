@@ -96,6 +96,8 @@ async def run_price_ticker(redis: Redis) -> None:
 
             batch_quotes = await MarketDataService.get_batch_quotes(symbols_list)
 
+            batch_start_time = time.time()
+
             for sym in symbols_list:
                 try:
                     await bucket.consume(1)
@@ -107,40 +109,44 @@ async def run_price_ticker(redis: Redis) -> None:
                     normalized_symbol = quote["symbol"]  # e.g. RELIANCE.NS
                     price = float(quote["price"])
 
+                    # Graceful degradation: skip heavy DB/History lookups if this batch is taking too long (e.g. >2s)
+                    skip_heavy_calcs = (time.time() - batch_start_time) > 2.0
+
                     # 1. Fetch cached daily history to compute latest indicators
                     ema9_val, ema21_val, rsi_val = None, None, None
                     macd_val, macd_sig, macd_h = None, None, None
-                    try:
-                        hist = await MarketDataService.get_history(
-                            normalized_symbol, interval="1d", period="3mo"
-                        )
-                        if hist and len(hist) >= 10:
-                            closes = [float(h["close"]) for h in hist] + [price]
-                            closes_df = pd.DataFrame({"close": closes})
+                    if not skip_heavy_calcs:
+                        try:
+                            hist = await MarketDataService.get_history(
+                                normalized_symbol, interval="1d", period="3mo"
+                            )
+                            if hist and len(hist) >= 10:
+                                closes = [float(h["close"]) for h in hist] + [price]
+                                closes_df = pd.DataFrame({"close": closes})
 
-                            ema9 = closes_df.ta.ema(close="close", length=9)
-                            ema21 = closes_df.ta.ema(close="close", length=21)
-                            rsi = closes_df.ta.rsi(close="close", length=14)
-                            macd_df = closes_df.ta.macd(close="close", fast=12, slow=26, signal=9)
+                                ema9 = closes_df.ta.ema(close="close", length=9)
+                                ema21 = closes_df.ta.ema(close="close", length=21)
+                                rsi = closes_df.ta.rsi(close="close", length=14)
+                                macd_df = closes_df.ta.macd(close="close", fast=12, slow=26, signal=9)
 
-                            if ema9 is not None and not pd.isna(ema9.iloc[-1]):
-                                ema9_val = float(ema9.iloc[-1])
-                            if ema21 is not None and not pd.isna(ema21.iloc[-1]):
-                                ema21_val = float(ema21.iloc[-1])
-                            if rsi is not None and not pd.isna(rsi.iloc[-1]):
-                                rsi_val = float(rsi.iloc[-1])
+                                if ema9 is not None and not pd.isna(ema9.iloc[-1]):
+                                    ema9_val = float(ema9.iloc[-1])
+                                if ema21 is not None and not pd.isna(ema21.iloc[-1]):
+                                    ema21_val = float(ema21.iloc[-1])
+                                if rsi is not None and not pd.isna(rsi.iloc[-1]):
+                                    rsi_val = float(rsi.iloc[-1])
 
-                            if macd_df is not None:
-                                if not pd.isna(macd_df.iloc[-1, 0]):
-                                    macd_val = float(macd_df.iloc[-1, 0])
-                                if not pd.isna(macd_df.iloc[-1, 1]):
-                                    macd_h = float(macd_df.iloc[-1, 1])
-                                if not pd.isna(macd_df.iloc[-1, 2]):
-                                    macd_sig = float(macd_df.iloc[-1, 2])
-                    except Exception as ind_err:
-                        logger.warning(
-                            f"Failed to calculate indicators for tick {normalized_symbol}: {ind_err}"
-                        )
+                                if macd_df is not None:
+                                    if not pd.isna(macd_df.iloc[-1, 0]):
+                                        macd_val = float(macd_df.iloc[-1, 0])
+                                    if not pd.isna(macd_df.iloc[-1, 1]):
+                                        macd_h = float(macd_df.iloc[-1, 1])
+                                    if not pd.isna(macd_df.iloc[-1, 2]):
+                                        macd_sig = float(macd_df.iloc[-1, 2])
+                        except Exception as ind_err:
+                            logger.warning(
+                                f"Failed to calculate indicators for tick {normalized_symbol}: {ind_err}"
+                            )
 
                     # Standard Envelope for tick
                     tick = {
@@ -180,37 +186,38 @@ async def run_price_ticker(redis: Redis) -> None:
                         )
 
                     # 4. Generate live ML signals on tick
-                    try:
-                        pred = await get_full_prediction(normalized_symbol, bypass_cache=False)
-                        if pred and pred.get("is_computed", False):
-                            ens = pred.get("ensemble", {})
+                    if not skip_heavy_calcs:
+                        try:
+                            pred = await get_full_prediction(normalized_symbol, bypass_cache=False)
+                            if pred and pred.get("is_computed", False):
+                                ens = pred.get("ensemble", {})
 
-                            rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
-                            macd_str = f"{macd_val:.2f}" if macd_val is not None else "N/A"
-                            ema9_str = f"{ema9_val:.2f}" if ema9_val is not None else "N/A"
-                            rationale = f"RSI is {rsi_str}. MACD is {macd_str}. Price is ₹{price:,.2f} vs EMA9 ₹{ema9_str}. Ensemble suggests {ens.get('direction')} (Conf: {ens.get('confidence', 0.5) * 100:.1f}%)."
+                                rsi_str = f"{rsi_val:.1f}" if rsi_val is not None else "N/A"
+                                macd_str = f"{macd_val:.2f}" if macd_val is not None else "N/A"
+                                ema9_str = f"{ema9_val:.2f}" if ema9_val is not None else "N/A"
+                                rationale = f"RSI is {rsi_str}. MACD is {macd_str}. Price is ₹{price:,.2f} vs EMA9 ₹{ema9_str}. Ensemble suggests {ens.get('direction')} (Conf: {ens.get('confidence', 0.5) * 100:.1f}%)."
 
-                            # Standard Envelope for signal
-                            signal_msg = {
-                                "type": "signal",
-                                "symbol": normalized_symbol,
-                                "payload": {
-                                    "direction": ens.get("direction", "NEUTRAL"),
-                                    "confidence": float(ens.get("confidence", 0.5)),
-                                    "raw_ensemble": float(ens.get("raw_ensemble", 0.0)),
-                                    "stop_loss": float(ens.get("stop_loss", price)),
-                                    "take_profit": float(ens.get("take_profit", price)),
-                                    "rationale": rationale,
-                                },
-                                "ts": datetime.now(UTC).isoformat(),
-                                "source": "system",
-                            }
+                                # Standard Envelope for signal
+                                signal_msg = {
+                                    "type": "signal",
+                                    "symbol": normalized_symbol,
+                                    "payload": {
+                                        "direction": ens.get("direction", "NEUTRAL"),
+                                        "confidence": float(ens.get("confidence", 0.5)),
+                                        "raw_ensemble": float(ens.get("raw_ensemble", 0.0)),
+                                        "stop_loss": float(ens.get("stop_loss", price)),
+                                        "take_profit": float(ens.get("take_profit", price)),
+                                        "rationale": rationale,
+                                    },
+                                    "ts": datetime.now(UTC).isoformat(),
+                                    "source": "system",
+                                }
 
-                            await redis.publish("prices.ticks", json.dumps(signal_msg))
-                    except Exception as sig_err:
-                        logger.warning(
-                            f"Failed to compute live signal for tick {normalized_symbol}: {sig_err}"
-                        )
+                                await redis.publish("prices.ticks", json.dumps(signal_msg))
+                        except Exception as sig_err:
+                            logger.warning(
+                                f"Failed to compute live signal for tick {normalized_symbol}: {sig_err}"
+                            )
                 except Exception as e:
                     logger.debug(f"Ticker processing failed for symbol={sym}: {e}")
 

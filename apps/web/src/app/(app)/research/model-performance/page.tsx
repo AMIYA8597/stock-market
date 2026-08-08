@@ -87,15 +87,15 @@ export default function ModelPerformancePage(): JSX.Element {
       </div>
       {error ? <p className="text-sm text-[var(--nq-accent-red)]">{error}</p> : null}
 
-      <div className="overflow-hidden rounded-lg border border-[var(--nq-border)] bg-[var(--nq-bg-card)]">
+      <div className="overflow-x-auto overflow-y-hidden rounded-lg border border-[var(--nq-border)] bg-[var(--nq-bg-card)]">
         <table className="w-full text-left text-sm">
           <thead className="bg-[var(--nq-bg-card-hover)] text-[var(--nq-text-secondary)]">
             <tr>
               <th className="px-4 py-2">Model</th>
               <th className="px-4 py-2">Directional Accuracy</th>
-              <th className="px-4 py-2">P50 RMSE</th>
-              <th className="px-4 py-2">Winkler Coverage</th>
-              <th className="px-4 py-2">KS Stat</th>
+              <th className="px-4 py-2 whitespace-nowrap">P50 RMSE</th>
+              <th className="px-4 py-2 whitespace-nowrap">Winkler Coverage</th>
+              <th className="px-4 py-2 whitespace-nowrap">KS Stat</th>
             </tr>
           </thead>
           <tbody>
@@ -113,6 +113,13 @@ export default function ModelPerformancePage(): JSX.Element {
                 <td className="px-4 py-3 text-[var(--nq-text-secondary)]" colSpan={5}>No model performance data returned.</td>
               </tr>
             ) : null}
+            {loading && tableRows.length === 0 ? (
+              <tr className="border-t border-[var(--nq-border)]">
+                <td className="px-4 py-3 text-[var(--nq-text-secondary)]" colSpan={5}>
+                  <div className="flex justify-center"><div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-cyan)]" /></div>
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
@@ -121,22 +128,34 @@ export default function ModelPerformancePage(): JSX.Element {
         <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <h3 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Directional Accuracy Snapshot</h3>
           <div className="h-36 rounded bg-[rgba(255,255,255,0.03)] p-2">
-            <div className="flex h-full items-end gap-[2px]">
-              {(loading ? Array.from({ length: 30 }, () => 20) : accuracyBars).map((height, index) => (
-                <div key={`acc-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-cyan)]/52" style={{ height: `${height}%` }} />
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-cyan)]" />
+              </div>
+            ) : (
+              <div className="flex h-full items-end gap-[2px]">
+                {accuracyBars.map((height, index) => (
+                  <div key={`acc-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-cyan)]/52" style={{ height: `${height}%` }} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
           <h3 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Residual Distribution Snapshot</h3>
           <div className="h-36 rounded bg-[rgba(255,255,255,0.03)] p-2">
-            <div className="flex h-full items-end gap-[3px]">
-              {(loading ? Array.from({ length: 24 }, () => 14) : residualBars).map((height, index) => (
-                <div key={`res-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-purple)]/55" style={{ height: `${height}%` }} />
-              ))}
-            </div>
+            {loading ? (
+              <div className="flex h-full items-center justify-center">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-purple)]" />
+              </div>
+            ) : (
+              <div className="flex h-full items-end gap-[3px]">
+                {residualBars.map((height, index) => (
+                  <div key={`res-${index}`} className="w-full rounded-sm bg-[var(--nq-accent-purple)]/55" style={{ height: `${height}%` }} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

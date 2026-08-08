@@ -160,12 +160,18 @@ export default function RegimeAnalysisPage(): JSX.Element {
 
           <ChartCard title="Conditional Volatility Forecast" subtitle="Rolling conditional volatility from regime model">
             <div className="h-[220px] rounded bg-[rgba(255,255,255,0.02)] p-2">
-              <SimpleLineAreaChart
-                data={loading ? Array.from({ length: 24 }, (_, idx) => ({ label: String(idx + 1), value: 0.12 })) : volSeries}
-                mode="line"
-                stroke="var(--nq-accent-red)"
-                yTickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
-              />
+              {loading ? (
+                <div className="flex h-full w-full items-center justify-center">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-red)]" />
+                </div>
+              ) : (
+                <SimpleLineAreaChart
+                  data={volSeries}
+                  mode="line"
+                  stroke="var(--nq-accent-red)"
+                  yTickFormatter={(value) => `${(value * 100).toFixed(1)}%`}
+                />
+              )}
             </div>
           </ChartCard>
         </section>
@@ -186,19 +192,19 @@ export default function RegimeAnalysisPage(): JSX.Element {
           </Card>
 
           <ChartCard title="Transition Matrix" subtitle="4x4 probability heatmap">
-            <SimpleHeatGrid
-              rows={4}
-              cols={4}
-              cells={loading
-                ? Array.from({ length: 16 }, (_, index) => ({
-                    row: Math.floor(index / 4),
-                    col: index % 4,
-                    value: 0.25,
-                  }))
-                : transitionCells}
-              min={0}
-              max={1}
-            />
+            {loading ? (
+              <div className="flex h-[200px] w-full items-center justify-center">
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-cyan)]" />
+              </div>
+            ) : (
+              <SimpleHeatGrid
+                rows={4}
+                cols={4}
+                cells={transitionCells}
+                min={0}
+                max={1}
+              />
+            )}
           </ChartCard>
 
           <div className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4">

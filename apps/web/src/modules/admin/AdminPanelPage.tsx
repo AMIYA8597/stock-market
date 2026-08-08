@@ -32,9 +32,7 @@ interface AdminUser {
   status: "Active" | "Invited" | "Suspended";
 }
 
-const seedUsers: AdminUser[] = [];
 
-const seedContentRows: any[] = [];
 
 export function AdminPanelPage(): JSX.Element {
   const pushToast = useToastStore((state) => state.pushToast);

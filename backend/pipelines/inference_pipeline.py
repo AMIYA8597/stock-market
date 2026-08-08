@@ -13,9 +13,10 @@ from research.models.ensemble.orchestrator import (
 
 @dataclass(slots=True)
 class InferencePipelineInput:
-    model_signals: dict[str, float]
-    rolling_sharpes: dict[str, float]
-    regime_weights: dict[str, float]
+    technical_score: float
+    ml_score: float
+    sentiment_tilt: float
+    regime: str
     regime_mean: float
     regime_variance: float
 
@@ -24,9 +25,10 @@ def run_inference_pipeline(payload: InferencePipelineInput) -> EnsembleInference
     """Run deterministic ensemble aggregation for one inference tick."""
     return build_ensemble_result(
         InferenceContext(
-            model_signals=payload.model_signals,
-            rolling_sharpes=payload.rolling_sharpes,
-            regime_weights=payload.regime_weights,
+            technical_score=payload.technical_score,
+            ml_score=payload.ml_score,
+            sentiment_tilt=payload.sentiment_tilt,
+            regime=payload.regime,
             regime_mean=payload.regime_mean,
             regime_variance=payload.regime_variance,
         )

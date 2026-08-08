@@ -30,10 +30,22 @@ class ConnectionManager:
         self._subscriptions: dict[WebSocket, set[str]] = defaultdict(set)
         # Maps WebSocket -> background heartbeat task
         self._heartbeats: dict[WebSocket, asyncio.Task] = {}
+        # Maps IP -> count of active connections
+        self._ip_counts: dict[str, int] = defaultdict(int)
+        self.MAX_CONNECTIONS_PER_IP = 5
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept a WebSocket connection and start its heartbeat."""
+        from fastapi import WebSocketException
+        client_ip = websocket.client.host if websocket.client else "unknown"
+        
+        async with self._lock:
+            if client_ip != "unknown" and self._ip_counts[client_ip] >= self.MAX_CONNECTIONS_PER_IP:
+                raise WebSocketException(code=1008, reason="Too many connections from this IP")
+            if client_ip != "unknown":
+                self._ip_counts[client_ip] += 1
+
         await websocket.accept()
         logger.info("WebSocket connected")
 
@@ -98,6 +110,10 @@ class ConnectionManager:
             if websocket in self._subscriptions:
                 del self._subscriptions[websocket]
 
+            client_ip = websocket.client.host if websocket.client else "unknown"
+            if client_ip != "unknown" and self._ip_counts[client_ip] > 0:
+                self._ip_counts[client_ip] -= 1
+
         logger.info("WebSocket disconnected cleanly")
 
     async def broadcast(self, channel: str, data: Any) -> None:
@@ -113,7 +129,11 @@ class ConnectionManager:
 
         for ws in connections:
             try:
-                await ws.send_text(message)
+                # Add 1s timeout to drop slow clients instead of blocking everyone
+                await asyncio.wait_for(ws.send_text(message), timeout=1.0)
+            except TimeoutError:
+                # Graceful degradation: Client too slow, drop this frame
+                logger.warning("Broadcast dropped frame due to client backpressure timeout")
             except Exception:
                 dead.append(ws)
 
@@ -122,9 +142,16 @@ class ConnectionManager:
                 await self.disconnect(ws)
 
     async def send_personal(self, websocket: WebSocket, data: Any) -> None:
-        """Send a JSON message to a specific WebSocket connection."""
+        """Send a JSON message to a specific WebSocket connection with backpressure handling."""
         message = json.dumps(data) if not isinstance(data, str) else data
-        await websocket.send_text(message)
+        try:
+            # 1s timeout prevents a slow client from blocking the pubsub consumer loop
+            await asyncio.wait_for(websocket.send_text(message), timeout=1.0)
+        except TimeoutError:
+            logger.warning("send_personal dropped frame due to client backpressure timeout")
+        except Exception as e:
+            # Re-raise to let caller handle disconnects
+            raise e
 
     @property
     def active_channels(self) -> list[str]:

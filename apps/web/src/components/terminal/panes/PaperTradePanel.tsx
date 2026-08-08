@@ -73,7 +73,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
             <button
               type="button"
               onClick={() => setSide("BUY")}
-              className={`flex-1 rounded py-1.5 text-xs font-bold transition-all ${
+              className={`flex-1 rounded py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 text-xs font-bold transition-all ${
                 side === "BUY" ? "bg-[rgba(0,230,118,0.15)] text-[var(--accent-green)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
               }`}
             >
@@ -82,7 +82,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
             <button
               type="button"
               onClick={() => setSide("SELL")}
-              className={`flex-1 rounded py-1.5 text-xs font-bold transition-all ${
+              className={`flex-1 rounded py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 text-xs font-bold transition-all ${
                 side === "SELL" ? "bg-[rgba(255,59,92,0.15)] text-[var(--accent-red)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]"
               }`}
             >
@@ -96,7 +96,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
               <select
                 value={orderType}
                 onChange={(e) => setOrderType(e.target.value as "MARKET" | "LIMIT")}
-                className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent-cyan)] focus:outline-none"
+                className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 text-sm text-[var(--text-primary)] focus:border-[var(--accent-cyan)] focus:outline-none"
               >
                 <option value="MARKET">Market</option>
                 <option value="LIMIT">Limit</option>
@@ -109,7 +109,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 min="1"
-                className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent-cyan)] focus:outline-none"
+                className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 text-sm text-[var(--text-primary)] focus:border-[var(--accent-cyan)] focus:outline-none"
               />
             </div>
           </div>
@@ -123,7 +123,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
                 onChange={(e) => setPrice(e.target.value)}
                 step="0.05"
                 min="0"
-                className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-1.5 text-sm text-[var(--text-primary)] focus:border-[var(--accent-cyan)] focus:outline-none"
+                className="w-full rounded border border-[var(--border-subtle)] bg-[var(--bg-surface)] px-2 py-2.5 md:py-1.5 min-h-[44px] md:min-h-0 text-sm text-[var(--text-primary)] focus:border-[var(--accent-cyan)] focus:outline-none"
               />
             </div>
           )}

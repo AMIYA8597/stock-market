@@ -12,7 +12,7 @@ final = (0.4 * technical_score) + (0.6 * ML_score) + sentiment_tilt
 
 - **Technical Score (`tech_score`)**: Composite of RSI, MACD, Bollinger Bands (-1.0 to 1.0).
 - **ML Score (`ml_score`)**: Normalized probability from the trained XGBoost or LightGBM model (-1.0 to 1.0). If untrained, defaults to 0.
-- **Sentiment Tilt (`sentiment_tilt`)**: Extracted from FinBERT (or simulated equivalent for missing news), scaled by 0.15.
+- **Sentiment Tilt (`sentiment_tilt`)**: Extracted from FinBERT via public RSS feeds, scaled by 0.15. The sentiment pipeline degrades gracefully on RSS failures or missing news, safely defaulting to a 0.0 tilt instead of crashing the prediction pipeline.
 
 ## Regime Gate
 The fused score is gated by the HMM-identified market regime:
@@ -35,3 +35,6 @@ The fused score is gated by the HMM-identified market regime:
 All approved signals are saved in PostgreSQL under the `EnsembleSignal` model with:
 1. `inputs_used`: JSON snapshot of subscore signals (technical, pattern, momentum, xgboost, sentiment).
 2. `outcome`: Realized outcome tracking status (e.g. `PENDING`, `WIN`, `LOSS`).
+
+## The Honesty Law Guard
+To prevent a leaky signal from ever reaching production, the system strictly enforces the Honesty Law during model training. If a model exhibits **>75% directional accuracy** (an impossible feat in efficient markets without look-ahead bias), the training pipeline throws a `LeakageError` and violently blocks the leaky `.pkl` from saving or updating the active DB artifact.

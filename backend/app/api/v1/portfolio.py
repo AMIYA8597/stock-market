@@ -8,7 +8,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user_or_none, get_db, require_premium_tier
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
@@ -37,6 +37,20 @@ async def list_portfolios(
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
+    import uuid
+
+    from sqlalchemy import and_, func, select
+
+    from app.models.payment import PaymentTransaction
+
+    uid = uuid.UUID(str(current_user.id))
+    deposits_res = await db.execute(
+        select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
+            and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded")
+        )
+    )
+    initial_cap = float(deposits_res.scalar_one()) or 0.0
+
     holdings = await get_holdings(current_user=current_user, db=db)
 
     return [
@@ -45,7 +59,7 @@ async def list_portfolios(
             "user_id": str(current_user.id),
             "name": "Main Portfolio",
             "description": "Primary trading portfolio",
-            "initial_capital": 100000.0,
+            "initial_capital": initial_cap,
             "total_value": float(holdings.portfolio_value),
             "cash_balance": float(holdings.cash_balance),
             "holdings": [h.model_dump() for h in holdings.holdings],
@@ -546,30 +560,99 @@ async def post_transaction(
 )
 async def get_risk_metrics(
     current_user: dict | None = Depends(get_current_user_or_none),
+    db: AsyncSession = Depends(get_db),
 ) -> RiskMetricsResponse:
-    """Return portfolio risk metrics for dashboard and monitoring."""
+    """Return portfolio risk metrics based on actual historical performance."""
     try:
-        _ = current_user
+        if not current_user:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        import numpy as np
+
+        # Calculate real performance
+        perf = await get_performance(current_user=current_user, db=db)
+
+        # If no history, return zeroes
+        if not perf.history or len(perf.history) < 2:
+            return RiskMetricsResponse(
+                sharpe_ratio=Decimal("0.0"),
+                sortino_ratio=Decimal("0.0"),
+                beta=Decimal("0.0"),
+                alpha=Decimal("0.0"),
+                max_drawdown=Decimal("0.0"),
+                var_95=Decimal("0.0"),
+                cvar_95=Decimal("0.0"),
+                treynor_ratio=Decimal("0.0"),
+                information_ratio=Decimal("0.0"),
+                calmar_ratio=Decimal("0.0"),
+                portfolio_volatility=Decimal("0.0"),
+                benchmark_volatility=Decimal("0.0"),
+            )
+
+        port_vals = [float(p.portfolio_value) for p in perf.history]
+        bench_vals = [float(p.benchmark_value) for p in perf.history]
+
+        # Returns
+        port_rets = np.diff(port_vals) / np.array(port_vals[:-1])
+        bench_rets = np.diff(bench_vals) / np.array(bench_vals[:-1])
+
+        # Volatility
+        port_vol = float(np.std(port_rets) * np.sqrt(252))
+        bench_vol = float(np.std(bench_rets) * np.sqrt(252))
+
+        # Sharpe
+        mean_ret = float(np.mean(port_rets) * 252)
+        sharpe = mean_ret / port_vol if port_vol > 0 else 0.0
+
+        # Max DD
+        cumulative = np.maximum.accumulate(port_vals)
+        drawdowns = (cumulative - port_vals) / cumulative
+        max_dd = float(np.max(drawdowns))
+
+        # Beta
+        cov = np.cov(port_rets, bench_rets)[0][1]
+        var_bench = np.var(bench_rets)
+        beta = float(cov / var_bench) if var_bench > 0 else 1.0
+
+        # Alpha
+        alpha = mean_ret - beta * float(np.mean(bench_rets) * 252)
+
+        # Sortino (downside vol)
+        downside = port_rets[port_rets < 0]
+        down_vol = float(np.std(downside) * np.sqrt(252)) if len(downside) > 0 else 0.0
+        sortino = mean_ret / down_vol if down_vol > 0 else sharpe
+
+        # VaR & CVaR 95%
+        var_95 = float(np.percentile(port_rets, 5))
+        cvar_95 = float(np.mean(port_rets[port_rets <= var_95])) if len(port_rets[port_rets <= var_95]) > 0 else var_95
+
+        import math
+
+        def safe_decimal(val: float) -> Decimal:
+            if math.isnan(val) or math.isinf(val):
+                return Decimal("0.0")
+            return Decimal(str(round(val, 4)))
+
         return RiskMetricsResponse(
-            sharpe_ratio=Decimal("1.4200"),
-            sortino_ratio=Decimal("1.8800"),
-            beta=Decimal("0.9300"),
-            alpha=Decimal("0.0210"),
-            max_drawdown=Decimal("0.0870"),
-            var_95=Decimal("0.0235"),
-            cvar_95=Decimal("0.0341"),
-            treynor_ratio=Decimal("0.1180"),
-            information_ratio=Decimal("0.6400"),
-            calmar_ratio=Decimal("1.1700"),
-            portfolio_volatility=Decimal("0.1420"),
-            benchmark_volatility=Decimal("0.1530"),
+            sharpe_ratio=safe_decimal(sharpe),
+            sortino_ratio=safe_decimal(sortino),
+            beta=safe_decimal(beta),
+            alpha=safe_decimal(alpha),
+            max_drawdown=safe_decimal(max_dd),
+            var_95=safe_decimal(abs(var_95)),
+            cvar_95=safe_decimal(abs(cvar_95)),
+            treynor_ratio=Decimal("0.0"),
+            information_ratio=Decimal("0.0"),
+            calmar_ratio=safe_decimal(mean_ret / max_dd if max_dd > 0 else 0.0),
+            portfolio_volatility=safe_decimal(port_vol),
+            benchmark_volatility=safe_decimal(bench_vol),
         )
     except Exception as exc:
         raise HTTPException(
             status_code=500,
             detail=ErrorResponse.create(
                 code=ErrorCode.INTERNAL_SERVER_ERROR,
-                message="Failed to fetch risk metrics.",
+                message=f"Failed to fetch risk metrics: {str(exc)}",
             ).dict(),
         ) from exc
 
@@ -582,7 +665,7 @@ async def get_risk_metrics(
 async def post_optimize(
     request: OptimizationRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict = Depends(require_premium_tier()),
 ) -> OptimizationResponse:
     """Return normalized optimization output for requested universe and method."""
     try:
@@ -904,17 +987,31 @@ async def get_portfolio(
     current_user: dict | None = Depends(get_current_user_or_none),
     db: AsyncSession = Depends(get_db),
 ):
-    holdings = await get_holdings(current_user=current_user, db=db)
-
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
+
+    import uuid
+
+    from sqlalchemy import and_, func, select
+
+    from app.models.payment import PaymentTransaction
+
+    uid = uuid.UUID(str(current_user.id))
+    deposits_res = await db.execute(
+        select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
+            and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded")
+        )
+    )
+    initial_cap = float(deposits_res.scalar_one()) or 0.0
+
+    holdings = await get_holdings(current_user=current_user, db=db)
+
     return {
         "id": portfolio_id,
         "user_id": str(current_user.id),
         "name": "Main Portfolio",
         "description": "Primary trading portfolio",
-        "initial_capital": 100000.0,
+        "initial_capital": initial_cap,
         "total_value": float(holdings.portfolio_value),
         "cash_balance": float(holdings.cash_balance),
         "holdings": [h.model_dump() for h in holdings.holdings],

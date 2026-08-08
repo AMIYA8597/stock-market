@@ -10,11 +10,11 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user, get_db, get_rate_limiter, require_premium_tier
 from app.database.connection import async_session_factory
 from app.models.backtest import BacktestJob
 from app.models.instrument import Instrument
@@ -459,16 +459,11 @@ async def execute_backtest_job(job_id: UUID) -> None:
 @router.post("/run", response_model=BacktestRunResponse, status_code=202)
 async def post_backtest_run(
     request: BacktestRequest,
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict = Depends(require_premium_tier()),
     db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(get_rate_limiter(requests=2, window=60)),
 ) -> BacktestRunResponse:
-    user_id_str = "3b79b787-f2a8-4a48-abf1-0268d6131a5b"
-    if current_user and "sub" in current_user:
-        try:
-            UUID(current_user["sub"])
-            user_id_str = current_user["sub"]
-        except ValueError:
-            pass
+    user_id_str = str(current_user.id)
 
     job_id = uuid4()
     new_job = BacktestJob(
@@ -503,14 +498,17 @@ async def post_backtest_run(
 
 @router.get("/status/{job_id}", response_model=BacktestStatusResponse)
 async def get_backtest_status(
-    job_id: str, db: AsyncSession = Depends(get_db)
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ) -> BacktestStatusResponse:
     try:
         job_uuid = UUID(job_id)
+        uid = UUID(str(current_user.id))
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    stmt = select(BacktestJob).where(BacktestJob.id == job_uuid)
+    stmt = select(BacktestJob).where(BacktestJob.id == job_uuid, BacktestJob.user_id == uid)
     res = await db.execute(stmt)
     job = res.scalar_one_or_none()
     if not job:
@@ -541,14 +539,17 @@ async def get_backtest_status(
 
 @router.get("/results/{job_id}", response_model=BacktestResultsResponse)
 async def get_backtest_results(
-    job_id: str, db: AsyncSession = Depends(get_db)
+    job_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
 ) -> BacktestResultsResponse:
     try:
         job_uuid = UUID(job_id)
+        uid = UUID(str(current_user.id))
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid job ID format")
+        raise HTTPException(status_code=400, detail="Invalid ID format")
 
-    stmt = select(BacktestJob).where(BacktestJob.id == job_uuid)
+    stmt = select(BacktestJob).where(BacktestJob.id == job_uuid, BacktestJob.user_id == uid)
     res = await db.execute(stmt)
     job = res.scalar_one_or_none()
     if not job:

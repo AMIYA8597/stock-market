@@ -266,8 +266,9 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
           <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-secondary)] font-semibold mb-2">
             Detailed Layer Outputs
           </p>
-          <table className="w-full text-left font-mono text-[9px] border-collapse">
-            <thead>
+          <div className="overflow-x-auto w-full custom-scrollbar">
+            <table className="w-full text-left font-mono text-[9px] border-collapse min-w-[200px]">
+              <thead>
               <tr className="border-b border-[var(--nq-border)] text-[var(--nq-text-muted)] font-sans font-bold">
                 <th className="pb-1">Model Layer</th>
                 <th className="pb-1 text-right">Consensus Score</th>
@@ -309,7 +310,8 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
                 );
               })}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       </div>
 
