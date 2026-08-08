@@ -11,9 +11,12 @@ import numpy as np
 project_root = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from research.backtesting.cost_model import compute_costs
 from research.backtesting.statistical_tests import diebold_mariano_test
 from research.models.ensemble.meta_learner import EnsembleMetaLearner
+
+
+class LeakageError(Exception):
+    pass
 
 
 def calculate_max_drawdown(cum_returns: np.ndarray) -> float:
@@ -43,9 +46,9 @@ def calculate_metrics(
 
     # apply transaction costs
     trades_abs = np.abs(np.diff(np.insert(predictions, 0, 0.0)))
-    adv = np.full_like(close_prices, 1000000.0)  # mock average daily volume
-    realized_vol = np.full_like(close_prices, 0.02)  # mock realized vol
-    costs = compute_costs(trades_abs, close_prices, adv, realized_vol)
+    # approximate costs (0.1% STT + 0.1% slippage + brokerage)
+    txn_cost_rate = 0.002
+    costs = trades_abs * close_prices * txn_cost_rate
 
     net_returns = trading_returns - (costs / close_prices)
     net_returns = np.nan_to_num(net_returns)
@@ -123,6 +126,11 @@ def main():
 
     metrics_old = calculate_metrics(old_preds, actual_returns, closes)
     metrics_new = calculate_metrics(new_preds, actual_returns, closes)
+
+    # ANTI-LEAKAGE GUARD (HONESTY LAW)
+    if metrics_new["hit_rate"] > 0.75 or metrics_old["hit_rate"] > 0.75:
+        max_hit = max(metrics_new["hit_rate"], metrics_old["hit_rate"])
+        raise LeakageError(f"Look-ahead bias detected! Directional accuracy of {max_hit*100:.1f}% exceeds realistic market efficiency (75% max). Pipeline aborted.")
 
     # 4. Statistical significance (Diebold-Mariano test)
     dm_stat, p_val = diebold_mariano_test(brier_old, brier_new)

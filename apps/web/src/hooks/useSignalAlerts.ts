@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { getWsBaseUrl } from "@/lib/runtime-config";
 
 export interface SignalAlert {
@@ -22,22 +22,103 @@ export interface SignalAlert {
   message: string;
 }
 
-const cleanWsUrl = getWsBaseUrl();
+let ws: WebSocket | null = null;
+let alerts: SignalAlert[] = [];
+let latestAlert: SignalAlert | null = null;
+let unread = 0;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 5000;
+const subscribers = new Set<() => void>();
+let isConnecting = false;
+
+function notifySubscribers() {
+  subscribers.forEach((cb) => cb());
+}
+
+function connectWs() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+  if (isConnecting) return;
+  isConnecting = true;
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  const cleanWsUrl = getWsBaseUrl();
+  const base = cleanWsUrl.replace(/\/+$/, "");
+  const cleanBase = base.replace(/\/ws$/i, "");
+  const wsUrl = `${cleanBase}/ws/alerts`; 
+
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    isConnecting = false;
+    reconnectDelay = 5000;
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data);
+      if (data && data.type === "signal_alert") {
+        const alert = {
+          ...data,
+          patterns_detected: data.patterns || data.patterns_detected || [],
+        } as SignalAlert;
+        
+        alerts = [alert, ...alerts];
+        if (alerts.length > 50) {
+          alerts = alerts.slice(0, 50);
+        }
+
+        latestAlert = alert;
+        unread += 1;
+
+        if (
+          typeof window !== "undefined" &&
+          "Notification" in window &&
+          Notification.permission === "granted"
+        ) {
+          new Notification(`${alert.direction} Alert: ${alert.symbol}`, {
+            body: alert.message,
+            icon: "/favicon.ico",
+            tag: alert.symbol,
+          });
+        }
+        
+        notifySubscribers();
+      }
+    } catch (err) {
+      // Suppress
+    }
+  };
+
+  ws.onclose = () => {
+    ws = null;
+    isConnecting = false;
+    reconnectTimer = setTimeout(() => {
+      connectWs();
+    }, reconnectDelay);
+  };
+
+  ws.onerror = () => {
+    ws?.close();
+  };
+}
 
 export function useSignalAlerts() {
-  const [alerts, setAlerts] = useState<SignalAlert[]>([]);
-  const [latestAlert, setLatestAlert] = useState<SignalAlert | null>(null);
-  const [unread, setUnread] = useState<number>(0);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mountedRef = useRef<boolean>(true);
+  const [localAlerts, setLocalAlerts] = useState<SignalAlert[]>(alerts);
+  const [localLatest, setLocalLatest] = useState<SignalAlert | null>(latestAlert);
+  const [localUnread, setLocalUnread] = useState<number>(unread);
 
-  // Mark all alerts as read
   const markAllRead = useCallback(() => {
-    setUnread(0);
+    unread = 0;
+    setLocalUnread(0);
+    notifySubscribers();
   }, []);
 
-  // Request browser Notification permissions
   useEffect(() => {
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === "default") {
@@ -46,92 +127,28 @@ export function useSignalAlerts() {
     }
   }, []);
 
-  const connect = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
-    }
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      return;
-    }
-
-    const base = cleanWsUrl.replace(/\/+$/, "");
-    const cleanBase = base.replace(/\/ws$/i, "");
-    const wsUrl = `${cleanBase}/ws/alerts`; // Resolved WebSocket URL: ws://host:port/ws/alerts (no double slash)
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data && data.type === "signal_alert") {
-          const alert = {
-            ...data,
-            patterns_detected: data.patterns || data.patterns_detected || [],
-          } as SignalAlert;
-          
-          setAlerts((prev) => {
-            const next = [alert, ...prev];
-            // Cap at 50 entries
-            if (next.length > 50) {
-              return next.slice(0, 50);
-            }
-            return next;
-          });
-
-          setLatestAlert(alert);
-          setUnread((prev) => prev + 1);
-
-          // Fire OS notification
-          if (
-            typeof window !== "undefined" &&
-            "Notification" in window &&
-            Notification.permission === "granted"
-          ) {
-            new Notification(`${alert.direction} Alert: ${alert.symbol}`, {
-              body: alert.message,
-              icon: "/favicon.ico",
-              tag: alert.symbol,
-            });
-          }
-        }
-      } catch (err) {
-        // Suppress malformed WS messages
-      }
+  useEffect(() => {
+    const handleChange = () => {
+      setLocalAlerts([...alerts]);
+      setLocalLatest(latestAlert);
+      setLocalUnread(unread);
     };
 
-    ws.onclose = () => {
-      if (!mountedRef.current) return;
-      reconnectTimerRef.current = setTimeout(() => {
-        connect();
-      }, 5000);
-    };
+    subscribers.add(handleChange);
+    
+    if (!ws && !isConnecting) {
+      connectWs();
+    }
 
-    ws.onerror = () => {
-      ws.close();
+    return () => {
+      subscribers.delete(handleChange);
     };
   }, []);
 
-  useEffect(() => {
-    connect();
-
-    return () => {
-      mountedRef.current = false;
-      if (reconnectTimerRef.current) {
-        clearTimeout(reconnectTimerRef.current);
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
-  }, [connect]);
-
   return {
-    alerts,
-    latestAlert,
-    unread,
+    alerts: localAlerts,
+    latestAlert: localLatest,
+    unread: localUnread,
     markAllRead,
   };
 }

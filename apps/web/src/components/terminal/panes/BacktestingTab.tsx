@@ -97,7 +97,7 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
           <select
             value={strategy}
             onChange={(e) => setStrategy(e.target.value)}
-            className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
+            className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-3 md:py-1 min-h-[44px] md:min-h-0 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
           >
             <option value="macd_crossover">MACD Crossover</option>
             <option value="rsi_mean_reversion">RSI Mean Reversion</option>
@@ -113,7 +113,7 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
             type="number"
             value={fastPeriod}
             onChange={(e) => setFastPeriod(Number(e.target.value))}
-            className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
+            className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-3 md:py-1 min-h-[44px] md:min-h-0 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
             min={1}
             max={100}
           />
@@ -126,7 +126,7 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
             type="number"
             value={slowPeriod}
             onChange={(e) => setSlowPeriod(Number(e.target.value))}
-            className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-1 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
+            className="w-full rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-2 py-3 md:py-1 min-h-[44px] md:min-h-0 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono"
             min={1}
             max={300}
           />
@@ -136,7 +136,7 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
             type="button"
             onClick={handleRunBacktest}
             disabled={backtestLoading || !symbol}
-            className="w-full rounded bg-[var(--nq-accent-cyan)] hover:bg-[rgba(0,212,245,0.8)] disabled:opacity-50 text-black font-semibold text-[10px] py-1 transition-colors"
+            className="w-full rounded bg-[var(--nq-accent-cyan)] hover:bg-[rgba(0,212,245,0.8)] disabled:opacity-50 text-black font-semibold text-[10px] py-3 md:py-1 min-h-[44px] md:min-h-0 transition-colors"
           >
             {backtestLoading ? "Running..." : "Run Backtest"}
           </button>

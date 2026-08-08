@@ -18,11 +18,18 @@ class TargetBuilder(FeatureBuilder):
     name = "target"
 
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
-        data = frame.sort_values("time").copy()
-
+        data = frame.copy()
+        
         # Next-day return direction: sign(close[t+1] - close[t])
-        # We shift(-1) to bring t+1 into the row for t
-        next_close = data["close"].shift(-1)
+        # We shift(-1) to bring t+1 into the row for t.
+        # MUST group by symbol if present to prevent cross-sectional leakage.
+        if "symbol" in data.columns:
+            data = data.sort_values(["symbol", "time"])
+            next_close = data.groupby("symbol")["close"].shift(-1)
+        else:
+            data = data.sort_values("time")
+            next_close = data["close"].shift(-1)
+
         data["target_direction_1d"] = np.sign(next_close - data["close"])
 
         return data

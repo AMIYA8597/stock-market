@@ -253,13 +253,13 @@ export default function ModelMonitorPage(): JSX.Element {
           </div>
         </ChartCard>
 
-        <article className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4">
+        <article className="rounded-[1.5rem] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.03))] p-4 overflow-x-auto">
           <h2 className="mb-3 text-sm font-medium uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Drift Detection</h2>
           <table className="min-w-full text-xs">
             <thead>
               <tr className="text-[var(--nq-text-secondary)]">
                 <th className="pb-2 text-left font-medium">Model</th>
-                <th className="pb-2 text-right font-medium">ADWIN p</th>
+                <th className="pb-2 text-right font-medium whitespace-nowrap">ADWIN p</th>
                 <th className="pb-2 text-right font-medium">Drift</th>
               </tr>
             </thead>
@@ -274,6 +274,13 @@ export default function ModelMonitorPage(): JSX.Element {
               {!loading && drift.length === 0 ? (
                 <tr>
                   <td className="py-2 text-[var(--nq-text-secondary)]" colSpan={3}>No drift data returned by monitor contract.</td>
+                </tr>
+              ) : null}
+              {loading && drift.length === 0 ? (
+                <tr>
+                  <td className="py-4 text-center" colSpan={3}>
+                    <div className="flex justify-center"><div className="h-4 w-4 animate-spin rounded-full border-2 border-[var(--nq-border)] border-t-[var(--nq-accent-cyan)]" /></div>
+                  </td>
                 </tr>
               ) : null}
             </tbody>

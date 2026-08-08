@@ -9,9 +9,18 @@ const ChartSection = dynamic(() => import("@/components/terminal/ChartSection"),
   ssr: false, 
   loading: () => <div className="h-full w-full animate-pulse bg-nq-bg-base/50" /> 
 });
-const SignalPanel = dynamic(() => import("@/components/terminal/SignalPanel"), { ssr: false });
-const PaperTradePanel = dynamic(() => import("@/components/terminal/panes/PaperTradePanel"), { ssr: false });
-const AlertsManager = dynamic(() => import("@/components/terminal/panes/AlertsManager"), { ssr: false });
+const SignalPanel = dynamic(() => import("@/components/terminal/SignalPanel"), { 
+  ssr: false,
+  loading: () => <div className="h-full w-full animate-pulse bg-[var(--nq-bg-surface)] opacity-50" />
+});
+const PaperTradePanel = dynamic(() => import("@/components/terminal/panes/PaperTradePanel"), { 
+  ssr: false,
+  loading: () => <div className="h-full w-full animate-pulse bg-[var(--nq-bg-surface)] opacity-50" />
+});
+const AlertsManager = dynamic(() => import("@/components/terminal/panes/AlertsManager"), { 
+  ssr: false,
+  loading: () => <div className="h-full w-full animate-pulse bg-[var(--nq-bg-surface)] opacity-50" />
+});
 import { useTerminalData } from "@/hooks/useTerminalData";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 

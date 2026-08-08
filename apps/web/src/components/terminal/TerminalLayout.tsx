@@ -44,9 +44,12 @@ export default function TerminalLayout({
     }
   }, [selectedSymbol]);
 
+  const [mounted, setMounted] = useState(false);
   const [isDesktop, setIsDesktop] = useState(true);
+  
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
+    setMounted(true);
+    const media = window.matchMedia("(min-width: 768px)");
     setIsDesktop(media.matches);
     const listener = () => setIsDesktop(media.matches);
     media.addEventListener("change", listener);
@@ -55,11 +58,25 @@ export default function TerminalLayout({
 
   const [rightActiveTab, setRightActiveTab] = useState<"signal" | "orders" | "alerts">("signal");
 
+  // Prevent hydration mismatch by rendering a structural skeleton until mounted
+  if (!mounted) {
+    return (
+      <main className={cn("terminal-root relative", className)}>
+         <div className={cn("terminal-grid nq-premium-bg nq-grid-overlay md:min-w-terminal", rowClass)}>
+            <div className="terminal-topbar">{topBar}</div>
+            <div className={cn("col-span-3 h-full min-h-0 w-full overflow-hidden flex items-center justify-center", contentRowClass)}>
+               <div className="animate-pulse w-full h-full bg-[var(--bg-surface)]" />
+            </div>
+         </div>
+      </main>
+    );
+  }
+
   return (
     <main className={cn("terminal-root relative", className)}>
       <div
         className={cn(
-          "terminal-grid nq-premium-bg nq-grid-overlay terminal:min-w-terminal",
+          "terminal-grid nq-premium-bg nq-grid-overlay md:min-w-terminal",
           rowClass,
         )}
       >
@@ -74,7 +91,7 @@ export default function TerminalLayout({
         ) : null}
 
         {/* Premium Glassmorphic Tab Bar for Mobile & Tablet viewports */}
-        <div className="col-span-3 flex border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 text-xs font-semibold uppercase tracking-wider terminal:hidden shrink-0">
+        <div className="col-span-3 flex border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 text-xs font-semibold uppercase tracking-wider md:hidden shrink-0">
           <button
             onClick={() => setActiveTab("watchlist")}
             className={cn(

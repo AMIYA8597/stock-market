@@ -68,14 +68,40 @@ async def run_backtest_async(job_id: str) -> None:
             prices = df["close"].values
             dates = df.index.astype(str).values
 
-            # 3. Generate Signals — EMA crossover (no pandas_ta dependency)
-            # ewm().mean() is look-ahead free: uses only past window.
-            close_series = df["close"] if "close" in df.columns else df.iloc[:, 0]
-            ema20 = close_series.ewm(span=20, adjust=False).mean().bfill().values
-            ema50 = close_series.ewm(span=50, adjust=False).mean().bfill().values
+            # 3. Fetch Real ML Signals from Database
+            from app.models.signal import EnsembleSignal
+            from app.models.instrument import Instrument
 
-            # Simple strategy: 1 if EMA20 > EMA50 else -1
-            signals = np.where(ema20 > ema50, 1.0, -1.0)
+            sig_stmt = select(EnsembleSignal).where(
+                EnsembleSignal.symbol_id == (
+                    select(Instrument.id)
+                    .where(Instrument.symbol == symbol)
+                    .scalar_subquery()
+                )
+            ).order_by(EnsembleSignal.time.asc())
+            sig_res = await db.execute(sig_stmt)
+            signal_records = sig_res.scalars().all()
+
+            # Align signals with dates
+            sig_dict = {}
+            kelly_dict = {}
+            for r in signal_records:
+                d = r.time.date() if isinstance(r.time, datetime) else r.time
+                sig_dict[str(d)] = float(r.signal)
+                kelly_dict[str(d)] = float(r.kelly_fraction) if r.kelly_fraction is not None else 0.05
+
+            signals = np.zeros(len(dates))
+            kellys = np.ones(len(dates)) * 0.05
+
+            for i, d in enumerate(dates):
+                # Ensure date string matches format used in dict
+                d_str = str(d).split('T')[0]
+                if d_str in sig_dict:
+                    signals[i] = sig_dict[d_str]
+                    kellys[i] = kelly_dict[d_str]
+                else:
+                    signals[i] = 0.0
+
 
             # 4. Run Event-Driven Engine
             def progress_cb(pct: int):
@@ -91,6 +117,7 @@ async def run_backtest_async(job_id: str) -> None:
                 signals=signals,
                 dates=dates,
                 initial_capital=float(job.initial_capital),
+                kelly_fraction=kellys,
                 target_vol=0.15
             )
 

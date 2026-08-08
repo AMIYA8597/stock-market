@@ -8,28 +8,23 @@ export interface LiveChartApi extends IChartApi {
 interface UseChartInstanceProps {
   containerRef: React.RefObject<HTMLDivElement>;
   height?: number;
-  activeSubPanes?: number;
 }
 
 export function useChartInstance({
   containerRef,
   height,
-  activeSubPanes = 0,
 }: UseChartInstanceProps) {
   const [chart, setChart] = useState<LiveChartApi | null>(null);
-
-  const subPaneHeight = 110;
-  const mainChartHeight = height ? Math.max(220, height - activeSubPanes * subPaneHeight) : undefined;
 
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
 
-    console.log(`[HOP 7 useChartInstance] element w=${element.clientWidth}, h=${element.clientHeight}, mainChartHeight=${mainChartHeight}`);
+    console.log(`[HOP 7 useChartInstance] element w=${element.clientWidth}, h=${element.clientHeight}, height=${height}`);
 
     const chartInstance = createChart(element, {
       autoSize: true,
-      ...(mainChartHeight ? { height: mainChartHeight } : {}),
+      ...(height ? { height } : {}),
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#8B97A8",
@@ -75,9 +70,9 @@ export function useChartInstance({
 
     const resizeObserver = new ResizeObserver((entries) => {
       if (!chartInstance.isAlive) return;
-      const { width, height } = entries[0]?.contentRect || { width: 0, height: 0 };
-      if (width > 0 && height > 0) {
-        chartInstance.applyOptions({ width, height: mainChartHeight ?? height });
+      const { width, height: rectHeight } = entries[0]?.contentRect || { width: 0, height: 0 };
+      if (width > 0 && rectHeight > 0) {
+        chartInstance.applyOptions({ width, height: height ?? rectHeight });
       }
     });
 
@@ -94,6 +89,5 @@ export function useChartInstance({
 
   return {
     chart,
-    mainChartHeight,
   };
 }

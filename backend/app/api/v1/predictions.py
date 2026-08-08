@@ -10,9 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.dependencies import get_rate_limiter
 from app.database.connection import get_db
 from app.models.instrument import Instrument
 from app.models.model_artifact import ModelArtifact
+from app.schemas.errors import ErrorResponse
 from app.schemas.prediction import ForecastRequest
 from app.services.market_data_service import MarketDataService
 from app.services.prediction_engine import get_full_prediction
@@ -21,7 +23,11 @@ router = APIRouter()
 
 
 @router.get("/{symbol}")
-async def get_prediction(symbol: str, db: AsyncSession = Depends(get_db)):
+async def get_prediction(
+    symbol: str, 
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+):
     norm_symbol = MarketDataService._normalize_symbol(symbol)
 
     # Check if we have an active XGBoost model for this symbol
@@ -39,7 +45,10 @@ async def get_prediction(symbol: str, db: AsyncSession = Depends(get_db)):
     if not artifact:
         raise HTTPException(
             status_code=503,
-            detail={"code": "MODEL_NOT_TRAINED", "message": f"ML prediction engine is offline until training phase for {symbol}."}
+            detail=ErrorResponse.create(
+                code="MODEL_NOT_TRAINED",
+                message=f"ML prediction engine is offline until training phase for {symbol}."
+            ).dict()
         )
 
     return await get_full_prediction(
@@ -50,21 +59,37 @@ async def get_prediction(symbol: str, db: AsyncSession = Depends(get_db)):
     )
 
 @router.post("/forecast")
-async def generate_forecast(payload: ForecastRequest):
+async def generate_forecast(
+    payload: ForecastRequest,
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+):
     raise HTTPException(
         status_code=503,
-        detail={"code": "MODEL_NOT_TRAINED", "message": "ML prediction engine is offline until training phase."}
+        detail=ErrorResponse.create(
+            code="MODEL_NOT_TRAINED",
+            message="ML prediction engine is offline until training phase."
+        ).dict()
     )
 
 @router.get("/latest/{symbol}")
-async def get_latest_forecast(symbol: str, db: AsyncSession = Depends(get_db)):
+async def get_latest_forecast(
+    symbol: str, 
+    db: AsyncSession = Depends(get_db),
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+):
     return await get_prediction(symbol, db)
 
 @router.get("/ensemble/{symbol}")
-async def get_ensemble_data(symbol: str):
+async def get_ensemble_data(
+    symbol: str,
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+):
     raise HTTPException(
         status_code=503,
-        detail={"code": "MODEL_NOT_TRAINED", "message": "ML prediction engine is offline until training phase."}
+        detail=ErrorResponse.create(
+            code="MODEL_NOT_TRAINED",
+            message="ML prediction engine is offline until training phase."
+        ).dict()
     )
 
 @router.get("/history/{symbol}")
@@ -90,7 +115,10 @@ async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)
     if not row:
         raise HTTPException(
             status_code=503,
-            detail={"code": "MODEL_NOT_TRAINED", "message": "No metrics available."}
+            detail=ErrorResponse.create(
+                code="MODEL_NOT_TRAINED",
+                message="No metrics available."
+            ).dict()
         )
 
     metric, artifact = row

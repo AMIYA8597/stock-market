@@ -1,0 +1,1 @@
+{"success":false,"error":{"code":"SERVICE_UNAVAILABLE","message":"Market provider failure: All providers failed to fetch OHLCV for SPY","details":[]},"request_id":"53635806-77ca-494e-8e13-3abac4c8f982","timestamp":"2026-08-08T08:38:28.159849Z"}

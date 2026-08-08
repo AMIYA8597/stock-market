@@ -34,31 +34,44 @@ def safe_float(val, fallback=0.0) -> float:
         return fallback
 
 
+import time
+
+
+class TokenBucket:
+    def __init__(self, rate: float, capacity: float):
+        self.rate = rate
+        self.capacity = capacity
+        self.tokens = capacity
+        self.last_update = time.monotonic()
+
+    async def consume(self, tokens: float = 1.0):
+        while True:
+            now = time.monotonic()
+            elapsed = now - self.last_update
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+            self.last_update = now
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return
+            await asyncio.sleep(0.01)
+
 class MarketDataService:
     # Class-level session and caches for sockets, rate-limiting, and performance optimization
     _session = None
     _semaphore = asyncio.Semaphore(
-        8
+        20
     )  # limit concurrency to avoid descriptor exhaustion under select()
 
-    _last_yfinance_request_time = 0.0
-    _last_nse_request_time = 0.0
+    _yfinance_bucket = TokenBucket(rate=10.0, capacity=20.0)
+    _nse_bucket = TokenBucket(rate=5.0, capacity=10.0)
 
     @classmethod
     async def _throttle_yfinance(cls, symbol: str) -> None:
-        now = asyncio.get_event_loop().time()
-        elapsed = now - cls._last_yfinance_request_time
-        if elapsed < 0.25:  # ensure at least 250ms gap between any yfinance calls
-            await asyncio.sleep(0.25 - elapsed)
-        cls._last_yfinance_request_time = asyncio.get_event_loop().time()
+        await cls._yfinance_bucket.consume(1.0)
 
     @classmethod
     async def _throttle_nse(cls) -> None:
-        now = asyncio.get_event_loop().time()
-        elapsed = now - cls._last_nse_request_time
-        if elapsed < 0.2:  # max 5 requests per second
-            await asyncio.sleep(0.2 - elapsed)
-        cls._last_nse_request_time = asyncio.get_event_loop().time()
+        await cls._nse_bucket.consume(1.0)
 
     # NSE Top 50 stocks with .NS suffix
     NSE_NIFTY50 = [
@@ -218,8 +231,9 @@ class MarketDataService:
 
             up_quote = UpstoxService.get_cached_quote(sym)
             if up_quote:
-                # Add source field
-                up_quote["source"] = "NSE"
+                # Add source field explicitly and never null
+                if not up_quote.get("source"):
+                    up_quote["source"] = "NSE"
                 return up_quote
         except Exception as ue:
             logger.debug(f"Upstox live cache check failed for {sym}: {ue}")
@@ -368,6 +382,9 @@ class MarketDataService:
             try:
                 fallback = IndianStockAPI.fetch_quote(sym)
                 if fallback:
+                    # Add source field explicitly and never null
+                    if not fallback.get("source"):
+                        fallback["source"] = "IndianStockAPI"
                     # Cache fallback result
                     if redis:
                         await redis.setex(cache_key, 60, json.dumps(fallback))
@@ -375,9 +392,13 @@ class MarketDataService:
             except Exception as fe:
                 logger.debug(f"IndianStockAPI fallback failed for {sym}: {fe}")
 
+            # No fake simulators allowed (Phase 8 Honesty Guard)
+            # If both yfinance and IndianStockAPI failed, we gracefully degrade by throwing an error.
+            logger.error(f"Both yfinance and IndianStockAPI failed for {sym}. Emitting external service failure.")
+            
             # Tombstone / cache the failure so we don't spam network
             datetime.now(UTC).timestamp()
-            failure_dict = {"error": True, "message": str(e)}
+            failure_dict = {"error": True, "message": "External Service Unavailable"}
             if redis:
                 try:
                     await redis.setex(cache_key, 60, json.dumps(failure_dict))
@@ -385,24 +406,13 @@ class MarketDataService:
                     pass
             if isinstance(e, ValueError):
                 raise
-            raise ValueError(sym) from e
-            # Tombstone / cache the failure so we don't spam network
-            datetime.now(UTC).timestamp()
-            failure_dict = {"error": True, "message": str(e)}
-            if redis:
-                try:
-                    await redis.setex(cache_key, 60, json.dumps(failure_dict))
-                except Exception:
-                    pass
-            if isinstance(e, ValueError):
-                raise
-            raise ValueError(sym) from e
+            raise ValueError(f"External service failure for {sym}") from e
 
-        # Store in caches
+        # Store in caches (Live quotes ~10s TTL)
         datetime.now(UTC).timestamp()
         if redis:
             try:
-                await redis.setex(cache_key, 20, json.dumps(result))
+                await redis.setex(cache_key, 10, json.dumps(result))
             except Exception as se:
                 logger.warning(f"Redis cache set failed for get_quote key={cache_key}: {se}")
 
@@ -581,18 +591,25 @@ class MarketDataService:
                 result = None
 
         datetime.now(UTC).timestamp()
+
+        # Calculate dynamic TTL based on interval
+        if interval in ("1d", "1wk", "1mo"):
+            ttl_seconds = 86400  # 24h for daily/weekly candles
+        else:
+            ttl_seconds = 60  # 60s for intraday candles
+
         if not result:
             failure_dict = {"error": True}
             if redis:
                 try:
-                    await redis.setex(cache_key, 300, json.dumps(failure_dict))
+                    await redis.setex(cache_key, 60, json.dumps(failure_dict))
                 except Exception:
                     pass
         else:
             cache_payload = {"source": result.source, "bars": list(result)}
             if redis:
                 try:
-                    await redis.setex(cache_key, 300, json.dumps(cache_payload))
+                    await redis.setex(cache_key, ttl_seconds, json.dumps(cache_payload))
                 except Exception as se:
                     logger.warning(f"Redis cache set failed for get_history key={cache_key}: {se}")
 

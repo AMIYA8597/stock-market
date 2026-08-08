@@ -32,5 +32,9 @@ celery_app.conf.update(
             "task": "update_news_sentiment",
             "schedule": 3600.0, # Every hour
         },
+        "update-regime-states-daily": {
+            "task": "update_regime_states",
+            "schedule": 86400.0, # Every day
+        }
     },
 )

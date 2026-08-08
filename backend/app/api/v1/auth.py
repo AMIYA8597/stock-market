@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import logging
+logger = logging.getLogger(__name__)
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pyotp
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.rate_limit import check_rate_limit
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
@@ -50,7 +53,10 @@ def _compat_test_mode() -> bool:
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) -> UserResponse:
+async def register(payload: UserRegister, request: Request, db: AsyncSession = Depends(get_db)) -> UserResponse:
+    client_ip = request.client.host if request.client else "unknown"
+    await check_rate_limit(f"auth:register:ip:{client_ip}", requests=3, window=3600)
+
     email = payload.email.lower().strip()
 
     existing = await db.execute(select(User).where(User.email == email))
@@ -105,13 +111,28 @@ async def register(payload: UserRegister, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     email = payload.email.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
+    
+    try:
+        await check_rate_limit(f"auth:login:ip:{client_ip}", requests=5, window=300)
+        await check_rate_limit(f"auth:login:email:{email}", requests=5, window=300)
+    except HTTPException:
+        # Don't leak if account exists or not when rate limited
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=ErrorResponse.create(
+                code=ErrorCode.TOO_MANY_REQUESTS,
+                message="Too many login attempts. Please try again later.",
+            ).dict(),
+        )
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if user is not None and user.locked_until and user.locked_until > datetime.now(UTC):
         remaining = (user.locked_until - datetime.now(UTC)).total_seconds()
+        logger.warning(f"Auth failed: Account locked for {email} from {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=ErrorResponse.create(
@@ -127,6 +148,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             if user.failed_login_attempts >= 5:
                 user.locked_until = datetime.now(UTC) + timedelta(minutes=15)
             await db.commit()  # CRITICAL: Persist lockout state to DB
+        logger.warning(f"Auth failed: Invalid credentials for {email} from {client_ip}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ErrorResponse.create(
@@ -137,6 +159,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
 
     if user.totp_secret:
         if not payload.totp_code:
+            logger.warning(f"Auth failed: Missing MFA token for {email} from {client_ip}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ErrorResponse.create(
@@ -146,6 +169,7 @@ async def login(payload: UserLogin, db: AsyncSession = Depends(get_db)) -> Token
             )
         totp = pyotp.TOTP(user.totp_secret)
         if not totp.verify(payload.totp_code):
+            logger.warning(f"Auth failed: Invalid MFA token for {email} from {client_ip}")
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ErrorResponse.create(
@@ -325,13 +349,32 @@ async def me(
 
 @router.post("/forgot-password", response_model=AuthMessage)
 async def forgot_password(
-    payload: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)
+    payload: ForgotPasswordRequest, request: Request, db: AsyncSession = Depends(get_db)
 ) -> AuthMessage:
-    result = await db.execute(select(User).where(User.email == payload.email.lower().strip()))
+    email = payload.email.lower().strip()
+    client_ip = request.client.host if request.client else "unknown"
+    
+    try:
+        await check_rate_limit(f"auth:forgot-password:ip:{client_ip}", requests=3, window=3600)
+        await check_rate_limit(f"auth:forgot-password:email:{email}", requests=3, window=3600)
+    except HTTPException:
+        return AuthMessage(message="If an account exists, a reset email has been queued")
+
+    result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
     if user is None:
         return AuthMessage(message="If an account exists, a reset email has been queued")
+
+    # Invalidate any prior unused reset tokens for this user
+    await db.execute(
+        PasswordResetToken.__table__.update()
+        .where(
+            PasswordResetToken.user_id == user.id,
+            PasswordResetToken.consumed_at.is_(None)
+        )
+        .values(consumed_at=datetime.now(UTC))
+    )
 
     raw_token = secrets.token_urlsafe(36)
     expires_at = datetime.now(UTC) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
@@ -358,8 +401,21 @@ async def forgot_password(
 
 @router.post("/reset-password", response_model=AuthMessage)
 async def reset_password(
-    payload: ResetPasswordConfirm, db: AsyncSession = Depends(get_db)
+    payload: ResetPasswordConfirm, request: Request, db: AsyncSession = Depends(get_db)
 ) -> AuthMessage:
+    client_ip = request.client.host if request.client else "unknown"
+    
+    try:
+        await check_rate_limit(f"auth:reset-password:ip:{client_ip}", requests=3, window=3600)
+    except HTTPException:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=ErrorResponse.create(
+                code=ErrorCode.TOO_MANY_REQUESTS,
+                message="Too many reset attempts. Please try again later.",
+            ).dict(),
+        )
+
     token_hash = _hash_token(payload.token)
     result = await db.execute(
         select(PasswordResetToken).where(

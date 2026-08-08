@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { getWsBaseUrl } from "@/lib/runtime-config";
 
 export interface LivePriceTick {
@@ -12,123 +12,148 @@ export interface LivePriceTick {
   source?: string;
 }
 
-interface UsePriceFeedState {
-  ticks: Map<string, LivePriceTick>;
-  status: "connected" | "reconnecting" | "disconnected";
+type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
+
+// Singleton state
+let ws: WebSocket | null = null;
+let status: ConnectionStatus = "disconnected";
+const ticks = new Map<string, LivePriceTick>();
+const activeSymbols = new Set<string>();
+const subscribers = new Set<() => void>();
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let reconnectDelay = 1000;
+
+function notifySubscribers() {
+  subscribers.forEach((cb) => cb());
 }
 
-const cleanWsUrl = getWsBaseUrl();
+function connectWs() {
+  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+    return;
+  }
+
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+
+  status = "reconnecting";
+  notifySubscribers();
+
+  const cleanWsUrl = getWsBaseUrl();
+  const base = cleanWsUrl.replace(/\/+$/, "");
+  const wsUrl = base.endsWith("/ws") ? `${base}/prices` : `${base}/ws/prices`;
+  
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    status = "connected";
+    reconnectDelay = 1000;
+    if (activeSymbols.size > 0) {
+      ws?.send(JSON.stringify({ action: "subscribe", symbols: Array.from(activeSymbols) }));
+    }
+    notifySubscribers();
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data as string);
+      if (message.type !== "tick") return;
+      
+      const payload = message.payload || {};
+      if (!message.symbol || typeof payload.price !== "number") return;
+      
+      const symbol = message.symbol.toUpperCase();
+      ticks.set(symbol, {
+        symbol,
+        price: payload.price,
+        change_pct: payload.change_pct ?? 0,
+        timestamp: message.timestamp ?? new Date().toISOString(),
+        source: message.source,
+      });
+      notifySubscribers();
+    } catch {
+      // ignore
+    }
+  };
+
+  ws.onclose = () => {
+    ws = null;
+    status = "reconnecting";
+    notifySubscribers();
+    
+    // Exponential backoff
+    reconnectTimer = setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+      connectWs();
+    }, reconnectDelay);
+  };
+
+  ws.onerror = () => {
+    ws?.close(); // triggers onclose
+  };
+}
+
+function updateSubscriptions(symbols: string[]) {
+  let changed = false;
+  
+  // Add new
+  for (const s of symbols) {
+    const sym = s.toUpperCase();
+    if (!activeSymbols.has(sym)) {
+      activeSymbols.add(sym);
+      changed = true;
+    }
+  }
+
+  if (changed && ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ action: "subscribe", symbols: Array.from(activeSymbols) }));
+  }
+  
+  // Start connection if not running and we have symbols
+  if (activeSymbols.size > 0 && !ws) {
+    connectWs();
+  }
+}
+
+export interface UsePriceFeedState {
+  ticks: Map<string, LivePriceTick>;
+  status: ConnectionStatus;
+}
 
 export function usePriceFeed(symbols: string[]): UsePriceFeedState {
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const reconnectDelayRef = useRef<number>(1000);
-  const [ticks, setTicks] = useState<Map<string, LivePriceTick>>(new Map());
-  const [status, setStatus] = useState<"connected" | "reconnecting" | "disconnected">("disconnected");
+  // Local state mirrored from singleton
+  const [localTicks, setLocalTicks] = useState(new Map(ticks));
+  const [localStatus, setLocalStatus] = useState(status);
 
-  const serializedSymbols = JSON.stringify(symbols.map((s) => s.toUpperCase()).sort());
-  const normalizedSymbols = useMemo(
-    () => JSON.parse(serializedSymbols) as string[],
-    [serializedSymbols],
-  );
-  const symbolsRef = useRef(normalizedSymbols);
+  // Re-run whenever the required symbols list changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    symbolsRef.current = normalizedSymbols;
-  }, [normalizedSymbols]);
-
-  const clearReconnect = useCallback(() => {
-    if (reconnectTimerRef.current) {
-      clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = null;
+    if (symbols.length > 0) {
+      updateSubscriptions(symbols);
     }
-  }, []);
-
-  const connect = useCallback(() => {
-    clearReconnect();
-    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
-
-    setStatus("reconnecting");
-    const base = cleanWsUrl.replace(/\/+$/, "");
-    const wsUrl = base.endsWith("/ws") ? `${base}/prices` : `${base}/ws/prices`;
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      setStatus("connected");
-      reconnectDelayRef.current = 1000;
-      if (symbolsRef.current.length > 0) {
-        ws.send(JSON.stringify({ action: "subscribe", symbols: symbolsRef.current }));
-      }
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data as string);
-        if (message.type !== "tick") {
-          return;
-        }
-        
-        const payload = message.payload || {};
-        
-        if (!message.symbol || typeof payload.price !== "number") {
-          return;
-        }
-        const symbol = message.symbol.toUpperCase();
-        const price = payload.price;
-        setTicks((prev) => {
-          const next = new Map(prev);
-          next.set(symbol, {
-            symbol,
-            price,
-            change_pct: payload.change_pct ?? 0,
-            timestamp: message.timestamp ?? new Date().toISOString(),
-            source: message.source,
-          });
-          return next;
-        });
-      } catch {
-        // Ignore malformed payloads.
-      }
-    };
-
-    ws.onclose = () => {
-      setStatus("reconnecting");
-      reconnectTimerRef.current = setTimeout(() => {
-        reconnectDelayRef.current = Math.min(reconnectDelayRef.current * 2, 30000);
-        connect();
-      }, reconnectDelayRef.current);
-    };
-
-    ws.onerror = () => {
-      ws.close();
-    };
-  }, [clearReconnect]);
+  }, [JSON.stringify(symbols)]);
 
   useEffect(() => {
-    connect();
+    // Subscribe to singleton updates
+    const handleChange = () => {
+      setLocalTicks(new Map(ticks));
+      setLocalStatus(status);
+    };
+
+    subscribers.add(handleChange);
+    handleChange(); // Initial sync
+    
+    if (!ws) {
+      connectWs();
+    }
 
     return () => {
-      clearReconnect();
-      setStatus("disconnected");
-      if (wsRef.current) {
-        const ws = wsRef.current;
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close();
-        }
-        wsRef.current = null;
-      }
+      subscribers.delete(handleChange);
+      // Optional: We do not aggressively clean up symbols from the singleton on unmount
+      // to avoid thrashing the WebSocket when navigating between pages.
     };
-  }, [connect, clearReconnect]);
+  }, []);
 
-  useEffect(() => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) {
-      return;
-    }
-    ws.send(JSON.stringify({ action: "subscribe", symbols: normalizedSymbols }));
-  }, [serializedSymbols, normalizedSymbols]);
-
-  return { ticks, status };
+  return { ticks: localTicks, status: localStatus };
 }

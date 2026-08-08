@@ -52,7 +52,7 @@ export class ApiError extends Error {
     public body: unknown
   ) {
     const bodyObj = body as Record<string, any>;
-    const detailMessage = bodyObj?.detail?.message || bodyObj?.detail || statusText;
+    const detailMessage = bodyObj?.error?.message || bodyObj?.detail?.message || bodyObj?.detail || statusText;
     super(typeof detailMessage === "string" ? detailMessage : `API Error ${status}: ${statusText}`);
     this.name = "ApiError";
   }
@@ -157,11 +157,6 @@ async function fetchApi<T>(
       }
     }
 
-    if (response.status >= 500 && retryCount < 2) {
-      await new Promise((resolve) => setTimeout(resolve, 250 * (retryCount + 1)));
-      return fetchApi<T>(path, options, retryCount + 1);
-    }
-
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, response.statusText, body);
   }
@@ -199,7 +194,7 @@ export const authApi = {
   },
 
   getProfile(): Promise<UserProfile> {
-    return fetchApi("/auth/me");
+    return fetchApi("/users/profile");
   },
 
   logout(): Promise<void> {
@@ -290,8 +285,22 @@ export const paymentsApi = {
       body: JSON.stringify({ intent_id, razorpay_payment_id }),
     });
   },
-    history(limit = 20): Promise<{ items: Array<{ id: string; amount: string; type: string; description: string; created_at: string }>; total: number }> {
+  history(limit = 20): Promise<{ items: Array<{ id: string; amount: string; type: string; description: string; created_at: string }>; total: number }> {
     return fetchApi(`/payments/history?limit=${limit}`);
+  },
+  getSubscription(): Promise<{ subscription: { id: string; status: string; current_period_end: string; plan: { name: string; features: string[] } } | null }> {
+    return fetchApi("/payments/subscription");
+  },
+  subscribe(plan_id: string): Promise<{ status: string; subscription_id: string; razorpay_key_id: string }> {
+    return fetchApi("/payments/subscribe", {
+      method: "POST",
+      body: JSON.stringify({ plan_id }),
+    });
+  },
+  cancelSubscription(): Promise<{ status: string }> {
+    return fetchApi("/payments/cancel-subscription", {
+      method: "POST"
+    });
   },
 };
 
@@ -652,9 +661,18 @@ export const alertsApi = {
   },
 
   create(data: Omit<AlertDefinition, "id" | "times_triggered" | "last_triggered_at" | "created_at">): Promise<AlertDefinition> {
+    // Map frontend AlertDefinition to backend AlertCreateRequest
+    const backendPayload = {
+      symbol: data.symbol,
+      alert_type: data.alert_type === "technical" ? "RSI_OB" : data.alert_type === "ml_signal" ? "SIGNAL_CHANGE" : "PRICE_ABOVE",
+      threshold: (data.conditions as any)?.threshold ?? (data.conditions as any)?.value ?? 0,
+      name: data.name,
+      enabled: data.is_active ?? true,
+    };
+    
     return fetchApi("/alerts", {
       method: "POST",
-      body: JSON.stringify(data),
+      body: JSON.stringify(backendPayload),
     });
   },
 
@@ -662,9 +680,14 @@ export const alertsApi = {
     id: string,
     data: Partial<AlertDefinition>
   ): Promise<AlertDefinition> {
+    const backendPayload: any = { ...data };
+    if (data.is_active !== undefined) {
+      backendPayload.enabled = data.is_active;
+      delete backendPayload.is_active;
+    }
     return fetchApi(`/alerts/${id}`, {
       method: "PATCH",
-      body: JSON.stringify(data),
+      body: JSON.stringify(backendPayload),
     });
   },
 

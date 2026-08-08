@@ -55,8 +55,8 @@ async def check_drift_and_retrain(symbol: str):
             logger.error("Instrument not found.")
             return
 
-        # For demo/mock purposes, since DB might have static data, we just get all data and slice by index
-        # (Assuming the DB has some data from phase A0)
+        # We fetch all feature vectors for this symbol to evaluate chronological drift
+        # by comparing the first 80% to the most recent 20%
         stmt = select(FeatureVector).where(FeatureVector.symbol_id == instrument.id).order_by(FeatureVector.time)
         result = await session.execute(stmt)
         vectors = result.scalars().all()

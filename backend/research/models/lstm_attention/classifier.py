@@ -9,51 +9,58 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
-import torch.nn as nn
-import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
-
-torch.set_num_threads(1)
 
 logger = logging.getLogger(__name__)
 
+_torch_cache = None
 
-class AttentionLayer(nn.Module):
-    def __init__(self, hidden_dim: int):
-        super().__init__()
-        self.attn_weights = nn.Parameter(torch.randn(hidden_dim, 1))
+def _get_torch():
+    global _torch_cache
+    if _torch_cache is not None:
+        return _torch_cache
 
-    def forward(self, lstm_out: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        # lstm_out shape: [batch_size, seq_len, hidden_dim]
-        # self.attn_weights shape: [hidden_dim, 1]
-        scores = torch.matmul(lstm_out, self.attn_weights)  # [batch_size, seq_len, 1]
-        attn_weights = torch.softmax(scores, dim=1)  # [batch_size, seq_len, 1]
-        context = torch.sum(lstm_out * attn_weights, dim=1)  # [batch_size, hidden_dim]
-        return context, attn_weights
+    import torch
+    import torch.nn as nn
+    import torch.optim as optim
+    
+    torch.set_num_threads(1)
+    
+    class AttentionLayer(nn.Module):
+        def __init__(self, hidden_dim: int):
+            super().__init__()
+            self.attn_weights = nn.Parameter(torch.randn(hidden_dim, 1))
 
+        def forward(self, lstm_out: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            scores = torch.matmul(lstm_out, self.attn_weights)
+            attn_weights = torch.softmax(scores, dim=1)
+            context = torch.sum(lstm_out * attn_weights, dim=1)
+            return context, attn_weights
 
-class LSTMAttentionNet(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1, dropout: float = 0.5):
-        super().__init__()
-        self.lstm = nn.LSTM(
-            input_dim,
-            hidden_dim,
-            num_layers,
-            batch_first=True,
-            dropout=dropout if num_layers > 1 else 0.0
-        )
-        self.attention = AttentionLayer(hidden_dim)
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(hidden_dim, 1)
-        self.sigmoid = nn.Sigmoid()
+    class LSTMAttentionNet(nn.Module):
+        def __init__(self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1, dropout: float = 0.5):
+            super().__init__()
+            self.lstm = nn.LSTM(
+                input_dim,
+                hidden_dim,
+                num_layers,
+                batch_first=True,
+                dropout=dropout if num_layers > 1 else 0.0
+            )
+            self.attention = AttentionLayer(hidden_dim)
+            self.dropout = nn.Dropout(dropout)
+            self.fc = nn.Linear(hidden_dim, 1)
+            self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        lstm_out, _ = self.lstm(x)  # [batch_size, seq_len, hidden_dim]
-        context, attn_weights = self.attention(lstm_out)
-        context = self.dropout(context)
-        out = self.sigmoid(self.fc(context))
-        return out, attn_weights
+        def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+            lstm_out, _ = self.lstm(x)
+            context, attn_weights = self.attention(lstm_out)
+            context = self.dropout(context)
+            out = self.sigmoid(self.fc(context))
+            return out, attn_weights
+
+    _torch_cache = (torch, nn, optim, LSTMAttentionNet)
+    return _torch_cache
 
 
 class LSTMAttentionClassifier:
@@ -76,10 +83,12 @@ class LSTMAttentionClassifier:
 
     def fit(self, df: pd.DataFrame, y: pd.Series) -> LSTMAttentionClassifier:
         """Fit the scaler, prepare sequences, and train the model with early stopping."""
+        torch, nn, optim, LSTMAttentionNet = _get_torch()
+        
         if not self.features:
-            self.features = list(df.columns)
+            self.features = [c for c in df.select_dtypes(include=[np.number]).columns.tolist() if not c.startswith("target_")]
 
-        X_clean = df[self.features].dropna()
+        X_clean = df[self.features].fillna(0)
         y_clean = y.loc[X_clean.index].values
         X_scaled = self.scaler.fit_transform(X_clean)
 
@@ -107,7 +116,7 @@ class LSTMAttentionClassifier:
         self.model = LSTMAttentionNet(input_dim=len(self.features))
 
         criterion = nn.BCELoss()
-        optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-4) # L2 regularized
+        optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
 
         best_val_loss = float('inf')
         patience = 5
@@ -147,6 +156,8 @@ class LSTMAttentionClassifier:
         if self.model is None:
             return 0.5, {}
 
+        torch, _, _, _ = _get_torch()
+
         X_clean = df[self.features]
         X_scaled = self.scaler.transform(X_clean)
 
@@ -171,13 +182,13 @@ class LSTMAttentionClassifier:
         if self.model is None:
             return pd.Series(0.5, index=df.index)
 
+        torch, _, _, _ = _get_torch()
+
         X_clean = df[self.features].fillna(0)
         X_scaled = self.scaler.transform(X_clean)
 
         # Prepare sliding windows
         X_seq = []
-        # We need a sequence of length seq_len for every row in df
-        # If we don't have enough history, pad with zeros.
         padded_X = np.vstack([np.zeros((self.seq_len - 1, len(self.features))), X_scaled])
 
         for i in range(len(X_scaled)):
@@ -216,6 +227,7 @@ class LSTMAttentionClassifier:
             inst.scaler = state["scaler"]
             inst.features = state["features"]
             if state["model_state_dict"] is not None:
+                _, _, _, LSTMAttentionNet = _get_torch()
                 inst.model = LSTMAttentionNet(input_dim=len(inst.features))
                 inst.model.load_state_dict(state["model_state_dict"])
             return inst

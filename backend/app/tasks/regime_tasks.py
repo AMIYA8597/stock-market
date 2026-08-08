@@ -5,8 +5,8 @@ import logging
 from decimal import Decimal
 from typing import Any
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from celery import shared_task
 from sqlalchemy import select
 
@@ -144,4 +144,3 @@ async def _update_regime_states_async() -> dict[str, Any]:
     return {"status": "success", "records_updated": records_updated}
 
 # We need numpy
-import numpy as np

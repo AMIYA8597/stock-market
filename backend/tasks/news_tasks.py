@@ -31,7 +31,7 @@ def _get_redis_client():
         client.ping()
         return client
     except redis.exceptions.ConnectionError:
-        logger.warning("Redis is not running. Falling back to in-memory dict cache.")
+        logger.warning("Redis is not running. Degraded to in-memory DummyRedis cache.")
         return DummyRedis()
 
 def _hash_headline(headline: str) -> str:

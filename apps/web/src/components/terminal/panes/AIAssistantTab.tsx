@@ -79,12 +79,12 @@ export default function AIAssistantTab({ signal }: AIAssistantTabProps): JSX.Ele
             if (e.key === "Enter") handleSendChat();
           }}
           placeholder="Ask AI Assistant about predictive signals, regime state..."
-          className="flex-1 rounded border border-[var(--nq-border)] glass-panel focus:glow-hover bg-[var(--nq-bg-card)] px-3 py-1 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono transition-all duration-300"
+          className="flex-1 rounded border border-[var(--nq-border)] glass-panel focus:glow-hover bg-[var(--nq-bg-card)] px-3 py-3 md:py-1 min-h-[44px] md:min-h-0 text-[10px] text-[var(--nq-text-primary)] focus:outline-none focus:border-[var(--nq-accent-cyan)] font-mono transition-all duration-300"
         />
         <button
           type="button"
           onClick={handleSendChat}
-          className="rounded bg-[var(--nq-accent-purple)] hover:bg-[rgba(139,92,246,0.8)] px-3 py-1 font-semibold text-[10px] text-white transition-colors"
+          className="rounded bg-[var(--nq-accent-purple)] hover:bg-[rgba(139,92,246,0.8)] px-3 py-3 md:py-1 min-h-[44px] md:min-h-0 font-semibold text-[10px] text-white transition-colors"
         >
           Send
         </button>

@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Bell, Pause, Trash2, Edit, AlertTriangle, Brain, TrendingUp, Newspaper } from "lucide-react";
 import { Card, CardHeader, CardTitle, Button, Badge, Modal, Input, Select } from "@neuroquant/ui";
 import type { AlertType, AlertSeverity } from "@neuroquant/types";
-import { alertsApi } from "@/lib/api-client";
+import { alertsApi, ApiError } from "@/lib/api-client";
 
 interface ActiveAlert {
   id: string; name: string; symbol: string; type: AlertType; status: "active" | "triggered" | "paused";
@@ -119,9 +119,13 @@ export function AlertsContent() {
       setModalOpen(false);
       await loadData();
     } catch (createError) {
-      const message =
-        createError instanceof Error ? createError.message : "Failed to create alert.";
-      setError(message);
+      if (createError instanceof ApiError && createError.status === 403) {
+        setError("Premium Required: Upgrade to a Pro subscription to create custom alerts.");
+      } else {
+        const message =
+          createError instanceof Error ? createError.message : "Failed to create alert.";
+        setError(message);
+      }
     } finally {
       setSubmitting(false);
     }

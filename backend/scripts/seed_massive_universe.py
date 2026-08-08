@@ -1,9 +1,7 @@
 import asyncio
-import io
 import logging
 import urllib.request
 
-import pandas as pd
 from sqlalchemy import select
 
 from app.database.connection import async_session_factory
@@ -15,18 +13,14 @@ logger = logging.getLogger(__name__)
 async def seed_universe():
     instruments_to_add = []
 
-    # 1. Fetch NSE Equities
-    logger.info("Fetching NSE Equities...")
-    nse_url = 'https://archives.nseindia.com/content/equities/EQUITY_L.csv'
+    # 1. Fetch NSE Equities using nsepython
+    logger.info("Fetching NSE Equities via nsepython...")
     try:
-        req = urllib.request.Request(nse_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as response:
-            nse_df = pd.read_csv(io.StringIO(response.read().decode('utf-8')))
-
-        for _idx, row in nse_df.iterrows():
-            symbol = row['SYMBOL'].strip() + ".NS"
-            name = row['NAME OF COMPANY'].strip()
-            row.get(' ISIN NUMBER', "Equity")
+        from nsepython import nse_eq_symbols
+        symbols = nse_eq_symbols()
+        for sym in symbols:
+            symbol = str(sym).strip() + ".NS"
+            name = str(sym).strip()
             instruments_to_add.append({
                 "symbol": symbol,
                 "name": name,
@@ -38,9 +32,9 @@ async def seed_universe():
                 "sector": "Equity",
                 "is_active": True,
             })
-        logger.info(f"Loaded {len(nse_df)} NSE equities.")
+        logger.info(f"Loaded {len(symbols)} NSE equities.")
     except Exception as e:
-        logger.error(f"Failed to fetch NSE: {e}")
+        logger.error(f"Failed to fetch NSE via nsepython: {e}")
 
     # 2. Fetch US Equities
     logger.info("Fetching US Equities (NASDAQ/NYSE)...")

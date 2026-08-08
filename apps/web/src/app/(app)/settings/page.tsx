@@ -31,7 +31,7 @@ export default function SettingsPage() {
               <CardDescription>Customize the look and feel of your terminal.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-4">
+              <div className="flex flex-wrap gap-4">
                 <Button 
                   variant={theme === "light" ? "default" : "outline"}
                   onClick={() => setTheme("light")}

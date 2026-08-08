@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { AlertTriangle, BellRing, BrainCircuit, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
+import { BellRing, BrainCircuit, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Modal, Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
@@ -54,7 +54,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: pnl,
     isLoading: isLoadingPnl,
-    isError: isErrorPnl,
   } = useQuery({
     queryKey: ["paper-trade", "pnl"],
     queryFn: () => paperTradingApi.getPnl() as Promise<PaperPnl>,
@@ -63,7 +62,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: positions,
     isLoading: isLoadingPositions,
-    isError: isErrorPositions,
   } = useQuery({
     queryKey: ["paper-trade", "positions"],
     queryFn: () => paperTradingApi.getPositions() as Promise<PositionRow[]>,
@@ -72,7 +70,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: portfolios,
     isLoading: isLoadingPortfolios,
-    isError: isErrorPortfolios,
   } = useQuery({
     queryKey: ["portfolios"],
     queryFn: () => portfolioApi.list(),
@@ -83,7 +80,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: riskMetrics,
     isLoading: isLoadingRisk,
-    isError: isErrorRisk,
   } = useQuery({
     queryKey: ["risk", portfolio?.id],
     queryFn: () => portfolioApi.getRisk(portfolio!.id),
@@ -93,7 +89,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: performance,
     isLoading: isLoadingPerformance,
-    isError: isErrorPerformance,
   } = useQuery({
     queryKey: ["performance", portfolio?.id],
     queryFn: () => portfolioApi.getPerformance(),
@@ -103,7 +98,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: alertsHistory,
     isLoading: isLoadingAlerts,
-    isError: isErrorAlerts,
   } = useQuery({
     queryKey: ["alerts", "history"],
     queryFn: () => alertsApi.getHistory(6),
@@ -112,7 +106,6 @@ export function DashboardOverview(): JSX.Element {
   const {
     data: signal,
     isLoading: isLoadingSignal,
-    isError: isErrorSignal,
   } = useSignalQuery("NIFTY50");
 
   const isLoading =
@@ -124,41 +117,7 @@ export function DashboardOverview(): JSX.Element {
     isLoadingAlerts ||
     isLoadingSignal;
 
-  const hasBlockingError =
-    isErrorPnl ||
-    isErrorPositions ||
-    isErrorPortfolios ||
-    isErrorRisk ||
-    isErrorPerformance ||
-    isErrorAlerts ||
-    isErrorSignal;
-
-  if (isLoading) {
-    return <div className="p-8 text-center text-sm text-[var(--nq-text-secondary)]">Loading dashboard data...</div>;
-  }
-
-  if (hasBlockingError) {
-    return (
-      <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-[1.5rem] border border-[rgba(255,91,92,0.28)] bg-[rgba(255,91,92,0.08)] p-8 text-center">
-        <AlertTriangle className="h-6 w-6 text-[var(--nq-bear)]" />
-        <div>
-          <p className="text-base font-semibold text-[var(--nq-text-primary)]">Dashboard data could not be loaded.</p>
-          <p className="mt-1 text-sm text-[var(--nq-text-secondary)]">The UI is stable now, but one or more backend contracts still need attention.</p>
-        </div>
-      </div>
-    );
-  }
-
-  const pnlData = pnl ?? {};
-  const openPositions = positions ?? [];
-  const alerts = alertsHistory ?? [];
-  const performanceSeries = Array.isArray(performance?.series)
-    ? performance.series.map((point) => ({
-        day: new Date(point.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-        value: Number(point.portfolio_value ?? 0),
-        benchmark: Number(point.benchmark_value ?? 0),
-      }))
-    : [];
+  // Global blocking error removed to allow graceful degradation of individual widgets
 
   const modelBreakdown = useMemo(() => {
     if (!signal?.models) {
@@ -179,11 +138,26 @@ export function DashboardOverview(): JSX.Element {
             : 0;
 
         return {
-          label: key.toUpperCase(),
-          confidence: Math.min(100, Math.round(Math.abs(value) * 100)),
+          label: key,
+          confidence: value * 100, // convert to percentage scale
         };
       });
-  }, [signal]);
+  }, [signal?.models]);
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-sm text-[var(--nq-text-secondary)]">Loading dashboard data...</div>;
+  }
+
+  const pnlData = pnl ?? {};
+  const openPositions = positions ?? [];
+  const alerts = alertsHistory ?? [];
+  const performanceSeries = Array.isArray(performance?.series)
+    ? performance.series.map((point) => ({
+        day: new Date(point.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+        value: Number(point.portfolio_value ?? 0),
+        benchmark: Number(point.benchmark_value ?? 0),
+      }))
+    : [];
 
   const kpis = [
     {

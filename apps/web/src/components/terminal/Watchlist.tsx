@@ -130,6 +130,17 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
   const [activeTab, setActiveTab] = useState<number>(0);
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "/" || (e.key === "k" && (e.metaKey || e.ctrlKey))) {
+        e.preventDefault();
+        document.getElementById("watchlist-search-input")?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const activeSymbols = useMemo(() => {
     if (activeTab === 4) {
       // Market tab - show all signals sorted by confidence
@@ -307,10 +318,10 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
         onDragStart={() => handleDragStart(index)}
         onDragOver={(e) => handleDragOver(e, index)}
         onDragEnd={handleDragEnd}
-        className={`relative flex w-full cursor-pointer flex-col rounded border px-3 py-2 transition-all duration-200 group ${
+        className={`relative flex w-full cursor-pointer flex-col rounded border-b border-l border-r border-t-0 px-2 py-1 transition-all duration-200 group ${
           selected
-            ? "border-[var(--nq-accent)] bg-[rgba(0,212,245,0.04)] shadow-[0_0_12px_rgba(0,212,245,0.05)]"
-            : "border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] hover:border-[rgba(255,255,255,0.12)] hover:bg-[rgba(255,255,255,0.02)]"
+            ? "border-l-2 border-l-[var(--nq-accent)] bg-[rgba(0,212,245,0.04)] shadow-inner"
+            : "border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] hover:border-l hover:border-l-[rgba(255,255,255,0.3)] hover:bg-[rgba(255,255,255,0.03)]"
         } ${draggedIdx === index ? "opacity-45 animate-pulse" : ""}`}
       >
         {/* Main row */}
@@ -345,7 +356,7 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
           </div>
           
           <div className="flex items-center gap-4 text-right transition-all group-hover:opacity-0">
-            <div className="flex flex-col items-end">
+            <div className="flex flex-col items-end min-w-[64px]">
               <span className="rounded bg-[rgba(0,212,245,0.08)] px-1.5 py-0.5 text-[8px] font-mono font-semibold text-[var(--nq-accent-cyan)] border border-[rgba(0,212,245,0.15)]">
                 SR {sharpe}
               </span>
@@ -413,7 +424,7 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
                 setActiveTab(idx);
                 setGroupBySector(false);
               }}
-              className={`rounded px-2.5 py-1 text-[10px] font-semibold font-mono transition-colors ${
+              className={`rounded px-2.5 py-1 text-[10px] font-semibold font-mono transition-colors shrink-0 ${
                 activeTab === idx && !groupBySector
                   ? "bg-[rgba(0,212,245,0.12)] text-[var(--nq-accent)] border border-[rgba(0,212,245,0.3)]"
                   : "text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] border border-transparent"
@@ -428,7 +439,7 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
               setActiveTab(4);
               setGroupBySector(false);
             }}
-            className={`rounded px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+            className={`rounded px-2.5 py-1 text-[10px] font-semibold transition-colors shrink-0 ${
               activeTab === 4 && !groupBySector
                 ? "bg-[rgba(0,212,245,0.12)] text-[var(--nq-accent)] border border-[rgba(0,212,245,0.3)]"
                 : "text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] border border-transparent"
@@ -476,11 +487,12 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
             <Search className="h-3.5 w-3.5 text-[var(--nq-text-secondary)]" />
           </div>
           <input
+            id="watchlist-search-input"
             type="text"
-            placeholder="Search & add symbol... (e.g. AAPL, RELIANCE)"
+            placeholder="Search symbol... (Press '/' to focus)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] py-1.5 pl-8 pr-3 text-xs text-[var(--nq-text-primary)] placeholder-[var(--nq-text-muted)] outline-none transition focus:border-[var(--nq-accent)] focus:bg-[rgba(255,255,255,0.04)]"
+            className="w-full rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] py-1 pl-8 pr-3 text-xs text-[var(--nq-text-primary)] placeholder-[var(--nq-text-muted)] outline-none transition focus:border-[var(--nq-accent)] focus:bg-[rgba(255,255,255,0.04)]"
           />
           {searchQuery && (
             <button
@@ -513,7 +525,14 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
       )}
 
       {/* Watchlist Body Container */}
-      <div className="flex-1 overflow-y-auto pr-1 space-y-1.5 ds-scrollable select-none">
+      <div className="flex items-center justify-between px-2 py-1 border-b border-[rgba(255,255,255,0.05)] font-mono text-[9px] font-semibold uppercase tracking-wider text-[var(--nq-text-secondary)] shrink-0 mt-1 sticky top-0 bg-[var(--nq-bg-surface)] z-10">
+        <span>Symbol</span>
+        <div className="flex items-center gap-4 text-right">
+          <span className="min-w-[64px]">Signal</span>
+          <span className="min-w-[70px]">LTP</span>
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto pr-1 pt-1 space-y-0.5 ds-scrollable select-none relative">
         {groupBySector && groupedSignals ? (
           Object.entries(groupedSignals).map(([sector, sectorSignals]) => {
             const isCollapsed = collapsedSectors[sector] ?? false;
