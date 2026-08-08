@@ -45,8 +45,9 @@ The true engine of QuantEdge is its 7-layer predictive pipeline.
 1. **Data Ingestion**: Fetches OHLCV data using `MarketDataService` (primarily relying on `yfinance`).
 2. **Feature Engineering**: Runs a causality-safe `FeaturePipeline` that calculates RSI, MACD, Bollinger Bands, ATR, ADX, Candlestick Patterns, and Jegadeesh-Titman momentum using `pandas-ta`.
 3. **Regime Detection (Layer 4)**: A 3-State Gaussian Hidden Markov Model (HMM) + GARCH(1,1) detects the current market environment (Bull, Bear, Sideways, Crisis).
-4. **Base Models (Layer 5)**:
-   - **XGBoost**: Trained via expanding-window walk-forward CV.
+4. **Base Models (Layer 5)** (Realistic D1 directional accuracy expected between **52% - 62%**):
+   - **XGBoost**: Trained via strict expanding-window walk-forward CV.
+   - **Honesty Law Guard**: Models scoring >75% directional accuracy are violently blocked from the database via a `LeakageError` check.
    - **LSTM-Attention**: Captures temporal sequences.
    - **TFT (Temporal Fusion Transformer)**: Generates quantile forecasts (p10, p50, p90) via LightGBM.
 5. **Ensemble Fusion (Layer 6)**: 
@@ -112,7 +113,10 @@ If you are just joining the project, be aware of the following critical fixes th
    - *Issue*: Dashboard had its own nested `AppShell` inside the main authenticated `AppShell`.
    - *Impact*: Sidebar/topbar content rendered twice on dashboard pages.
    - *Fix*: The dashboard route layout now returns children directly.
-6. **Still expected in local dev**:
+6. **Mobile Responsiveness & UI Honesty Updates (Phase U0-U7)**:
+   - *Issue*: UI surfaces were broken on 375px screens and research pages used fake hardcoded fallback arrays for loading states.
+   - *Fix*: The Terminal, Billing, Settings, and Research pages were audited and fully made responsive (using `overflow-x-auto`, `flex-wrap`, and dynamic grid columns). All fake data loading states in charts were replaced by proper CSS skeletons, and WebSocket data streams now cleanly handle singletons across surfaces.
+7. **Still expected in local dev**:
    - Backend `/health` remains `degraded` if Redis is not running locally.
    - Some model logs still warn about optional dependencies like `river` and `TA-Lib`.
    - Market/provider warnings do not block the basic auth flow anymore, but they still affect advanced live-signal quality.

@@ -29,8 +29,8 @@ Final Ensemble = Classical Composite ⊕ ML Probability ⊕ Regime Gate ⊕ Sent
 - Source: `HMM-GARCH Engine` (Hidden Markov Model)
 - Description: Acts as an absolute veto layer to protect capital during unfavorable structural market conditions.
 - Rules:
-  - **BULL Regime**: Hard-blocks any SELL signals (Ensemble drops to 0.0 neutral).
-  - **BEAR or CRISIS Regime**: Hard-blocks any BUY signals (Ensemble drops to 0.0 neutral).
+  - **BULL Regime**: Hard-blocks any SELL signals (Ensemble capped at -0.2).
+  - **BEAR or CRISIS Regime**: Hard-blocks any BUY signals (Ensemble capped at 0.2, effectively NEUTRAL).
   - **SIDEWAYS Regime**: Standard operations (no hard blocks).
 
 ---

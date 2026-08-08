@@ -17,7 +17,7 @@ function formatMoney(value: number | string): string {
 }
 
 export default function PortfolioFundsPage(): JSX.Element {
-  const { data: balanceData, isLoading: isLoadingBalance } = useQuery({
+  const { data: balance } = useQuery({
     queryKey: ["payments", "balance"],
     queryFn: () => paymentsApi.balance(),
   });
@@ -41,7 +41,7 @@ export default function PortfolioFundsPage(): JSX.Element {
         <article className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4 flex flex-col justify-center text-center">
           <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Available Margin / Cash Balance</h2>
           <p className="text-4xl font-semibold text-[var(--nq-text-primary)] tracking-tight">
-            {balanceData?.wallet_balance ? formatMoney(balanceData.wallet_balance) : "INR 0.00"}
+            {balance?.wallet_balance ? formatMoney(balance.wallet_balance) : "INR 0.00"}
           </p>
           <p className="mt-2 text-xs text-[var(--nq-text-secondary)]">Cash available for placing new orders.</p>
         </article>

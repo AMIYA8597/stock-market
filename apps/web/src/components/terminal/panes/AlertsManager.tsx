@@ -103,35 +103,35 @@ export default function AlertsManager() {
       <div className="mb-6 rounded-lg border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-3 shadow-inner">
         <h3 className="text-xs font-semibold text-[var(--nq-text-secondary)] mb-3">Create New Alert</h3>
         <div className="flex flex-col gap-2">
-          <div className="flex gap-2">
+          <div className="flex flex-col md:flex-row gap-2">
             <input 
               type="text" 
               placeholder="Symbol (e.g. AAPL)" 
               value={newSymbol}
               onChange={(e) => setNewSymbol(e.target.value)}
-              className="flex-1 rounded border border-[var(--nq-border)] bg-[rgba(0,0,0,0.2)] px-2 py-1.5 text-xs text-[var(--nq-text-primary)] focus:border-[var(--nq-accent-cyan)] outline-none transition-colors"
+              className="flex-1 rounded border border-[var(--nq-border)] bg-[rgba(0,0,0,0.2)] px-2 py-1.5 min-h-[44px] md:min-h-0 text-xs text-[var(--nq-text-primary)] focus:border-[var(--nq-accent-cyan)] outline-none transition-colors"
             />
             <select 
               value={newType}
               onChange={(e) => setNewType(e.target.value)}
-              className="rounded border border-[var(--nq-border)] bg-[rgba(0,0,0,0.2)] px-2 py-1.5 text-xs text-[var(--nq-text-primary)] focus:border-[var(--nq-accent-cyan)] outline-none transition-colors"
+              className="rounded border border-[var(--nq-border)] bg-[rgba(0,0,0,0.2)] px-2 py-1.5 min-h-[44px] md:min-h-0 text-xs text-[var(--nq-text-primary)] focus:border-[var(--nq-accent-cyan)] outline-none transition-colors"
             >
               <option value="PRICE_ABOVE">Price Above</option>
               <option value="PRICE_BELOW">Price Below</option>
             </select>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col md:flex-row gap-2">
             <input 
               type="number" 
               placeholder="Threshold (e.g. 150)" 
               value={newThreshold}
               onChange={(e) => setNewThreshold(e.target.value)}
-              className="flex-1 rounded border border-[var(--nq-border)] bg-[rgba(0,0,0,0.2)] px-2 py-1.5 text-xs text-[var(--nq-text-primary)] focus:border-[var(--nq-accent-cyan)] outline-none transition-colors"
+              className="flex-1 rounded border border-[var(--nq-border)] bg-[rgba(0,0,0,0.2)] px-2 py-1.5 min-h-[44px] md:min-h-0 text-xs text-[var(--nq-text-primary)] focus:border-[var(--nq-accent-cyan)] outline-none transition-colors"
             />
             <button 
               onClick={createAlert}
               disabled={!newSymbol || !newThreshold}
-              className="flex items-center gap-1 rounded bg-[var(--nq-accent-cyan)] px-3 py-1.5 text-xs font-bold text-black hover:bg-[#00e6ff] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(0,212,245,0.3)]"
+              className="flex items-center justify-center gap-1 rounded bg-[var(--nq-accent-cyan)] px-3 py-1.5 min-h-[44px] md:min-h-0 text-xs font-bold text-black hover:bg-[#00e6ff] transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_10px_rgba(0,212,245,0.3)]"
             >
               <Plus className="w-3 h-3" /> Add
             </button>

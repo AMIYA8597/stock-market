@@ -118,31 +118,59 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     prev_close_prices = df["close"].iloc[start_idx - 1 : total_len - 1].values
     actual_returns = (close_prices / prev_close_prices) - 1.0
 
-    # 4. Compute performance metrics
-    def compute_metrics(sigs, rets):
-        hit = np.sign(sigs) == np.sign(rets)
-        hit_rate = float(np.mean(hit)) if len(hit) > 0 else 0.5
+    # Leakage Guard
+    hit = np.sign(signals) == np.sign(actual_returns)
+    ens_hit = float(np.mean(hit)) if len(hit) > 0 else 0.5
+    if ens_hit > 0.75:
+        logger.error(f"Leakage Guard Triggered in Walk-Forward Runner! Hit rate {ens_hit:.2f} is unnaturally high. Aborting!")
+        import sys
+        sys.exit(1)
 
-        # Sharpe ratio
-        daily_pnl = sigs * rets
-        ann_sharpe = (
-            float(np.mean(daily_pnl) / (np.std(daily_pnl) + 1e-9) * np.sqrt(252))
-            if np.std(daily_pnl) > 0
-            else 0.0
-        )
-        return hit_rate, ann_sharpe
+    # 4. Compute performance metrics using EventDrivenBacktester
+    from research.backtesting.engine import EventDrivenBacktester
 
-    ens_hit, ens_sharpe = compute_metrics(signals, actual_returns)
+    backtester = EventDrivenBacktester(
+        prices=prices,
+        signals=signals,
+        dates=np.array(dates),
+        initial_capital=100000.0,
+        kelly_fraction=kellys,
+        target_vol=0.15
+    )
+    result = backtester.run()
+
+    daily_returns = result.daily_returns
+    ens_sharpe = (
+        float(np.mean(daily_returns) / (np.std(daily_returns) + 1e-9) * np.sqrt(252))
+        if np.std(daily_returns) > 0
+        else 0.0
+    )
 
     model_metrics = {}
     for model, sigs in model_signals_track.items():
-        m_hit, m_sharpe = compute_metrics(np.array(sigs), actual_returns)
+        m_sigs = np.array(sigs)
+        m_hit = float(np.mean(np.sign(m_sigs) == np.sign(actual_returns))) if len(m_sigs) > 0 else 0.5
+        m_backtester = EventDrivenBacktester(
+            prices=prices,
+            signals=m_sigs,
+            dates=np.array(dates),
+            initial_capital=100000.0,
+            kelly_fraction=kellys,
+            target_vol=0.15
+        )
+        m_result = m_backtester.run()
+        m_rets = m_result.daily_returns
+        m_sharpe = (
+            float(np.mean(m_rets) / (np.std(m_rets) + 1e-9) * np.sqrt(252))
+            if np.std(m_rets) > 0
+            else 0.0
+        )
         model_metrics[model] = {"hit_rate": m_hit, "sharpe": m_sharpe}
 
     # Calculate drawdowns
-    equity = 100000.0 * np.cumprod(1.0 + signals * actual_returns)
+    equity = result.equity_curve
     peaks = np.maximum.accumulate(equity)
-    drawdowns = (equity - peaks) / peaks
+    drawdowns = (equity - peaks) / np.maximum(peaks, 1e-9)
     max_dd = float(np.min(drawdowns))
 
     return {

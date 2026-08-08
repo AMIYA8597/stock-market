@@ -123,11 +123,14 @@ const Header = (): JSX.Element => {
             <div className="flex items-center gap-2">
               <div
                 className={`w-2 h-2 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-[#00E676] animate-pulse' : 'bg-[#FF3B3B]'
+                  connectionStatus === 'connected' ? 'bg-[#00E676] animate-pulse' : 
+                  connectionStatus === 'reconnecting' ? 'bg-[#FFC107] animate-pulse' : 
+                  'bg-[#FF3B3B]'
                 }`}
               />
               <span className="text-xs text-[#8B9BB4] hidden sm:inline">
-                {connectionStatus === 'connected' ? 'Live' : 'Offline'}
+                {connectionStatus === 'connected' ? 'Live' : 
+                 connectionStatus === 'reconnecting' ? 'Reconnecting' : 'Offline'}
               </span>
             </div>
 

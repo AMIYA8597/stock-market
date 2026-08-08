@@ -158,6 +158,10 @@ def train_single_xgboost(symbol: str) -> None:
 
     win_rate = float(np.mean(predictions == actuals)) if len(predictions) > 0 else 0.54
 
+    # ANTI-LEAKAGE GUARD (HONESTY LAW)
+    if win_rate > 0.75:
+        raise ValueError(f"LeakageError: Look-ahead bias detected! Directional accuracy of {win_rate*100:.1f}% exceeds realistic market efficiency (75% max). Aborting model promotion.")
+
     if len(predictions) > 0:
         wins = fwd_rets_test[(predictions == 1) & (fwd_rets_test > 0)]
         losses = fwd_rets_test[(predictions == 1) & (fwd_rets_test < 0)]

@@ -36,6 +36,7 @@ interface TxItem {
 
 export function PricingPage(): JSX.Element {
   const [plans, setPlans] = useState<PlanItem[]>([]);
+  const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
   const pushToast = useToastStore((state) => state.pushToast);
 
   useEffect(() => {
@@ -45,6 +46,53 @@ export function PricingPage(): JSX.Element {
       pushToast({ tone: "error", title: "Error", message: "Failed to load pricing plans" });
     });
   }, [pushToast]);
+
+  const handleSubscribe = async (plan: PlanItem) => {
+    try {
+      setLoadingPlan(plan.id);
+      await loadRazorpayScript();
+      
+      const res = await paymentsApi.subscribe(plan.id);
+      
+      if (res.subscription_id.startsWith("sub_mock_")) {
+         pushToast({
+           tone: "success",
+           title: "Mock Subscription Created",
+           message: "Test mode: Subscription activated instantly."
+         });
+         return;
+      }
+      
+      const options = {
+        key: res.razorpay_key_id,
+        subscription_id: res.subscription_id,
+        name: "NeuroQuant",
+        description: `Subscription to ${plan.name}`,
+        handler: function (response: any) {
+           pushToast({
+             tone: "success",
+             title: "Subscription Active",
+             message: "Your subscription has been activated!"
+           });
+        },
+        theme: {
+          color: "#3b82f6" // matches primary-500
+        }
+      };
+      
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+      
+    } catch (err: any) {
+      pushToast({
+        tone: "error",
+        title: "Subscription failed",
+        message: err?.message || "Please try again."
+      });
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
 
   return (
     <section className="space-y-5">
@@ -74,7 +122,13 @@ export function PricingPage(): JSX.Element {
                   </li>
                 ))}
               </ul>
-              <Button className="mt-5 w-full">Choose {tier.name}</Button>
+              <Button 
+                className="mt-5 w-full" 
+                isLoading={loadingPlan === tier.id}
+                onClick={() => handleSubscribe(tier)}
+              >
+                Choose {tier.name}
+              </Button>
             </CardContent>
           </Card>
         ))}
@@ -96,6 +150,103 @@ const loadRazorpayScript = () => {
     document.body.appendChild(script);
   });
 };
+
+export function SubscriptionDashboard(): JSX.Element {
+  const pushToast = useToastStore((state) => state.pushToast);
+  const [sub, setSub] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
+
+  useEffect(() => {
+    paymentsApi.getSubscription().then((res) => {
+      setSub(res.subscription);
+    }).finally(() => {
+      setLoading(false);
+    });
+  }, []);
+
+  const handleCancel = async () => {
+    if (!confirm("Are you sure you want to cancel your subscription? Cancellation takes effect at the end of your current billing cycle. You will not be charged again. We cannot offer prorated refunds directly via this portal.")) {
+      return;
+    }
+    try {
+      setCancelling(true);
+      await paymentsApi.cancelSubscription();
+      pushToast({ tone: "success", title: "Subscription Cancelled", message: "Your subscription will not renew." });
+      // reload
+      const res = await paymentsApi.getSubscription();
+      setSub(res.subscription);
+    } catch (err: any) {
+      pushToast({ tone: "error", title: "Error", message: err?.message || "Failed to cancel." });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
+  if (loading) {
+     return <div className="p-8 text-center text-sm text-[var(--ds-text-secondary)]">Loading subscription...</div>;
+  }
+
+  if (!sub) {
+    return (
+      <Card className="mx-auto max-w-xl bg-[var(--ds-surface-1)]/90">
+        <CardHeader>
+          <CardTitle>Subscription Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-[var(--ds-text-secondary)]">You do not have an active subscription.</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="mx-auto max-w-xl bg-[var(--ds-surface-1)]/90">
+      <CardHeader>
+        <CardTitle>Subscription Status</CardTitle>
+        <CardDescription>
+          Manage your premium features and billing.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+           <p className="text-sm text-[var(--ds-text-secondary)]">Current Plan</p>
+           <p className="font-medium text-lg">{sub.plan.name}</p>
+        </div>
+        <div>
+           <p className="text-sm text-[var(--ds-text-secondary)]">Status</p>
+           <Badge variant={sub.status === "active" ? "buy" : "neutral"}>{sub.status}</Badge>
+        </div>
+        {sub.status === "active" && (
+           <div className="bg-[var(--ds-color-primary-500)]/10 p-3 rounded-md text-sm border border-[var(--ds-color-primary-500)]/20">
+             <span className="font-medium text-[var(--ds-color-primary-500)]">Active until:</span> {new Date(sub.current_period_end).toLocaleDateString()}
+           </div>
+        )}
+        {sub.status === "trialing" && (
+           <div className="bg-[var(--nq-accent-cyan)]/10 p-3 rounded-md text-sm border border-[var(--nq-accent-cyan)]/20">
+             <span className="font-medium text-[var(--nq-accent-cyan)]">Trial Active:</span> Your trial ends on {new Date(sub.current_period_end).toLocaleDateString()}.
+           </div>
+        )}
+        {sub.status === "pending_cancellation" && (
+           <div className="bg-[var(--ds-color-warning-500)]/10 p-3 rounded-md text-sm border border-[var(--ds-color-warning-500)]/20">
+             <span className="font-medium text-[var(--ds-color-warning-500)]">Cancellation Pending:</span> Your subscription will end on {new Date(sub.current_period_end).toLocaleDateString()}.
+           </div>
+        )}
+        
+        {(sub.status === "active" || sub.status === "trialing") && (
+          <div className="pt-4 border-t border-[var(--ds-border-subtle)]">
+            <Button variant="outline" className="w-full text-[var(--ds-color-danger-500)] hover:bg-[var(--ds-color-danger-500)]/10 hover:text-[var(--ds-color-danger-500)]" isLoading={cancelling} onClick={handleCancel}>
+              Cancel Subscription
+            </Button>
+            <p className="text-xs text-[var(--ds-text-muted)] mt-2 text-center">
+              Cancellation takes effect at the end of your current billing cycle. You will not be charged again. We cannot offer prorated refunds directly via this portal.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export function CheckoutPage(): JSX.Element {
   const pushToast = useToastStore((state) => state.pushToast);

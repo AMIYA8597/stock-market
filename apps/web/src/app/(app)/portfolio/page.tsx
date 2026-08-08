@@ -72,19 +72,19 @@ export default function PortfolioPage(): JSX.Element {
         <div className="flex items-center gap-2">
           <Link
             href="/portfolio/funds"
-            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-3 md:py-1.5 min-h-[44px] md:min-h-0 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)] inline-flex items-center"
           >
             Manage funds
           </Link>
           <Link
             href="/portfolio/orders"
-            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-3 md:py-1.5 min-h-[44px] md:min-h-0 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)] inline-flex items-center"
           >
             Order history
           </Link>
           <Link
             href="/portfolio/optimizer"
-            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1.5 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
+            className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-3 md:py-1.5 min-h-[44px] md:min-h-0 text-xs text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)] inline-flex items-center"
           >
             Optimizer
           </Link>
@@ -108,10 +108,10 @@ export default function PortfolioPage(): JSX.Element {
       </section>
 
       {/* Tabs Row */}
-      <div className="mt-6 flex border-b border-[var(--nq-border)] gap-6 text-sm font-medium">
+      <div className="mt-6 flex border-b border-[var(--nq-border)] gap-6 text-sm font-medium overflow-x-auto custom-scrollbar">
         <button
           onClick={() => setActiveTab("holdings")}
-          className={`pb-2.5 transition border-b-2 ${
+          className={`py-3 md:pb-2.5 md:pt-0 min-h-[44px] md:min-h-0 whitespace-nowrap transition border-b-2 ${
             activeTab === "holdings"
               ? "border-[var(--nq-accent-cyan)] text-[var(--nq-text-primary)]"
               : "border-transparent text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)]"
@@ -121,7 +121,7 @@ export default function PortfolioPage(): JSX.Element {
         </button>
         <button
           onClick={() => setActiveTab("performance")}
-          className={`pb-2.5 transition border-b-2 ${
+          className={`py-3 md:pb-2.5 md:pt-0 min-h-[44px] md:min-h-0 whitespace-nowrap transition border-b-2 ${
             activeTab === "performance"
               ? "border-[var(--nq-accent-cyan)] text-[var(--nq-text-primary)]"
               : "border-transparent text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)]"

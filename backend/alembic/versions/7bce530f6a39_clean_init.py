@@ -527,3 +527,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_email_jobs_status'), table_name='email_jobs')
     op.drop_table('email_jobs')
     # ### end Alembic commands ###
+
+
+

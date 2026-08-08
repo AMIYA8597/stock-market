@@ -29,6 +29,7 @@ from app.core.security import decode_token, oauth2_scheme
 from app.core.test_state import is_test_mode
 from app.database.connection import async_session_factory
 from app.database.redis_client import _redis_pool_singleton
+from app.models.payment import Subscription
 from app.models.user import User
 
 logger = get_logger(__name__)
@@ -243,6 +244,28 @@ async def get_current_user_or_none(
         return None
 
 
+async def get_current_premium_user(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Ensure the authenticated user has an active premium subscription.
+    
+    If they do not have an active subscription, raise 403 Forbidden.
+    """
+    result = await db.execute(
+        select(Subscription)
+        .where(Subscription.user_id == current_user.id, Subscription.status == "active")
+        .limit(1)
+    )
+    sub = result.scalars().first()
+    if not sub:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Premium subscription required to access this resource.",
+        )
+    return current_user
+
+
 # ─── Role-Based Access Control ───────────────────────────────────────────
 def require_role(required_role: str):
     """Dependency factory for role-based access control.
@@ -303,6 +326,39 @@ def require_role(required_role: str):
         return current_user
 
     return role_checker
+
+
+def require_premium_tier():
+    """Dependency to check if user has an active premium subscription.
+
+    Returns:
+        User: The authenticated user if they have an active subscription.
+
+    Raises:
+        HTTPException: 403 if user lacks an active subscription.
+    """
+    async def premium_checker(
+        current_user: Annotated[User, Depends(get_current_user)],
+        db: Annotated[AsyncSession, Depends(get_db)],
+    ) -> User:
+        user_id = str(current_user.id)
+        result = await db.execute(
+            select(Subscription).where(
+                Subscription.user_id == current_user.id,
+                Subscription.status.in_(["active", "pending_cancellation"])
+            )
+        )
+        sub = result.scalars().first()
+
+        if not sub:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Premium subscription required for this action."
+            )
+
+        return current_user
+
+    return premium_checker
 
 
 # ─── Request Context ────────────────────────────────────────────────────
@@ -398,31 +454,9 @@ def get_rate_limiter(requests: int, window: int):
         window: Time window in seconds.
     """
     async def _rate_limiter(request: Request):
-        if is_test_mode():
-            return
-
+        from app.core.rate_limit import check_rate_limit
         client_ip = request.client.host if request.client else "unknown"
-        bucket_key = f"rate_limit:route:{request.url.path}:{client_ip}"
-        now = time.monotonic()
-        window_start = now - window
-
-        try:
-            redis = await _redis_pool_singleton()
-            pipe = redis.pipeline()
-            pipe.zremrangebyscore(bucket_key, "-inf", window_start)
-            pipe.zadd(bucket_key, {str(now): now})
-            pipe.zcard(bucket_key)
-            pipe.expire(bucket_key, window)
-            results = await pipe.execute()
-
-            if results[2] > requests:
-                raise HTTPException(
-                    status_code=429,
-                    detail="Rate limit exceeded for this endpoint."
-                )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error("redis_rate_limit_error", error=str(e))
+        key = f"route:{request.url.path}:{client_ip}"
+        await check_rate_limit(key, requests, window)
 
     return _rate_limiter

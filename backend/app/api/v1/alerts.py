@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db
+from app.core.dependencies import get_current_user, get_db, require_premium_tier
 from app.models.alert import Alert
 from app.models.instrument import Instrument
 from app.schemas.errors import ErrorCode, ErrorResponse
@@ -110,7 +110,7 @@ async def get_alerts(
 @router.post("", response_model=AlertData, status_code=201)
 async def post_alert(
     request: AlertCreateRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_premium_tier()),
     db: AsyncSession = Depends(get_db),
 ) -> AlertData:
     user_id_str = str(current_user.id)

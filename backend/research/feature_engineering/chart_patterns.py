@@ -27,6 +27,14 @@ class ChartPatternsBuilder(FeatureBuilder):
     name = "chart_patterns"
 
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if "symbol" in frame.columns and frame["symbol"].nunique() > 1:
+            results = []
+            for _, group in frame.groupby("symbol"):
+                results.append(self._transform_single(group))
+            return pd.concat(results).sort_index()
+        return self._transform_single(frame)
+
+    def _transform_single(self, frame: pd.DataFrame) -> pd.DataFrame:
         df = frame.copy()
         n = len(df)
 

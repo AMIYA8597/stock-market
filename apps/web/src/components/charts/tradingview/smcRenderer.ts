@@ -1,4 +1,4 @@
-import { type IChartApi } from "lightweight-charts";
+import { type IChartApi , LineSeries} from 'lightweight-charts';
 import { type IndicatorResult } from "@/utils/indicators";
 import { type PriceBar, toUtcTimestamp } from "@/utils/chartFormatters";
 
@@ -15,8 +15,8 @@ export function drawSMC(
   indResults.smc.orderBlocks.forEach((ob, idx) => {
     const color = ob.type === "bullish" ? "rgba(0, 230, 118, 0.45)" : "rgba(255, 59, 92, 0.45)";
     const label = ob.type === "bullish" ? `Bull OB ${idx+1}` : `Bear OB ${idx+1}`;
-    const topSeries = mainChart.addLineSeries({ color, lineWidth: 1, lineStyle: 1, priceLineVisible: false, title: label });
-    const bottomSeries = mainChart.addLineSeries({ color, lineWidth: 1, lineStyle: 1, priceLineVisible: false });
+    const topSeries = mainChart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: 1, priceLineVisible: false, title: label });
+    const bottomSeries = mainChart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: 1, priceLineVisible: false });
     
     const lastBar = bars[bars.length - 1];
     if (lastBar) {
@@ -38,8 +38,8 @@ export function drawSMC(
   indResults.smc.fairValueGaps.forEach((fvg, idx) => {
     const color = fvg.type === "bullish" ? "rgba(255, 179, 0, 0.35)" : "rgba(156, 39, 176, 0.35)";
     const label = fvg.type === "bullish" ? `Bull FVG ${idx+1}` : `Bear FVG ${idx+1}`;
-    const topSeries = mainChart.addLineSeries({ color, lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: label });
-    const bottomSeries = mainChart.addLineSeries({ color, lineWidth: 1, lineStyle: 2, priceLineVisible: false });
+    const topSeries = mainChart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: label });
+    const bottomSeries = mainChart.addSeries(LineSeries, { color, lineWidth: 1, lineStyle: 2, priceLineVisible: false });
 
     const lastBar = bars[bars.length - 1];
     if (lastBar) {
@@ -63,7 +63,7 @@ export function drawSMC(
     const style = liq.isSwept ? 2 : 0; // Swept is dashed, active is solid
     const title = liq.type === "bsl" ? "BSL" : "SSL";
     
-    const lineSeries = mainChart.addLineSeries({
+    const lineSeries = mainChart.addSeries(LineSeries, {
       color,
       lineWidth: 1,
       lineStyle: style,

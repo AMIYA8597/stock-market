@@ -1,4 +1,4 @@
-import { type IChartApi, type UTCTimestamp } from "lightweight-charts";
+import { type IChartApi, type UTCTimestamp , LineSeries} from 'lightweight-charts';
 import { type IndicatorResult } from "@/utils/indicators";
 import { buildEma, buildSma, buildBollingerBands } from "@/utils/chartFormatters";
 
@@ -42,7 +42,7 @@ export function drawIndicators(
   // 1. Moving Averages
   if (ema9) {
     const data = buildEma(closes, 9);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#00D4F5",
       lineWidth: 1,
       priceLineVisible: false,
@@ -54,7 +54,7 @@ export function drawIndicators(
 
   if (ema21) {
     const data = buildEma(closes, 21);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#8B5CF6",
       lineWidth: 1,
       priceLineVisible: false,
@@ -66,7 +66,7 @@ export function drawIndicators(
 
   if (ema50) {
     const data = buildEma(closes, 50);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#FFB800",
       lineWidth: 1,
       priceLineVisible: false,
@@ -78,7 +78,7 @@ export function drawIndicators(
 
   if (ema200) {
     const data = buildEma(closes, 200);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#EC4899",
       lineWidth: 2,
       priceLineVisible: false,
@@ -90,7 +90,7 @@ export function drawIndicators(
 
   if (sma20) {
     const data = buildSma(closes, 20);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#3B82F6",
       lineWidth: 1,
       priceLineVisible: false,
@@ -102,7 +102,7 @@ export function drawIndicators(
 
   if (sma50) {
     const data = buildSma(closes, 50);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#EF4444",
       lineWidth: 1,
       priceLineVisible: false,
@@ -114,7 +114,7 @@ export function drawIndicators(
 
   if (sma100) {
     const data = buildSma(closes, 100);
-    const series = mainChart.addLineSeries({
+    const series = mainChart.addSeries(LineSeries, {
       color: "#10B981",
       lineWidth: 1,
       priceLineVisible: false,
@@ -127,19 +127,19 @@ export function drawIndicators(
   // 2. Bollinger Bands
   if (bollingerBands) {
     const bb = buildBollingerBands(closes, 20, 2);
-    const bbUpperSeries = mainChart.addLineSeries({
+    const bbUpperSeries = mainChart.addSeries(LineSeries, {
       color: "rgba(0, 212, 245, 0.4)",
       lineWidth: 1,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
     });
-    const bbBasisSeries = mainChart.addLineSeries({
+    const bbBasisSeries = mainChart.addSeries(LineSeries, {
       color: "rgba(0, 212, 245, 0.2)",
       lineWidth: 1,
       priceLineVisible: false,
       crosshairMarkerVisible: false,
     });
-    const bbLowerSeries = mainChart.addLineSeries({
+    const bbLowerSeries = mainChart.addSeries(LineSeries, {
       color: "rgba(0, 212, 245, 0.4)",
       lineWidth: 1,
       priceLineVisible: false,
@@ -157,7 +157,7 @@ export function drawIndicators(
 
   // 3. VWAP
   if (vwap && indResults.vwap) {
-    const vwapSeries = mainChart.addLineSeries({
+    const vwapSeries = mainChart.addSeries(LineSeries, {
       color: "#F50057",
       lineWidth: 2,
       priceLineVisible: false,
@@ -169,7 +169,7 @@ export function drawIndicators(
 
   // 4. SuperTrend
   if (superTrend && indResults.superTrend) {
-    const stSeries = mainChart.addLineSeries({
+    const stSeries = mainChart.addSeries(LineSeries, {
       color: "#FF9800",
       lineWidth: 2,
       priceLineVisible: false,
@@ -181,10 +181,10 @@ export function drawIndicators(
 
   // 5. Ichimoku Cloud
   if (ichimoku && indResults.ichimoku) {
-    const tenkanSeries = mainChart.addLineSeries({ color: "#2196F3", lineWidth: 1, priceLineVisible: false, title: "Tenkan" });
-    const kijunSeries = mainChart.addLineSeries({ color: "#FF1744", lineWidth: 1, priceLineVisible: false, title: "Kijun" });
-    const senkouASeries = mainChart.addLineSeries({ color: "#4CAF50", lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: "Senkou A" });
-    const senkouBSeries = mainChart.addLineSeries({ color: "#FF5722", lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: "Senkou B" });
+    const tenkanSeries = mainChart.addSeries(LineSeries, { color: "#2196F3", lineWidth: 1, priceLineVisible: false, title: "Tenkan" });
+    const kijunSeries = mainChart.addSeries(LineSeries, { color: "#FF1744", lineWidth: 1, priceLineVisible: false, title: "Kijun" });
+    const senkouASeries = mainChart.addSeries(LineSeries, { color: "#4CAF50", lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: "Senkou A" });
+    const senkouBSeries = mainChart.addSeries(LineSeries, { color: "#FF5722", lineWidth: 1, lineStyle: 2, priceLineVisible: false, title: "Senkou B" });
 
     tenkanSeries.setData(indResults.ichimoku.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.tenkan })));
     kijunSeries.setData(indResults.ichimoku.map(pt => ({ time: pt.time as UTCTimestamp, value: pt.kijun })));

@@ -14,6 +14,14 @@ class VolatilityFactorsBuilder(FeatureBuilder):
     name = "volatility_factors"
 
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
+        if "symbol" in frame.columns and frame["symbol"].nunique() > 1:
+            results = []
+            for _, group in frame.groupby("symbol"):
+                results.append(self._transform_single(group))
+            return pd.concat(results).sort_index()
+        return self._transform_single(frame)
+
+    def _transform_single(self, frame: pd.DataFrame) -> pd.DataFrame:
         data = frame.sort_values("time").copy()
         close = data["close"].astype(float)
         high = data["high"].astype(float)

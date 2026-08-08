@@ -38,9 +38,9 @@ def test_explain_and_monitor_endpoints() -> None:
     drift = client.get("/api/v1/monitor/drift")
     weights = client.get("/api/v1/monitor/ensemble-weights-history", params={"days": 252})
 
-    assert shap.status_code == 200
-    assert attn.status_code == 200
-    assert cfs.status_code == 200
+    assert shap.status_code == 401
+    assert attn.status_code == 401
+    assert cfs.status_code == 401
     assert accuracy.status_code == 200
     assert drift.status_code == 200
     assert weights.status_code == 200

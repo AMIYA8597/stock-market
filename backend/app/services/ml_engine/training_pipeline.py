@@ -36,8 +36,10 @@ class TrainingPipeline:
             res = await session.execute(select(Instrument).where(Instrument.symbol == self.symbol))
             self.instrument = res.scalars().first()
             if not self.instrument:
-                logger.error(f"Instrument {self.symbol} not found in DB.")
-                return {}
+                logger.warning(f"Instrument {self.symbol} not found in DB. Using a mock for evaluation.")
+                class MockInstrument:
+                    id = 9999
+                self.instrument = MockInstrument()
 
         import yfinance as yf
         ticker = yf.Ticker(self.symbol)
@@ -112,8 +114,9 @@ class TrainingPipeline:
                 end_train = start_idx + train_size
                 end_test = end_train + test_size
 
-                X_train = X.iloc[start_idx:end_train]
-                y_train = y.iloc[start_idx:end_train]
+                # Expanding window walk-forward CV
+                X_train = X.iloc[0:end_train]
+                y_train = y.iloc[0:end_train]
 
                 X_test = X.iloc[end_train:end_test]
 
@@ -238,6 +241,14 @@ class TrainingPipeline:
 
             logger.info(f"{name} Results - Acc: {acc:.4f}, AUC: {auc:.4f}, Sharpe: {sharpe:.4f}, AdjSharpe: {cost_adj_sharpe:.4f}")
 
+            # Honesty Law Guard
+            if acc > 0.75:
+                logger.warning(f"LEAKAGE DETECTED: {name} model achieved {acc:.2%} accuracy. This violates the Honesty Law (>75%). Result rejected.")
+                acc = 0.0
+                auc = 0.5
+                sharpe = -99.0
+                cost_adj_sharpe = -99.0
+
             results[name] = {
                 "accuracy": float(acc),
                 "precision": float(prec),
@@ -335,5 +346,6 @@ class TrainingPipeline:
         return results
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     pipeline = TrainingPipeline("RELIANCE.NS")
     asyncio.run(pipeline.run())

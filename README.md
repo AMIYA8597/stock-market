@@ -4,10 +4,11 @@ NeuroQuant is a full-stack, ML-driven educational paper-trading platform. It exe
 
 ## 🌟 Key Features
 
-- **Local AI & ML Pipelines**: Advanced tree models (XGBoost, LightGBM) trained via walk-forward cross-validation.
-- **Regime & Volatility Modeling**: 3-State Gaussian Hidden Markov Models (HMM) + GARCH(1,1) for market regime detection.
-- **Transparent Explainability**: Real-time SHAP values visualization.
-- **Zero Paid Keys Required**: Ingests data securely via public sources (`yfinance`) and tests via simulated gateways (Razorpay test mode).
+- **Honesty Law Validated**: A strict guard ensures any model with >75% walk-forward accuracy is blocked from deployment, preventing look-ahead bias and feature leakage.
+- **Resilient Data Layer**: Integrates `yfinance` with an honest fallback to an alternative Indian stock API (`0xramm`), gracefully degrading (HTTP 503) without serving mocked data if both fail.
+- **Regime-Aware ML**: Implements HMM-GARCH regime detection. Final signals dynamically weight Technical (40%) and ML (60%) indicators based on the detected market regime (trending vs. mean-reverting).
+- **Subscription Billing (Razorpay)**: Includes a full Next.js/FastAPI implementation of Razorpay subscription billing with HMAC webhook verification, strictly gating advanced Explainability routes without hiding user portfolio data.
+- **Fully Typed Next.js Terminal**: A real-time WebSocket-powered dashboard built on Tailwind CSS, mimicking production broker UI density.
 
 ---
 
@@ -129,3 +130,6 @@ npm run dev
 If you encounter **UI Errors** such as `Attempted import error: 'PanelGroup' is not exported` or **Backend Database Errors** such as `AttributeError: type object 'Instrument' has no attribute 'ticker'`:
 1. Ensure you have the latest code pulled (these bugs were resolved by mapping `PanelGroup` -> `Group` and `Instrument.ticker` -> `Instrument.symbol`).
 2. **CRITICAL**: Completely stop your Next.js frontend (`Ctrl+C`), delete the `.next` folder (`rm -rf .next`), and restart the dev server (`npm run dev`) to clear cached errors.
+
+## 📱 Mobile Responsiveness (Phase U0-U7 Updates)
+The entire application, including the Terminal, Research pages, and Model Monitor, has been fully audited and updated for `375px` mobile responsiveness. If a layout appears broken on mobile, ensure you have cleared your browser cache. All hardcoded/fallback metric loading states have been removed in favor of strict, honest backend data streaming.
