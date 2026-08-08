@@ -12,9 +12,10 @@ from uuid import UUID, uuid4
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from sqlalchemy import UUID as SQLA_UUID
-from sqlalchemy import Boolean, DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.database_types import EncryptedString
 from app.database.connection import Base
 
 # Password hashing
@@ -65,9 +66,14 @@ class User(Base):
         doc="User full name for display",
     )
     totp_secret: Mapped[str | None] = mapped_column(
-        String(64),
+        EncryptedString(255),
         nullable=True,
-        doc="Base32 TOTP secret for 2FA",
+        doc="Encrypted Base32 TOTP secret for 2FA",
+    )
+    backup_codes: Mapped[list[str] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        doc="List of hashed backup codes for 2FA",
     )
     role: Mapped[str] = mapped_column(
         String(24),

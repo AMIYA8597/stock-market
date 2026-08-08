@@ -7,7 +7,9 @@ from sqlalchemy.sql import Select
 
 import app.api.v1.backtest as backtest_module
 from app.api.v1.backtest import router as backtest_router
-from app.core.dependencies import get_db
+from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
+from app.models.payment import Subscription
+from app.models.user import User
 
 
 class InMemorySession:
@@ -46,12 +48,19 @@ class InMemorySession:
             entity = statement.column_descriptions[0]["entity"]
             objs = [v for v in self.store.values() if isinstance(v, entity)]
 
-            # Simple filtering by id
+            # Simple filtering by id and user_id
             try:
                 params = statement.compile().params
                 for k, v in params.items():
-                    if "id" in k or k == "id_1" or k == "id":
-                        objs = [x for x in objs if getattr(x, "id", None) == uuid.UUID(str(v))]
+                    if "user_id" in k:
+                        objs = [x for x in objs if getattr(x, "user_id", None) == uuid.UUID(str(v))]
+                    elif "id" in k or k == "id_1" or k == "id":
+                        # Only apply this if it's not a status array or similar
+                        if isinstance(v, (str, uuid.UUID)):
+                            try:
+                                objs = [x for x in objs if getattr(x, "id", None) == uuid.UUID(str(v))]
+                            except Exception:
+                                pass
             except Exception:
                 pass
 
@@ -110,6 +119,20 @@ async def override_get_db():
 
 
 app.dependency_overrides[get_db] = override_get_db
+
+async def override_get_current_user():
+    return User(id=uuid.UUID("3b79b787-f2a8-4a48-abf1-0268d6131a5b"))
+
+app.dependency_overrides[get_current_user_or_none] = override_get_current_user
+app.dependency_overrides[get_current_user] = override_get_current_user
+
+# Pre-seed a subscription for the premium check
+sub = Subscription(
+    id=uuid.uuid4(),
+    user_id=uuid.UUID("3b79b787-f2a8-4a48-abf1-0268d6131a5b"),
+    status="active",
+)
+shared_store[sub.id] = sub
 backtest_module.async_session_factory = lambda: InMemorySession(shared_store)
 
 client = TestClient(app)

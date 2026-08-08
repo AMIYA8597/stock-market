@@ -597,41 +597,48 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
 
             <ChartCard title="Attention Heatmap" subtitle="Heads x recent timesteps">
               <div className="grid grid-cols-12 gap-1">
-                {(attentionHeatCells.length > 0
-                  ? attentionHeatCells
-                  : Array.from({ length: 96 }, (_, idx) => ({
-                      headIndex: Math.floor(idx / 12),
-                      stepIndex: idx % 12,
-                      value: 0.05,
-                    }))
-                ).map((cell) => (
-                  <div
-                    key={`a-${cell.headIndex}-${cell.stepIndex}`}
-                    className="h-5 rounded"
-                    style={{ background: `rgba(255,184,0,${0.1 + Math.min(0.75, cell.value * 3.2)})` }}
-                  />
-                ))}
+                {attentionHeatCells.length > 0 ? (
+                  attentionHeatCells.map((cell) => (
+                    <div
+                      key={`a-${cell.headIndex}-${cell.stepIndex}`}
+                      className="h-5 rounded"
+                      style={{ background: `rgba(255,184,0,${0.1 + Math.min(0.75, cell.value * 3.2)})` }}
+                    />
+                  ))
+                ) : (
+                  <div className="col-span-12 py-4 text-center text-xs text-[var(--nq-text-secondary)] animate-pulse">
+                    Computing attention weights...
+                  </div>
+                )}
               </div>
             </ChartCard>
 
             <ChartCard title="Counterfactual Panel" subtitle="Feature shifts to flip to BUY" className="xl:col-span-2">
               <div className="grid gap-3 md:grid-cols-3">
-                {(counterfactuals.length > 0 ? counterfactuals : [{ cf_id: "CF1", changed_features: [], resulting_signal: "BUY", proximity_score: 0 }] as CounterfactualResponse[])
-                  .slice(0, 3)
-                  .map((cf) => (
-                    <div key={cf.cf_id} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-3 text-xs">
-                      <p className="mb-2 font-semibold">{cf.cf_id}</p>
+                {counterfactuals.length > 0 ? (
+                  counterfactuals.slice(0, 3).map((cf) => (
+                    <div key={cf.cf_id} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-3">
+                      <div className="mb-2 text-xs font-semibold text-[var(--nq-text-secondary)] flex justify-between">
+                        <span>Path to {cf.resulting_signal}</span>
+                        <span className="text-[var(--nq-text-tertiary)]">Score: {Number(cf.proximity_score).toFixed(2)}</span>
+                      </div>
                       <div className="space-y-1">
-                        {cf.changed_features.slice(0, 5).map((feature) => (
-                          <div key={`${cf.cf_id}-${feature.name}`} className="flex items-center justify-between gap-2">
-                            <span className="text-[var(--nq-text-secondary)]">{feature.name}</span>
-                            <span>{feature.original.toFixed(2)} {'->'} {feature.counterfactual.toFixed(2)}</span>
+                        {cf.changed_features.map((feat, idx) => (
+                          <div key={idx} className="flex justify-between text-xs">
+                            <span className="truncate w-24 text-[var(--nq-text-primary)]" title={feat.name}>{feat.name}</span>
+                            <span className="text-[var(--nq-text-secondary)]">
+                              {Number(feat.original).toFixed(2)} <span className="text-[var(--nq-text-tertiary)]">→</span> <span className="text-[var(--nq-accent-cyan)]">{Number(feat.counterfactual).toFixed(2)}</span>
+                            </span>
                           </div>
                         ))}
-                        {cf.changed_features.length === 0 ? <p className="text-[var(--nq-text-secondary)]">No counterfactual deltas available.</p> : null}
                       </div>
                     </div>
-                  ))}
+                  ))
+                ) : (
+                  <div className="col-span-3 py-4 text-center text-xs text-[var(--nq-text-secondary)] animate-pulse">
+                    Computing optimal paths...
+                  </div>
+                )}
               </div>
             </ChartCard>
           </div>

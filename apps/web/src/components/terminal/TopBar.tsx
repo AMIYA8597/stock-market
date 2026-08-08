@@ -242,8 +242,8 @@ export default function TopBar({
   }, [portfolio]);
 
   return (
-    <header className="flex h-[var(--terminal-topbar-height)] items-center gap-2 px-3 text-xs terminal:px-4">
-      <div className="flex min-w-[220px] items-center gap-2 terminal:min-w-[280px]">
+    <header className="flex h-[var(--terminal-topbar-height)] items-center justify-between gap-2 px-2 text-xs terminal:px-4">
+      <div className="flex items-center gap-1.5 terminal:min-w-[280px] terminal:gap-2">
         <span className="rounded bg-[rgba(0,212,245,0.16)] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--accent-cyan)] shrink-0">
           NQ
         </span>
@@ -308,7 +308,7 @@ export default function TopBar({
         </div>
       </div>
 
-      <div className="ml-auto flex min-w-[220px] items-center justify-end gap-2 terminal:min-w-[300px] shrink-0">
+      <div className="flex items-center justify-end gap-1.5 terminal:min-w-[300px] terminal:gap-2">
         <div className="hidden text-right terminal:block">
           <div className="font-mono text-[11px] text-[var(--text-primary)]">
             ₹{equityValue.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
@@ -386,20 +386,20 @@ export default function TopBar({
             await triggerKillSwitch();
             alert("EMERGENCY KILL SWITCH: Trading mode forced to PAPER. All pending simulation orders cancelled.");
           }}
-          className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-bold uppercase tracking-wider transition ${
+          className={`inline-flex items-center gap-1 rounded border px-1.5 py-1 text-[10px] font-bold uppercase tracking-wider transition terminal:px-2 ${
             tradingMode === "LIVE"
               ? "border-[#FF3B5C] bg-[rgba(255,59,92,0.18)] text-[#FF3B5C] animate-pulse"
               : "border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)] hover:border-[var(--border-muted)]"
           }`}
           title="Emergency Kill Switch: immediately reverts to PAPER and cancels simulation orders"
         >
-          🚨 Kill Switch ({tradingMode})
+          🚨 <span className="hidden terminal:inline">Kill Switch </span>({tradingMode})
         </button>
 
         <button
           type="button"
           onClick={toggleThemeMode}
-          className="inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] transition hover:border-[var(--border-muted)]"
+          className="hidden terminal:inline-flex items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] transition hover:border-[var(--border-muted)]"
           title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
         >
           {themeMode === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
@@ -408,7 +408,7 @@ export default function TopBar({
 
         <Link
           href="/billing"
-          className="inline-flex items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)]"
+          className="hidden terminal:inline-flex items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)]"
           aria-label="Billing & Payments"
           title="Billing & Payments"
         >
@@ -417,7 +417,7 @@ export default function TopBar({
 
         <button
           type="button"
-          className="inline-flex items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)]"
+          className="hidden terminal:inline-flex items-center justify-center rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] p-1.5 text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)]"
           aria-label="Terminal settings"
         >
           <Settings2 className="h-3.5 w-3.5" />

@@ -110,7 +110,7 @@ export default function ScannersTab({
                     <button
                       type="button"
                       onClick={() => onSelectSymbol?.(item.symbol)}
-                      className="rounded border border-[var(--nq-border)] hover:border-[var(--nq-accent-cyan)] hover:text-[var(--nq-text-primary)] px-2 py-0.5 text-[9px] text-[var(--nq-text-secondary)] transition-colors"
+                      className="rounded border border-[var(--nq-border)] hover:border-[var(--nq-accent-cyan)] hover:text-[var(--nq-text-primary)] px-2 py-2 md:py-0.5 min-h-[44px] md:min-h-0 text-[9px] text-[var(--nq-text-secondary)] transition-colors"
                     >
                       Load
                     </button>

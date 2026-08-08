@@ -81,6 +81,20 @@ async def _cache_store(symbol: str, payload: dict[str, Any]) -> None:
 _HMM_CACHE = {}
 _MODEL_CACHE = {}
 _INDEX_DATA_CACHE = None
+_SENTIMENT_PIPELINE = None
+
+def get_sentiment_pipeline():
+    global _SENTIMENT_PIPELINE
+    if _SENTIMENT_PIPELINE is None:
+        try:
+            from transformers import pipeline
+            # Using ProsusAI/finbert which is the standard financial BERT
+            _SENTIMENT_PIPELINE = pipeline("sentiment-analysis", model="ProsusAI/finbert", device=-1)
+        except Exception as e:
+            logger.error(f"Failed to load FinBERT pipeline: {e}")
+            _SENTIMENT_PIPELINE = "failed"
+    return _SENTIMENT_PIPELINE
+
 
 def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) < 60:
@@ -484,12 +498,18 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     technical = TechnicalSignalEngine.generate_signal(df)
     tech_score = technical["score"]
 
-    # simulated lookahead-free sentiment score
-    import datetime
-    ret_5d = float((df["close"].iloc[-1] / df["close"].iloc[max(0, len(df)-6)]) - 1.0) if len(df) >= 6 else 0.0
-    dt_str = str(df["time"].iloc[-1]) if "time" in df.columns else str(datetime.datetime.now().date())
-    noise_val = (((sum(ord(c) for c in dt_str) + sum(ord(c) for c in symbol)) % 100) / 500.0) - 0.1
-    sentiment_score = float(np.clip(1.5 * ret_5d + noise_val, -1.0, 1.0))
+    # True lookahead-free local FinBERT sentiment score
+    sentiment_score = 0.0
+    try:
+        from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
+        analyzer = FinBERTSentimentAnalyzer()
+        if getattr(analyzer, "_initialized", False) or getattr(analyzer, "vader", None):
+            headlines = analyzer.scrape_google_news(f"{symbol} stock India")
+            if headlines:
+                sentiment_score = analyzer.get_stock_sentiment(symbol, headlines)
+    except Exception as e:
+        logger.warning(f"FinBERT sentiment extraction failed: {e}")
+
     sentiment_tilt = sentiment_score * 0.15
 
     ml_score = xgb_score if xgb_status == "trained" else 0.0
@@ -504,7 +524,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
 
     raw_ensemble = float(np.clip(fused_score, -1.0, 1.0))
     prob_up = (raw_ensemble / 2.0) + 0.5
-    ensemble_confidence = float(prob_up if prob_up > 0.5 else (1.0 - prob_up))
+    ensemble_confidence = float(abs(prob_up - 0.5) * 2.0)
 
     active_signals = [xgb_score] if xgb_status == "trained" else [tech_score]
     if len(active_signals) > 0:
@@ -695,71 +715,29 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
         if cached:
             return cached
 
-    def _fetch():
-        from tenacity import retry, stop_after_attempt, wait_exponential
-
-        def _v8_fallback():
-            import json
-            import urllib.request
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol.upper()}?range=2y&interval=1d"
-            headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-            req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=15) as response:
-                data = json.loads(response.read().decode())
-            res = data["chart"]["result"][0]
-            ind = res["indicators"]["quote"][0]
-            ts = res["timestamp"]
-            temp_df = pd.DataFrame({
-                "time": pd.to_datetime(ts, unit="s"),
-                "open": ind["open"],
-                "high": ind["high"],
-                "low": ind["low"],
-                "close": ind["close"],
-                "volume": ind["volume"]
-            }).dropna(subset=["close"])
-            return temp_df
-
-        @retry(
-            stop=stop_after_attempt(3),
-            wait=wait_exponential(multiplier=1, min=1, max=5),
-            reraise=True
-        )
-        def _primary_fetch():
-            t = yf.Ticker(symbol)
-            res_df = t.history(period="2y", interval="1d")
-            return res_df
-
-        try:
-            df = _primary_fetch()
-            if df.empty or len(df) < 60:
-                raise ValueError("Empty or insufficient data from yfinance Ticker")
-            df.columns = [c.lower() for c in df.columns]
-            df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
-            df = df[["open", "high", "low", "close", "volume"]].dropna()
-            if "time" not in df.columns and df.index.name in ("Date", "Datetime"):
-                df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
-            df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
-            return df
-        except Exception as e:
-            logger.warning(f"Primary yfinance fetch failed for {symbol}: {e}. Trying direct Yahoo Finance v8 API query...")
-            try:
-                df = _v8_fallback()
-                if df.empty or len(df) < 60:
-                    raise ValueError("Empty or insufficient data from Yahoo Finance v8 fallback")
-                df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
-                return df
-            except Exception as ex:
-                logger.error(f"Fallback Yahoo Finance v8 API query failed for {symbol}: {ex}")
-                raise ValueError(f"Failed to fetch market data for {symbol}: {ex}") from ex
-
+    from app.services.data_ingestion.provider_manager import provider_manager
+    from datetime import datetime, UTC, timedelta
+    import pandas as pd
+    
+    end_date = datetime.now(UTC)
+    start_date = end_date - timedelta(days=2 * 365) # 2 years
+    
     try:
-        df = await asyncio.to_thread(_fetch)
+        bars = await provider_manager.get_ohlcv(symbol, "1d", start_date, end_date)
+        if not bars or len(bars) < 60:
+            raise ValueError(f"Insufficient OHLCV data for {symbol} (need at least 60 rows)")
+            
+        df = pd.DataFrame([{
+            "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
+            "open": b.open,
+            "high": b.high,
+            "low": b.low,
+            "close": b.close,
+            "volume": b.volume
+        } for b in bars])
     except Exception as e:
         logger.error(f"Failed to fetch market data for {symbol}: {e}")
         raise ValueError(f"Failed to fetch market data for {symbol}") from e
-
-    if df is None or len(df) < 60:
-        raise ValueError(f"Insufficient OHLCV data for {symbol} (need at least 60 rows)")
 
     # Prepare DataFrame by running all builders and indicators
     df.index = pd.DatetimeIndex(df["time"])

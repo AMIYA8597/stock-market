@@ -265,6 +265,8 @@ async def _redis_pool_singleton() -> Redis:
                 settings.REDIS_URL,
                 max_connections=settings.REDIS_MAX_CONNECTIONS,
                 decode_responses=True,
+                socket_connect_timeout=0.2,
+                socket_timeout=0.2
             )
             _redis_client = Redis(connection_pool=_redis_pool)
 

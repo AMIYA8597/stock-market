@@ -1095,6 +1095,85 @@
         ]
       }
     },
+    "/api/v1/payments/cancel-subscription": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Cancel Subscription",
+        "operationId": "cancel_subscription_api_v1_payments_cancel_subscription_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Cancel Subscription Api V1 Payments Cancel Subscription Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/payments/subscription": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Subscription",
+        "operationId": "get_subscription_api_v1_payments_subscription_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Subscription Api V1 Payments Subscription Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Razorpay Webhook",
+        "operationId": "razorpay_webhook_api_v1_payments_webhook_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Razorpay Webhook Api V1 Payments Webhook Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/payments/history": {
       "get": {
         "tags": [
@@ -1143,34 +1222,6 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/payments/subscription": {
-      "get": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Get Subscription",
-        "operationId": "get_subscription_api_v1_payments_subscription_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Get Subscription Api V1 Payments Subscription Get"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
       }
     },
     "/api/v1/watchlist": {
@@ -2047,6 +2098,11 @@
         "summary": "Get Shap Explainability",
         "description": "Return SHAP feature attribution values for the latest inference.",
         "operationId": "get_shap_explainability_api_v1_explain_shap__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2087,6 +2143,11 @@
         "summary": "Get Attention Explainability",
         "description": "Return temporal attention weights from the requested sequence model.",
         "operationId": "get_attention_explainability_api_v1_explain_attention__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2138,6 +2199,11 @@
         "summary": "Get Counterfactual",
         "description": "Return counterfactual feature changes that can flip signal direction.",
         "operationId": "get_counterfactual_api_v1_explain_counterfactual__symbol__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2448,7 +2514,7 @@
           "portfolio"
         ],
         "summary": "Portfolio risk metrics",
-        "description": "Return portfolio risk metrics for dashboard and monitoring.",
+        "description": "Return portfolio risk metrics based on actual historical performance.",
         "operationId": "get_risk_metrics_api_v1_portfolio_risk_metrics_get",
         "responses": {
           "200": {

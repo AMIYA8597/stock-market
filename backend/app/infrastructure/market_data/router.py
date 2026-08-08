@@ -6,6 +6,7 @@ Provides REST endpoint `/api/v1/market/quote/{symbol}` and WebSocket `/api/v1/ma
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -14,7 +15,9 @@ from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.dependencies import get_redis_optional
-from app.providers.market_data_provider import MarketDataProvider
+from app.providers.market_data_provider import MarketDataProvider, get_is_market_closed
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/market")
 
@@ -27,6 +30,7 @@ class QuoteResponse(BaseModel):
     price: float = Field(..., description="Current price")
     timestamp: datetime = Field(..., description="Quote timestamp (UTC)")
     source: str = Field(..., description="Provider that supplied the data")
+    market_closed: bool = Field(False, description="True if market is currently closed")
 
 
 async def get_cached_quote(redis, symbol: str) -> dict[str, Any] | None:
@@ -63,6 +67,7 @@ async def get_quote(symbol: str, redis=Depends(get_redis_optional)) -> QuoteResp
             "price": latest.close,
             "timestamp": datetime.utcfromtimestamp(latest.timestamp),
             "source": "market_data_provider",
+            "market_closed": get_is_market_closed()
         }
         if redis:
             await set_cached_quote(redis, symbol, result)
@@ -74,16 +79,22 @@ async def get_quote(symbol: str, redis=Depends(get_redis_optional)) -> QuoteResp
         )
 
 
-# Simple WebSocket manager for broadcasting quotes to subscribed clients
+# Centralized WebSocket manager for broadcasting quotes to subscribed clients
 class WSManager:
     def __init__(self):
         self.connections: list[WebSocket] = []
-        self.subscriptions: dict[WebSocket, list[str]] = {}
+        self.subscriptions: dict[WebSocket, set[str]] = {}
+        self._broadcaster_task: asyncio.Task | None = None
+        self._redis = None
 
     async def connect(self, ws: WebSocket):
         await ws.accept()
         self.connections.append(ws)
-        self.subscriptions[ws] = []
+        self.subscriptions[ws] = set()
+
+        # Start broadcaster if not running
+        if self._broadcaster_task is None or self._broadcaster_task.done():
+            self._broadcaster_task = asyncio.create_task(self.broadcast_loop())
 
     def disconnect(self, ws: WebSocket):
         if ws in self.connections:
@@ -91,36 +102,86 @@ class WSManager:
         self.subscriptions.pop(ws, None)
 
     async def send(self, ws: WebSocket, data: dict):
-        await ws.send_text(json.dumps(data))
+        try:
+            await ws.send_text(json.dumps(data))
+        except Exception:
+            self.disconnect(ws)
 
+    def set_redis(self, redis):
+        self._redis = redis
+
+    async def broadcast_loop(self):
+        while True:
+            try:
+                if not self.connections:
+                    await asyncio.sleep(5)
+                    continue
+
+                # Gather all unique symbols currently subscribed by anyone
+                all_symbols = set()
+                for syms in self.subscriptions.values():
+                    all_symbols.update(syms)
+
+                if not all_symbols:
+                    await asyncio.sleep(5)
+                    continue
+
+                # Fetch quotes for all unique symbols concurrently
+                async def _fetch_safe(sym):
+                    try:
+                        quote = await get_quote(sym, self._redis)
+                        # We use isoformat to serialize datetime correctly
+                        data = quote.dict()
+                        data["timestamp"] = data["timestamp"].isoformat()
+                        return data
+                    except Exception as exc:
+                        return {"symbol": sym, "error": str(exc)}
+
+                fetch_tasks = {
+                    sym: asyncio.create_task(_fetch_safe(sym))
+                    for sym in all_symbols
+                }
+
+                # Wait for all fetches to complete
+                if fetch_tasks:
+                    await asyncio.wait(fetch_tasks.values())
+
+                # Broadcast to each connection its subscribed symbols
+                for ws in list(self.connections):
+                    subs = self.subscriptions.get(ws, set())
+                    for sym in subs:
+                        task = fetch_tasks.get(sym)
+                        if task and task.done():
+                            res = task.result()
+                            if res:
+                                asyncio.create_task(self.send(ws, res))
+
+                # Sleep before next tick (if market is closed, we could sleep longer, but this is simple enough)
+                await asyncio.sleep(5)
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error(f"Broadcaster loop error: {exc}")
+                await asyncio.sleep(5)
 
 manager = WSManager()
 
 
 @router.websocket("/ws/quotes")
 async def ws_quotes(ws: WebSocket, redis=Depends(get_redis_optional)):
+    manager.set_redis(redis)
     await manager.connect(ws)
     try:
         while True:
             raw = await ws.receive_text()
             try:
                 payload = json.loads(raw)
-                symbols = [s.upper() for s in payload.get("symbols", [])]
+                symbols = {s.upper() for s in payload.get("symbols", [])}
                 manager.subscriptions[ws] = symbols
             except Exception:
                 await manager.send(ws, {"error": "Invalid subscription message"})
-                continue
-            # Push updates every 5 s for this connection's subscriptions
-            while True:
-                for sym in manager.subscriptions[ws]:
-                    try:
-                        quote = await get_quote(sym, redis)
-                        await manager.send(ws, quote.dict())
-                    except Exception as exc:
-                        await manager.send(ws, {"symbol": sym, "error": str(exc)})
-                await asyncio.sleep(5)
     except WebSocketDisconnect:
         manager.disconnect(ws)
     except Exception:
         manager.disconnect(ws)
-        raise
+

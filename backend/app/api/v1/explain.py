@@ -10,7 +10,6 @@ from __future__ import annotations
 import math
 from datetime import UTC, datetime
 from decimal import Decimal
-from uuid import NAMESPACE_DNS, uuid5
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +19,8 @@ from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.explain import (
     AttentionResponse,
     AttentionTimestep,
-    CounterfactualInstance,
     CounterfactualRequest,
     CounterfactualResponse,
-    FeatureChange,
     SHAPContribution,
     SHAPResponse,
 )

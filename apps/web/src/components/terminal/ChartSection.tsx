@@ -120,63 +120,9 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   const { ticks } = usePriceFeed(activeSymbol ? [activeSymbol] : []);
   const liveTick = activeSymbol ? ticks.get(activeSymbol.toUpperCase()) : null;
 
-  useEffect(() => {
-    if (!liveTick || bars.length === 0) return;
-
-    setBars((prevBars) => {
-      if (prevBars.length === 0) return prevBars;
-      const lastBar = prevBars[prevBars.length - 1];
-      if (!lastBar) return prevBars;
-
-      const tickTime = new Date(liveTick.timestamp).getTime();
-      const lastBarTime = new Date(lastBar.timestamp).getTime();
-
-      // Determine timeframe length in milliseconds
-      let intervalMs = 24 * 60 * 60 * 1000; // default 1d
-      if (timeframe === "1m") intervalMs = 60 * 1000;
-      else if (timeframe === "3m") intervalMs = 3 * 60 * 1000;
-      else if (timeframe === "5m") intervalMs = 5 * 60 * 1000;
-      else if (timeframe === "10m") intervalMs = 10 * 60 * 1000;
-      else if (timeframe === "15m") intervalMs = 15 * 60 * 1000;
-      else if (timeframe === "30m") intervalMs = 30 * 60 * 1000;
-      else if (timeframe === "45m") intervalMs = 45 * 60 * 1000;
-      else if (timeframe === "1h") intervalMs = 60 * 60 * 1000;
-      else if (timeframe === "2h") intervalMs = 2 * 60 * 60 * 1000;
-      else if (timeframe === "4h") intervalMs = 4 * 60 * 60 * 1000;
-      else if (timeframe === "1w") intervalMs = 7 * 24 * 60 * 60 * 1000;
-      else if (timeframe === "1mo") intervalMs = 30 * 24 * 60 * 60 * 1000;
-
-      const tickBucketTime = Math.floor(tickTime / intervalMs) * intervalMs;
-      const lastBarBucketTime = Math.floor(lastBarTime / intervalMs) * intervalMs;
-
-      const updatedBars = [...prevBars];
-
-      if (tickBucketTime === lastBarBucketTime) {
-        // Update the last candle
-        const updatedBar = { ...lastBar };
-        updatedBar.close = liveTick.price;
-        updatedBar.high = Math.max(updatedBar.high, liveTick.price);
-        updatedBar.low = Math.min(updatedBar.low, liveTick.price);
-        updatedBars[updatedBars.length - 1] = updatedBar;
-      } else if (tickBucketTime > lastBarBucketTime) {
-        // Append a new candle
-        const newBar: OHLCVBar = {
-          timestamp: new Date(tickBucketTime).toISOString(),
-          open: liveTick.price,
-          high: liveTick.price,
-          low: liveTick.price,
-          close: liveTick.price,
-          volume: 0,
-        };
-        updatedBars.push(newBar);
-        if (updatedBars.length > 180) {
-          updatedBars.shift();
-        }
-      }
-
-      return updatedBars;
-    });
-  }, [liveTick, timeframe, bars.length]);
+  // Note: We intentionally do NOT update `bars` state on every `liveTick`.
+  // The LightweightCandlestickChart component handles liveTick updates internally
+  // via `mainSeries.update()` to prevent expensive full re-renders and memory leaks.
 
   const [chartStyle, setChartStyle] = useState<
     | "line"

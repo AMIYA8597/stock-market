@@ -136,9 +136,9 @@ export default function CorrelationGraphPage(): JSX.Element {
       transition={{ duration: 0.24, ease: "easeOut" }}
       className="space-y-4"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-xl font-semibold">Correlation Graph</h2>
-        <div className="flex items-center gap-2 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-1 text-xs text-[var(--nq-text-secondary)]">
+        <div className="flex flex-wrap items-center gap-2 rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2 text-xs text-[var(--nq-text-secondary)]">
           <span>Updated: {lastUpdated ? new Date(lastUpdated).toLocaleTimeString() : "--"}</span>
           <span className="text-[var(--nq-border)]">|</span>
           <span className={stale ? "text-[var(--nq-accent-amber)]" : "text-[var(--nq-accent-green)]"}>{stale ? "stale" : "fresh"}</span>

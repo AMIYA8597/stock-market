@@ -214,7 +214,7 @@ class BrokerAdapter:
             raise ValueError(f"Invalid trading mode: {mode}")
 
     @staticmethod
-    async def cancel_order(order_id: str, symbol: str) -> dict[str, Any]:
+    async def cancel_order(order_id: str, symbol: str, user_id: str | None = None) -> dict[str, Any]:
         """Cancels an order."""
         mode = UpstoxService.TRADING_MODE
         symbol = symbol.upper().strip()
@@ -228,13 +228,19 @@ class BrokerAdapter:
                 from app.database.connection import async_session_factory
                 from app.models.paper_trading import PaperOrder
 
+                import uuid
                 async with async_session_factory() as session:
                     stmt = (
                         update(PaperOrder)
-                        .where(PaperOrder.id == order_id)
-                        .values(status="CANCELLED")
+                        .where(PaperOrder.id == uuid.UUID(order_id))
                     )
-                    await session.execute(stmt)
+                    if user_id:
+                        stmt = stmt.where(PaperOrder.user_id == uuid.UUID(user_id))
+                    
+                    stmt = stmt.values(status="CANCELLED")
+                    res = await session.execute(stmt)
+                    if res.rowcount == 0:
+                        raise ValueError("Order not found or you do not have permission to cancel it.")
                     await session.commit()
                 UpstoxService.log_audit(f"[PAPER ORDER CANCELLED] ID={order_id}")
                 return {"order_id": order_id, "status": "CANCELLED", "trading_mode": "PAPER"}

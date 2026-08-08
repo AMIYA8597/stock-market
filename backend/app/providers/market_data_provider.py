@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import httpx
 import redis
@@ -11,6 +13,21 @@ from app.core.config import get_settings
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+def get_is_market_closed() -> bool:
+    """Returns True if the Indian equity market is currently closed."""
+    now = datetime.now(ZoneInfo("Asia/Kolkata"))
+    # Open Mon-Fri
+    if now.weekday() >= 5:
+        return True
+
+    total_minutes = now.hour * 60 + now.minute
+    # Market open 9:15 AM (555 mins) to 3:30 PM (930 mins)
+    if total_minutes < 555 or total_minutes >= 930:
+        return True
+
+    return False
+
 
 # Initialize Redis client with fallback to in‑memory cache if Redis unavailable
 try:
@@ -53,6 +70,9 @@ class MarketDataProvider:
         Results are cached per `symbol|interval|period`.
         """
         cache_key = f"market:{symbol}:{interval}:{period}"
+        is_closed = get_is_market_closed()
+        ttl = 3600 if is_closed else cls.CACHE_TTL
+
         # Attempt to retrieve from Redis if available, otherwise from in‑memory cache
         cached = None
         if redis_client:
@@ -79,10 +99,10 @@ class MarketDataProvider:
                     # Store in Redis if available, else in‑memory cache with expiry timestamp
                     if redis_client:
                         redis_client.setex(
-                            cache_key, cls.CACHE_TTL, str([c.dict() for c in candles])
+                            cache_key, ttl, str([c.dict() for c in candles])
                         )
                     else:
-                        expiry = asyncio.get_event_loop().time() + cls.CACHE_TTL
+                        expiry = asyncio.get_event_loop().time() + ttl
                         _in_memory_cache[cache_key] = (expiry, str([c.dict() for c in candles]))
                     return candles
             except Exception as exc:

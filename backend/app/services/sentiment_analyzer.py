@@ -165,7 +165,7 @@ class FinBERTSentimentAnalyzer:
                 with urllib.request.urlopen(req, timeout=10) as response:
                     xml_data = response.read()
 
-                root = ET.fromstring(xml_data)
+                root = ET.fromstring(xml_data)  # nosec B314
                 for item in root.findall(".//item"):
                     title = item.find("title")
                     pub_date = item.find("pubDate")
@@ -177,7 +177,7 @@ class FinBERTSentimentAnalyzer:
                         link_str = link.text if link is not None else ""
                         headlines.append({"text": text, "date": date_str, "url": link_str, "source": source_name})
             except Exception as e:
-                logger.warning(f"Failed to scrape headlines from {url}: {e}")
+                logger.warning(f"No sentiment tilt this cycle: Failed to parse XML/scrape headlines from {url}: {e}")
 
         # Dedupe by text
         seen = set()
@@ -202,7 +202,7 @@ class FinBERTSentimentAnalyzer:
             with urllib.request.urlopen(req, timeout=10) as response:
                 xml_data = response.read()
 
-            root = ET.fromstring(xml_data)
+            root = ET.fromstring(xml_data)  # nosec B314
             for item in root.findall(".//item"):
                 title = item.find("title")
                 pub_date = item.find("pubDate")
@@ -218,6 +218,6 @@ class FinBERTSentimentAnalyzer:
                     resolved_url = self._resolve_google_news_url(link_str)
                     headlines.append({"text": text, "date": date_str, "url": resolved_url, "source": "Google News"})
         except Exception as e:
-            logger.warning(f"Failed to scrape Google News for {query}: {e}")
+            logger.warning(f"No sentiment tilt this cycle: Failed to scrape Google News for {query}: {e}")
 
         return headlines

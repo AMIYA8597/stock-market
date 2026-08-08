@@ -19,14 +19,15 @@ QuantEdge is a full-stack, local-first ML-driven educational paper-trading platf
 
 ### 3. ML Pipeline
 - **Data Ingestion**: Fetches raw OHLCV.
-- **Feature Engineering**: Calculates technical indicators (TA-Lib / Pandas TA), calendar features, and embeds FinBERT sentiment.
+- **Feature Engineering**: Calculates technical indicators (TA-Lib / Pandas TA), calendar features, and embeds FinBERT sentiment. Features are strictly **causality-safe**, computed dynamically to ensure no look-ahead bias leaks into the training pipeline.
 - **Models**:
   - **Volatility**: GARCH(1,1) for conditional volatility and expected-move cones.
   - **Regime**: 3-State Gaussian HMM (Bull, Bear, Sideways) to gate signal aggressiveness.
-  - **Direction Classifiers**: XGBoost and LightGBM models trained via expanding-window walk-forward cross-validation.
+  - **Direction Classifiers**: XGBoost and LightGBM models trained via expanding-window **walk-forward cross-validation** (not randomized k-fold) to preserve chronological boundaries.
   - **Deep Learning**: LSTM/TFT sequence models for temporal patterns.
-- **Explainability**: SHAP values are extracted post-inference for feature attribution.
+- **Explainability**: SHAP values are extracted post-inference for feature attribution (numerically additive and directly verifiable).
 - **Governance**: Models are constantly evaluated for drift (PSI/KS metrics) and retrained autonomously if they degrade. Walk-forward metrics are persisted to the database to ensure absolute honesty in reported accuracy (no random shuffling or future leakage).
+- **The Honesty Law Guard**: The training pipeline contains a strict structural blockade: if a model exceeds **75% directional accuracy** during walk-forward validation (which is practically impossible in efficient markets without data leakage), it triggers a `LeakageError` and is violently aborted before it can be deployed to the live serving database.
 
 ## Data Flow (Prediction End-to-End)
 1. **Ingest**: End-of-day or intraday OHLCV is fetched.
