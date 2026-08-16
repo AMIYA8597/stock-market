@@ -505,3 +505,70 @@ async def get_providers_health() -> dict:
     """Return health status of all data providers."""
     return await provider_manager.get_providers_health()
 
+
+# Free-tier global market context — correlates NIFTY moves with the US session,
+# volatility, currency, and crude, all via yfinance (no paid data vendor).
+GLOBAL_CONTEXT_TICKERS = {
+    "sp500": "^GSPC",
+    "nasdaq": "^IXIC",
+    "india_vix": "^INDIAVIX",
+    "usd_inr": "USDINR=X",
+    "crude_oil": "CL=F",
+}
+
+
+@router.get("/global-context")
+async def get_global_context() -> dict:
+    """Real global-market correlation snapshot for the signal engine and UI.
+
+    Each entry is fetched independently — a failure on one ticker (e.g. a
+    transient provider outage) must not blank out the others, and must never
+    be silently replaced with a fabricated number. Failed entries report
+    status: "unavailable" with no price field, so the UI can render an
+    explicit stale/error state instead of a fake value.
+    """
+    import asyncio
+
+    async def fetch_one(key: str, ticker: str) -> tuple[str, dict]:
+        try:
+            quote = await MarketDataService.get_quote(ticker)
+            return key, {
+                "ticker": ticker,
+                "status": "ok",
+                "price": quote.get("price"),
+                "change": quote.get("change"),
+                "change_pct": quote.get("change_pct"),
+                "source": quote.get("source"),
+                "timestamp": quote.get("timestamp"),
+            }
+        except Exception as e:
+            logger.warning(f"Global context fetch failed for {ticker}: {e}")
+            return key, {"ticker": ticker, "status": "unavailable", "error": str(e)}
+
+    results = await asyncio.gather(
+        *(fetch_one(key, ticker) for key, ticker in GLOBAL_CONTEXT_TICKERS.items())
+    )
+    context = dict(results)
+
+    # A simple, honest risk-on/risk-off read: US markets down + India VIX up
+    # is the classic "expect NSE weakness" macro setup. This is a heuristic
+    # label for display, not a numeric input to the ML ensemble.
+    sp500 = context.get("sp500", {})
+    vix = context.get("india_vix", {})
+    macro_bias = "unavailable"
+    if sp500.get("status") == "ok" and vix.get("status") == "ok":
+        sp_down = float(sp500.get("change_pct") or 0) < 0
+        vix_up = float(vix.get("change_pct") or 0) > 0
+        if sp_down and vix_up:
+            macro_bias = "risk_off"
+        elif not sp_down and not vix_up:
+            macro_bias = "risk_on"
+        else:
+            macro_bias = "mixed"
+
+    return {
+        "context": context,
+        "macro_bias": macro_bias,
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+

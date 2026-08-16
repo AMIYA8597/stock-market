@@ -12,6 +12,7 @@ import { useTradingStore } from "@/stores/tradingStore";
 import { useTradingModeQuery, useTriggerKillSwitchMutation } from "@/hooks/queries/useTrading";
 
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { getApiBaseUrl } from "@/lib/runtime-config";
 
 interface TopBarProps {
   selectedSignal: SignalResponse | null;
@@ -93,6 +94,7 @@ export default function TopBar({
     status: "CLOSED",
     countdown: "",
   });
+  const [macroBias, setMacroBias] = useState<"risk_on" | "risk_off" | "mixed" | "unavailable" | null>(null);
 
   useEffect(() => {
     void fetchStatus();
@@ -123,16 +125,32 @@ export default function TopBar({
       }
     }
 
+    async function loadGlobalContext() {
+      try {
+        const res = await fetch(`${getApiBaseUrl()}/api/v1/market/global-context`);
+        if (!res.ok) throw new Error(`Request failed (${res.status})`);
+        const data = await res.json();
+        if (active) setMacroBias(data.macro_bias ?? "unavailable");
+      } catch (err) {
+        console.error("Failed to load global market context", err);
+        if (active) setMacroBias("unavailable");
+      }
+    }
+
     void checkHealth();
     void loadIndices();
+    void loadGlobalContext();
 
     const healthInterval = setInterval(checkHealth, 30000);
     const indicesInterval = setInterval(loadIndices, 10000);
+    // US/global markets move slower than intraday NSE ticks — refresh less often.
+    const globalContextInterval = setInterval(loadGlobalContext, 60000);
 
     return () => {
       active = false;
       clearInterval(healthInterval);
       clearInterval(indicesInterval);
+      clearInterval(globalContextInterval);
     };
   }, []);
 
@@ -290,6 +308,20 @@ export default function TopBar({
           {indices.length === 0 && (
             <div className="text-[10px] text-[var(--text-secondary)] font-mono animate-pulse">Loading index feed...</div>
           )}
+          {macroBias && macroBias !== "unavailable" && (
+            <div
+              title="Heuristic read of US markets + India VIX, not an ML input"
+              className={`flex items-center gap-1 rounded border px-2 py-1 font-mono text-[10px] font-bold uppercase shrink-0 ${
+                macroBias === "risk_on"
+                  ? "border-[rgba(0,230,118,0.35)] bg-[rgba(0,230,118,0.08)] text-[var(--accent-green)]"
+                  : macroBias === "risk_off"
+                    ? "border-[rgba(255,59,92,0.35)] bg-[rgba(255,59,92,0.08)] text-[var(--accent-red)]"
+                    : "border-[var(--border-subtle)] bg-[var(--bg-elevated)] text-[var(--text-secondary)]"
+              }`}
+            >
+              Global: {macroBias.replace("_", " ")}
+            </div>
+          )}
         </div>
 
         {/* Search Input */}
@@ -319,8 +351,11 @@ export default function TopBar({
           </div>
         </div>
 
-        {/* Feeds Health Indicators */}
-        <div className="hidden items-center gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[9px] text-[var(--text-secondary)] xl:inline-flex">
+        {/* Feeds Health Indicators — diagnostic info, not core trading data. Only
+        show once there's genuinely spare width; at typical laptop widths
+        (1366-1440px) this was squeezing the market indices ticker down to
+        near-nothing. */}
+        <div className="hidden items-center gap-2 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[9px] text-[var(--text-secondary)] 2xl:inline-flex">
           <span className="text-[7px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mr-1">Feeds:</span>
           {Object.entries(healthStatus).map(([source, status]) => (
             <div
@@ -334,12 +369,12 @@ export default function TopBar({
           ))}
         </div>
 
-        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex">
+        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] xl:inline-flex">
           <span className={`h-1.5 w-1.5 rounded-full ${streamClassName}`} />
           {refreshing ? "Syncing" : signalStreamStatus}
         </span>
 
-        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex" title="Live Price Feed WebSocket Connection State">
+        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] 2xl:inline-flex" title="Live Price Feed WebSocket Connection State">
           <span className={`h-1.5 w-1.5 rounded-full ${
             priceFeedStatus === "connected"
               ? "bg-[var(--accent-green)]"
@@ -350,7 +385,7 @@ export default function TopBar({
           Price Feed: {priceFeedStatus}
         </span>
 
-        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] terminal:inline-flex" title="Upstox WebSocket Connection State">
+        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] 2xl:inline-flex" title="Upstox WebSocket Connection State">
           <span className={`h-1.5 w-1.5 rounded-full ${
             connectionStatus === "connected"
               ? "bg-[var(--accent-green)]"
