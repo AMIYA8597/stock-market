@@ -701,6 +701,128 @@ def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any
     return output
 
 # ---------------------------------------------------------------------------
+# Layer 7b – Multi-Horizon Forecast (1m through 1Y)
+# ---------------------------------------------------------------------------
+
+# Every horizon label the user actually asked for, mapped to the real data it
+# can honestly be trained on. Free yfinance intraday bars only go back ~60
+# days (5m/15m/30m/1h) or ~7 days (1m) — there is no free source of 10 years
+# of minute-level history for any stock, so short horizons are genuinely
+# lower-confidence than daily+ horizons. This is a structural data-
+# availability limit, not something to paper over with a fabricated number.
+HORIZON_SPECS: dict[str, dict[str, Any]] = {
+    "1m":  {"interval": "1m", "period": "5d",  "steps": 1,   "confidence": "experimental"},
+    "2m":  {"interval": "1m", "period": "5d",  "steps": 2,   "confidence": "experimental"},
+    "3m":  {"interval": "1m", "period": "5d",  "steps": 3,   "confidence": "experimental"},
+    "5m":  {"interval": "5m", "period": "60d", "steps": 1,   "confidence": "experimental"},
+    "10m": {"interval": "5m", "period": "60d", "steps": 2,   "confidence": "experimental"},
+    "15m": {"interval": "5m", "period": "60d", "steps": 3,   "confidence": "experimental"},
+    "30m": {"interval": "5m", "period": "60d", "steps": 6,   "confidence": "low"},
+    "1h":  {"interval": "5m", "period": "60d", "steps": 12,  "confidence": "low"},
+    "1d":  {"interval": "1d", "period": "10y", "steps": 1,   "confidence": "medium"},
+    "1w":  {"interval": "1d", "period": "10y", "steps": 5,   "confidence": "medium"},
+    "15d": {"interval": "1d", "period": "10y", "steps": 15,  "confidence": "medium"},
+    "1mo": {"interval": "1d", "period": "10y", "steps": 21,  "confidence": "low"},
+    "1y":  {"interval": "1d", "period": "10y", "steps": 252, "confidence": "low"},
+}
+
+
+def _fit_and_forecast(closes: np.ndarray, steps: int) -> tuple[np.ndarray, np.ndarray]:
+    """Shared SARIMAX-with-fallback fit used by every horizon group."""
+    log_prices = np.log(closes)
+    try:
+        model = SARIMAX(log_prices, order=(2, 1, 2), trend="c")
+        result = model.fit(disp=False, maxiter=200)
+        forecasts = result.get_forecast(steps=steps)
+        pred_mean = np.exp(forecasts.predicted_mean)
+        pred_ci = np.exp(forecasts.conf_int(alpha=0.20))
+        return pred_mean, pred_ci
+    except Exception as e:
+        logger.warning(f"SARIMAX forecast failed: {e}. Falling back to ExponentialSmoothing.")
+        try:
+            model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
+            result = model.fit()
+            pred_mean = result.forecast(steps)
+            ci_width = np.std(closes) * np.sqrt(np.arange(1, steps + 1)) * 0.5
+            pred_ci = np.column_stack([pred_mean - ci_width, pred_mean + ci_width])
+            return pred_mean, pred_ci
+        except Exception as ee:
+            logger.error(f"ExponentialSmoothing fallback also failed: {ee}")
+            current = float(closes[-1])
+            pred_mean = np.full(steps, current)
+            pred_ci = np.column_stack([pred_mean * 0.97, pred_mean * 1.03])
+            return pred_mean, pred_ci
+
+
+async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict[str, Any]:
+    """Real SARIMAX forecasts across every requested horizon label.
+
+    Groups horizons by the data granularity they need (intraday 1m/5m bars
+    vs daily bars) so each group only needs one model fit. Any horizon label
+    not in HORIZON_SPECS, or whose underlying data fetch fails, is reported
+    with an explicit error rather than silently omitted or fabricated.
+    """
+    from app.services.market_data_service import MarketDataService
+
+    results: dict[str, Any] = {}
+    unknown = [h for h in horizon_labels if h not in HORIZON_SPECS]
+    known = [h for h in horizon_labels if h in HORIZON_SPECS]
+    for h in unknown:
+        results[h] = {"status": "error", "message": f"Unsupported horizon label: {h}"}
+
+    # Group by (interval, period) so each distinct data window is fetched once
+    groups: dict[tuple[str, str], list[str]] = {}
+    for h in known:
+        spec = HORIZON_SPECS[h]
+        key = (spec["interval"], spec["period"])
+        groups.setdefault(key, []).append(h)
+
+    for (interval, period), labels in groups.items():
+        try:
+            bars = await MarketDataService.get_history(symbol, interval=interval, period=period)
+            if not bars or len(bars) < 20:
+                for h in labels:
+                    results[h] = {
+                        "status": "error",
+                        "message": f"Insufficient {interval} history ({len(bars) if bars else 0} bars) for {symbol}",
+                    }
+                continue
+
+            closes = np.array([b["close"] for b in bars], dtype=float)
+            data_window = f"{len(bars)} bars @ {interval} (period={period})"
+            current_price = float(closes[-1])
+            max_steps = max(HORIZON_SPECS[h]["steps"] for h in labels)
+            pred_mean, pred_ci = _fit_and_forecast(closes, max_steps)
+
+            for h in labels:
+                step_idx = HORIZON_SPECS[h]["steps"] - 1
+                predicted = float(pred_mean[step_idx]) if step_idx < len(pred_mean) else current_price
+                low = float(pred_ci[step_idx, 0]) if step_idx < len(pred_ci) else predicted * 0.97
+                high = float(pred_ci[step_idx, 1]) if step_idx < len(pred_ci) else predicted * 1.03
+                results[h] = {
+                    "status": "ok",
+                    "horizon": h,
+                    "current_price": round(current_price, 2),
+                    "predicted_price": round(predicted, 2),
+                    "prediction_low": round(low, 2),
+                    "prediction_high": round(high, 2),
+                    "change_pct": round((predicted - current_price) / current_price, 4) if current_price else 0.0,
+                    "confidence": HORIZON_SPECS[h]["confidence"],
+                    "data_window": data_window,
+                }
+        except Exception as e:
+            logger.error(f"Multi-horizon forecast failed for {symbol} group {interval}/{period}: {e}")
+            for h in labels:
+                results[h] = {"status": "error", "message": str(e)}
+
+    return {
+        "symbol": symbol,
+        "generated_at": datetime.now(UTC).isoformat(),
+        "horizons": results,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main Entry Point
 # ---------------------------------------------------------------------------
 

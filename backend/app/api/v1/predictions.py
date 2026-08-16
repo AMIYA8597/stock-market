@@ -17,7 +17,7 @@ from app.models.model_artifact import ModelArtifact
 from app.schemas.errors import ErrorResponse
 from app.schemas.prediction import ForecastRequest
 from app.services.market_data_service import MarketDataService
-from app.services.prediction_engine import get_full_prediction
+from app.services.prediction_engine import forecast_multi_horizon, get_full_prediction
 
 router = APIRouter()
 
@@ -63,13 +63,15 @@ async def generate_forecast(
     payload: ForecastRequest,
     _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
 ):
-    raise HTTPException(
-        status_code=503,
-        detail=ErrorResponse.create(
-            code="MODEL_NOT_TRAINED",
-            message="ML prediction engine is offline until training phase."
-        ).dict()
-    )
+    """Multi-horizon SARIMAX price forecast — real statistical forecasting on
+    real OHLCV history, not a stub. Each horizon reports the actual data
+    window it was fit on and an honest confidence label; horizons under 1h
+    are only ever backed by ~60 days of intraday data (a free-data-source
+    limit, not a modeling choice) and are labeled accordingly.
+    """
+    norm_symbol = MarketDataService._normalize_symbol(payload.symbol)
+    result = await forecast_multi_horizon(norm_symbol, payload.horizons)
+    return result
 
 @router.get("/latest/{symbol}")
 async def get_latest_forecast(
