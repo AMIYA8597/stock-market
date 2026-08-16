@@ -35,6 +35,10 @@ celery_app.conf.update(
         "update-regime-states-daily": {
             "task": "update_regime_states",
             "schedule": 86400.0, # Every day
-        }
+        },
+        "check-model-drift-daily": {
+            "task": "check_drift_for_watchlist",
+            "schedule": 86400.0, # Every day — walk-forward PSI/KS drift check, retrains only if drift exceeds threshold
+        },
     },
 )

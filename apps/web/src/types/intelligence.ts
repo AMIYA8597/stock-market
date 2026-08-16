@@ -126,10 +126,12 @@ export interface SignalResponse {
 
 export interface ForecastPoint {
   target_date: string;
-  horizon_days: number;
+  horizon: string;
   predicted_price: number;
   predicted_direction: string;
-  confidence: number;
+  /** Qualitative, not a fake precision number — see data_window for why. */
+  confidence_label: "experimental" | "low" | "medium" | "high";
+  data_window: string;
   prediction_low: number;
   prediction_high: number;
   change_pct?: number;

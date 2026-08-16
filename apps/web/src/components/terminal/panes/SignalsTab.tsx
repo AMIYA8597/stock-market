@@ -325,21 +325,28 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
             <thead>
               <tr className="border-b border-[var(--nq-border)] text-[var(--nq-text-muted)] font-sans font-bold">
                 <th className="pb-1">Horizon</th>
-                <th className="pb-1">Target Date</th>
+                <th className="pb-1">Data Window</th>
                 <th className="pb-1 text-right">Predicted Price</th>
                 <th className="pb-1 text-right">Expected Change</th>
                 <th className="pb-1 text-right">80% Conf. Low</th>
                 <th className="pb-1 text-right">80% Conf. High</th>
+                <th className="pb-1 text-right">Confidence</th>
               </tr>
             </thead>
             <tbody>
               {(forecast || []).map((pt) => {
                 const changePct = pt.change_pct ?? 0;
                 const isPositive = changePct >= 0;
+                const confColor =
+                  pt.confidence_label === "medium"
+                    ? "text-[var(--nq-accent-cyan)]"
+                    : pt.confidence_label === "high"
+                      ? "text-[var(--nq-accent-green)]"
+                      : "text-[var(--nq-text-muted)]";
                 return (
-                  <tr key={pt.horizon_days} className="border-b border-[rgba(255,255,255,0.02)] text-[var(--nq-text-secondary)] hover:bg-[rgba(255,255,255,0.01)]">
-                    <td className="py-1">{pt.horizon_days}d</td>
-                    <td className="py-1">{pt.target_date}</td>
+                  <tr key={pt.horizon} className="border-b border-[rgba(255,255,255,0.02)] text-[var(--nq-text-secondary)] hover:bg-[rgba(255,255,255,0.01)]">
+                    <td className="py-1 font-bold text-[var(--nq-text-primary)]">{pt.horizon}</td>
+                    <td className="py-1 opacity-60" title={pt.data_window}>{pt.data_window}</td>
                     <td className="py-1 text-right text-[var(--nq-text-primary)] font-semibold">
                       ₹{pt.predicted_price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
@@ -352,12 +359,13 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
                     <td className="py-1 text-right opacity-75">
                       ₹{pt.prediction_high.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
+                    <td className={`py-1 text-right font-bold uppercase ${confColor}`}>{pt.confidence_label}</td>
                   </tr>
                 );
               })}
               {(!forecast || forecast.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-[var(--nq-text-muted)] italic">
+                  <td colSpan={7} className="py-4 text-center text-[var(--nq-text-muted)] italic">
                     No forecast projections available.
                   </td>
                 </tr>
