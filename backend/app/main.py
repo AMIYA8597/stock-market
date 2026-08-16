@@ -115,6 +115,13 @@ def create_app() -> FastAPI:
     _app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.BACKEND_CORS_ORIGINS,
+        # Dev preview tooling assigns an arbitrary free localhost port when 3000
+        # is already taken (e.g. by another session's dev server) — a fixed
+        # origin list would break CORS every time that happens. Regex is scoped
+        # to localhost/127.0.0.1 only and skipped outside development.
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$"
+        if settings.ENVIRONMENT == "development"
+        else None,
         allow_credentials=True,
         allow_methods=settings.CORS_ALLOW_METHODS,
         allow_headers=settings.CORS_ALLOW_HEADERS,
