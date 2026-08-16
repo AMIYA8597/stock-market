@@ -126,6 +126,28 @@ async def force_retrain(symbol: str) -> dict:
     result = await pipeline.run()
     return {"status": "retrained", "metrics": result}
 
+
+@shared_task(name="check_drift_for_watchlist")
+def check_drift_for_watchlist() -> dict:
+    """Walk-forward drift check across the canonical watchlist.
+
+    check_model_drift_and_retrain existed as a real, working per-symbol PSI/KS
+    drift detector but was never actually scheduled anywhere — dead code that
+    silently never ran. This wraps it across WATCHLIST_SYMBOLS and is the task
+    that's actually registered in the Celery beat schedule.
+    """
+    from app.core.watchlist import WATCHLIST_SYMBOLS
+
+    results: dict[str, str] = {}
+    for symbol in WATCHLIST_SYMBOLS:
+        try:
+            outcome = asyncio.run(_check_model_drift_async(symbol))
+            results[symbol] = outcome.get("status", "unknown")
+        except Exception as e:
+            logger.error(f"Drift check failed for {symbol}: {e}")
+            results[symbol] = "error"
+    return results
+
 if __name__ == "__main__":
     import sys
     symbol = sys.argv[1] if len(sys.argv) > 1 else "RELIANCE.NS"

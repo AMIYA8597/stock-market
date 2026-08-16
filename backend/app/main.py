@@ -27,6 +27,12 @@ from contextlib import asynccontextmanager
 # isn't running here), instead of our Redis-backed, dev-eager-mode-enabled app.
 from app.core.celery_app import celery_app as _celery_app  # noqa: F401
 
+# check_drift_for_watchlist is only ever invoked via the Celery beat schedule
+# (never through an API route's .delay() call), so nothing else in the process
+# would otherwise import this module — and an unregistered @shared_task means
+# beat silently has nothing to run, exactly like the earlier backtest binding bug.
+from app.tasks import retraining_trigger as _retraining_trigger_tasks  # noqa: F401
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware

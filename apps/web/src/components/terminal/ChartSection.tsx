@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { marketApi } from "@/lib/api-client";
+import { intelligenceApi } from "@/lib/intelligence-api";
 import { safeFormat } from "@/lib/formatters";
 import type { OHLCVBar, Interval } from "@neuroquant/types";
 import type { SignalResponse, ForecastPoint } from "@/types/intelligence";
@@ -90,29 +91,31 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
   // 1. Fetch History using React Query
   const { data: historyData, error: queryError, isLoading: queryLoading } = useHistoryQuery(activeSymbol || "", timeframe);
 
-  // 2. Forecast is now available directly on the signal payload
+  // 2. Real multi-horizon SARIMAX forecast (1m through 1y), fetched directly —
+  // this is pure statistical forecasting on price history, so it doesn't
+  // depend on whether an XGBoost model happens to be trained for this symbol.
   useEffect(() => {
-    if (signal?.forecast) {
-      setPredictions(signal.forecast.map((pt: any) => ({
-        target_date: pt.target_date,
-        horizon_days: pt.horizon_days,
-        predicted_price: pt.predicted_price,
-        predicted_direction: pt.change_pct >= 0 ? "BUY" : "SELL",
-        confidence: signal.ensemble?.confidence ?? 0.5,
-        prediction_low: pt.prediction_low,
-        prediction_high: pt.prediction_high,
-        change_pct: pt.change_pct,
-      })));
-      setForecastError(null);
-    } else {
+    if (!activeSymbol) {
       setPredictions([]);
-      if (!signal?.model_version || signal?.model_version === "heuristic") {
-        setForecastError("Prediction model not yet trained");
-      } else {
-        setForecastError(null);
-      }
+      return;
     }
-  }, [signal]);
+    let active = true;
+    intelligenceApi
+      .getMultiHorizonForecast(activeSymbol)
+      .then((points) => {
+        if (!active) return;
+        setPredictions(points);
+        setForecastError(points.length === 0 ? "No forecast projections available for this symbol yet." : null);
+      })
+      .catch((err) => {
+        if (!active) return;
+        setPredictions([]);
+        setForecastError(err instanceof Error ? err.message : "Forecast request failed.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [activeSymbol]);
 
   const isLoading = queryLoading;
 
@@ -253,7 +256,7 @@ export default function ChartSection({ signal, onSelectSymbol, defaultSymbol }: 
             Regime {signal?.regime.state ?? "-"} | Confidence {confidence}%
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           {/* Timeframe selector */}
           <div className="flex items-center gap-1 border-r border-[var(--nq-border)] pr-2 mr-1 overflow-x-auto max-w-[140px] xs:max-w-[180px] sm:max-w-[320px] md:max-w-none ds-scrollable shrink-0">
             {([

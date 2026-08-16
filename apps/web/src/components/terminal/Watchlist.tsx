@@ -302,10 +302,10 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
         } ${draggedIdx === index ? "opacity-45 animate-pulse" : ""}`}
       >
         {/* Main row */}
-        <div className="flex items-center justify-between">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className={`h-1.5 w-1.5 rounded-full ${regimeDotColor}`} />
+        <div className="flex items-center justify-between gap-1 min-w-0">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-1 gap-y-0.5">
+              <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${regimeDotColor}`} />
               <span className="font-mono text-xs font-bold text-[var(--nq-text-primary)]">
                 {item.symbol}
               </span>
