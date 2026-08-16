@@ -58,6 +58,20 @@ async def startup_events() -> dict[str, Any]:
 
     logger.info("startup_begin")
 
+    # ─── Widen the default thread pool ─────────────────────────────────────
+    # Every synchronous yfinance/NSE/sqlite3 call in this app runs via
+    # asyncio.to_thread(), which shares Python's default executor
+    # (min(32, cpu_count+4) workers). Under realistic concurrent load — e.g.
+    # a 20-symbol watchlist each doing a blocking data fetch — that pool
+    # saturates and starves unrelated, otherwise-fast requests (even simple
+    # DB reads) queued behind it. Raise the ceiling so blocking I/O-bound
+    # work doesn't serialize the whole app.
+    from concurrent.futures import ThreadPoolExecutor
+
+    asyncio.get_running_loop().set_default_executor(
+        ThreadPoolExecutor(max_workers=64, thread_name_prefix="nq-worker")
+    )
+
     try:
         # ─── Initialize Redis Connection Pool ──────────────────────────────
         logger.info("startup_redis_init")

@@ -65,6 +65,8 @@ class MarketDataService:
     _yfinance_bucket = TokenBucket(rate=10.0, capacity=20.0)
     _nse_bucket = TokenBucket(rate=5.0, capacity=10.0)
 
+    _in_memory_ticker_history_df_cache: dict = {}
+
     @classmethod
     async def _throttle_yfinance(cls, symbol: str) -> None:
         await cls._yfinance_bucket.consume(1.0)
@@ -139,6 +141,41 @@ class MarketDataService:
                 }
             )
         return cls._session
+
+    _health_cache: dict | None = None
+    _health_cache_at: float = 0.0
+
+    @classmethod
+    async def health(cls) -> dict:
+        """Lightweight, cached check that the upstream market data provider is reachable."""
+        now = datetime.now(UTC).timestamp()
+        if cls._health_cache is not None and (now - cls._health_cache_at) < 60:
+            return cls._health_cache
+
+        def _probe() -> bool:
+            try:
+                session = cls.get_session()
+                df = yf.download(
+                    "^NSEI",
+                    period="1d",
+                    interval="1d",
+                    progress=False,
+                    threads=False,
+                    session=session,
+                )
+                return not df.empty
+            except Exception:
+                return False
+
+        try:
+            ok = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=5.0)
+        except Exception:
+            ok = False
+
+        result = {"status": "ok" if ok else "unhealthy"}
+        cls._health_cache = result
+        cls._health_cache_at = now
+        return result
 
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:
@@ -508,74 +545,12 @@ class MarketDataService:
                 )
 
             if bars:
-                print(
-                    f"[HOP 1 yfinance] {sym} @ {interval}: count_out={len(bars)}, first={bars[0]['time']}, last={bars[-1]['time']}"
+                logger.debug(
+                    f"[history:yfinance] {sym} @ {interval}: count_out={len(bars)}, first={bars[0]['time']}, last={bars[-1]['time']}"
                 )
             return bars
 
         result = None
-        try:
-            from datetime import timedelta
-
-            from app.services.data_ingestion.orchestrator import (
-                DataIngestionOrchestrator,
-                IngestionTask,
-            )
-
-            # D8: Never silently relabel data
-            orch_interval = interval
-
-            period_days = {
-                "1d": 1,
-                "5d": 5,
-                "1mo": 30,
-                "3mo": 90,
-                "6mo": 180,
-                "1y": 365,
-                "2y": 730,
-                "5y": 1825,
-                "max": 3650,
-            }
-            days = period_days.get(period, 30)
-            start_time = datetime.now(UTC) - timedelta(days=days)
-            end_time = datetime.now(UTC)
-
-            asset_type = "CRYPTO" if sym.endswith("-USD") else "EQUITY"
-            task = IngestionTask(
-                symbol=sym,
-                interval=orch_interval,
-                start=start_time,
-                end=end_time,
-                asset_type=asset_type,
-            )
-            orchestrator = DataIngestionOrchestrator(max_concurrency=4)
-            source_name, ohlcv_bars = await orchestrator.fetch_task(task)
-            if ohlcv_bars:
-                bars_list = []
-                for b in ohlcv_bars:
-                    time_str = b.time.isoformat() if hasattr(b.time, "isoformat") else str(b.time)
-                    bars_list.append(
-                        {
-                            "time": time_str,
-                            "open": float(b.open),
-                            "high": float(b.high),
-                            "low": float(b.low),
-                            "close": float(b.close),
-                            "volume": float(b.volume),
-                        }
-                    )
-                if bars_list:
-                    print(
-                        f"[HOP 1 {source_name}] {sym} @ {interval}: count_out={len(bars_list)}, first={bars_list[0]['time']}, last={bars_list[-1]['time']}"
-                    )
-                result = HistoryList(bars_list, source=source_name)
-                logger.info(
-                    f"Historical data fetched via orchestrator source: {source_name} for {sym}"
-                )
-        except Exception as e:
-            logger.info(
-                f"Orchestrator fetch failed for {sym}: {e}, falling back to direct yfinance..."
-            )
 
         if not result:
             try:
@@ -615,11 +590,11 @@ class MarketDataService:
 
         if result:
             bars_for_log = list(result) if not hasattr(result, "bars") else result.bars
-            print(
-                f"[HOP 2 MarketDataService] {sym} @ {interval}: count_out={len(bars_for_log)}, first={bars_for_log[0]['time'] if bars_for_log else 'None'}, last={bars_for_log[-1]['time'] if bars_for_log else 'None'}"
+            logger.debug(
+                f"[history:MarketDataService] {sym} @ {interval}: count_out={len(bars_for_log)}, first={bars_for_log[0]['time'] if bars_for_log else 'None'}, last={bars_for_log[-1]['time'] if bars_for_log else 'None'}"
             )
         else:
-            print(f"[HOP 2 MarketDataService] {sym} @ {interval}: count_out=0")
+            logger.debug(f"[history:MarketDataService] {sym} @ {interval}: count_out=0")
         return result
 
     @classmethod
@@ -780,6 +755,7 @@ class MarketDataService:
             result = await asyncio.to_thread(_fetch)
 
         if not result.empty:
+            MarketDataService._in_memory_ticker_history_df_cache[cache_key] = (result, now)
             return result
 
     @staticmethod

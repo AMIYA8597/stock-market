@@ -26,6 +26,7 @@ from app.core.test_state import (
     is_test_mode,
 )
 from app.models.auth_token import PasswordResetToken, RefreshSession
+from app.models.payment import Plan, Subscription
 from app.models.user import User
 from app.schemas.auth import (
     AuthMessage,
@@ -91,6 +92,34 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
     db.add(user)
     await db.flush()
     await db.refresh(user)
+
+    # This is a thesis/demo platform, not a paid product — every new account gets an
+    # active subscription automatically so premium-gated features (e.g. backtesting)
+    # are usable without a real payment flow. The paywall code itself is left intact
+    # since it demonstrates real subscription-gating architecture.
+    plan_result = await db.execute(select(Plan).where(Plan.name == "Thesis Demo"))
+    demo_plan = plan_result.scalar_one_or_none()
+    if demo_plan is None:
+        demo_plan = Plan(
+            name="Thesis Demo",
+            description="Auto-granted plan for the local/thesis-demo deployment.",
+            price_inr=0,
+            interval="yearly",
+            features_json="[]",
+            is_active=True,
+        )
+        db.add(demo_plan)
+        await db.flush()
+
+    db.add(
+        Subscription(
+            user_id=user.id,
+            plan_id=demo_plan.id,
+            status="active",
+            current_period_end=datetime.now(UTC) + timedelta(days=3650),
+        )
+    )
+
     await db.commit()
 
     await enqueue_email(

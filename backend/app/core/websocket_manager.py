@@ -32,7 +32,10 @@ class ConnectionManager:
         self._heartbeats: dict[WebSocket, asyncio.Task] = {}
         # Maps IP -> count of active connections
         self._ip_counts: dict[str, int] = defaultdict(int)
-        self.MAX_CONNECTIONS_PER_IP = 5
+        # A single browser can legitimately open several sockets from one IP
+        # (prices, signals, alerts, plus multiple tabs) — this caps abuse, not
+        # normal multi-tab usage.
+        self.MAX_CONNECTIONS_PER_IP = 30
         self._lock = asyncio.Lock()
 
     async def connect(self, websocket: WebSocket) -> None:

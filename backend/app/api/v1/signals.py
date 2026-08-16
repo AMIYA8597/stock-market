@@ -116,7 +116,9 @@ async def get_signal(symbol: str) -> SignalResponse:
     try:
         result = await _get_technical_signal(symbol_upper)
     except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+        # No history available (bad/delisted symbol or provider outage) is a data-
+        # availability issue, not a malformed request — 503, not 422.
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Signal engine error: {e}")
 

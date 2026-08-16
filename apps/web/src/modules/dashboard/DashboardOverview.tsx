@@ -108,12 +108,14 @@ export function DashboardOverview(): JSX.Element {
     isLoading: isLoadingSignal,
   } = useSignalQuery("NIFTY50");
 
+  // risk-metrics/performance queries are disabled until a portfolio id is known;
+  // a disabled query never leaves "pending" state, so only wait on them once enabled,
+  // otherwise the whole dashboard would hang forever whenever there's no portfolio yet.
   const isLoading =
     isLoadingPnl ||
     isLoadingPositions ||
     isLoadingPortfolios ||
-    isLoadingRisk ||
-    isLoadingPerformance ||
+    (Boolean(portfolio?.id) && (isLoadingRisk || isLoadingPerformance)) ||
     isLoadingAlerts ||
     isLoadingSignal;
 
