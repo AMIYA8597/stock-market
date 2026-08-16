@@ -11,7 +11,10 @@ class ForecastRequest(BaseModel):
     """Request to generate a price forecast."""
 
     symbol: str
-    horizons: list[int] = Field(default=[1, 5, 30], description="Forecast horizons in days")
+    horizons: list[str] = Field(
+        default=["1d", "1w", "1mo"],
+        description="Forecast horizon labels: 1m,2m,3m,5m,10m,15m,30m,1h,1d,1w,15d,1mo,1y",
+    )
     models: list[str] | None = Field(
         default=None,
         description="Specific models to use. None = all available.",

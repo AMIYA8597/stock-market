@@ -1,4 +1,8 @@
-import type { SignalResponse, ForecastResponse } from "@/types/intelligence";
+import type { SignalResponse, ForecastResponse, ForecastPoint } from "@/types/intelligence";
+
+export const ALL_FORECAST_HORIZONS = [
+  "1m", "2m", "3m", "5m", "10m", "15m", "30m", "1h", "1d", "1w", "15d", "1mo", "1y",
+] as const;
 import { getApiV1Url } from "@/lib/runtime-config";
 
 const API_URL = getApiV1Url();
@@ -258,5 +262,55 @@ export const intelligenceApi = {
       cache: "no-store",
     });
     return parseJson<ForecastResponse>(response);
+  },
+
+  /** Real SARIMAX multi-horizon forecast (1m through 1y) — independent of
+   * whether an XGBoost model is trained for this symbol, since it's pure
+   * statistical forecasting on price history. See HORIZON_SPECS on the
+   * backend for exactly what data window backs each horizon. */
+  async getMultiHorizonForecast(
+    symbol: string,
+    horizons: readonly string[] = ALL_FORECAST_HORIZONS
+  ): Promise<ForecastPoint[]> {
+    const response = await fetch(`${API_URL}/predictions/forecast`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol, horizons }),
+      cache: "no-store",
+    });
+    const data = await parseJson<{
+      symbol: string;
+      generated_at: string;
+      horizons: Record<
+        string,
+        {
+          status: "ok" | "error";
+          message?: string;
+          predicted_price?: number;
+          prediction_low?: number;
+          prediction_high?: number;
+          change_pct?: number;
+          confidence?: "experimental" | "low" | "medium" | "high";
+          data_window?: string;
+        }
+      >;
+    }>(response);
+
+    const points: ForecastPoint[] = [];
+    for (const [horizon, v] of Object.entries(data.horizons)) {
+      if (v.status !== "ok" || v.predicted_price === undefined) continue;
+      points.push({
+        target_date: data.generated_at,
+        horizon,
+        predicted_price: v.predicted_price,
+        predicted_direction: (v.change_pct ?? 0) >= 0 ? "BUY" : "SELL",
+        confidence_label: v.confidence ?? "low",
+        data_window: v.data_window ?? "",
+        prediction_low: v.prediction_low ?? v.predicted_price,
+        prediction_high: v.prediction_high ?? v.predicted_price,
+        change_pct: v.change_pct ?? 0,
+      });
+    }
+    return points;
   },
 };
