@@ -64,7 +64,11 @@ class YFinanceProvider(MarketDataProvider):
                 return await response.json()
 
     async def get_quote(self, symbol: str) -> Quote:
-        yf_symbol = Instrument.normalize_symbol(symbol) + ".NS" if not symbol.endswith(".NS") and "^" not in symbol else symbol
+        yf_symbol = (
+            Instrument.normalize_symbol(symbol) + ".NS"
+            if not symbol.endswith(".NS") and "^" not in symbol and "=" not in symbol
+            else symbol
+        )
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{yf_symbol}?interval=1m&range=1d"
         try:
             data = await self._fetch(url)
@@ -86,7 +90,11 @@ class YFinanceProvider(MarketDataProvider):
     async def get_ohlcv(
         self, symbol: str, interval: Interval, start: datetime, end: datetime
     ) -> list[OHLCVBar]:
-        yf_symbol = Instrument.normalize_symbol(symbol) + ".NS" if not symbol.endswith(".NS") and "^" not in symbol else symbol
+        yf_symbol = (
+            Instrument.normalize_symbol(symbol) + ".NS"
+            if not symbol.endswith(".NS") and "^" not in symbol and "=" not in symbol
+            else symbol
+        )
         y_interval = _YF_INTERVAL_MAP[interval]
         start_ts = int(start.timestamp())
         end_ts = int(end.timestamp())
