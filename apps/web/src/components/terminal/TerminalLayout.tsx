@@ -49,7 +49,7 @@ export default function TerminalLayout({
   
   useEffect(() => {
     setMounted(true);
-    const media = window.matchMedia("(min-width: 768px)");
+    const media = window.matchMedia("(min-width: 1024px)");
     setIsDesktop(media.matches);
     const listener = () => setIsDesktop(media.matches);
     media.addEventListener("change", listener);
@@ -91,7 +91,7 @@ export default function TerminalLayout({
         ) : null}
 
         {/* Premium Glassmorphic Tab Bar for Mobile & Tablet viewports */}
-        <div className="col-span-3 flex border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 text-xs font-semibold uppercase tracking-wider md:hidden shrink-0">
+        <div className="col-span-3 flex border-b border-[var(--border-subtle)] bg-[var(--bg-surface)] px-3 text-xs font-semibold uppercase tracking-wider lg:hidden shrink-0">
           <button
             onClick={() => setActiveTab("watchlist")}
             className={cn(

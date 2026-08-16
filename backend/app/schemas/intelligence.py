@@ -62,6 +62,10 @@ class SignalResponse(BaseModel):
     models: dict[str, TFTSignal | HMMGarchSignal | GNNSignal | LSTMAttnSignal | XGBoostSignal]
     model_weights: dict[str, float]
     regime: RegimeDetails
+    # True when no trained model could be loaded and every field above is a
+    # static placeholder, not a real prediction. Callers/UI must check this
+    # before presenting the response as a genuine signal.
+    is_fallback: bool = False
 
 
 class SignalHistoryPoint(BaseModel):

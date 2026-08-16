@@ -168,11 +168,23 @@ async def get_zones(symbol: str):
             "symbol": symbol.upper(),
             "metrics": {"precision": res["precision"], "recall": res["recall"], "f1": res["f1"]},
             "classical_zones": [
-                {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]}
+                {
+                    "type": z["type"],
+                    "min": z["min"],
+                    "max": z["max"],
+                    "touches": z["touches"],
+                    "avg": z["avg"],
+                }
                 for z in res["classical_zones"]
             ],
             "deep_learning_zones": [
-                {"min": z["min"], "max": z["max"], "touches": z["touches"], "avg": z["avg"]}
+                {
+                    "type": z["type"],
+                    "min": z["min"],
+                    "max": z["max"],
+                    "touches": z["touches"],
+                    "avg": z["avg"],
+                }
                 for z in res["dl_zones"]
             ],
         }

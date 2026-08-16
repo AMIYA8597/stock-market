@@ -249,8 +249,8 @@ async def get_history(
                 detail=f"Bad Gateway: Too many malformed data points ({dropped_bars}/{total_bars} dropped).",
             )
 
-        print(
-            f"[HOP 3 API return] {symbol} @ {interval}: count_out={len(bars)}, first={bars[0].time if bars else 'None'}, last={bars[-1].time if bars else 'None'}"
+        logger.debug(
+            f"[history:api] {symbol} @ {interval}: count_out={len(bars)}, first={bars[0].time if bars else 'None'}, last={bars[-1].time if bars else 'None'}"
         )
 
         source_val = "provider_manager"

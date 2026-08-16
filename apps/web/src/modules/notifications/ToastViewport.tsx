@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { useToastStore } from '@/stores/toast-store';
-import { getWsBaseUrl } from '@/lib/runtime-config';
+import { useSignalAlerts } from '@/hooks/useSignalAlerts';
 
 const toneIcon = {
   success: CheckCircle2,
@@ -18,66 +18,32 @@ const toneClass = {
   info: 'text-[var(--ds-color-primary-300)]',
 };
 
-const cleanWsUrl = getWsBaseUrl();
-
 export function ToastViewport(): JSX.Element {
   const { toasts, removeToast, addToast } = useToastStore();
+  const { latestAlert } = useSignalAlerts();
+  const lastSeenIdRef = useRef<string | null>(null);
 
+  // useSignalAlerts already owns a single shared /ws/alerts connection (module-level
+  // singleton) — this component just reacts to its latest alert instead of opening a
+  // second raw socket to the same endpoint.
   useEffect(() => {
-    let ws: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-    let isMounted = true;
+    if (!latestAlert) return;
+    const id = `${latestAlert.symbol}-${latestAlert.timestamp}`;
+    if (lastSeenIdRef.current === id) return;
+    lastSeenIdRef.current = id;
 
-    function connect() {
-      if (!isMounted) return;
+    const isBuy = latestAlert.direction.includes('BUY');
+    const isSell = latestAlert.direction.includes('SELL');
+    const variant = isBuy ? 'success' : isSell ? 'destructive' : 'info';
 
-      const base = cleanWsUrl.replace(/\/+$/, "");
-      const cleanBase = base.replace(/\/ws$/i, "");
-      const wsUrl = `${cleanBase}/ws/alerts`; // Resolved WebSocket URL: ws://host:port/ws/alerts (no double slash)
-      ws = new WebSocket(wsUrl);
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data && data.type === 'signal_alert') {
-            const isBuy = data.direction.includes('BUY');
-            const isSell = data.direction.includes('SELL');
-            const variant = isBuy ? 'success' : isSell ? 'destructive' : 'info';
-
-            addToast({
-              id: `${data.symbol}-${data.timestamp}`,
-              title: data.direction,
-              description: data.message,
-              variant,
-              duration: 8000,
-            });
-          }
-        } catch {
-          // Ignore parsing errors
-        }
-      };
-
-      ws.onclose = () => {
-        if (isMounted) {
-          reconnectTimer = setTimeout(() => {
-            connect();
-          }, 5000);
-        }
-      };
-
-      ws.onerror = () => {
-        ws?.close();
-      };
-    }
-
-    connect();
-
-    return () => {
-      isMounted = false;
-      if (reconnectTimer) clearTimeout(reconnectTimer);
-      if (ws) ws.close();
-    };
-  }, [addToast]);
+    addToast({
+      id,
+      title: latestAlert.direction,
+      description: latestAlert.message,
+      variant,
+      duration: 8000,
+    });
+  }, [latestAlert, addToast]);
 
   return (
     <div className="pointer-events-none fixed bottom-4 right-4 z-[60] w-[min(92vw,360px)] space-y-2">

@@ -36,10 +36,10 @@ class TrainingPipeline:
             res = await session.execute(select(Instrument).where(Instrument.symbol == self.symbol))
             self.instrument = res.scalars().first()
             if not self.instrument:
-                logger.warning(f"Instrument {self.symbol} not found in DB. Using a mock for evaluation.")
-                class MockInstrument:
-                    id = 9999
-                self.instrument = MockInstrument()
+                raise ValueError(
+                    f"Instrument {self.symbol} not found in DB. Add it to the symbols table "
+                    "before training — refusing to persist model artifacts against a fake instrument id."
+                )
 
         import yfinance as yf
         ticker = yf.Ticker(self.symbol)
