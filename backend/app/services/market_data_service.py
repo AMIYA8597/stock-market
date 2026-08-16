@@ -230,7 +230,9 @@ class MarketDataService:
         if s in us_tickers:
             return s
 
-        if "." not in s and "^" not in s and "-" not in s:
+        # "=" covers yfinance forex/futures suffixes (USDINR=X, CL=F, GC=F, etc.) —
+        # without this they'd get a bogus ".NS" appended and fail to resolve.
+        if "." not in s and "^" not in s and "-" not in s and "=" not in s:
             return f"{s}.NS"
         return s
 

@@ -71,6 +71,18 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     void loadHistoryMetrics();
   }, [signal?.symbol]);
 
+  // A directional signal computed 30 minutes ago on an intraday timeframe is
+  // stale — price and regime can have moved. Surface this instead of letting
+  // stop-loss/take-profit levels silently imply the signal is still fresh.
+  const signalAgeMinutes = useMemo(() => {
+    if (!signal?.timestamp) return null;
+    const ageMs = Date.now() - new Date(signal.timestamp).getTime();
+    if (Number.isNaN(ageMs)) return null;
+    return Math.max(0, Math.round(ageMs / 60000));
+  }, [signal?.timestamp]);
+  const STALE_THRESHOLD_MINUTES = 20;
+  const isSignalStale = signalAgeMinutes !== null && signalAgeMinutes >= STALE_THRESHOLD_MINUTES;
+
   const rationale = useMemo(() => {
     if (signal?.message) {
       return signal.message;
@@ -533,7 +545,21 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       </div>
 
       <div className="mb-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3">
-        <p className="mb-2 text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Risk & Position Sizing</p>
+        <div className="mb-2 flex items-center justify-between">
+          <p className="text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Risk & Position Sizing</p>
+          {signalAgeMinutes !== null && (
+            <span
+              title="Levels below were computed at signal time and don't move with the live price"
+              className={`rounded px-1.5 py-0.5 text-[8px] font-mono font-bold uppercase tracking-wider ${
+                isSignalStale
+                  ? "bg-[rgba(255,59,92,0.12)] text-[var(--accent-red)]"
+                  : "bg-[rgba(0,230,118,0.1)] text-[var(--accent-green)]"
+              }`}
+            >
+              {isSignalStale ? `Stale · ${signalAgeMinutes}m old` : `Fresh · ${signalAgeMinutes}m ago`}
+            </span>
+          )}
+        </div>
         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
           <div className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] px-2 py-1.5">
             <p className="text-[8px] uppercase tracking-wider text-[var(--nq-text-secondary)]">5d Target Price</p>
