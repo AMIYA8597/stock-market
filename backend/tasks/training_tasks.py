@@ -16,20 +16,17 @@ MODEL_DIR = Path(__file__).parent.parent / "data" / "models"
 SYMBOLS = ["RELIANCE.NS", "TCS.NS", "INFY.NS", "HDFCBANK.NS", "ICICIBANK.NS"]
 
 
-def train_single_xgboost(symbol: str) -> None:
-    """Train XGBoost classifier for a single stock and save to disk."""
-    import yfinance as yf
+def build_training_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Single source of truth for the technical feature set used by every model family.
 
+    Takes a raw yfinance history DataFrame (OHLCV, PascalCase columns) through to a
+    cleaned frame with standardized indicator column names. Used by train_single_xgboost
+    and every branch of retrain_model — do not duplicate this block per model family.
+    """
     from research.feature_engineering.price_factors import PriceFactorsBuilder
     from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
 
-    logger.info(f"Training scheduled XGBoost model for {symbol}...")
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(period="2y", interval="1d")
-    if df.empty or len(df) < 100:
-        logger.warning(f"Insufficient history to train XGBoost for {symbol}")
-        return
-
+    df = df.copy()
     df.columns = [c.lower() for c in df.columns]
     df = df.rename(columns={"stock splits": "stock_splits", "capital gains": "capital_gains"})
     df = df[["open", "high", "low", "close", "volume"]].dropna()
@@ -93,6 +90,22 @@ def train_single_xgboost(symbol: str) -> None:
 
     if rename_map:
         df = df.rename(columns=rename_map)
+
+    return df
+
+
+def train_single_xgboost(symbol: str) -> None:
+    """Train XGBoost classifier for a single stock and save to disk."""
+    import yfinance as yf
+
+    logger.info(f"Training scheduled XGBoost model for {symbol}...")
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period="2y", interval="1d")
+    if df.empty or len(df) < 100:
+        logger.warning(f"Insufficient history to train XGBoost for {symbol}")
+        return
+
+    df = build_training_features(df)
 
     features = [
         "ret_1d",
@@ -236,83 +249,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 df = ticker.history(period="2y", interval="1d")
                 if df.empty or len(df) < 100:
                     continue
-                df.columns = [c.lower() for c in df.columns]
-                df = df.rename(
-                    columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
-                )
-                df = df[["open", "high", "low", "close", "volume"]].dropna()
-                df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
-                df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
-                df.index = pd.DatetimeIndex(df["time"])
-                df.index.name = None
-
-                from research.feature_engineering.price_factors import PriceFactorsBuilder
-                from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
-
-                df = PriceFactorsBuilder().transform(df)
-                df = VolatilityFactorsBuilder().transform(df)
-
-                df.ta.rsi(length=14, append=True)
-                df.ta.macd(fast=12, slow=26, signal=9, append=True)
-                df.ta.ema(length=9, append=True)
-                df.ta.ema(length=21, append=True)
-                df.ta.ema(length=50, append=True)
-                df.ta.ema(length=200, append=True)
-                df.ta.bbands(length=20, std=2, append=True)
-                df.ta.atr(length=14, append=True)
-                df.ta.vwap(append=True)
-                df.ta.adx(length=14, append=True)
-                df.ta.stoch(k=14, d=3, append=True)
-                df.ta.obv(append=True)
-                df.ta.supertrend(length=10, multiplier=3.0, append=True)
-                df.ta.cdl_pattern(name="all", append=True)
-                df = df.loc[:, ~df.columns.duplicated()]
-
-                cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
-                df = df.drop(columns=cols_to_drop, errors="ignore")
-
-                # Standardize column names
-                rename_map = {}
-                RSI_col = (
-                    "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-                )
-                MACDh_col = (
-                    "MACDh_12_26_9"
-                    if "MACDh_12_26_9" in df.columns
-                    else [c for c in df.columns if "MACDh" in c][0]
-                )
-                BBP_col = (
-                    "BBP_20_2.0_2.0"
-                    if "BBP_20_2.0_2.0" in df.columns
-                    else (
-                        "BBP_20_2.0"
-                        if "BBP_20_2.0" in df.columns
-                        else [c for c in df.columns if "BBP" in c][0]
-                    )
-                )
-                ATR_col = (
-                    "ATRr_14"
-                    if "ATRr_14" in df.columns
-                    else [c for c in df.columns if "ATR" in c][0]
-                )
-                ADX_col = (
-                    "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-                )
-
-                if RSI_col != "RSI_14":
-                    rename_map[RSI_col] = "RSI_14"
-                if MACDh_col != "MACDh_12_26_9":
-                    rename_map[MACDh_col] = "MACDh_12_26_9"
-                if BBP_col != "BBP_20_2.0":
-                    rename_map[BBP_col] = "BBP_20_2.0"
-                if ATR_col != "ATRr_14":
-                    rename_map[ATR_col] = "ATRr_14"
-                if ADX_col != "ADX_14":
-                    rename_map[ADX_col] = "ADX_14"
-                if rename_map:
-                    df = df.rename(columns=rename_map)
-
-                df = df.replace([np.inf, -np.inf], np.nan).dropna()
+                df = build_training_features(df)
 
                 df["target_5d"] = df["close"].shift(-5) / df["close"] - 1.0
                 df["label"] = (df["target_5d"] > 0).astype(int)
@@ -352,83 +289,7 @@ def retrain_model(model_name: str) -> dict[str, str]:
                 df = ticker.history(period="2y", interval="1d")
                 if df.empty or len(df) < 100:
                     continue
-                df.columns = [c.lower() for c in df.columns]
-                df = df.rename(
-                    columns={"stock splits": "stock_splits", "capital gains": "capital_gains"}
-                )
-                df = df[["open", "high", "low", "close", "volume"]].dropna()
-                df = df.reset_index().rename(columns={"Date": "time", "Datetime": "time"})
-                df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
-                df.index = pd.DatetimeIndex(df["time"])
-                df.index.name = None
-
-                from research.feature_engineering.price_factors import PriceFactorsBuilder
-                from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
-
-                df = PriceFactorsBuilder().transform(df)
-                df = VolatilityFactorsBuilder().transform(df)
-
-                df.ta.rsi(length=14, append=True)
-                df.ta.macd(fast=12, slow=26, signal=9, append=True)
-                df.ta.ema(length=9, append=True)
-                df.ta.ema(length=21, append=True)
-                df.ta.ema(length=50, append=True)
-                df.ta.ema(length=200, append=True)
-                df.ta.bbands(length=20, std=2, append=True)
-                df.ta.atr(length=14, append=True)
-                df.ta.vwap(append=True)
-                df.ta.adx(length=14, append=True)
-                df.ta.stoch(k=14, d=3, append=True)
-                df.ta.obv(append=True)
-                df.ta.supertrend(length=10, multiplier=3.0, append=True)
-                df.ta.cdl_pattern(name="all", append=True)
-                df = df.loc[:, ~df.columns.duplicated()]
-
-                cols_to_drop = [c for c in df.columns if "SUPERTl" in c or "SUPERTs" in c]
-                df = df.drop(columns=cols_to_drop, errors="ignore")
-
-                # Standardize column names
-                rename_map = {}
-                RSI_col = (
-                    "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-                )
-                MACDh_col = (
-                    "MACDh_12_26_9"
-                    if "MACDh_12_26_9" in df.columns
-                    else [c for c in df.columns if "MACDh" in c][0]
-                )
-                BBP_col = (
-                    "BBP_20_2.0_2.0"
-                    if "BBP_20_2.0_2.0" in df.columns
-                    else (
-                        "BBP_20_2.0"
-                        if "BBP_20_2.0" in df.columns
-                        else [c for c in df.columns if "BBP" in c][0]
-                    )
-                )
-                ATR_col = (
-                    "ATRr_14"
-                    if "ATRr_14" in df.columns
-                    else [c for c in df.columns if "ATR" in c][0]
-                )
-                ADX_col = (
-                    "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
-                )
-
-                if RSI_col != "RSI_14":
-                    rename_map[RSI_col] = "RSI_14"
-                if MACDh_col != "MACDh_12_26_9":
-                    rename_map[MACDh_col] = "MACDh_12_26_9"
-                if BBP_col != "BBP_20_2.0":
-                    rename_map[BBP_col] = "BBP_20_2.0"
-                if ATR_col != "ATRr_14":
-                    rename_map[ATR_col] = "ATRr_14"
-                if ADX_col != "ADX_14":
-                    rename_map[ADX_col] = "ADX_14"
-                if rename_map:
-                    df = df.rename(columns=rename_map)
-
-                df = df.replace([np.inf, -np.inf], np.nan).dropna()
+                df = build_training_features(df)
 
                 df["target_5d"] = df["close"].shift(-5) / df["close"] - 1.0
                 df["label"] = (df["target_5d"] > 0).astype(int)

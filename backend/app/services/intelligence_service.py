@@ -50,6 +50,25 @@ REGIME_STATES = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
 MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
 
 
+def _resolve_sync_sqlite_path(sync_database_url: str):
+    """Resolve the on-disk path for a sqlite:/// URL, relative to the backend root.
+
+    Model monitoring queries the app's actual configured database directly via
+    sqlite3 (bypassing the async ORM session) for simplicity — it must point at
+    the same file the app is actually using, not a hardcoded guess.
+    """
+    from pathlib import Path
+
+    backend_root = Path(__file__).parent.parent.parent
+    if not sync_database_url.startswith("sqlite"):
+        # Non-sqlite (e.g. Postgres) — nothing sensible to return for a raw
+        # sqlite3.connect() call; caller's try/except will handle the failure.
+        return backend_root / "dev.db"
+    raw_path = sync_database_url.split("///", 1)[-1]
+    candidate = Path(raw_path)
+    return candidate if candidate.is_absolute() else backend_root / candidate
+
+
 @dataclass(frozen=True)
 class IntelligenceService:
     def _direction(self, score: float) -> str:
@@ -88,8 +107,16 @@ class IntelligenceService:
             result = {"is_computed": False, "message": str(e), "symbol": symbol}
 
         if not result.get("is_computed", True):
-            # Fallback result dictionary
+            import logging as _logging
+
+            _logging.getLogger(__name__).warning(
+                "No trained models found for %s — returning equal-weight placeholder "
+                "signal (is_fallback=True), NOT a model-driven prediction. Reason: %s",
+                symbol,
+                result.get("message", "unknown"),
+            )
             return SignalResponse(
+                is_fallback=True,
                 symbol=symbol.upper(),
                 timestamp=datetime.now(UTC),
                 ensemble=EnsembleSignal(
@@ -680,8 +707,8 @@ class IntelligenceService:
 
     def get_model_accuracy(self) -> list[ModelAccuracyItem]:
         import sqlite3
-        from pathlib import Path
-        db_path = Path(__file__).parent.parent.parent / "data" / "stock_market.db"
+        from app.core.config import get_settings
+        db_path = _resolve_sync_sqlite_path(get_settings().SYNC_DATABASE_URL)
 
         rows: list[ModelAccuracyItem] = []
         try:
@@ -728,8 +755,8 @@ class IntelligenceService:
 
     def get_drift(self) -> list[DriftItem]:
         import sqlite3
-        from pathlib import Path
-        db_path = Path(__file__).parent.parent.parent / "data" / "stock_market.db"
+        from app.core.config import get_settings
+        db_path = _resolve_sync_sqlite_path(get_settings().SYNC_DATABASE_URL)
 
         rows: list[DriftItem] = []
         try:
@@ -798,8 +825,8 @@ class IntelligenceService:
 
     def get_ensemble_weights_history(self, days: int) -> list[EnsembleWeightPoint]:
         import sqlite3
-        from pathlib import Path
-        db_path = Path(__file__).parent.parent.parent / "data" / "stock_market.db"
+        from app.core.config import get_settings
+        db_path = _resolve_sync_sqlite_path(get_settings().SYNC_DATABASE_URL)
 
         rows: list[EnsembleWeightPoint] = []
         try:

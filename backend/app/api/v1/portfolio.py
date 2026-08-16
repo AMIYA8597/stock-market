@@ -573,7 +573,7 @@ async def get_risk_metrics(
         perf = await get_performance(current_user=current_user, db=db)
 
         # If no history, return zeroes
-        if not perf.history or len(perf.history) < 2:
+        if not perf.series or len(perf.series) < 2:
             return RiskMetricsResponse(
                 sharpe_ratio=Decimal("0.0"),
                 sortino_ratio=Decimal("0.0"),
@@ -589,8 +589,8 @@ async def get_risk_metrics(
                 benchmark_volatility=Decimal("0.0"),
             )
 
-        port_vals = [float(p.portfolio_value) for p in perf.history]
-        bench_vals = [float(p.benchmark_value) for p in perf.history]
+        port_vals = [float(p.portfolio_value) for p in perf.series]
+        bench_vals = [float(p.benchmark_value) for p in perf.series]
 
         # Returns
         port_rets = np.diff(port_vals) / np.array(port_vals[:-1])

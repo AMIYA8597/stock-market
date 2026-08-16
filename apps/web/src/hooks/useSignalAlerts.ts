@@ -109,9 +109,12 @@ function connectWs() {
 }
 
 export function useSignalAlerts() {
-  const [localAlerts, setLocalAlerts] = useState<SignalAlert[]>(alerts);
-  const [localLatest, setLocalLatest] = useState<SignalAlert | null>(latestAlert);
-  const [localUnread, setLocalUnread] = useState<number>(unread);
+  // Seed with static defaults, not the live singleton — see usePriceFeed.ts for why
+  // (avoids a hydration mismatch when the singleton has already advanced by the time
+  // a later component mounts). The mount effect below syncs to the real value immediately.
+  const [localAlerts, setLocalAlerts] = useState<SignalAlert[]>(() => []);
+  const [localLatest, setLocalLatest] = useState<SignalAlert | null>(() => null);
+  const [localUnread, setLocalUnread] = useState<number>(() => 0);
 
   const markAllRead = useCallback(() => {
     unread = 0;
@@ -135,7 +138,8 @@ export function useSignalAlerts() {
     };
 
     subscribers.add(handleChange);
-    
+    handleChange(); // Initial sync
+
     if (!ws && !isConnecting) {
       connectWs();
     }

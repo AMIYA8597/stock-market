@@ -129,8 +129,11 @@ export interface UseSignalFeedState {
 }
 
 export function useSignalFeed(symbols: string[]): UseSignalFeedState {
-  const [localSignals, setLocalSignals] = useState(new Map(signals));
-  const [localStatus, setLocalStatus] = useState(status);
+  // Seed with the module's static defaults, not the live singleton value — see
+  // usePriceFeed.ts for why (avoids a hydration mismatch when the singleton has
+  // already advanced by the time a later component mounts).
+  const [localSignals, setLocalSignals] = useState(() => new Map<string, LiveSignalTick>());
+  const [localStatus, setLocalStatus] = useState<ConnectionStatus>("disconnected");
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {

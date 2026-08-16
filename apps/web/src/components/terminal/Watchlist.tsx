@@ -36,28 +36,6 @@ function getExchangeAndName(symbol: string): { exchange: string; name: string } 
   return { exchange: "NASDAQ", name: `${sym} Inc.` };
 }
 
-function getSharpeRatio(symbol: string): string {
-  const sym = symbol.toUpperCase();
-  const map: Record<string, string> = {
-    "RELIANCE.NS": "1.34",
-    "TCS.NS": "1.45",
-    "INFY.NS": "1.12",
-    "HDFCBANK.NS": "1.28",
-    "ICICIBANK.NS": "1.52",
-    "SBIN.NS": "1.21",
-    "ITC.NS": "1.09",
-    "LT.NS": "1.30",
-    "AAPL": "1.42",
-    "MSFT": "1.55",
-    "GOOGL": "1.38",
-    "AMZN": "1.24",
-    "BTC-USD": "1.65",
-    "ETH-USD": "1.51",
-    "SOL-USD": "1.89",
-  };
-  return map[sym] || "1.25";
-}
-
 function getSector(symbol: string): string {
   const sym = symbol.toUpperCase();
   if (sym === "RELIANCE.NS") return "Energy & Conglomerate";
@@ -303,7 +281,6 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
             : "bg-[var(--accent-amber)] shadow-[0_0_8px_rgba(255,184,0,0.5)]";
 
     const { exchange, name } = getExchangeAndName(item.symbol);
-    const sharpe = getSharpeRatio(item.symbol);
     const tick = ticks.get(item.symbol.toUpperCase());
     const ltpText = tick ? `₹${safeFormat(tick.price, 2)}` : "--";
     const changePct = tick ? tick.change_pct : null;
@@ -312,7 +289,7 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
 
     return (
       <div
-        key={`${activeTab}-${item.symbol}`}
+        key={`${activeTab}-${item.symbol}-${index}`}
         onClick={() => onSelectSymbol(item.symbol)}
         draggable={activeTab !== 4 && !groupBySector}
         onDragStart={() => handleDragStart(index)}
@@ -357,11 +334,11 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
           
           <div className="flex items-center gap-4 text-right transition-all group-hover:opacity-0">
             <div className="flex flex-col items-end min-w-[64px]">
-              <span className="rounded bg-[rgba(0,212,245,0.08)] px-1.5 py-0.5 text-[8px] font-mono font-semibold text-[var(--nq-accent-cyan)] border border-[rgba(0,212,245,0.15)]">
-                SR {sharpe}
-              </span>
-              <span className={`mt-0.5 block text-[8px] font-bold uppercase tracking-wider ${directionColor(item.ensemble.direction)}`}>
+              <span className={`block text-[8px] font-bold uppercase tracking-wider ${directionColor(item.ensemble.direction)}`}>
                 {item.ensemble.direction.replace("_", " ")}
+              </span>
+              <span className="mt-0.5 block text-[8px] font-mono text-[var(--nq-text-secondary)]">
+                {Math.round(item.ensemble.confidence * 100)}% conf
               </span>
             </div>
             

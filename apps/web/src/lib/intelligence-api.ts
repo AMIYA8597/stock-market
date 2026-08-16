@@ -193,24 +193,56 @@ const parseJson = async <T>(response: Response): Promise<T> => {
   return (await response.json()) as T;
 };
 
-export const intelligenceApi = {
-  async getSignal(symbol: string): Promise<SignalResponse> {
+// The technical signals endpoint (/signals/{symbol}) returns a flatter shape than the
+// ML ensemble endpoint (/predictions/{symbol}) — adapt it into the shape
+// normalizeSignalResponse expects so it can still populate ensemble.direction/confidence.
+function adaptTechnicalSignalToRaw(raw: UnknownRecord): UnknownRecord {
+  return {
+    symbol: raw.symbol,
+    timestamp: raw.timestamp,
+    ensemble: {
+      direction: raw.direction,
+      confidence: raw.confidence,
+      kelly_fraction: 0,
+    },
+    model_status: "heuristic",
+    message: "ML ensemble prediction unavailable; showing technical signal instead.",
+  };
+}
+
+async function fetchSignalWithFallback(symbol: string): Promise<UnknownRecord> {
+  try {
+    // The ML ensemble endpoint does real feature/data work before it can even tell us
+    // the model isn't trained, which can take many seconds under load. Give up fast and
+    // fall back to the technical signal rather than blocking the whole watchlist on it.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const response = await fetch(`${API_URL}/predictions/${encodeURIComponent(symbol)}`, {
       method: "GET",
       cache: "no-store",
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutId));
+    return await parseJson<UnknownRecord>(response);
+  } catch {
+    // ML model likely not trained yet (503) — fall back to the always-available
+    // technical signal so the UI shows real data instead of a hard error.
+    const response = await fetch(`${API_URL}/signals/${encodeURIComponent(symbol)}`, {
+      method: "GET",
+      cache: "no-store",
     });
-    return parseJson<UnknownRecord>(response).then(normalizeSignalResponse);
+    const raw = await parseJson<UnknownRecord>(response);
+    return adaptTechnicalSignalToRaw(raw);
+  }
+}
+
+export const intelligenceApi = {
+  async getSignal(symbol: string): Promise<SignalResponse> {
+    const raw = await fetchSignalWithFallback(symbol);
+    return normalizeSignalResponse(raw);
   },
 
   async getBulkSignals(symbols: string[]): Promise<SignalResponse[]> {
-    const promises = symbols.map(symbol => 
-      fetch(`${API_URL}/predictions/${encodeURIComponent(symbol)}`, {
-        method: "GET",
-        cache: "no-store",
-      }).then(r => parseJson<UnknownRecord>(r))
-    );
-    
-    const results = await Promise.allSettled(promises);
+    const results = await Promise.allSettled(symbols.map(fetchSignalWithFallback));
     return results
       .filter((res): res is PromiseFulfilledResult<UnknownRecord> => res.status === 'fulfilled')
       .map(res => normalizeSignalResponse(res.value));

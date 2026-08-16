@@ -47,7 +47,9 @@ export default function PortfolioPage(): JSX.Element {
   const symbols = useMemo(() => positionsData.map((h) => h.symbol.toUpperCase()), [positionsData]);
   const { ticks, status } = usePriceFeed(symbols);
 
-  const isLoading = isLoadingPnl || isLoadingPositions || isLoadingPerf;
+  // isLoadingPerf is gated by `enabled: !!portfolioId`; a disabled query never leaves
+  // "pending", so only block on it once actually enabled or this hangs forever pre-portfolio.
+  const isLoading = isLoadingPnl || isLoadingPositions || (Boolean(portfolioId) && isLoadingPerf);
   const error = isErrorPnl || isErrorPositions ? "Unable to load portfolio data." : null;
 
   // Calculate live valuations

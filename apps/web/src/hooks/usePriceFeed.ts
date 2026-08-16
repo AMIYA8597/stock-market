@@ -122,9 +122,14 @@ export interface UsePriceFeedState {
 }
 
 export function usePriceFeed(symbols: string[]): UsePriceFeedState {
-  // Local state mirrored from singleton
-  const [localTicks, setLocalTicks] = useState(new Map(ticks));
-  const [localStatus, setLocalStatus] = useState(status);
+  // Local state mirrored from singleton. Always seed with the same defaults the
+  // module starts with ("disconnected", empty ticks) rather than the live singleton
+  // value, since the singleton may already have advanced past its initial state by
+  // the time a later component mounts — reading it directly here would make the
+  // first client render diverge from the server-rendered HTML (hydration mismatch).
+  // The mount effect below immediately syncs to the real value right after paint.
+  const [localTicks, setLocalTicks] = useState(() => new Map<string, LivePriceTick>());
+  const [localStatus, setLocalStatus] = useState<ConnectionStatus>("disconnected");
 
   // Re-run whenever the required symbols list changes
   // eslint-disable-next-line react-hooks/exhaustive-deps
