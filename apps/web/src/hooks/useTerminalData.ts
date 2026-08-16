@@ -41,6 +41,7 @@ export const useTerminalData = (): TerminalDataState => {
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const initializedRef = useRef<boolean>(false);
+  const symbolsRef = useRef<string[]>([]);
   const { signals: liveSignals, status: signalStreamStatus } = useSignalFeed(symbols);
 
   const loadSymbols = useCallback(async (): Promise<string[]> => {
@@ -53,9 +54,10 @@ export const useTerminalData = (): TerminalDataState => {
       ]);
       const newLists = [l0.symbols || [], l1.symbols || [], l2.symbols || [], l3.symbols || []];
       setWlLists(newLists);
-      
+
       const combined = Array.from(new Set(newLists.flat()));
       if (combined.length > 0) {
+        symbolsRef.current = combined;
         setSymbols(combined);
         return combined;
       }
@@ -63,6 +65,7 @@ export const useTerminalData = (): TerminalDataState => {
       console.warn("Failed to load user watchlist, falling back to defaults", err);
     }
 
+    symbolsRef.current = FALLBACK_SYMBOLS;
     setSymbols(FALLBACK_SYMBOLS);
     setWlLists([FALLBACK_SYMBOLS, [], [], []]);
     return FALLBACK_SYMBOLS;
@@ -76,7 +79,8 @@ export const useTerminalData = (): TerminalDataState => {
         setLoading(true);
       }
       setError(null);
-      const symbolsToLoad = sourceSymbols ?? (symbols.length > 0 ? symbols : await loadSymbols());
+      const rawSymbolsToLoad = sourceSymbols ?? (symbolsRef.current.length > 0 ? symbolsRef.current : await loadSymbols());
+      const symbolsToLoad = Array.from(new Set(rawSymbolsToLoad));
       if (symbolsToLoad.length === 0) {
         setLoading(false);
         setRefreshing(false);
@@ -90,29 +94,33 @@ export const useTerminalData = (): TerminalDataState => {
 
       const targetSymbol = symbolsToLoad.includes(selectedSymbol) ? selectedSymbol : (symbolsToLoad[0] ?? "RELIANCE.NS");
 
-      try {
-        const [bulk, single] = await Promise.all([
-          intelligenceApi.getBulkSignals(symbolsToLoad),
-          intelligenceApi.getSignal(targetSymbol),
-        ]);
+      const [bulkResult, singleResult] = await Promise.allSettled([
+        intelligenceApi.getBulkSignals(symbolsToLoad),
+        intelligenceApi.getSignal(targetSymbol),
+      ]);
 
-        setSymbols(symbolsToLoad);
-        setWatchlistSignals(bulk);
-        setSelectedSignal(single);
-        initializedRef.current = true;
-      } catch (err) {
-        console.warn("Failed to fetch live signal feed:", err);
-        setSymbols(symbolsToLoad);
-        setWatchlistSignals([]);
-        setSelectedSignal(null);
-        initializedRef.current = true;
-        setError("Live signal feed is unavailable. Check the backend market and signal services.");
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+      const bulk = bulkResult.status === "fulfilled" ? bulkResult.value : [];
+      const single = singleResult.status === "fulfilled" ? singleResult.value : null;
+
+      if (singleResult.status === "rejected") {
+        console.warn("Failed to fetch selected signal (model likely not trained yet):", singleResult.reason);
       }
+
+      symbolsRef.current = symbolsToLoad;
+      setSymbols(symbolsToLoad);
+      setWatchlistSignals(bulk);
+      setSelectedSignal(single);
+      initializedRef.current = true;
+
+      // Only surface a hard error when we got nothing at all back.
+      if (bulk.length === 0 && single === null) {
+        setError("Live signal feed is unavailable. Check the backend market and signal services.");
+      }
+
+      setLoading(false);
+      setRefreshing(false);
     },
-    [loadSymbols, selectedSymbol, symbols]
+    [loadSymbols, selectedSymbol]
   );
 
   const refreshSelected = useCallback(
@@ -131,10 +139,9 @@ export const useTerminalData = (): TerminalDataState => {
         setSelectedSignal(single);
         initializedRef.current = true;
       } catch (err) {
-        console.warn("Failed to fetch live selected signal:", err);
+        console.warn("Failed to fetch selected signal (model likely not trained yet):", err);
         setSelectedSignal(null);
         initializedRef.current = true;
-        setError("Live signal feed is unavailable. Check the backend market and signal services.");
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -236,12 +243,16 @@ export const useTerminalData = (): TerminalDataState => {
           newLists[listId] = res.symbols;
           return newLists;
         });
-        setSymbols((prev) => Array.from(new Set([...prev, ...res.symbols])));
+        const updatedSymbols = Array.from(new Set([...symbolsRef.current, ...res.symbols]));
+        setSymbols(updatedSymbols);
+        // The newly added symbol has no entry in watchlistSignals yet — without this,
+        // it would show as missing/empty in the UI until the next 60s background poll.
+        await refreshAll(true, updatedSymbols);
       }
     } catch (e) {
       console.error("Failed to add symbol", e);
     }
-  }, []);
+  }, [refreshAll]);
 
   const removeWatchlistSymbol = useCallback(async (symbol: string, listId: number = 0) => {
     try {

@@ -159,6 +159,31 @@ To truly support 10,000+ live-updating stocks, the next phase should define:
 
 ---
 
+## 7a. Bug Fix Session Log (August 16, 2026)
+
+A full local-run debugging pass was done this session: backend and frontend were started from a cold checkout (neither had ever been run — `node_modules` and JWT keys did not exist), then exercised end-to-end (register → login → dashboard → terminal → portfolio) while watching the backend log and browser console for real errors. Root causes were fixed, not just symptoms suppressed. Confirmed working afterward with a clean browser tab.
+
+**Backend fixes** (`backend/`):
+- `keys/private.pem` / `keys/public.pem` were missing entirely — the API cannot start without them. Generated a fresh local dev RSA keypair.
+- `app/main.py`: `/health` called `get_redis_client()` without `await` — Redis always reported unhealthy even when it wasn't. Fixed.
+- `app/services/market_data_service.py`: `MarketDataService.health()` was called by `/health` but never defined — providers always reported unhealthy. Added a real (5s-timeout, 60s-cached) yfinance probe.
+- `app/services/market_data_service.py`: every single history request tried importing `app.services.data_ingestion.orchestrator`, a module that doesn't exist in this checkout, logging a warning on every call before falling back to the yfinance path that actually works. Removed the dead code path.
+- `app/services/market_data_service.py`, `app/api/v1/market.py`: several `print()` calls were dumping full pandas DataFrames and per-request debug lines straight to stdout. Converted to `logger.debug`.
+- `app/api/v1/portfolio.py` (`get_risk_metrics`): referenced `perf.history`, but `PerformanceResponse`'s actual field is `series` — this made `/portfolio/risk-metrics` 500 on every call. Fixed.
+- `app/schemas/portfolio.py` (`RiskMetricsResponse`): `portfolio_volatility` / `benchmark_volatility` were declared `gt=0`, which rejects the legitimate `0.0` a brand-new portfolio has. Changed to `ge=0`.
+
+**Frontend fixes** (`apps/web/src/`):
+- `components/terminal/TerminalLayout.tsx`: the desktop/mobile layout switch used `window.matchMedia("(min-width: 768px)")` in JS, but the CSS grid (`styles/terminal.css`) only switches to the 3-column desktop layout at `1024px`. Any viewport between 768–1023px (tablets, small laptops) got the desktop JS layout squeezed into mobile CSS — this was the main cause of "content not showing / cut off" on non-desktop sizes. Aligned both to `1024px`.
+- `modules/dashboard/DashboardOverview.tsx`, `app/(app)/portfolio/page.tsx`: `risk-metrics`/`performance` queries are `enabled: Boolean(portfolio?.id)`. In TanStack Query, a disabled query never leaves `pending`, so both pages' combined `isLoading` flag could get stuck `true` forever if the portfolio id wasn't available yet — hanging the whole page on an infinite loading spinner. Excluded disabled queries from the blocking condition.
+- `hooks/useTerminalData.ts`: `refreshAll` had `symbols` in its own `useCallback` deps while also calling `setSymbols()` inside itself, causing an unstable callback identity that re-triggered the mount effect on every successful fetch (an effective refetch loop). Moved the current symbol list into a ref instead of a state dependency. Also stopped one 503 (e.g. a not-yet-trained model) from wiping out watchlist data that did load, and de-duplicated the symbol list feeding the watchlist (this was also the source of a "two children with the same key" React warning).
+- `hooks/usePriceFeed.ts`, `hooks/useSignalFeed.ts`, `hooks/useSignalAlerts.ts`: all three keep their live WebSocket state in a module-level singleton (by design, to share one socket across components) but seeded React state directly from that singleton's *current* value. If the singleton had already advanced (e.g. the app shell's own `usePriceFeed` call moved status to `"reconnecting"` before a page's own call mounted), the very first client render diverged from the server-rendered HTML — a React hydration error, visible as `Text content did not match... disconnected / reconnecting`. Fixed by always seeding from the same static default the server uses, and relying on the existing post-mount sync effect to catch up to the real value immediately after.
+
+**Confirmed by direct testing, not just code inspection:** registered a user, logged in, and loaded `/dashboard`, `/terminal`, and `/portfolio` in a clean browser tab at 375px, 900px, and 1280px widths, with the console watched for errors each time.
+
+**Known remaining issue (not fixed — needs a design decision, not a quick patch):** `/api/v1/predictions/{symbol}` and `/api/v1/portfolio/performance` take **8–9 seconds** per call because they run a real yfinance fetch synchronously before the "no trained model" check. With ~20 watchlist symbols firing in parallel against a single-process `uvicorn` dev server, this can cause unrelated fast endpoints to queue up behind them. Options: make the yfinance call properly async/cached, raise the thread pool size, or run multiple uvicorn workers — this is a backend concurrency change, out of scope for a bug-fix pass.
+
+---
+
 ## 8. Where to go from here?
 - To understand how new ML models are trained, look at `backend/scripts/train_model.py` and `backend/research/models/`.
 - To modify the trading UI grid, check `apps/web/src/components/terminal/TradingTerminal.tsx`.

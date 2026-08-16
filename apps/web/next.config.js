@@ -50,6 +50,12 @@ const nextConfig = {
         source: "/api/v1/:path*",
         destination: `${apiBase}/api/v1/:path*`,
       },
+      {
+        // Legacy `quantedge_router` endpoints (e.g. /api/zones/:symbol) are mounted
+        // on the backend without the /api/v1 prefix — proxy those too.
+        source: "/api/:path((?!v1/).*)",
+        destination: `${apiBase}/api/:path*`,
+      },
     ];
   },
 };

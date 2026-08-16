@@ -6,7 +6,8 @@ import {
   type IChartApi,
   type HistogramData,
   type UTCTimestamp,
-  CandlestickSeries, LineSeries, AreaSeries, HistogramSeries, BaselineSeries, BarSeries
+  CandlestickSeries, LineSeries, AreaSeries, HistogramSeries, BaselineSeries, BarSeries,
+  createSeriesMarkers,
 } from 'lightweight-charts';
 import { MousePointer, MoveRight, Minus, Layers, Trash2 } from "lucide-react";
 // Patterns now fetched from backend via /api/v1/market/patterns/{symbol}
@@ -37,6 +38,13 @@ import { drawSMC } from "./tradingview/smcRenderer";
 import { drawSubPanes } from "./tradingview/subpaneRenderer";
 
 import { type Quote } from "@neuroquant/types";
+
+// Stable references for default prop values. An inline `= []` / `= {}` default
+// parameter is re-evaluated (new identity) on every render — when that value is a
+// dependency of an effect which also sets state unconditionally, it causes an
+// infinite render loop ("Maximum update depth exceeded").
+const EMPTY_PREDICTIONS: LightweightCandlestickChartProps["predictions"] = [];
+const EMPTY_INDICATORS: NonNullable<LightweightCandlestickChartProps["indicators"]> = {};
 
 interface LightweightCandlestickChartProps {
   bars: PriceBar[];
@@ -160,8 +168,8 @@ export function LightweightCandlestickChart({
   bars,
   height = 400,
   chartStyle = "candlestick",
-  indicators = {},
-  predictions = [],
+  indicators = EMPTY_INDICATORS,
+  predictions = EMPTY_PREDICTIONS,
   symbol = "SPY",
   liveTick,
 }: LightweightCandlestickChartProps): JSX.Element {
@@ -208,7 +216,7 @@ export function LightweightCandlestickChart({
 
   // Support & Resistance Zones State and Fetcher
   const [zones, setZones] = useState<
-    { type: string; min: number; max: number; avg: number; mode: string }[]
+    { type: string; min: number; max: number; avg: number; mode: string; touches: number }[]
   >([]);
 
   // Patterns State and Fetcher
@@ -808,34 +816,37 @@ export function LightweightCandlestickChart({
       addedSeries.push(mainSeries);
       mainSeriesRef.current = mainSeries;
       if (finalMarkers.length > 0) {
-        mainSeries.setMarkers(finalMarkers);
+        // lightweight-charts v5 removed ISeriesApi.setMarkers() — markers are now
+        // applied via the separate series-markers plugin.
+        createSeriesMarkers(mainSeries, finalMarkers);
       }
 
-      // Draw Support & Resistance zones
+      // Draw Support & Resistance zones — cap to the strongest few nearest the
+      // current price per side, one labeled line each, or the axis fills with
+      // dozens of overlapping labels (every zone x 3 lines) and becomes unreadable.
       if (zones.length > 0) {
-        zones.forEach((zone) => {
+        const lastClose = bars.length > 0 ? bars[bars.length - 1]!.close : null;
+        const MAX_PER_SIDE = 3;
+
+        const pickTopZones = (side: "support" | "resistance") =>
+          zones
+            .filter((z) => z.type === side)
+            .sort((a, b) => {
+              if (lastClose === null) return b.touches - a.touches;
+              return Math.abs(a.avg - lastClose) - Math.abs(b.avg - lastClose);
+            })
+            .slice(0, MAX_PER_SIDE);
+
+        const visibleZones = [
+          ...pickTopZones("support"),
+          ...pickTopZones("resistance"),
+        ];
+
+        visibleZones.forEach((zone) => {
           const isSupport = zone.type === "support";
           const color = isSupport
-            ? "rgba(0, 230, 118, 0.45)"
-            : "rgba(255, 59, 92, 0.45)";
-
-          mainSeries.createPriceLine({
-            price: zone.min,
-            color: color,
-            lineWidth: 1,
-            lineStyle: 2,
-            axisLabelVisible: true,
-            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MIN`,
-          });
-
-          mainSeries.createPriceLine({
-            price: zone.max,
-            color: color,
-            lineWidth: 1,
-            lineStyle: 2,
-            axisLabelVisible: true,
-            title: `${zone.mode} ${zone.type === "support" ? "SUP" : "RES"} MAX`,
-          });
+            ? "rgba(0, 230, 118, 0.65)"
+            : "rgba(255, 59, 92, 0.65)";
 
           mainSeries.createPriceLine({
             price: zone.avg,
@@ -843,7 +854,7 @@ export function LightweightCandlestickChart({
             lineWidth: 2,
             lineStyle: 0,
             axisLabelVisible: true,
-            title: `${zone.mode} ${zone.type === "support" ? "Support" : "Resistance"}`,
+            title: `${zone.mode} ${isSupport ? "Support" : "Resistance"}`,
           });
         });
       }

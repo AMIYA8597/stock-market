@@ -109,8 +109,8 @@ class RiskMetricsResponse(BaseModel):
     treynor_ratio: Decimal = Field(...)
     information_ratio: Decimal = Field(...)
     calmar_ratio: Decimal = Field(...)
-    portfolio_volatility: Decimal = Field(..., gt=0)
-    benchmark_volatility: Decimal = Field(..., gt=0)
+    portfolio_volatility: Decimal = Field(..., ge=0)
+    benchmark_volatility: Decimal = Field(..., ge=0)
 
 
 # ─────────────────────────────────────────────────────────────━━

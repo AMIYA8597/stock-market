@@ -123,7 +123,12 @@ async def ws_prices(websocket: WebSocket):
     t1 = asyncio.create_task(read_client_messages())
     t2 = asyncio.create_task(send_price_ticks())
     try:
-        await asyncio.gather(t1, t2)
+        # read_client_messages() only exits once the client actually disconnects;
+        # send_price_ticks() only exits when a send to a dead socket fails, which
+        # can never happen if no ticks arrive (e.g. market closed) — wait for
+        # whichever finishes first and cancel the other, instead of gather()
+        # which would leak this connection (and its per-IP slot) forever.
+        await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
     except asyncio.CancelledError:
         pass
     except Exception as e:

@@ -19,6 +19,14 @@ if _backend_root_str not in sys.path:
 
 from contextlib import asynccontextmanager
 
+# Import (and thereby activate as Celery's "current app") our configured Celery
+# instance before any task modules load. Task files use the generic @shared_task
+# decorator, which binds to whatever Celery app is current at call time — if this
+# app was never imported anywhere in the process, Celery silently falls back to a
+# default instance with no broker configured (defaults to amqp://localhost, which
+# isn't running here), instead of our Redis-backed, dev-eager-mode-enabled app.
+from app.core.celery_app import celery_app as _celery_app  # noqa: F401
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -137,7 +145,7 @@ def create_app() -> FastAPI:
 
         # Check Redis
         try:
-            redis = get_redis_client()
+            redis = await get_redis_client()
             if not await redis.ping():
                 raise ValueError("Redis ping returned false")
         except Exception as e:

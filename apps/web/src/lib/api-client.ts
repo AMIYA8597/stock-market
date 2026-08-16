@@ -621,8 +621,8 @@ export const backtestApi = {
 
 export const alertsApi = {
   list(): Promise<AlertDefinition[]> {
-    return fetchApi<UnknownRecord[]>("/alerts").then((rawItems) =>
-      rawItems.map((raw, index) => {
+    return fetchApi<{ alerts: UnknownRecord[]; total_count: number }>("/alerts").then((res) =>
+      (res.alerts ?? []).map((raw, index) => {
         const symbol =
           typeof raw.symbol === "string" ? raw.symbol : null;
         const alertTypeRaw =
