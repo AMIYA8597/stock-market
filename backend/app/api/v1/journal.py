@@ -17,13 +17,16 @@ router = APIRouter(prefix="/journal", tags=["journal"])
 
 
 async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UUID:
-    """Resolve current user's UUID from token or database."""
-    if not current_user or "sub" not in current_user:
+    """Resolve current user's UUID from token or database.
+
+    get_current_user_or_none returns the real User model, not a JWT payload
+    dict — "sub" not in current_user previously raised an uncaught TypeError
+    (SQLAlchemy models aren't iterable) for every authenticated request,
+    turning into an unhandled 500 rather than the intended 401.
+    """
+    if not current_user or not current_user.id:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        return uuid.UUID(str(current_user["sub"]))
-    except ValueError:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    return current_user.id
 
 
 @router.get("", response_model=list[JournalResponse])

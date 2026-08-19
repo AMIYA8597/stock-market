@@ -143,7 +143,7 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
 async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
     email = payload.email.lower().strip()
     client_ip = request.client.host if request.client else "unknown"
-    
+
     try:
         await check_rate_limit(f"auth:login:ip:{client_ip}", requests=5, window=300)
         await check_rate_limit(f"auth:login:email:{email}", requests=5, window=300)
