@@ -157,7 +157,18 @@ if _is_postgres:
             cursor.close()
             logger.info("database_timescaledb_initialized")
         except Exception as e:
+            # A failed CREATE EXTENSION leaves the connection's transaction
+            # aborted at the Postgres level — without rolling back here,
+            # every later query reusing this pooled connection (schema
+            # version check, create_all(), ...) fails with
+            # "current transaction is aborted", silently skipping all
+            # schema setup. TimescaleDB isn't available on managed Postgres
+            # like Supabase, so this is expected there — just recover.
             logger.warning("database_timescaledb_init_error", error=str(e))
+            try:
+                dbapi_conn.rollback()
+            except Exception:
+                pass
 else:
     logger.debug(
         "database_skipping_postgres_listeners (using %s)", settings.DATABASE_URL.split(":")[0]
