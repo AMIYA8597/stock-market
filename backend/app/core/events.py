@@ -110,19 +110,29 @@ async def startup_events() -> dict[str, Any]:
 
         logger.info("startup_background_tasks_init")
         try:
-            # Price ticker task
-            try:
-                from app.websocket.price_ticker import run_price_ticker
+            # Price ticker task — continuous polling/broadcast loop. Its CPU-
+            # bound work (batch quote processing every cycle) competes with
+            # this single-process server's event loop for the same requests
+            # users are waiting on, measurably slowing down foreground
+            # requests (login went from ~0.2s in isolation to ~3s under this
+            # load, confirmed via direct timing). Real value in production
+            # (separate worker process there); not worth the latency hit in
+            # local dev, same reasoning as market_scheduler below.
+            if settings.is_production:
+                try:
+                    from app.websocket.price_ticker import run_price_ticker
 
-                if redis_client:
-                    ticker_task = asyncio.create_task(
-                        run_price_ticker(redis_client),
-                        name="price_ticker",
-                    )
-                    background_tasks.append(ticker_task)
-                    logger.info("startup_price_ticker_created")
-            except Exception as e:
-                logger.error(f"Failed to start price ticker task: {e}")
+                    if redis_client:
+                        ticker_task = asyncio.create_task(
+                            run_price_ticker(redis_client),
+                            name="price_ticker",
+                        )
+                        background_tasks.append(ticker_task)
+                        logger.info("startup_price_ticker_created")
+                except Exception as e:
+                    logger.error(f"Failed to start price ticker task: {e}")
+            else:
+                logger.info("startup_price_ticker_skipped_dev_mode")
 
             # Alert polling loop task
             try:
@@ -164,15 +174,19 @@ async def startup_events() -> dict[str, Any]:
             except Exception as sched_err:
                 logger.error(f"Failed to start market scheduler: {sched_err}")
 
-            # Initialize Alert Evaluator
-            try:
-                from app.workers.alert_evaluator import evaluator as alert_evaluator
-                await alert_evaluator.start()
-                if alert_evaluator._task:
-                    background_tasks.append(alert_evaluator._task)
-                logger.info("startup_alert_evaluator_started")
-            except Exception as err:
-                logger.error(f"Failed to start alert evaluator: {err}")
+            # Initialize Alert Evaluator — same event-loop contention
+            # reasoning as price_ticker above; production-only.
+            if settings.is_production:
+                try:
+                    from app.workers.alert_evaluator import evaluator as alert_evaluator
+                    await alert_evaluator.start()
+                    if alert_evaluator._task:
+                        background_tasks.append(alert_evaluator._task)
+                    logger.info("startup_alert_evaluator_started")
+                except Exception as err:
+                    logger.error(f"Failed to start alert evaluator: {err}")
+            else:
+                logger.info("startup_alert_evaluator_skipped_dev_mode")
 
             if background_tasks:
                 services["background_tasks"] = background_tasks

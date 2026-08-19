@@ -64,7 +64,7 @@ from app.core.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
 from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
 from app.database.connection import async_session_factory
-from app.database.redis_client import get_redis_client
+from app.database.redis_client import InMemoryCache, get_redis_client
 from app.websocket.router import router as websocket_router
 
 settings = get_settings()
@@ -159,7 +159,13 @@ def create_app() -> FastAPI:
         # Check Redis
         try:
             redis = await get_redis_client()
-            if not await redis.ping():
+            if isinstance(redis, InMemoryCache):
+                # get_redis_client() silently swaps in a process-local dict when
+                # real Redis is unreachable, so a bare ping() would report "ok"
+                # even though caching/pubsub isn't actually shared or persistent.
+                health_status["redis"] = "degraded_in_memory_fallback"
+                health_status["status"] = "degraded"
+            elif not await redis.ping():
                 raise ValueError("Redis ping returned false")
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")

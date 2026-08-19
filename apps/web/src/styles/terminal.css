@@ -6,7 +6,7 @@
   color: var(--text-primary);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .terminal-root {
     min-width: var(--desktop-min-width);
   }
@@ -19,7 +19,7 @@
   height: 100%;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .terminal-grid {
     display: grid;
     grid-template-columns: var(--terminal-sidebar-width) minmax(0, 1fr) var(--terminal-signal-width);
@@ -33,7 +33,7 @@
   background: var(--bg-surface);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .terminal-topbar {
     grid-column: 1 / span 3;
   }
@@ -45,7 +45,7 @@
   flex: 1 1 0%;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .terminal-pane {
     flex: none;
   }

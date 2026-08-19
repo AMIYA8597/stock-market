@@ -27,7 +27,7 @@ export default function AlertsManager() {
   const fetchAlerts = async () => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const token = localStorage.getItem("token") || "";
+      const token = localStorage.getItem("nq_access_token") || "";
       const res = await fetch(`${apiUrl}/api/v1/alerts`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -46,7 +46,7 @@ export default function AlertsManager() {
     if (!newSymbol || !newThreshold) return;
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const token = localStorage.getItem("token") || "";
+      const token = localStorage.getItem("nq_access_token") || "";
       const payload = {
         symbol: newSymbol.toUpperCase(),
         alert_type: newType,
@@ -80,7 +80,7 @@ export default function AlertsManager() {
   const deleteAlert = async (id: string) => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const token = localStorage.getItem("token") || "";
+      const token = localStorage.getItem("nq_access_token") || "";
       const res = await fetch(`${apiUrl}/api/v1/alerts/${id}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }
