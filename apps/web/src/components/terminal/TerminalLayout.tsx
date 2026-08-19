@@ -49,7 +49,11 @@ export default function TerminalLayout({
   
   useEffect(() => {
     setMounted(true);
-    const media = window.matchMedia("(min-width: 1024px)");
+    // Must match the "terminal" breakpoint in tailwind.config.ts / the
+    // --desktop-min-width CSS var — this was hardcoded at 1024px separately
+    // from those and drifted out of sync, causing the desktop 3-column
+    // layout to activate before there was actually enough width for it.
+    const media = window.matchMedia("(min-width: 1280px)");
     setIsDesktop(media.matches);
     const listener = () => setIsDesktop(media.matches);
     media.addEventListener("change", listener);
@@ -62,7 +66,7 @@ export default function TerminalLayout({
   if (!mounted) {
     return (
       <main className={cn("terminal-root relative", className)}>
-         <div className={cn("terminal-grid nq-premium-bg nq-grid-overlay md:min-w-terminal", rowClass)}>
+         <div className={cn("terminal-grid nq-premium-bg nq-grid-overlay terminal:min-w-terminal", rowClass)}>
             <div className="terminal-topbar">{topBar}</div>
             <div className={cn("col-span-3 h-full min-h-0 w-full overflow-hidden flex items-center justify-center", contentRowClass)}>
                <div className="animate-pulse w-full h-full bg-[var(--bg-surface)]" />
@@ -76,7 +80,7 @@ export default function TerminalLayout({
     <main className={cn("terminal-root relative", className)}>
       <div
         className={cn(
-          "terminal-grid nq-premium-bg nq-grid-overlay md:min-w-terminal",
+          "terminal-grid nq-premium-bg nq-grid-overlay terminal:min-w-terminal",
           rowClass,
         )}
       >

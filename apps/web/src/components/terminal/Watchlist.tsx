@@ -304,25 +304,33 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
         {/* Main row */}
         <div className="flex items-center justify-between gap-1 min-w-0">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div className="flex flex-wrap items-center gap-1 gap-y-0.5">
+            <div className="flex min-w-0 items-center gap-1">
               <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${regimeDotColor}`} />
-              <span className="font-mono text-xs font-bold text-[var(--nq-text-primary)]">
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-xs font-bold text-[var(--nq-text-primary)]"
+                title={item.symbol}
+              >
                 {item.symbol}
               </span>
-              <span className="rounded bg-[rgba(255,255,255,0.05)] px-1 py-0.2 text-[7px] text-[var(--nq-text-secondary)] font-mono font-semibold uppercase tracking-wider">
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="rounded bg-[rgba(255,255,255,0.05)] px-1 py-0.2 text-[7px] text-[var(--nq-text-secondary)] font-mono font-semibold uppercase tracking-wider shrink-0">
                 {exchange}
               </span>
               {tick?.source && (
-                <span className={`rounded px-1 py-0.2 text-[7px] font-mono font-semibold uppercase tracking-wider ${
-                  tick.source.toLowerCase() === "nse"
-                    ? "bg-[rgba(0,230,118,0.12)] text-[#00E676]"
-                    : "bg-[rgba(255,255,255,0.05)] text-[var(--nq-text-muted)]"
-                }`}>
-                  {tick.source.toLowerCase() === "nse" ? "NSE live" : `${tick.source} (delayed)`}
+                <span
+                  className={`rounded px-1 py-0.2 text-[7px] font-mono font-semibold uppercase tracking-wider shrink-0 ${
+                    tick.source.toLowerCase() === "nse"
+                      ? "bg-[rgba(0,230,118,0.12)] text-[#00E676]"
+                      : "bg-[rgba(255,255,255,0.05)] text-[var(--nq-text-muted)]"
+                  }`}
+                  title={tick.source.toLowerCase() === "nse" ? "NSE live" : `${tick.source} (delayed)`}
+                >
+                  {tick.source.toLowerCase() === "nse" ? "LIVE" : "DLY"}
                 </span>
               )}
             </div>
-            <span className="block font-sans text-[9px] text-[var(--nq-text-secondary)] truncate max-w-[120px]" title={name}>
+            <span className="block truncate font-sans text-[9px] text-[var(--nq-text-secondary)]" title={name}>
               {name}
             </span>
           </div>
@@ -332,17 +340,17 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
             <Sparkline data={hist} />
           </div>
           
-          <div className="flex items-center gap-4 text-right transition-all group-hover:opacity-0">
-            <div className="flex flex-col items-end min-w-[64px]">
+          <div className="flex shrink-0 items-center gap-2 text-right transition-all group-hover:opacity-0">
+            <div className="flex flex-col items-end min-w-[38px]">
               <span className={`block text-[8px] font-bold uppercase tracking-wider ${directionColor(item.ensemble.direction)}`}>
                 {item.ensemble.direction.replace("_", " ")}
               </span>
               <span className="mt-0.5 block text-[8px] font-mono text-[var(--nq-text-secondary)]">
-                {Math.round(item.ensemble.confidence * 100)}% conf
+                {Math.round(item.ensemble.confidence * 100)}%
               </span>
             </div>
-            
-            <div className="flex flex-col items-end min-w-[70px]">
+
+            <div className="flex flex-col items-end min-w-[44px]">
               <span className="font-mono text-xs font-bold text-[var(--nq-text-primary)]">
                 {ltpText}
               </span>
@@ -504,9 +512,9 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
       {/* Watchlist Body Container */}
       <div className="flex items-center justify-between px-2 py-1 border-b border-[rgba(255,255,255,0.05)] font-mono text-[9px] font-semibold uppercase tracking-wider text-[var(--nq-text-secondary)] shrink-0 mt-1 sticky top-0 bg-[var(--nq-bg-surface)] z-10">
         <span>Symbol</span>
-        <div className="flex items-center gap-4 text-right">
-          <span className="min-w-[64px]">Signal</span>
-          <span className="min-w-[70px]">LTP</span>
+        <div className="flex items-center gap-2 text-right">
+          <span className="min-w-[38px]">Signal</span>
+          <span className="min-w-[44px]">LTP</span>
         </div>
       </div>
       <div className="flex-1 overflow-y-auto pr-1 pt-1 space-y-0.5 ds-scrollable select-none relative">

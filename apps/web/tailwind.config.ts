@@ -44,7 +44,13 @@ const config: Config = {
         mono: ["var(--font-berkeley)", "ui-monospace", "monospace"],
       },
       screens: {
-        terminal: "1024px",
+        // Was 1024px, but the dense 3-column terminal layout (sidebar +
+        // chart + signal panel) genuinely needs more room than that — at
+        // exactly 1024px content was overflowing/clipping horizontally
+        // (measured, not guessed). Raised so the desktop layout only
+        // activates once there's actually enough width; below this the
+        // existing mobile/tablet layout renders instead.
+        terminal: "1280px",
       },
       gridTemplateColumns: {
         terminal:

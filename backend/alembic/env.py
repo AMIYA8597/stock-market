@@ -20,8 +20,12 @@ from app.core.database import Base
 config = context.config
 settings = get_settings()
 
-# Override sqlalchemy.url with the env variable
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC)
+# Override sqlalchemy.url with the env variable. configparser's default
+# interpolation treats bare "%" as special syntax — a percent-encoded
+# password (e.g. "%40" for "@") would otherwise raise
+# "invalid interpolation syntax". Escape it as "%%" before handing it to
+# set_main_option, which configparser un-escapes back to a single "%".
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

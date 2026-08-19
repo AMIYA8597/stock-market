@@ -62,7 +62,13 @@ class MarketDataService:
         20
     )  # limit concurrency to avoid descriptor exhaustion under select()
 
-    _yfinance_bucket = TokenBucket(rate=10.0, capacity=20.0)
+    # Capacity was 20 — exactly the full watchlist size — so a startup batch
+    # fetch could burst all 20 requests to Yahoo Finance simultaneously with
+    # zero throttling, which repeatedly triggered Yahoo's rate-limit/block and
+    # made every symbol in the batch fail together ("possibly delisted" is
+    # yfinance's generic error for a blocked/empty response, not a real
+    # delisting). A smaller burst allowance forces real staggering.
+    _yfinance_bucket = TokenBucket(rate=5.0, capacity=5.0)
     _nse_bucket = TokenBucket(rate=5.0, capacity=10.0)
 
     _in_memory_ticker_history_df_cache: dict = {}
@@ -133,6 +139,7 @@ class MarketDataService:
     def get_session(cls):
         if cls._session is None:
             import requests
+            from requests.adapters import HTTPAdapter
 
             cls._session = requests.Session()
             cls._session.headers.update(
@@ -140,6 +147,14 @@ class MarketDataService:
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
             )
+            # Default urllib3 pool (10 connections) is far smaller than the
+            # concurrent yfinance/NSE fetches this app fires for a full
+            # watchlist — it was silently discarding excess connections and
+            # contributing to request pileup under load ("Connection pool is
+            # full, discarding connection" in the logs).
+            adapter = HTTPAdapter(pool_connections=50, pool_maxsize=50)
+            cls._session.mount("https://", adapter)
+            cls._session.mount("http://", adapter)
         return cls._session
 
     _health_cache: dict | None = None

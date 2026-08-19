@@ -27,13 +27,28 @@ except Exception:
     razorpay_client = None
 
 
+def _is_placeholder(value: str | None) -> bool:
+    """True if a Razorpay credential is still the unfilled placeholder.
+
+    Was previously an exact case-sensitive match against one specific
+    casing ("rzp_test_replace_me"/"replace_me"), while the actual .env
+    placeholder is "rzp_test_REPLACE_ME"/"REPLACE_ME" — the mismatch meant
+    the placeholder was never detected, so the app always attempted a real
+    Razorpay API call with fake credentials instead of using test mode.
+    """
+    if not value:
+        return True
+    return "replace_me" in value.lower()
+
+
 def _resolve_user_id(current_user: dict | None) -> uuid.UUID:
-    if not current_user or not str(current_user.id):
+    # get_current_user_or_none returns the real User model, not a JWT payload
+    # dict — current_user["sub"] here previously always raised TypeError
+    # (SQLAlchemy models aren't subscriptable), so every payments endpoint
+    # failed with a misleading "Invalid User ID" 401 regardless of auth state.
+    if not current_user or not current_user.id:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    try:
-        return uuid.UUID(str(current_user["sub"]))
-    except (ValueError, TypeError):
-        raise HTTPException(status_code=401, detail="Invalid User ID")
+    return current_user.id
 
 
 @router.get("/plans")
@@ -90,7 +105,7 @@ async def create_intent(
     amount_paise = int(payload.amount * 100)
     receipt_id = f"rcpt_{uuid4().hex[:10]}"
 
-    if razorpay_client is None or settings.RAZORPAY_KEY_ID == "rzp_test_replace_me":
+    if razorpay_client is None or _is_placeholder(settings.RAZORPAY_KEY_ID):
         # Test-mode payment gateway for local setup
         order_id = f"order_{uuid4().hex[:14]}"
     else:
@@ -99,7 +114,9 @@ async def create_intent(
                 "amount": amount_paise,
                 "currency": payload.currency.upper(),
                 "receipt": receipt_id,
-                "notes": {"user_id": user_id, "description": payload.description},
+                # UUID isn't JSON-serializable — Razorpay's SDK json.dumps()s
+                # this payload directly, so it must be a plain string.
+                "notes": {"user_id": str(user_id), "description": payload.description},
             }
         )
         order_id = order["id"]
@@ -157,7 +174,7 @@ async def confirm_intent(
     if tx.status == "succeeded":
         return {"status": "already_succeeded"}
 
-    if razorpay_client is None or settings.RAZORPAY_KEY_SECRET == "replace_me":
+    if razorpay_client is None or _is_placeholder(settings.RAZORPAY_KEY_SECRET):
         # Test-mode signature verification for local setup
         pass
     else:
@@ -245,7 +262,12 @@ async def subscribe_to_plan(
     db.add(sub)
     await db.commit()
 
-    return {"status": "subscribed", "plan": plan.name}
+    return {
+        "status": "subscribed",
+        "plan": plan.name,
+        "subscription_id": f"sub_mock_{uuid4().hex[:10]}",
+        "razorpay_key_id": settings.RAZORPAY_KEY_ID
+    }
 
 
 @router.get("/history")
@@ -321,8 +343,8 @@ async def razorpay_webhook(
     import hmac
     import hashlib
     is_verified = False
-    secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "replace_me")
-    if secret and secret != "replace_me":
+    secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "REPLACE_ME")
+    if not _is_placeholder(secret):
         expected_sig = hmac.new(
             secret.encode(),
             raw_body,
