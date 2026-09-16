@@ -72,7 +72,9 @@ class EventDrivenBacktester:
 
         # First pass to compute realized volatility for sizing
         returns = np.zeros_like(self.prices)
-        returns[1:] = self.prices[1:] / np.where(self.prices[:-1] == 0, np.nan, self.prices[:-1]) - 1.0
+        returns[1:] = (
+            self.prices[1:] / np.where(self.prices[:-1] == 0, np.nan, self.prices[:-1]) - 1.0
+        )
         returns = np.nan_to_num(returns, nan=0.0)
 
         realized_vol = np.full_like(self.prices, fill_value=np.nan)
@@ -129,24 +131,23 @@ class EventDrivenBacktester:
 
                     # Compute costs
                     cost_breakdown = compute_indian_costs(
-                        gross_amount=gross_value,
-                        side=side,
-                        is_delivery=True,
-                        slippage_pct=0.0005
+                        gross_amount=gross_value, side=side, is_delivery=True, slippage_pct=0.0005
                     )
                     total_cost = cost_breakdown["total_cost"]
 
                     # Execute Trade
                     if side == "BUY":
-                        self.cash -= (gross_value + total_cost)
+                        self.cash -= gross_value + total_cost
 
                         # Update Avg Price
                         total_qty = self.position_qty + qty_delta
                         if total_qty != 0:
-                            self.avg_price = (self.position_qty * self.avg_price + qty_delta * next_price) / total_qty
+                            self.avg_price = (
+                                self.position_qty * self.avg_price + qty_delta * next_price
+                            ) / total_qty
                         self.position_qty += qty_delta
                     else:
-                        self.cash += (gross_value - total_cost)
+                        self.cash += gross_value - total_cost
                         self.position_qty += qty_delta
                         if abs(self.position_qty) < 1e-6:
                             self.position_qty = 0.0
@@ -156,14 +157,16 @@ class EventDrivenBacktester:
                     self.costs_array[t + 1] += total_cost
 
                     # Log trade
-                    self.trades_log.append({
-                        "date": str(self.dates[t + 1]),
-                        "side": side,
-                        "qty": qty_delta,
-                        "price": next_price,
-                        "cost": total_cost,
-                        "equity_after": self.cash + (self.position_qty * next_price)
-                    })
+                    self.trades_log.append(
+                        {
+                            "date": str(self.dates[t + 1]),
+                            "side": side,
+                            "qty": qty_delta,
+                            "price": next_price,
+                            "cost": total_cost,
+                            "equity_after": self.cash + (self.position_qty * next_price),
+                        }
+                    )
 
             if progress_callback and t % max(1, self.num_steps // 20) == 0:
                 progress_callback(int((t / self.num_steps) * 100))
@@ -174,10 +177,16 @@ class EventDrivenBacktester:
             equity_curve=self.equity_curve,
             positions=self.positions,
             costs=self.costs_array,
-            trades_log=self.trades_log
+            trades_log=self.trades_log,
         )
 
-def run_vectorized_backtest(signals: np.ndarray, prices: np.ndarray, kelly_fraction: np.ndarray, initial_capital: float = 100000.0) -> BacktestResult:
+
+def run_vectorized_backtest(
+    signals: np.ndarray,
+    prices: np.ndarray,
+    kelly_fraction: np.ndarray,
+    initial_capital: float = 100000.0,
+) -> BacktestResult:
     n = prices.shape[0] if len(prices.shape) > 0 else 0
     returns = np.zeros(n)
     pnl = np.zeros(n)

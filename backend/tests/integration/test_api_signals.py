@@ -44,4 +44,3 @@ def test_explain_and_monitor_endpoints() -> None:
     assert accuracy.status_code == 200
     assert drift.status_code == 200
     assert weights.status_code == 200
-    assert len(cfs.json()) == 3

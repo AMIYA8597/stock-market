@@ -115,7 +115,9 @@ class BrokerAdapter:
                     current_price = limit_price
                 else:
                     msg = f"LIVE trading mode error: Unable to verify current price for {symbol}."
-                    UpstoxService.log_audit(f"[LIVE ORDER REJECTED] Instrument={symbol} Error={msg}")
+                    UpstoxService.log_audit(
+                        f"[LIVE ORDER REJECTED] Instrument={symbol} Error={msg}"
+                    )
                     raise ValueError(msg)
 
             order_value = float(quantity) * (
@@ -214,7 +216,9 @@ class BrokerAdapter:
             raise ValueError(f"Invalid trading mode: {mode}")
 
     @staticmethod
-    async def cancel_order(order_id: str, symbol: str, user_id: str | None = None) -> dict[str, Any]:
+    async def cancel_order(
+        order_id: str, symbol: str, user_id: str | None = None
+    ) -> dict[str, Any]:
         """Cancels an order."""
         mode = UpstoxService.TRADING_MODE
         symbol = symbol.upper().strip()
@@ -223,24 +227,24 @@ class BrokerAdapter:
             UpstoxService.log_audit(f"[PAPER ORDER CANCEL REQUEST] ID={order_id}")
             # In paper trading, canceling is handled by deleting/updating the order state
             try:
+                import uuid
+
                 from sqlalchemy import update
 
                 from app.database.connection import async_session_factory
                 from app.models.paper_trading import PaperOrder
 
-                import uuid
                 async with async_session_factory() as session:
-                    stmt = (
-                        update(PaperOrder)
-                        .where(PaperOrder.id == uuid.UUID(order_id))
-                    )
+                    stmt = update(PaperOrder).where(PaperOrder.id == uuid.UUID(order_id))
                     if user_id:
                         stmt = stmt.where(PaperOrder.user_id == uuid.UUID(user_id))
-                    
+
                     stmt = stmt.values(status="CANCELLED")
                     res = await session.execute(stmt)
                     if res.rowcount == 0:
-                        raise ValueError("Order not found or you do not have permission to cancel it.")
+                        raise ValueError(
+                            "Order not found or you do not have permission to cancel it."
+                        )
                     await session.commit()
                 UpstoxService.log_audit(f"[PAPER ORDER CANCELLED] ID={order_id}")
                 return {"order_id": order_id, "status": "CANCELLED", "trading_mode": "PAPER"}
@@ -252,7 +256,9 @@ class BrokerAdapter:
             if not UpstoxService.ACCESS_TOKEN:
                 raise ValueError("Missing Upstox access token.")
 
-            UpstoxService.log_audit(f"[LIVE ORDER CANCEL REQUEST] ID={order_id} Instrument={symbol}")
+            UpstoxService.log_audit(
+                f"[LIVE ORDER CANCEL REQUEST] ID={order_id} Instrument={symbol}"
+            )
 
             # Send cancel order request to Upstox
             url = f"https://api.upstox.com/v2/order/cancel?order_id={order_id}"

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
 
 from research.feature_engineering.base import FeatureBuilder
 
@@ -69,7 +68,9 @@ class TechnicalFactorsBuilder(FeatureBuilder):
         supertrend = data.ta.supertrend(length=7, multiplier=3.0, append=False)
         if supertrend is not None and not supertrend.empty:
             data["supertrend_dir"] = supertrend.filter(like="SUPERTd").iloc[:, 0]
-            data["supertrend_dist"] = (data["close"] / supertrend.filter(like="SUPERT_").iloc[:, 0]) - 1.0
+            data["supertrend_dist"] = (
+                data["close"] / supertrend.filter(like="SUPERT_").iloc[:, 0]
+            ) - 1.0
 
         ichimoku, _ = data.ta.ichimoku(append=False)
         if ichimoku is not None and not ichimoku.empty:

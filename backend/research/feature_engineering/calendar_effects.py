@@ -40,13 +40,17 @@ class CalendarEffectsBuilder(FeatureBuilder):
         # Week number of the month (approximate)
         last_day_of_month = t + pd.offsets.MonthEnd(0)
         # Find the last Thursday of the month
-        last_thursday = last_day_of_month - pd.to_timedelta((last_day_of_month.dt.dayofweek - 3) % 7, unit='d')
+        last_thursday = last_day_of_month - pd.to_timedelta(
+            (last_day_of_month.dt.dayofweek - 3) % 7, unit="d"
+        )
         # If current week is the week of last Thursday
-        data["is_expiry_week"] = (t.dt.isocalendar().week == last_thursday.dt.isocalendar().week).astype(int)
+        data["is_expiry_week"] = (
+            t.dt.isocalendar().week == last_thursday.dt.isocalendar().week
+        ).astype(int)
 
         # Holiday proximity (approximate NSE holidays which are often Mondays/Fridays)
         # Flagging days that are next to weekends as higher probability of being pre/post holiday
-        data["is_pre_holiday"] = (dow == 4).astype(int) # Friday
-        data["is_post_holiday"] = (dow == 0).astype(int) # Monday
+        data["is_pre_holiday"] = (dow == 4).astype(int)  # Friday
+        data["is_post_holiday"] = (dow == 0).astype(int)  # Monday
 
         return data

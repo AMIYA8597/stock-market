@@ -18,15 +18,17 @@ def test_feature_pipeline_no_lookahead_leakage():
     returns = np.random.normal(loc=0.0001, scale=0.02, size=300)
     price = 100 * np.exp(np.cumsum(returns))
 
-    df = pd.DataFrame({
-        "time": dates,
-        "symbol": "TEST",
-        "open": price * np.random.uniform(0.99, 1.01, size=300),
-        "high": price * np.random.uniform(1.0, 1.03, size=300),
-        "low": price * np.random.uniform(0.97, 1.0, size=300),
-        "close": price,
-        "volume": np.random.randint(1000, 1000000, size=300).astype(float),
-    })
+    df = pd.DataFrame(
+        {
+            "time": dates,
+            "symbol": "TEST",
+            "open": price * np.random.uniform(0.99, 1.01, size=300),
+            "high": price * np.random.uniform(1.0, 1.03, size=300),
+            "low": price * np.random.uniform(0.97, 1.0, size=300),
+            "close": price,
+            "volume": np.random.randint(1000, 1000000, size=300).astype(float),
+        }
+    )
 
     # Add mock Fama-French factors for FF5BetasBuilder
     df["mkt_rf"] = np.random.normal(0, 0.01, size=300)
@@ -38,7 +40,7 @@ def test_feature_pipeline_no_lookahead_leakage():
     # 2. Split into data up to T, and data up to T+10
     T = 250
     df_past = df.iloc[:T].copy()
-    df_future = df.iloc[:T+10].copy()
+    df_future = df.iloc[: T + 10].copy()
 
     # 3. Run feature pipeline
     pipeline = FeaturePipeline()
@@ -70,8 +72,11 @@ def test_feature_pipeline_no_lookahead_leakage():
             f"Value at T with future: {val_future}"
         )
 
+
 import pytest
+
 from research.feature_engineering.base import FeatureBuilder
+
 
 class LeakyFeatureBuilder(FeatureBuilder):
     name = "leaky_feature"
@@ -82,19 +87,25 @@ class LeakyFeatureBuilder(FeatureBuilder):
         data["leaky_close"] = data["close"].shift(-2)
         return data
 
+
 def test_causality_guard_rejects_leaky_feature():
     """Test that FeaturePipeline.validate_causality() catches explicit look-ahead bias."""
     np.random.seed(42)
     dates = pd.date_range(start="2020-01-01", periods=50, freq="B")
-    
-    df = pd.DataFrame({
-        "time": dates,
-        "symbol": "TEST",
-        "close": np.random.uniform(100, 110, size=50),
-    })
+
+    df = pd.DataFrame(
+        {
+            "time": dates,
+            "symbol": "TEST",
+            "close": np.random.uniform(100, 110, size=50),
+        }
+    )
 
     # Initialize pipeline with the leaky builder
     pipeline = FeaturePipeline(builders=[LeakyFeatureBuilder()])
-    
-    with pytest.raises(ValueError, match="Causality guard failed! Look-ahead bias detected in features: leaky_close"):
+
+    with pytest.raises(
+        ValueError,
+        match="Causality guard failed! Look-ahead bias detected in features: leaky_close",
+    ):
         pipeline.validate_causality(df)

@@ -68,104 +68,292 @@ def detect_patterns(df: pd.DataFrame) -> list[dict]:
 
         # 1. Dragonfly Doji
         if bs <= rng * 0.05 and lw >= rng * 0.6 and uw <= rng * 0.1:
-            markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#FFEB3B", "text": "Dragonfly Doji"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "belowBar",
+                    "shape": "arrowUp",
+                    "color": "#FFEB3B",
+                    "text": "Dragonfly Doji",
+                }
+            )
             continue
 
         # 2. Gravestone Doji
         if bs <= rng * 0.05 and uw >= rng * 0.6 and lw <= rng * 0.1:
-            markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#FFC107", "text": "Gravestone Doji"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "aboveBar",
+                    "shape": "arrowDown",
+                    "color": "#FFC107",
+                    "text": "Gravestone Doji",
+                }
+            )
             continue
 
         # 3. Doji
         if bs <= rng * 0.05:
-            markers.append({"time": time_val, "position": "inBar", "shape": "circle", "color": "#FFEB3B", "text": "Doji"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "inBar",
+                    "shape": "circle",
+                    "color": "#FFEB3B",
+                    "text": "Doji",
+                }
+            )
             continue
 
         # 4. Marubozu
         if bs >= rng * 0.95:
             color = "#8E24AA" if bull else "#D81B60"
-            markers.append({"time": time_val, "position": "inBar", "shape": "square", "color": color, "text": "Marubozu"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "inBar",
+                    "shape": "square",
+                    "color": color,
+                    "text": "Marubozu",
+                }
+            )
             continue
 
         # 5. Hammer
         if lw >= bs * 2 and uw <= rng * 0.1 and dn_t:
-            markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#00E676", "text": "Hammer"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "belowBar",
+                    "shape": "arrowUp",
+                    "color": "#00E676",
+                    "text": "Hammer",
+                }
+            )
             continue
 
         # 6. Hanging Man
         if lw >= bs * 2 and uw <= rng * 0.1 and up_t:
-            markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#FF3B5C", "text": "Hanging Man"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "aboveBar",
+                    "shape": "arrowDown",
+                    "color": "#FF3B5C",
+                    "text": "Hanging Man",
+                }
+            )
             continue
 
         # 7. Inverted Hammer
         if uw >= bs * 2 and lw <= rng * 0.1 and dn_t:
-            markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#00E5FF", "text": "Inv Hammer"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "belowBar",
+                    "shape": "arrowUp",
+                    "color": "#00E5FF",
+                    "text": "Inv Hammer",
+                }
+            )
             continue
 
         # 8. Shooting Star
         if uw >= bs * 2 and lw <= rng * 0.1 and up_t:
-            markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#E040FB", "text": "Shooting Star"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "aboveBar",
+                    "shape": "arrowDown",
+                    "color": "#E040FB",
+                    "text": "Shooting Star",
+                }
+            )
             continue
 
         # 9. Spinning Top
         if bs > rng * 0.05 and bs <= rng * 0.3 and abs(uw - lw) <= rng * 0.2:
-            markers.append({"time": time_val, "position": "inBar", "shape": "circle", "color": "#3F51B5", "text": "Spinning Top"})
+            markers.append(
+                {
+                    "time": time_val,
+                    "position": "inBar",
+                    "shape": "circle",
+                    "color": "#3F51B5",
+                    "text": "Spinning Top",
+                }
+            )
             continue
 
         # Multi-candle patterns
         if i >= 1:
-            prev_bull = is_bullish.iloc[i-1]
-            prev_close = close.iloc[i-1]
-            prev_open = open_.iloc[i-1]
-            prev_bs = body_size.iloc[i-1]
+            prev_bull = is_bullish.iloc[i - 1]
+            prev_close = close.iloc[i - 1]
+            prev_open = open_.iloc[i - 1]
+            prev_bs = body_size.iloc[i - 1]
             curr_close = close.iloc[i]
             curr_open = open_.iloc[i]
 
             # Engulfing
-            if not prev_bull and bull and curr_close > prev_open and curr_open < prev_close and dn_t:
-                markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#00E676", "text": "Bullish Engulfing"})
+            if (
+                not prev_bull
+                and bull
+                and curr_close > prev_open
+                and curr_open < prev_close
+                and dn_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "belowBar",
+                        "shape": "arrowUp",
+                        "color": "#00E676",
+                        "text": "Bullish Engulfing",
+                    }
+                )
                 continue
-            if prev_bull and not bull and curr_close < prev_open and curr_open > prev_close and up_t:
-                markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#D81B60", "text": "Bearish Engulfing"})
+            if (
+                prev_bull
+                and not bull
+                and curr_close < prev_open
+                and curr_open > prev_close
+                and up_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "aboveBar",
+                        "shape": "arrowDown",
+                        "color": "#D81B60",
+                        "text": "Bearish Engulfing",
+                    }
+                )
                 continue
 
             # Harami
-            if not prev_bull and bull and curr_close < prev_open and curr_open > prev_close and prev_bs > bs * 2 and dn_t:
-                markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#00E5FF", "text": "Bullish Harami"})
+            if (
+                not prev_bull
+                and bull
+                and curr_close < prev_open
+                and curr_open > prev_close
+                and prev_bs > bs * 2
+                and dn_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "belowBar",
+                        "shape": "arrowUp",
+                        "color": "#00E5FF",
+                        "text": "Bullish Harami",
+                    }
+                )
                 continue
-            if prev_bull and not bull and curr_close > prev_open and curr_open < prev_close and prev_bs > bs * 2 and up_t:
-                markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#FF3B5C", "text": "Bearish Harami"})
+            if (
+                prev_bull
+                and not bull
+                and curr_close > prev_open
+                and curr_open < prev_close
+                and prev_bs > bs * 2
+                and up_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "aboveBar",
+                        "shape": "arrowDown",
+                        "color": "#FF3B5C",
+                        "text": "Bearish Harami",
+                    }
+                )
                 continue
 
         if i >= 2:
-            p2_bull = is_bullish.iloc[i-2]
-            p2_close = close.iloc[i-2]
-            p2_open = open_.iloc[i-2]
-            p1_bull = is_bullish.iloc[i-1]
-            p1_bs = body_size.iloc[i-1]
-            p1_rng = range_.iloc[i-1]
+            p2_bull = is_bullish.iloc[i - 2]
+            p2_close = close.iloc[i - 2]
+            p2_open = open_.iloc[i - 2]
+            p1_bull = is_bullish.iloc[i - 1]
+            p1_bs = body_size.iloc[i - 1]
+            p1_rng = range_.iloc[i - 1]
             curr_close = close.iloc[i]
             curr_open = open_.iloc[i]
             curr_bull = bull
 
             # Morning Star
-            if not p2_bull and p1_bs <= p1_rng * 0.1 and curr_bull and curr_close > (p2_open + p2_close) / 2 and dn_t:
-                markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#00E676", "text": "Morning Star"})
+            if (
+                not p2_bull
+                and p1_bs <= p1_rng * 0.1
+                and curr_bull
+                and curr_close > (p2_open + p2_close) / 2
+                and dn_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "belowBar",
+                        "shape": "arrowUp",
+                        "color": "#00E676",
+                        "text": "Morning Star",
+                    }
+                )
                 continue
 
             # Evening Star
-            if p2_bull and p1_bs <= p1_rng * 0.1 and not curr_bull and curr_close < (p2_open + p2_close) / 2 and up_t:
-                markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#D81B60", "text": "Evening Star"})
+            if (
+                p2_bull
+                and p1_bs <= p1_rng * 0.1
+                and not curr_bull
+                and curr_close < (p2_open + p2_close) / 2
+                and up_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "aboveBar",
+                        "shape": "arrowDown",
+                        "color": "#D81B60",
+                        "text": "Evening Star",
+                    }
+                )
                 continue
 
             # Three White Soldiers
-            if p2_bull and p1_bull and curr_bull and (curr_close > close.iloc[i-1]) and (close.iloc[i-1] > close.iloc[i-2]) and dn_t:
-                markers.append({"time": time_val, "position": "belowBar", "shape": "arrowUp", "color": "#00E676", "text": "Three White Soldiers"})
+            if (
+                p2_bull
+                and p1_bull
+                and curr_bull
+                and (curr_close > close.iloc[i - 1])
+                and (close.iloc[i - 1] > close.iloc[i - 2])
+                and dn_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "belowBar",
+                        "shape": "arrowUp",
+                        "color": "#00E676",
+                        "text": "Three White Soldiers",
+                    }
+                )
                 continue
 
             # Three Black Crows
-            if not p2_bull and not p1_bull and not curr_bull and (curr_close < close.iloc[i-1]) and (close.iloc[i-1] < close.iloc[i-2]) and up_t:
-                markers.append({"time": time_val, "position": "aboveBar", "shape": "arrowDown", "color": "#D81B60", "text": "Three Black Crows"})
+            if (
+                not p2_bull
+                and not p1_bull
+                and not curr_bull
+                and (curr_close < close.iloc[i - 1])
+                and (close.iloc[i - 1] < close.iloc[i - 2])
+                and up_t
+            ):
+                markers.append(
+                    {
+                        "time": time_val,
+                        "position": "aboveBar",
+                        "shape": "arrowDown",
+                        "color": "#D81B60",
+                        "text": "Three Black Crows",
+                    }
+                )
                 continue
 
     return markers

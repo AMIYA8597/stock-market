@@ -158,9 +158,7 @@ class InMemoryCache:
         _ = (key, ttl)
         return True
 
-    async def zrange(
-        self, key: str, start: int, end: int, withscores: bool = False
-    ) -> list[Any]:
+    async def zrange(self, key: str, start: int, end: int, withscores: bool = False) -> list[Any]:
         items = sorted(self.sorted_sets.get(key, {}).items(), key=lambda item: item[1])
         if end == -1:
             selected = items[start:]
@@ -266,7 +264,7 @@ async def _redis_pool_singleton() -> Redis:
                 max_connections=settings.REDIS_MAX_CONNECTIONS,
                 decode_responses=True,
                 socket_connect_timeout=0.2,
-                socket_timeout=0.2
+                socket_timeout=0.2,
             )
             _redis_client = Redis(connection_pool=_redis_pool)
 

@@ -35,10 +35,7 @@ async def get_watchlist(
     """Retrieve the current user's watchlist for a specific tab."""
     result = await db.execute(
         select(UserWatchlist.symbol)
-        .where(
-            UserWatchlist.user_id == current_user.id,
-            UserWatchlist.list_id == list_id
-        )
+        .where(UserWatchlist.user_id == current_user.id, UserWatchlist.list_id == list_id)
         .order_by(UserWatchlist.added_at.desc())
     )
     symbols = result.scalars().all()
@@ -62,11 +59,10 @@ async def add_to_watchlist(
 
     # Check if exists
     result = await db.execute(
-        select(UserWatchlist)
-        .where(
+        select(UserWatchlist).where(
             UserWatchlist.user_id == current_user.id,
             UserWatchlist.symbol == symbol,
-            UserWatchlist.list_id == list_id
+            UserWatchlist.list_id == list_id,
         )
     )
     existing = result.scalar_one_or_none()
@@ -79,17 +75,16 @@ async def add_to_watchlist(
     # Fetch updated list
     result = await db.execute(
         select(UserWatchlist.symbol)
-        .where(
-            UserWatchlist.user_id == current_user.id,
-            UserWatchlist.list_id == list_id
-        )
+        .where(UserWatchlist.user_id == current_user.id, UserWatchlist.list_id == list_id)
         .order_by(UserWatchlist.added_at.desc())
     )
     symbols = result.scalars().all()
     return WatchlistResponse(symbols=list(symbols), list_id=list_id)
 
 
-@router.delete("/{symbol}", response_model=WatchlistResponse, summary="Remove symbol from watchlist")
+@router.delete(
+    "/{symbol}", response_model=WatchlistResponse, summary="Remove symbol from watchlist"
+)
 async def remove_from_watchlist(
     symbol: str,
     list_id: int = 0,
@@ -100,11 +95,10 @@ async def remove_from_watchlist(
     target_symbol = symbol.upper()
 
     await db.execute(
-        delete(UserWatchlist)
-        .where(
+        delete(UserWatchlist).where(
             UserWatchlist.user_id == current_user.id,
             UserWatchlist.symbol == target_symbol,
-            UserWatchlist.list_id == list_id
+            UserWatchlist.list_id == list_id,
         )
     )
     await db.commit()
@@ -112,10 +106,7 @@ async def remove_from_watchlist(
     # Fetch updated list
     result = await db.execute(
         select(UserWatchlist.symbol)
-        .where(
-            UserWatchlist.user_id == current_user.id,
-            UserWatchlist.list_id == list_id
-        )
+        .where(UserWatchlist.user_id == current_user.id, UserWatchlist.list_id == list_id)
         .order_by(UserWatchlist.added_at.desc())
     )
     symbols = result.scalars().all()

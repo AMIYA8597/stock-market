@@ -17,13 +17,18 @@ class SentimentFactorsBuilder(FeatureBuilder):
 
         # Ensure sentiment features exist, and STRICTLY shift by 1 to prevent intraday/after-hours leakage.
         # News published on day T cannot be used to predict day T if processed after market close.
-        sentiment_cols = ["sentiment_score", "news_volume", "sentiment_pos_neg_ratio", "market_sentiment_index"]
-        
+        sentiment_cols = [
+            "sentiment_score",
+            "news_volume",
+            "sentiment_pos_neg_ratio",
+            "market_sentiment_index",
+        ]
+
         # First ensure they exist
         for col in sentiment_cols:
             if col not in data.columns:
                 data[col] = 0.0
-                
+
         # Group by symbol if panel data, else just shift
         if "symbol" in data.columns:
             data = data.sort_values(["symbol", "time"])

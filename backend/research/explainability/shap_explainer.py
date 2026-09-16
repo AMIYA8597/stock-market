@@ -32,9 +32,7 @@ def approximate_tree_shap(
 
 
 def get_tree_shap(
-    model,
-    feature_matrix: np.ndarray,
-    feature_names: list[str] | None = None
+    model, feature_matrix: np.ndarray, feature_names: list[str] | None = None
 ) -> ShapExplanation:
     """Compute true SHAP values using shap.TreeExplainer."""
     import shap
@@ -57,11 +55,7 @@ def get_tree_shap(
     if feature_names is None:
         feature_names = [f"f_{i}" for i in range(feature_matrix.shape[1])]
 
-    return ShapExplanation(
-        values=shap_values,
-        base_value=base_value,
-        feature_names=feature_names
-    )
+    return ShapExplanation(values=shap_values, base_value=base_value, feature_names=feature_names)
 
 
 def top_contributors(
@@ -71,4 +65,3 @@ def top_contributors(
     row = expl.values[row_index]
     idx = np.argsort(np.abs(row))[::-1][:top_k]
     return [(expl.feature_names[i], float(row[i])) for i in idx]
-

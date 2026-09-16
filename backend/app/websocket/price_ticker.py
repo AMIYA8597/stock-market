@@ -62,7 +62,9 @@ async def run_price_ticker(redis: Redis) -> None:
             market_open = is_market_hours()
 
             # 1. Gather all active symbols dynamically
-            symbols_to_poll = set(MarketDataService.NSE_NIFTY50[:5]) # poll top 5 always just to keep it alive
+            symbols_to_poll = set(
+                MarketDataService.NSE_NIFTY50[:5]
+            )  # poll top 5 always just to keep it alive
 
             # Fetch from DB: Watchlists, Portfolios, Paper Positions
             try:
@@ -71,8 +73,9 @@ async def run_price_ticker(redis: Redis) -> None:
                     symbols_to_poll.update([s for s in wl_res.scalars().all()])
 
                     pf_res = await session.execute(
-                        select(Instrument.symbol)
-                        .join(PortfolioHolding, PortfolioHolding.symbol_id == Instrument.id)
+                        select(Instrument.symbol).join(
+                            PortfolioHolding, PortfolioHolding.symbol_id == Instrument.id
+                        )
                     )
                     symbols_to_poll.update([s for s in pf_res.scalars().all()])
 
@@ -85,7 +88,7 @@ async def run_price_ticker(redis: Redis) -> None:
             try:
                 active_from_redis = await redis.smembers("active_symbols")
                 if active_from_redis:
-                    symbols_to_poll.update([s.decode('utf-8') for s in active_from_redis])
+                    symbols_to_poll.update([s.decode("utf-8") for s in active_from_redis])
             except Exception as redis_err:
                 logger.debug(f"Failed to fetch active_symbols from Redis: {redis_err}")
 
@@ -127,7 +130,9 @@ async def run_price_ticker(redis: Redis) -> None:
                                 ema9 = closes_df.ta.ema(close="close", length=9)
                                 ema21 = closes_df.ta.ema(close="close", length=21)
                                 rsi = closes_df.ta.rsi(close="close", length=14)
-                                macd_df = closes_df.ta.macd(close="close", fast=12, slow=26, signal=9)
+                                macd_df = closes_df.ta.macd(
+                                    close="close", fast=12, slow=26, signal=9
+                                )
 
                                 if ema9 is not None and not pd.isna(ema9.iloc[-1]):
                                     ema9_val = float(ema9.iloc[-1])

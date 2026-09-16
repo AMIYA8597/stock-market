@@ -47,9 +47,7 @@ class RegimeState(Base):
     """
 
     __tablename__ = "regime_states"
-    __table_args__ = (
-        {"sqlite_autoincrement": True},
-    )
+    __table_args__ = ({"sqlite_autoincrement": True},)
 
     id: Mapped[int] = mapped_column(
         Integer,

@@ -1,12 +1,12 @@
 from collections.abc import Callable
 
-from app.models.subscription import Subscription
 from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user_or_none, get_db
 from app.models.payment import Plan
+from app.models.subscription import Subscription
 from app.models.user import User
 
 

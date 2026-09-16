@@ -79,7 +79,7 @@ async def get_signals_bulk(
                 patterns=result.get("patterns", []),
                 stop_loss=result["stop_loss"],
                 take_profit=result["take_profit"],
-                position_size_pct=result.get("position_size_pct", 0.0)
+                position_size_pct=result.get("position_size_pct", 0.0),
             )
         )
 
@@ -132,7 +132,7 @@ async def get_signal(symbol: str) -> SignalResponse:
         patterns=result.get("patterns", []),
         stop_loss=result["stop_loss"],
         take_profit=result["take_profit"],
-        position_size_pct=result.get("position_size_pct", 0.0)
+        position_size_pct=result.get("position_size_pct", 0.0),
     )
 
     if redis is not None:
@@ -147,4 +147,6 @@ async def get_signal(symbol: str) -> SignalResponse:
 @router.get("/history/{symbol}")
 async def get_signal_history(symbol: str) -> dict:
     """Historical signals endpoint stubbed for B6."""
-    raise HTTPException(status_code=501, detail="Historical signals not implemented for classical engine")
+    raise HTTPException(
+        status_code=501, detail="Historical signals not implemented for classical engine"
+    )

@@ -6,10 +6,13 @@ from app.database.connection import Base
 
 class ModelMetric(Base):
     """Stores out-of-sample evaluation metrics for a model artifact."""
+
     __tablename__ = "model_metric"
 
     id = Column(Integer, primary_key=True, index=True)
-    artifact_id = Column(Integer, ForeignKey("model_artifact.id", ondelete="CASCADE"), nullable=False, index=True)
+    artifact_id = Column(
+        Integer, ForeignKey("model_artifact.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     # Standard Metrics
     accuracy = Column(Float, nullable=False)

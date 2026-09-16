@@ -1,4 +1,3 @@
-
 import numpy as np
 import pandas as pd
 
@@ -19,14 +18,16 @@ def test_anti_leakage_feature_pipeline():
     returns = np.random.normal(loc=0.0005, scale=0.015, size=200)
     close_prices = 100 * np.cumprod(1 + returns)
 
-    df = pd.DataFrame({
-        "time": dates,
-        "open": close_prices * (1 + np.random.normal(0, 0.005, 200)),
-        "high": close_prices * (1 + np.abs(np.random.normal(0, 0.01, 200))),
-        "low": close_prices * (1 - np.abs(np.random.normal(0, 0.01, 200))),
-        "close": close_prices,
-        "volume": np.random.randint(1000, 100000, 200),
-    })
+    df = pd.DataFrame(
+        {
+            "time": dates,
+            "open": close_prices * (1 + np.random.normal(0, 0.005, 200)),
+            "high": close_prices * (1 + np.abs(np.random.normal(0, 0.01, 200))),
+            "low": close_prices * (1 - np.abs(np.random.normal(0, 0.01, 200))),
+            "close": close_prices,
+            "volume": np.random.randint(1000, 100000, 200),
+        }
+    )
 
     pipeline = FeaturePipeline()
 
@@ -36,7 +37,7 @@ def test_anti_leakage_feature_pipeline():
     # 2. Compute features using truncated dataset (data up to t)
     # Let's say t is index 150
     t_idx = 150
-    truncated_df = df.iloc[:t_idx + 1].copy()
+    truncated_df = df.iloc[: t_idx + 1].copy()
 
     truncated_features = pipeline.run(truncated_df)
 

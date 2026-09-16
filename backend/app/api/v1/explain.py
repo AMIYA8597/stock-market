@@ -65,7 +65,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
                 output_value=0.5,
                 feature_contributions=[],
                 model="Unknown",
-                timestamp=datetime.now(UTC)
+                timestamp=datetime.now(UTC),
             )
 
         # 1. Fetch live prediction
@@ -73,7 +73,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
             symbol,
             bypass_cache=False,
             artifact_path=artifact.artifact_path,
-            model_version=artifact.version_tag
+            model_version=artifact.version_tag,
         )
         if not result or not result.get("is_computed", False):
             # Return an empty response so the UI doesn't break
@@ -83,7 +83,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
                 output_value=0.5,
                 feature_contributions=[],
                 model="Unknown",
-                timestamp=datetime.now(UTC)
+                timestamp=datetime.now(UTC),
             )
 
         ensemble = result.get("ensemble", {})
@@ -377,11 +377,8 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 
 @router.post("/counterfactual/{symbol}", response_model=CounterfactualResponse)
 async def post_counterfactual_explanation(
-    symbol: str,
-    request: CounterfactualRequest,
-    db: AsyncSession = Depends(get_db)
+    symbol: str, request: CounterfactualRequest, db: AsyncSession = Depends(get_db)
 ) -> CounterfactualResponse:
     raise HTTPException(
-        status_code=501,
-        detail="Counterfactual explanation generation is not implemented."
+        status_code=501, detail="Counterfactual explanation generation is not implemented."
     )

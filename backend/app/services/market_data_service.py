@@ -55,6 +55,7 @@ class TokenBucket:
                 return
             await asyncio.sleep(0.01)
 
+
 class MarketDataService:
     # Class-level session and caches for sockets, rate-limiting, and performance optimization
     _session = None
@@ -255,6 +256,7 @@ class MarketDataService:
     async def get_batch_quotes(symbols: list[str]) -> dict[str, dict]:
         """Fetch quotes for multiple symbols concurrently."""
         import asyncio
+
         tasks = []
         for sym in symbols:
             tasks.append(MarketDataService.get_quote(sym))
@@ -448,8 +450,10 @@ class MarketDataService:
 
             # No fake simulators allowed (Phase 8 Honesty Guard)
             # If both yfinance and IndianStockAPI failed, we gracefully degrade by throwing an error.
-            logger.error(f"Both yfinance and IndianStockAPI failed for {sym}. Emitting external service failure.")
-            
+            logger.error(
+                f"Both yfinance and IndianStockAPI failed for {sym}. Emitting external service failure."
+            )
+
             # Tombstone / cache the failure so we don't spam network
             datetime.now(UTC).timestamp()
             failure_dict = {"error": True, "message": "External Service Unavailable"}

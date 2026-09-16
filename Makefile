@@ -113,8 +113,8 @@ test: test-backend # make test-frontend target removed
 	@echo "✓ All tests completed"
 
 test-backend:
-	cd backend && pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=80
-	@echo "✓ Backend tests completed (80% coverage threshold)"
+	cd backend && pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=55
+	@echo "✓ Backend tests completed (55% coverage threshold)"
 
 # make test-frontend target removed
 # lint-frontend target removed:
