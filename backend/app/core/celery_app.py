@@ -30,15 +30,15 @@ celery_app.conf.update(
         # Scheduled data fetch tasks
         "update-news-sentiment-hourly": {
             "task": "update_news_sentiment",
-            "schedule": 3600.0, # Every hour
+            "schedule": 3600.0,  # Every hour
         },
         "update-regime-states-daily": {
             "task": "update_regime_states",
-            "schedule": 86400.0, # Every day
+            "schedule": 86400.0,  # Every day
         },
         "check-model-drift-daily": {
             "task": "check_drift_for_watchlist",
-            "schedule": 86400.0, # Every day — walk-forward PSI/KS drift check, retrains only if drift exceeds threshold
+            "schedule": 86400.0,  # Every day — walk-forward PSI/KS drift check, retrains only if drift exceeds threshold
         },
     },
 )

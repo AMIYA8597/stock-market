@@ -15,6 +15,7 @@ from app.services.data_ingestion.provider_manager import provider_manager
 
 logger = logging.getLogger(__name__)
 
+
 async def _seed_universe_async():
     nse_provider = next((p for p in provider_manager.providers if p.name == "nse"), None)
     if not nse_provider:
@@ -45,6 +46,7 @@ async def _seed_universe_async():
         await session.commit()
         logger.info(f"Seeded {count} new instruments")
 
+
 @shared_task(name="market_data.seed_universe")
 def seed_universe():
     try:
@@ -56,13 +58,14 @@ def seed_universe():
     loop.run_until_complete(_seed_universe_async())
     return {"status": "success"}
 
+
 async def _backfill_historical_data_async():
     async for session in get_db():
         stmt = select(Instrument).where(Instrument.is_active)
         result = await session.execute(stmt)
         instruments = result.scalars().all()
 
-        start = datetime.now(UTC) - timedelta(days=5*365)
+        start = datetime.now(UTC) - timedelta(days=5 * 365)
         end = datetime.now(UTC)
 
         for inst in instruments:
@@ -76,7 +79,7 @@ async def _backfill_historical_data_async():
                         exist_stmt = select(OHLCV).where(
                             OHLCV.instrument_id == inst.id,
                             OHLCV.time == bar.time,
-                            OHLCV.interval == "1d"
+                            OHLCV.interval == "1d",
                         )
                         exist_res = await session.execute(exist_stmt)
                         if not exist_res.scalar_one_or_none():
@@ -97,6 +100,7 @@ async def _backfill_historical_data_async():
             except Exception as e:
                 logger.error(f"Failed backfilling {inst.symbol}: {e}")
                 await session.rollback()
+
 
 @shared_task(name="market_data.backfill_historical_data")
 def backfill_historical_data():

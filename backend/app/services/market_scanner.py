@@ -1,4 +1,5 @@
 """Background Market Scanner for AI Alerts."""
+
 import asyncio
 import json
 import logging
@@ -10,6 +11,7 @@ from app.services.prediction_engine import get_full_prediction
 
 logger = logging.getLogger(__name__)
 
+
 async def run_market_scanner():
     """Scans top symbols periodically for high conviction AI setups and publishes alerts."""
     logger.info("Starting Market Scanner background process...")
@@ -19,7 +21,9 @@ async def run_market_scanner():
             # Only scan top Nifty50 for global alerts to save resources
             symbols = MarketDataService.NSE_NIFTY50
 
-            logger.info(f"Market Scanner: Scanning {len(symbols)} symbols for high conviction setups...")
+            logger.info(
+                f"Market Scanner: Scanning {len(symbols)} symbols for high conviction setups..."
+            )
             redis = await get_redis_client()
 
             for sym in symbols:
@@ -40,13 +44,15 @@ async def run_market_scanner():
                             "symbol": sym,
                             "direction": direction,
                             "confidence": confidence,
-                            "rationale": f"AI Engine detected a {direction} setup with {confidence*100:.1f}% conviction.",
-                            "ts": datetime.now(UTC).isoformat()
+                            "rationale": f"AI Engine detected a {direction} setup with {confidence * 100:.1f}% conviction.",
+                            "ts": datetime.now(UTC).isoformat(),
                         }
 
                         # Publish to alerts channel for websocket distribution
                         await redis.publish("signals:alerts", json.dumps(alert_payload))
-                        logger.info(f"Published AI Alert for {sym}: {direction} @ {confidence*100:.1f}%")
+                        logger.info(
+                            f"Published AI Alert for {sym}: {direction} @ {confidence * 100:.1f}%"
+                        )
 
                 except Exception as sym_err:
                     logger.debug(f"Scanner error for {sym}: {sym_err}")
@@ -59,6 +65,7 @@ async def run_market_scanner():
 
         # Run scan every 1 hour
         await asyncio.sleep(3600)
+
 
 if __name__ == "__main__":
     asyncio.run(run_market_scanner())

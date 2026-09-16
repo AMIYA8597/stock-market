@@ -270,7 +270,12 @@ class PaperTradingService:
         brokerage = Decimal(str(cost_breakdown["brokerage"]))
         stt = Decimal(str(cost_breakdown["stt"]))
         slippage = Decimal(str(cost_breakdown["slippage"]))
-        txn_charges = Decimal(str(cost_breakdown["txn_charge"])) + Decimal(str(cost_breakdown["sebi_fee"])) + Decimal(str(cost_breakdown["gst"])) + Decimal(str(cost_breakdown["stamp_duty"]))
+        txn_charges = (
+            Decimal(str(cost_breakdown["txn_charge"]))
+            + Decimal(str(cost_breakdown["sebi_fee"]))
+            + Decimal(str(cost_breakdown["gst"]))
+            + Decimal(str(cost_breakdown["stamp_duty"]))
+        )
 
         if side == "BUY":
             execute_price = quote_price + (slippage / qty_dec)
@@ -323,7 +328,9 @@ class PaperTradingService:
             wallet.balance += net_amount
 
             # Calculate realized P&L
-            realized = qty_dec * (execute_price - pos.avg_buy_price) - (brokerage + stt + slippage + txn_charges)
+            realized = qty_dec * (execute_price - pos.avg_buy_price) - (
+                brokerage + stt + slippage + txn_charges
+            )
             wallet.realized_pnl += realized
             pos.realized_pnl += realized
 
@@ -396,7 +403,12 @@ class PaperTradingService:
             brokerage = Decimal(str(cost_breakdown["brokerage"]))
             stt = Decimal(str(cost_breakdown["stt"]))
             slippage = Decimal(str(cost_breakdown["slippage"]))
-            txn_charges = Decimal(str(cost_breakdown["txn_charge"])) + Decimal(str(cost_breakdown["sebi_fee"])) + Decimal(str(cost_breakdown["gst"])) + Decimal(str(cost_breakdown["stamp_duty"]))
+            txn_charges = (
+                Decimal(str(cost_breakdown["txn_charge"]))
+                + Decimal(str(cost_breakdown["sebi_fee"]))
+                + Decimal(str(cost_breakdown["gst"]))
+                + Decimal(str(cost_breakdown["stamp_duty"]))
+            )
 
             if order.side == "BUY":
                 execute_price = limit_price_dec + (slippage / qty_dec)

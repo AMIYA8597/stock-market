@@ -16,6 +16,7 @@ from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
 
+
 @shared_task(name="update_news_sentiment", bind=True, max_retries=3)
 def update_news_sentiment(self: Any) -> dict[str, Any]:
     """Pull news from RSS, score with FinBERT, and save to database."""
@@ -54,7 +55,7 @@ async def _update_news_sentiment_async() -> dict[str, Any]:
             if not text or text in existing_headlines:
                 continue
             new_market_hls.append(hl)
-            existing_headlines.add(text) # Dedupe internally for the batch
+            existing_headlines.add(text)  # Dedupe internally for the batch
 
         if new_market_hls:
             texts = [hl["text"] for hl in new_market_hls]
@@ -70,16 +71,18 @@ async def _update_news_sentiment_async() -> dict[str, Any]:
                 score = sent["positive"] - sent["negative"]
                 label = "POSITIVE" if score > 0.1 else ("NEGATIVE" if score < -0.1 else "NEUTRAL")
 
-                session.add(NewsSentiment(
-                    symbol_id=None,
-                    headline=hl["text"],
-                    source=hl.get("source", "RSS"),
-                    url=hl.get("url"),
-                    sentiment_label=label,
-                    sentiment_score=score,
-                    published_at=dt,
-                    processed_at=datetime.now(UTC)
-                ))
+                session.add(
+                    NewsSentiment(
+                        symbol_id=None,
+                        headline=hl["text"],
+                        source=hl.get("source", "RSS"),
+                        url=hl.get("url"),
+                        sentiment_label=label,
+                        sentiment_score=score,
+                        published_at=dt,
+                        processed_at=datetime.now(UTC),
+                    )
+                )
                 records_added += 1
 
         # 2. Process per-ticker headlines
@@ -113,16 +116,18 @@ async def _update_news_sentiment_async() -> dict[str, Any]:
                 score = sent["positive"] - sent["negative"]
                 label = "POSITIVE" if score > 0.1 else ("NEGATIVE" if score < -0.1 else "NEUTRAL")
 
-                session.add(NewsSentiment(
-                    symbol_id=inst_id,
-                    headline=hl["text"],
-                    source=hl.get("source", "Google News"),
-                    url=hl.get("url"),
-                    sentiment_label=label,
-                    sentiment_score=score,
-                    published_at=dt,
-                    processed_at=datetime.now(UTC)
-                ))
+                session.add(
+                    NewsSentiment(
+                        symbol_id=inst_id,
+                        headline=hl["text"],
+                        source=hl.get("source", "Google News"),
+                        url=hl.get("url"),
+                        sentiment_label=label,
+                        sentiment_score=score,
+                        published_at=dt,
+                        processed_at=datetime.now(UTC),
+                    )
+                )
                 records_added += 1
 
         if records_added > 0:

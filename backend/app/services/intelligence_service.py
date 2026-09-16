@@ -8,7 +8,10 @@ real mathematical calculations on real market and symbol OHLCV data.
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
+
+logger = logging.getLogger(__name__)
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
@@ -135,9 +138,7 @@ class IntelligenceService:
                     "gnn": GNNSignal(
                         spillover_risk=0.1, embedding_norm=0.6, top_correlated_assets=["NIFTY50"]
                     ),
-                    "lstm_attn": LSTMAttnSignal(
-                        raw_signal=0.0, attention_peaks=[]
-                    ),
+                    "lstm_attn": LSTMAttnSignal(raw_signal=0.0, attention_peaks=[]),
                     "xgboost": XGBoostSignal(raw_signal=0.0, top_features=[]),
                 },
                 model_weights={
@@ -531,6 +532,7 @@ class IntelligenceService:
         try:
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(asyncio.run, get_full_prediction(symbol))
                     pred = future.result(timeout=15)
@@ -556,12 +558,17 @@ class IntelligenceService:
         mean_weights = [peak["weight"] for peak in attn_peaks]
         # Duplicate to create a pseudo 2D attention map (since we only have 1D mean_weights from prediction engine)
         weights = [mean_weights] * 8
-        
+
         top = [
-            {"date": datetime.fromisoformat(peak["date"]).date() if "T" in peak["date"] else datetime.strptime(peak["date"], "%Y-%m-%d").date(), "weight": peak["weight"]}
+            {
+                "date": datetime.fromisoformat(peak["date"]).date()
+                if "T" in peak["date"]
+                else datetime.strptime(peak["date"], "%Y-%m-%d").date(),
+                "weight": peak["weight"],
+            }
             for peak in sorted(attn_peaks, key=lambda x: x["weight"], reverse=True)[:5]
         ]
-        
+
         return ExplainAttentionResponse(
             model=model_name,
             weights=weights,
@@ -589,75 +596,91 @@ class IntelligenceService:
         except Exception:
             pred = {}
 
-        ens = pred.get("ensemble", {})
-        
         # Real counterfactual loop against xgboost model
-        from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier
         from pathlib import Path
-        model_path = Path(__file__).parent.parent.parent.parent / "data" / "models" / f"xgboost_{symbol.upper()}.pkl"
-        
+
+        from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier
+
+        model_path = (
+            Path(__file__).parent.parent.parent.parent
+            / "data"
+            / "models"
+            / f"xgboost_{symbol.upper()}.pkl"
+        )
+
         rows: list[CounterfactualResponse] = []
         if not model_path.exists():
             return rows
-            
+
         try:
             clf = XGBoostDirectionalClassifier.load(model_path)
             # Find the most recent feature row from the prediction dataframe
             # To do this safely, we will extract it from the pipeline
-            from app.services.market_data_service import MarketDataService
-            from app.services.data_ingestion.provider_manager import provider_manager
             import pandas as pd
+
+            from app.services.data_ingestion.provider_manager import provider_manager
             from research.feature_engineering.pipeline import FeaturePipeline
-            
+
             end_date = datetime.now(UTC)
             start_date = end_date - timedelta(days=60)
-            
+
             if loop and loop.is_running():
                 import concurrent.futures
+
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, provider_manager.get_ohlcv(symbol, "1d", start_date, end_date))
+                    future = pool.submit(
+                        asyncio.run, provider_manager.get_ohlcv(symbol, "1d", start_date, end_date)
+                    )
                     bars = future.result(timeout=10)
             else:
                 bars = asyncio.run(provider_manager.get_ohlcv(symbol, "1d", start_date, end_date))
-                
+
             if len(bars) < 60:
                 return rows
-                
-            df = pd.DataFrame([{
-                "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
-                "open": b.open, "high": b.high, "low": b.low, "close": b.close, "volume": b.volume
-            } for b in bars])
+
+            df = pd.DataFrame(
+                [
+                    {
+                        "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                    }
+                    for b in bars
+                ]
+            )
             df.index = pd.DatetimeIndex(df["time"])
             df = FeaturePipeline().run(df)
             df.ta.rsi(length=14, append=True)
-            
+
             # Identify target sign
             target_sign = 1 if payload.target_direction == "BUY" else -1
-            
+
             # Using our actual counterfactual engine
-            from research.explainability.counterfactual import generate_counterfactuals_linear
-            
+
             # Extract features
             x_dict = {f: float(df[f].iloc[-1]) for f in clf.features if f in df.columns}
-            x_arr = np.array([list(x_dict.values())], dtype=float)[0]
-            
+
             # For tree models, we can use a linear proxy or just perturb and predict directly.
             # We will perturb the top 2 features iteratively
             # Get SHAP to find top features
             xgb_top_features = pred.get("xgboost", {}).get("top_features", [])
             if not xgb_top_features:
                 return rows
-                
+
             top_feat_1 = xgb_top_features[0]["name"]
             top_feat_2 = xgb_top_features[1]["name"] if len(xgb_top_features) > 1 else None
-            
+
             orig_1 = x_dict.get(top_feat_1, 0.0)
             orig_2 = x_dict.get(top_feat_2, 0.0) if top_feat_2 else 0.0
-            
+
             cf_results = []
-            
+
             # Iterative search
             import copy
+
             for step_multiplier in range(1, payload.num_cfs + 1):
                 temp_dict = copy.deepcopy(x_dict)
                 # Perturb by 5% increments
@@ -666,7 +689,7 @@ class IntelligenceService:
                 temp_dict[top_feat_1] = perturb_1
                 if top_feat_2:
                     temp_dict[top_feat_2] = perturb_2
-                
+
                 # Check prediction
                 temp_df = pd.DataFrame([temp_dict])
                 try:
@@ -677,7 +700,7 @@ class IntelligenceService:
                             CounterfactualFeatureChange(
                                 name=top_feat_1,
                                 original=round(orig_1, 4),
-                                counterfactual=round(perturb_1, 4)
+                                counterfactual=round(perturb_1, 4),
                             )
                         ]
                         if top_feat_2:
@@ -685,7 +708,7 @@ class IntelligenceService:
                                 CounterfactualFeatureChange(
                                     name=top_feat_2,
                                     original=round(orig_2, 4),
-                                    counterfactual=round(perturb_2, 4)
+                                    counterfactual=round(perturb_2, 4),
                                 )
                             )
                         cf_results.append(
@@ -693,21 +716,23 @@ class IntelligenceService:
                                 cf_id=f"CF-{step_multiplier}",
                                 changed_features=changes,
                                 resulting_signal=payload.target_direction,
-                                proximity_score=round(1.0 - (0.05 * step_multiplier), 4)
+                                proximity_score=round(1.0 - (0.05 * step_multiplier), 4),
                             )
                         )
                 except Exception as e:
                     logger.warning(f"Counterfactual perturbation failed: {e}")
-                    
-            return cf_results[:payload.num_cfs]
-            
+
+            return cf_results[: payload.num_cfs]
+
         except Exception as e:
             logger.warning(f"Failed to generate real counterfactuals: {e}")
             return rows
 
     def get_model_accuracy(self) -> list[ModelAccuracyItem]:
         import sqlite3
+
         from app.core.config import get_settings
+
         db_path = _resolve_sync_sqlite_path(get_settings().SYNC_DATABASE_URL)
 
         rows: list[ModelAccuracyItem] = []
@@ -723,17 +748,20 @@ class IntelligenceService:
                         "lstm_attn": "LSTM-Attention",
                         "hmm_garch": "HMM-GARCH",
                         "gnn": "GNN",
-                        "ensemble": "Ensemble"
+                        "ensemble": "Ensemble",
                     }
                     db_model = db_model_map.get(model, "XGBoost")
 
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT m.accuracy, m.precision, m.recall, m.auc
                         FROM model_metric m
                         JOIN model_artifact a ON m.artifact_id = a.id
                         WHERE a.model_type = ?
                         ORDER BY m.created_at DESC LIMIT 1
-                    """, (db_model,))
+                    """,
+                        (db_model,),
+                    )
                     row = cur.fetchone()
 
                     if row:
@@ -744,18 +772,20 @@ class IntelligenceService:
                                 recall=round(float(row["recall"]), 4),
                                 directional_accuracy=round(float(row["accuracy"]), 4),
                                 p50_rmse=0.0,
-                                winkler_coverage_score=round(float(row["auc"]), 4)
+                                winkler_coverage_score=round(float(row["auc"]), 4),
                             )
                         )
                     else:
-                        pass # Removed fake model accuracy fallback
+                        pass  # Removed fake model accuracy fallback
         except Exception:
-            pass # Removed global fallback for model accuracy
+            pass  # Removed global fallback for model accuracy
         return rows
 
     def get_drift(self) -> list[DriftItem]:
         import sqlite3
+
         from app.core.config import get_settings
+
         db_path = _resolve_sync_sqlite_path(get_settings().SYNC_DATABASE_URL)
 
         rows: list[DriftItem] = []
@@ -770,17 +800,20 @@ class IntelligenceService:
                         "lstm_attn": "LSTM-Attention",
                         "hmm_garch": "HMM-GARCH",
                         "gnn": "GNN",
-                        "ensemble": "Ensemble"
+                        "ensemble": "Ensemble",
                     }
                     db_model = db_model_map.get(model, "XGBoost")
 
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT m.accuracy
                         FROM model_metric m
                         JOIN model_artifact a ON m.artifact_id = a.id
                         WHERE a.model_type = ?
                         ORDER BY m.created_at DESC LIMIT 60
-                    """, (db_model,))
+                    """,
+                        (db_model,),
+                    )
                     history = [row["accuracy"] for row in cur.fetchall()]
 
                     if len(history) >= 10:
@@ -789,7 +822,9 @@ class IntelligenceService:
                         recent = history[:mid]
                         older = history[mid:]
 
-                        drift_detected = bool((sum(older)/len(older)) - (sum(recent)/len(recent)) > 0.05)
+                        drift_detected = bool(
+                            (sum(older) / len(older)) - (sum(recent) / len(recent)) > 0.05
+                        )
 
                         rows.append(
                             DriftItem(
@@ -825,7 +860,9 @@ class IntelligenceService:
 
     def get_ensemble_weights_history(self, days: int) -> list[EnsembleWeightPoint]:
         import sqlite3
+
         from app.core.config import get_settings
+
         db_path = _resolve_sync_sqlite_path(get_settings().SYNC_DATABASE_URL)
 
         rows: list[EnsembleWeightPoint] = []
@@ -844,19 +881,24 @@ class IntelligenceService:
                         "xgboost": "XGBoost",
                         "lstm_attn": "LSTM-Attention",
                         "hmm_garch": "HMM-GARCH",
-                        "gnn": "GNN"
+                        "gnn": "GNN",
                     }
                     db_model = db_model_map.get(model, "XGBoost")
 
-                    cur.execute("""
+                    cur.execute(
+                        """
                         SELECT m.accuracy, m.created_at
                         FROM model_metric m
                         JOIN model_artifact a ON m.artifact_id = a.id
                         WHERE a.model_type = ?
                         ORDER BY m.created_at ASC
-                    """, (db_model,))
+                    """,
+                        (db_model,),
+                    )
                     history = cur.fetchall()
-                    model_acc[model] = {row["created_at"][:10]: float(row["accuracy"]) for row in history}
+                    model_acc[model] = {
+                        row["created_at"][:10]: float(row["accuracy"]) for row in history
+                    }
 
                 # We need to construct daily weights
                 dates_set = set()

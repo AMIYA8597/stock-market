@@ -34,6 +34,7 @@ MODEL_DIR = Path(__file__).parent.parent.parent / "data" / "models"
 
 _in_memory_prediction_cache: dict[str, tuple[dict[str, Any], float]] = {}
 
+
 async def _cache_fetch(symbol: str) -> dict[str, Any] | None:
     """Attempt to retrieve cached full prediction for *symbol*."""
     key = f"prediction_raw:{symbol.upper()}"
@@ -47,6 +48,7 @@ async def _cache_fetch(symbol: str) -> dict[str, Any] | None:
 
     try:
         from app.database.redis_client import get_redis
+
         redis = await get_redis()
         cached = await redis.get(key)
         if cached:
@@ -57,6 +59,7 @@ async def _cache_fetch(symbol: str) -> dict[str, Any] | None:
         logger.warning(f"Redis cache fetch failed for prediction key={key}: {e}")
     return None
 
+
 async def _cache_store(symbol: str, payload: dict[str, Any]) -> None:
     """Store *payload* in Redis & memory for *symbol* with a TTL of 3600 seconds (1 hour)."""
     key = f"prediction_raw:{symbol.upper()}"
@@ -65,10 +68,12 @@ async def _cache_store(symbol: str, payload: dict[str, Any]) -> None:
 
     try:
         from app.database.redis_client import get_redis
+
         redis = await get_redis()
         await redis.setex(key, 3600, json.dumps(payload, default=str))
     except Exception as e:
         logger.warning(f"Failed to cache prediction for key={key}: {e}")
+
 
 # ---------------------------------------------------------------------------
 # ML/Predictive Scoring
@@ -83,13 +88,17 @@ _MODEL_CACHE = {}
 _INDEX_DATA_CACHE = None
 _SENTIMENT_PIPELINE = None
 
+
 def get_sentiment_pipeline():
     global _SENTIMENT_PIPELINE
     if _SENTIMENT_PIPELINE is None:
         try:
             from transformers import pipeline
+
             # Using ProsusAI/finbert which is the standard financial BERT
-            _SENTIMENT_PIPELINE = pipeline("sentiment-analysis", model="ProsusAI/finbert", device=-1)
+            _SENTIMENT_PIPELINE = pipeline(
+                "sentiment-analysis", model="ProsusAI/finbert", device=-1
+            )
         except Exception as e:
             logger.error(f"Failed to load FinBERT pipeline: {e}")
             _SENTIMENT_PIPELINE = "failed"
@@ -98,10 +107,17 @@ def get_sentiment_pipeline():
 
 def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) < 60:
-        return {"regime": "unknown", "regime_confidence": 0.5, "bull_prob": 0.5, "bear_prob": 0.5, "hmm_used": False}
+        return {
+            "regime": "unknown",
+            "regime_confidence": 0.5,
+            "bull_prob": 0.5,
+            "bear_prob": 0.5,
+            "hmm_used": False,
+        }
 
     try:
         from research.models.hmm_garch.inference import InferenceEngine
+
         ohlcv_data = df[["open", "high", "low", "close", "volume"]].astype(float).values
 
         symbol = df.attrs.get("symbol", "DEFAULT")
@@ -119,12 +135,7 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
         current_state = res.current_state
         probs = res.state_probs
 
-        state_to_regime = {
-            0: "BULL",
-            1: "BEAR",
-            2: "SIDEWAYS",
-            3: "CRISIS"
-        }
+        state_to_regime = {0: "BULL", 1: "BEAR", 2: "SIDEWAYS", 3: "CRISIS"}
         regime = state_to_regime.get(current_state, "SIDEWAYS")
         bull_prob = float(probs[0])
         bear_prob = float(probs[1])
@@ -145,14 +156,22 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
             "hmm_used": hmm_used,
             "conditional_vol": conditional_vol,
             "vol_forecast_5d": float(forecast_5d[-1]) if len(forecast_5d) > 0 else conditional_vol,
-            "vol_forecast_21d": float(forecast_21d[-1]) if len(forecast_21d) > 0 else conditional_vol,
+            "vol_forecast_21d": float(forecast_21d[-1])
+            if len(forecast_21d) > 0
+            else conditional_vol,
             "transition_matrix": transition_matrix,
         }
     except Exception as e:
         logger.warning(f"Real HMM-GARCH solver failed, falling back to threshold: {e}")
         # Fall back to simple threshold regime
-        ret_63d = float((df["close"].iloc[-1] / df["close"].iloc[-64]) - 1) if len(df) >= 64 else 0.0
-        realized_vol = float(np.log(df["close"]/df["close"].shift(1)).rolling(21).std().iloc[-1]) if len(df) >= 22 else 0.02
+        ret_63d = (
+            float((df["close"].iloc[-1] / df["close"].iloc[-64]) - 1) if len(df) >= 64 else 0.0
+        )
+        realized_vol = (
+            float(np.log(df["close"] / df["close"].shift(1)).rolling(21).std().iloc[-1])
+            if len(df) >= 22
+            else 0.02
+        )
         ann_vol = realized_vol * np.sqrt(252)
         sharpe_proxy = ret_63d / (ann_vol + 1e-6)
         if sharpe_proxy > 0.5:
@@ -170,12 +189,14 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
             "hmm_used": False,
             "conditional_vol": realized_vol,
             "vol_forecast_5d": realized_vol * np.sqrt(5),
-            "vol_forecast_21d": realized_vol * np.sqrt(21)
+            "vol_forecast_21d": realized_vol * np.sqrt(21),
         }
+
 
 # ---------------------------------------------------------------------------
 # Layer 6 – Ensemble Combiner
 # ---------------------------------------------------------------------------
+
 
 def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> float:
     """Compute Kelly fraction from measured out-of-sample win-rate and payoff stats.
@@ -261,16 +282,34 @@ def standardize_df_columns(df: pd.DataFrame, expected_features: list[str]) -> pd
     return df_copy
 
 
-async def build_ensemble_signal(symbol: str, df: pd.DataFrame, artifact_path: str = None, model_version: str = None) -> dict[str, Any]:
-    return await asyncio.to_thread(build_ensemble_signal_sync, symbol, df, artifact_path, model_version)
+async def build_ensemble_signal(
+    symbol: str, df: pd.DataFrame, artifact_path: str = None, model_version: str = None
+) -> dict[str, Any]:
+    return await asyncio.to_thread(
+        build_ensemble_signal_sync, symbol, df, artifact_path, model_version
+    )
 
-def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str = None, model_version: str = None) -> dict[str, Any]:
+
+def build_ensemble_signal_sync(
+    symbol: str, df: pd.DataFrame, artifact_path: str = None, model_version: str = None
+) -> dict[str, Any]:
     expected_features = [
-        "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-        "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14",
-        "ADX_14", "realized_vol_21d", "yang_zhang_vol_21d",
-        "dist_52w_high", "dist_52w_low", "drawdown",
-        "range_pct", "close_to_open"
+        "ret_1d",
+        "ret_5d",
+        "ret_21d",
+        "momentum_63d",
+        "RSI_14",
+        "MACDh_12_26_9",
+        "BBP_20_2.0",
+        "ATRr_14",
+        "ADX_14",
+        "realized_vol_21d",
+        "yang_zhang_vol_21d",
+        "dist_52w_high",
+        "dist_52w_low",
+        "drawdown",
+        "range_pct",
+        "close_to_open",
     ]
     df = standardize_df_columns(df, expected_features)
     df.attrs["symbol"] = symbol
@@ -320,7 +359,11 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     except ImportError:
         xgb_status = "unavailable"
 
-    xgb_path = Path(artifact_path) if (artifact_path and "xgboost" in artifact_path.lower()) else MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
+    xgb_path = (
+        Path(artifact_path)
+        if (artifact_path and "xgboost" in artifact_path.lower())
+        else MODEL_DIR / f"xgboost_{symbol.upper()}.pkl"
+    )
 
     if xgb_path.exists():
         try:
@@ -356,7 +399,11 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     except ImportError:
         lstm_status = "unavailable"
 
-    lstm_path = Path(artifact_path) if (artifact_path and "lstm" in artifact_path.lower()) else MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
+    lstm_path = (
+        Path(artifact_path)
+        if (artifact_path and "lstm" in artifact_path.lower())
+        else MODEL_DIR / f"lstm_attention_{symbol.upper()}.pkl"
+    )
 
     if lstm_path.exists():
         try:
@@ -445,9 +492,12 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
         if _INDEX_DATA_CACHE is None or _INDEX_DATA_CACHE.empty:
             try:
                 import yfinance as yf
+
                 index_ticker = yf.Ticker("^NSEI")
                 _INDEX_DATA_CACHE = index_ticker.history(period="2y", interval="1d")
-                _INDEX_DATA_CACHE.index = pd.DatetimeIndex(_INDEX_DATA_CACHE.index).tz_localize(None)
+                _INDEX_DATA_CACHE.index = pd.DatetimeIndex(_INDEX_DATA_CACHE.index).tz_localize(
+                    None
+                )
             except Exception as index_err:
                 logger.error(f"Failed to pre-fetch index data globally: {index_err}")
 
@@ -484,7 +534,9 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
             learner = OnlineAdaptiveLearner.load(online_checkpoint)
             if learner is not None:
                 last_row = df.iloc[-1]
-                x_dict = {feat: float(last_row[feat]) for feat in learner.features if feat in df.columns}
+                x_dict = {
+                    feat: float(last_row[feat]) for feat in learner.features if feat in df.columns
+                }
                 if not any(np.isnan(v) for v in x_dict.values()):
                     online_prob = float(learner.predict_proba(x_dict))
                     online_score = float((online_prob - 0.5) * 2.0)
@@ -502,6 +554,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     sentiment_score = 0.0
     try:
         from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
+
         analyzer = FinBERTSentimentAnalyzer()
         if getattr(analyzer, "_initialized", False) or getattr(analyzer, "vader", None):
             headlines = analyzer.scrape_google_news(f"{symbol} stock India")
@@ -520,7 +573,7 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     if regime in ("BEAR", "CRISIS") and fused_score > 0:
         fused_score = min(fused_score, 0.2)  # Suppress BUY
     elif regime == "BULL" and fused_score < 0:
-        fused_score = max(fused_score, -0.2) # Suppress SELL
+        fused_score = max(fused_score, -0.2)  # Suppress SELL
 
     raw_ensemble = float(np.clip(fused_score, -1.0, 1.0))
     prob_up = (raw_ensemble / 2.0) + 0.5
@@ -555,17 +608,29 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
     garch_vol = float(regime_info["conditional_vol"])
     garch_vol_5d = float(regime_info["vol_forecast_5d"])
 
-    stop_distance = max(current_price * 2.0 * garch_vol, 1.5 * atr) if atr > 0 else current_price * 2.0 * garch_vol
-    take_profit_distance = max(current_price * 3.0 * garch_vol, 2.5 * atr) if atr > 0 else current_price * 3.0 * garch_vol
+    stop_distance = (
+        max(current_price * 2.0 * garch_vol, 1.5 * atr)
+        if atr > 0
+        else current_price * 2.0 * garch_vol
+    )
+    take_profit_distance = (
+        max(current_price * 3.0 * garch_vol, 2.5 * atr)
+        if atr > 0
+        else current_price * 3.0 * garch_vol
+    )
 
     if direction in ("STRONG_BUY", "BUY"):
         stop_loss = current_price - stop_distance
         take_profit = current_price + take_profit_distance
-        max_loss_pct = ((current_price - stop_loss) / current_price) * 100.0 if current_price > 0 else 0.0
+        max_loss_pct = (
+            ((current_price - stop_loss) / current_price) * 100.0 if current_price > 0 else 0.0
+        )
     elif direction in ("STRONG_SELL", "SELL"):
         stop_loss = current_price + stop_distance
         take_profit = current_price - take_profit_distance
-        max_loss_pct = ((stop_loss - current_price) / current_price) * 100.0 if current_price > 0 else 0.0
+        max_loss_pct = (
+            ((stop_loss - current_price) / current_price) * 100.0 if current_price > 0 else 0.0
+        )
     else:
         stop_loss = current_price
         take_profit = current_price
@@ -584,10 +649,12 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
         "raw_ensemble": raw_ensemble,
         "confidence": ensemble_confidence,
         "direction": direction,
-        "direction_up_down_flat": "up" if direction in ("BUY", "STRONG_BUY") else ("down" if direction in ("SELL", "STRONG_SELL") else "flat"),
+        "direction_up_down_flat": "up"
+        if direction in ("BUY", "STRONG_BUY")
+        else ("down" if direction in ("SELL", "STRONG_SELL") else "flat"),
         "expected_move_range": {
             "low": float(current_price - stop_distance),
-            "high": float(current_price + take_profit_distance)
+            "high": float(current_price + take_profit_distance),
         },
         "kelly": kelly_fraction,
         "agreement": agreement,
@@ -601,7 +668,6 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
         "model_signals": model_signals,
         "model_confidences": model_confidences,
         "model_statuses": model_statuses,
-
         "technical": technical,
         "regime": {
             "regime": regime_info["regime"],
@@ -616,10 +682,18 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
         "xgboost": {
             "xgb_score": xgb_score,
             "xgb_confidence": xgb_confidence,
-            "xgb_direction": "BUY" if xgb_score > 0.2 else ("SELL" if xgb_score < -0.2 else "NEUTRAL"),
-            "top_features": [{"name": feat["name"], "shap_value": feat["shap_value" if "shap_value" in feat else "importance"]} for feat in xgb_top_features],
+            "xgb_direction": "BUY"
+            if xgb_score > 0.2
+            else ("SELL" if xgb_score < -0.2 else "NEUTRAL"),
+            "top_features": [
+                {
+                    "name": feat["name"],
+                    "shap_value": feat["shap_value" if "shap_value" in feat else "importance"],
+                }
+                for feat in xgb_top_features
+            ],
             "base_value": xgb_base_value,
-            "status": xgb_status
+            "status": xgb_status,
         },
         "tft": {
             "p10_return": float(tft_p10),
@@ -627,30 +701,27 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
             "p90_return": float(tft_p90),
             "raw_signal": tft_score,
             "horizon_days": 5,
-            "status": tft_status
+            "status": tft_status,
         },
         "lstm_attn": {
             "raw_signal": lstm_score,
             "attention_peaks": lstm_attn_peaks,
-            "status": lstm_status
+            "status": lstm_status,
         },
         "gnn": {
             "spillover_risk": gnn_confidence,
             "embedding_norm": 1.0,
             "top_correlated_assets": gnn_top_correlated,
-            "status": gnn_status
+            "status": gnn_status,
         },
         "hmm_garch": {
             "regime_signal": hmm_score,
             "vol_forecast_1d": garch_vol,
             "vol_forecast_5d": garch_vol_5d,
             "vol_forecast_21d": regime_info["vol_forecast_21d"],
-            "status": hmm_status
+            "status": hmm_status,
         },
-        "online_learner": {
-            "raw_signal": online_score,
-            "prob_buy": online_prob
-        }
+        "online_learner": {"raw_signal": online_score, "prob_buy": online_prob},
     }
 
 
@@ -658,23 +729,20 @@ def build_ensemble_signal_sync(symbol: str, df: pd.DataFrame, artifact_path: str
 # Layer 7 – Price Forecast
 # ---------------------------------------------------------------------------
 
+
 def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any]]:
-    log_prices = np.log(df["close"].values[-90:])  # Use last 90 days
+    closes = df["close"].values[-90:]  # Use last 90 days
     try:
-        model = SARIMAX(log_prices, order=(2, 1, 2), trend='c')
-        result = model.fit(disp=False, maxiter=200)
-        forecasts = result.get_forecast(steps=max(horizons))
-        pred_mean = np.exp(forecasts.predicted_mean)
-        pred_ci   = np.exp(forecasts.conf_int(alpha=0.20))  # 80% CI
+        from app.services.ml_engine.lstm_forecaster import deep_learning_forecast
+        pred_mean, pred_ci = deep_learning_forecast(closes, max(horizons))
     except Exception as e:
-        logger.warning(f"SARIMAX price forecast failed: {e}. Falling back to ExponentialSmoothing.")
+        logger.warning(f"LSTM price forecast failed: {e}. Falling back to ExponentialSmoothing.")
         # Fallback: simple exponential smoothing trend
         try:
-            closes_60 = df["close"].values[-60:]
-            model = ExponentialSmoothing(closes_60, trend='add', damped_trend=True)
+            model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
             result = model.fit()
             pred_mean = result.forecast(max(horizons))
-            ci_width = df["close"].std() * np.sqrt(np.arange(1, max(horizons)+1)) * 0.5
+            ci_width = df["close"].std() * np.sqrt(np.arange(1, max(horizons) + 1)) * 0.5
             pred_ci = np.column_stack([pred_mean - ci_width, pred_mean + ci_width])
         except Exception as ee:
             logger.error(f"HoltWinters forecast fallback failed: {ee}")
@@ -687,18 +755,21 @@ def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any
     for h in horizons:
         idx = h - 1
         predicted = float(pred_mean[idx]) if idx < len(pred_mean) else current
-        low  = float(pred_ci[idx, 0]) if idx < len(pred_ci) else predicted * 0.97
+        low = float(pred_ci[idx, 0]) if idx < len(pred_ci) else predicted * 0.97
         high = float(pred_ci[idx, 1]) if idx < len(pred_ci) else predicted * 1.03
         change_pct = (predicted - current) / current
-        output.append({
-            "horizon_days": h,
-            "predicted_price": round(predicted, 2),
-            "prediction_low":  round(low, 2),
-            "prediction_high": round(high, 2),
-            "change_pct": round(change_pct, 4),
-            "target_date": (datetime.now(UTC) + timedelta(days=h)).date().isoformat()
-        })
+        output.append(
+            {
+                "horizon_days": h,
+                "predicted_price": round(predicted, 2),
+                "prediction_low": round(low, 2),
+                "prediction_high": round(high, 2),
+                "change_pct": round(change_pct, 4),
+                "target_date": (datetime.now(UTC) + timedelta(days=h)).date().isoformat(),
+            }
+        )
     return output
+
 
 # ---------------------------------------------------------------------------
 # Layer 7b – Multi-Horizon Forecast (1m through 1Y)
@@ -711,34 +782,29 @@ def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any
 # lower-confidence than daily+ horizons. This is a structural data-
 # availability limit, not something to paper over with a fabricated number.
 HORIZON_SPECS: dict[str, dict[str, Any]] = {
-    "1m":  {"interval": "1m", "period": "5d",  "steps": 1,   "confidence": "experimental"},
-    "2m":  {"interval": "1m", "period": "5d",  "steps": 2,   "confidence": "experimental"},
-    "3m":  {"interval": "1m", "period": "5d",  "steps": 3,   "confidence": "experimental"},
-    "5m":  {"interval": "5m", "period": "60d", "steps": 1,   "confidence": "experimental"},
-    "10m": {"interval": "5m", "period": "60d", "steps": 2,   "confidence": "experimental"},
-    "15m": {"interval": "5m", "period": "60d", "steps": 3,   "confidence": "experimental"},
-    "30m": {"interval": "5m", "period": "60d", "steps": 6,   "confidence": "low"},
-    "1h":  {"interval": "5m", "period": "60d", "steps": 12,  "confidence": "low"},
-    "1d":  {"interval": "1d", "period": "10y", "steps": 1,   "confidence": "medium"},
-    "1w":  {"interval": "1d", "period": "10y", "steps": 5,   "confidence": "medium"},
-    "15d": {"interval": "1d", "period": "10y", "steps": 15,  "confidence": "medium"},
-    "1mo": {"interval": "1d", "period": "10y", "steps": 21,  "confidence": "low"},
-    "1y":  {"interval": "1d", "period": "10y", "steps": 252, "confidence": "low"},
+    "1m": {"interval": "1m", "period": "5d", "steps": 1, "confidence": "experimental"},
+    "2m": {"interval": "1m", "period": "5d", "steps": 2, "confidence": "experimental"},
+    "3m": {"interval": "1m", "period": "5d", "steps": 3, "confidence": "experimental"},
+    "5m": {"interval": "5m", "period": "60d", "steps": 1, "confidence": "experimental"},
+    "10m": {"interval": "5m", "period": "60d", "steps": 2, "confidence": "experimental"},
+    "15m": {"interval": "5m", "period": "60d", "steps": 3, "confidence": "experimental"},
+    "30m": {"interval": "5m", "period": "60d", "steps": 6, "confidence": "low"},
+    "1h": {"interval": "5m", "period": "60d", "steps": 12, "confidence": "low"},
+    "1d": {"interval": "1d", "period": "10y", "steps": 1, "confidence": "medium"},
+    "1w": {"interval": "1d", "period": "10y", "steps": 5, "confidence": "medium"},
+    "15d": {"interval": "1d", "period": "10y", "steps": 15, "confidence": "medium"},
+    "1mo": {"interval": "1d", "period": "10y", "steps": 21, "confidence": "low"},
+    "1y": {"interval": "1d", "period": "10y", "steps": 252, "confidence": "low"},
 }
 
 
 def _fit_and_forecast(closes: np.ndarray, steps: int) -> tuple[np.ndarray, np.ndarray]:
-    """Shared SARIMAX-with-fallback fit used by every horizon group."""
-    log_prices = np.log(closes)
+    """Shared Deep Learning (LSTM) fit used by every horizon group."""
     try:
-        model = SARIMAX(log_prices, order=(2, 1, 2), trend="c")
-        result = model.fit(disp=False, maxiter=200)
-        forecasts = result.get_forecast(steps=steps)
-        pred_mean = np.exp(forecasts.predicted_mean)
-        pred_ci = np.exp(forecasts.conf_int(alpha=0.20))
-        return pred_mean, pred_ci
+        from app.services.ml_engine.lstm_forecaster import deep_learning_forecast
+        return deep_learning_forecast(closes, steps)
     except Exception as e:
-        logger.warning(f"SARIMAX forecast failed: {e}. Falling back to ExponentialSmoothing.")
+        logger.warning(f"LSTM Deep Learning forecast failed: {e}. Falling back to ExponentialSmoothing.")
         try:
             model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
             result = model.fit()
@@ -796,7 +862,9 @@ async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict
 
             for h in labels:
                 step_idx = HORIZON_SPECS[h]["steps"] - 1
-                predicted = float(pred_mean[step_idx]) if step_idx < len(pred_mean) else current_price
+                predicted = (
+                    float(pred_mean[step_idx]) if step_idx < len(pred_mean) else current_price
+                )
                 low = float(pred_ci[step_idx, 0]) if step_idx < len(pred_ci) else predicted * 0.97
                 high = float(pred_ci[step_idx, 1]) if step_idx < len(pred_ci) else predicted * 1.03
                 results[h] = {
@@ -806,12 +874,16 @@ async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict
                     "predicted_price": round(predicted, 2),
                     "prediction_low": round(low, 2),
                     "prediction_high": round(high, 2),
-                    "change_pct": round((predicted - current_price) / current_price, 4) if current_price else 0.0,
+                    "change_pct": round((predicted - current_price) / current_price, 4)
+                    if current_price
+                    else 0.0,
                     "confidence": HORIZON_SPECS[h]["confidence"],
                     "data_window": data_window,
                 }
         except Exception as e:
-            logger.error(f"Multi-horizon forecast failed for {symbol} group {interval}/{period}: {e}")
+            logger.error(
+                f"Multi-horizon forecast failed for {symbol} group {interval}/{period}: {e}"
+            )
             for h in labels:
                 results[h] = {"status": "error", "message": str(e)}
 
@@ -826,37 +898,47 @@ async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict
 # Main Entry Point
 # ---------------------------------------------------------------------------
 
-async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_path: str = None, model_version: str = None) -> dict[str, Any]:
+
+async def get_full_prediction(
+    symbol: str, bypass_cache: bool = False, artifact_path: str = None, model_version: str = None
+) -> dict[str, Any]:
     """Fetch OHLCV, run all 7 methods, return complete prediction payload."""
     from app.services.market_data_service import MarketDataService
+
     symbol = MarketDataService._normalize_symbol(symbol)
-    import yfinance as yf
 
     if not bypass_cache:
         cached = await _cache_fetch(symbol)
         if cached:
             return cached
 
-    from app.services.data_ingestion.provider_manager import provider_manager
-    from datetime import datetime, UTC, timedelta
+    from datetime import UTC, datetime, timedelta
+
     import pandas as pd
-    
+
+    from app.services.data_ingestion.provider_manager import provider_manager
+
     end_date = datetime.now(UTC)
-    start_date = end_date - timedelta(days=2 * 365) # 2 years
-    
+    start_date = end_date - timedelta(days=2 * 365)  # 2 years
+
     try:
         bars = await provider_manager.get_ohlcv(symbol, "1d", start_date, end_date)
         if not bars or len(bars) < 60:
             raise ValueError(f"Insufficient OHLCV data for {symbol} (need at least 60 rows)")
-            
-        df = pd.DataFrame([{
-            "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
-            "open": b.open,
-            "high": b.high,
-            "low": b.low,
-            "close": b.close,
-            "volume": b.volume
-        } for b in bars])
+
+        df = pd.DataFrame(
+            [
+                {
+                    "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                }
+                for b in bars
+            ]
+        )
     except Exception as e:
         logger.error(f"Failed to fetch market data for {symbol}: {e}")
         raise ValueError(f"Failed to fetch market data for {symbol}") from e
@@ -867,6 +949,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
 
     # Import pipeline dynamically to avoid circular references
     import sys
+
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     from research.feature_engineering.pipeline import FeaturePipeline
 
@@ -893,25 +976,57 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
     df = df.loc[:, ~df.columns.duplicated()].copy()
 
     # Ensure database-derived features are present (fallback to 0 if missing during live inference)
-    for col in ["sentiment_score", "news_volume", "sentiment_pos_neg_ratio", "market_sentiment_index", "sentiment_momentum_3d", "regime_state", "garch_vol"]:
+    for col in [
+        "sentiment_score",
+        "news_volume",
+        "sentiment_pos_neg_ratio",
+        "market_sentiment_index",
+        "sentiment_momentum_3d",
+        "regime_state",
+        "garch_vol",
+    ]:
         if col not in df.columns:
             df[col] = 0.0
-
 
     # Incremental update for OnlineAdaptiveLearner
     try:
         from research.models.online_learner import OnlineAdaptiveLearner
+
         online_checkpoint = MODEL_DIR / f"online_learner_{symbol.upper()}.pkl"
         learner = OnlineAdaptiveLearner.load(online_checkpoint)
 
         # Prepare columns standardizing just like in scoring
         df_clean_copy = df.copy()
         rename_map = {}
-        RSI_col = "RSI_14" if "RSI_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "RSI" in c][0]
-        MACDh_col = "MACDh_12_26_9" if "MACDh_12_26_9" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "MACDh" in c][0]
-        BBP_col = "BBP_20_2.0_2.0" if "BBP_20_2.0_2.0" in df_clean_copy.columns else ("BBP_20_2.0" if "BBP_20_2.0" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "BBP" in c][0])
-        ATR_col = "ATRr_14" if "ATRr_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "ATR" in c][0]
-        ADX_col = "ADX_14" if "ADX_14" in df_clean_copy.columns else [c for c in df_clean_copy.columns if "ADX" in c][0]
+        RSI_col = (
+            "RSI_14"
+            if "RSI_14" in df_clean_copy.columns
+            else [c for c in df_clean_copy.columns if "RSI" in c][0]
+        )
+        MACDh_col = (
+            "MACDh_12_26_9"
+            if "MACDh_12_26_9" in df_clean_copy.columns
+            else [c for c in df_clean_copy.columns if "MACDh" in c][0]
+        )
+        BBP_col = (
+            "BBP_20_2.0_2.0"
+            if "BBP_20_2.0_2.0" in df_clean_copy.columns
+            else (
+                "BBP_20_2.0"
+                if "BBP_20_2.0" in df_clean_copy.columns
+                else [c for c in df_clean_copy.columns if "BBP" in c][0]
+            )
+        )
+        ATR_col = (
+            "ATRr_14"
+            if "ATRr_14" in df_clean_copy.columns
+            else [c for c in df_clean_copy.columns if "ATR" in c][0]
+        )
+        ADX_col = (
+            "ADX_14"
+            if "ADX_14" in df_clean_copy.columns
+            else [c for c in df_clean_copy.columns if "ADX" in c][0]
+        )
 
         if RSI_col != "RSI_14":
             rename_map[RSI_col] = "RSI_14"
@@ -932,7 +1047,11 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
             close_t5 = float(df_clean_copy["close"].iloc[-1])
             y_val = 1 if close_t5 > close_t else 0
 
-            x_dict_6 = {feat: float(row_6[feat]) for feat in learner.features if feat in df_clean_copy.columns}
+            x_dict_6 = {
+                feat: float(row_6[feat])
+                for feat in learner.features
+                if feat in df_clean_copy.columns
+            }
             if not any(np.isnan(v) for v in x_dict_6.values()):
                 learner.update(x_dict_6, y_val)
                 learner.save(online_checkpoint)
@@ -942,6 +1061,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
 
     # Run the scoring methods
     from research.models.xgboost_model.classifier import FeatureMismatchError
+
     try:
         ensemble = await build_ensemble_signal(symbol, df, artifact_path, model_version)
     except FeatureMismatchError as e:
@@ -950,44 +1070,27 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
 
     forecast = forecast_prices(df, horizons=[1, 3, 5, 10, 21])
 
-    # Generate plain-language reasoning
+    # Generate plain-language reasoning via LLM Engine
     reasons = []
     try:
-        # 1. RSI
-        rsi_val = float(df["RSI_14"].iloc[-1]) if "RSI_14" in df.columns else 50.0
-        if rsi_val < 30:
-            reasons.append("RSI oversold")
-        elif rsi_val > 70:
-            reasons.append("RSI overbought")
+        from app.services.llm_reasoning_engine import LLMReasoningEngine
 
-        # 2. HMM Regime
-        regime_name = ensemble.get("regime", {}).get("regime", "UNKNOWN").lower()
-        reasons.append(f"{regime_name} regime")
+        technicals_dict = {
+            "RSI_14": float(df["RSI_14"].iloc[-1]) if "RSI_14" in df.columns else 50.0,
+            "MACD": float(df["MACD"].iloc[-1]) if "MACD" in df.columns else 0.0,
+            "Trend": ensemble.get("regime", {}).get("regime", "UNKNOWN"),
+        }
 
-        # 3. S/R zones
-        current_price = float(df["close"].iloc[-1])
-        from app.services.sr_service import SupportResistanceEngine
-        zones_res = SupportResistanceEngine.detect_classical_zones(df)
-        near_support = False
-        near_resistance = False
-        for zone in zones_res:
-            avg_zone = zone["avg"]
-            if abs(current_price - avg_zone) / current_price <= 0.015:
-                if zone["type"] == "support":
-                    near_support = True
-                elif zone["type"] == "resistance":
-                    near_resistance = True
-        if near_support:
-            reasons.append("price near support zone")
-        elif near_resistance:
-            reasons.append("price near resistance zone")
-
-        # 4. Trend Crossover
-        macd_val = float(df["MACDh_12_26_9"].iloc[-1]) if "MACDh_12_26_9" in df.columns else 0.0
-        if macd_val > 0:
-            reasons.append("MACD bullish crossover")
-        elif macd_val < 0:
-            reasons.append("MACD bearish crossover")
+        # Run the LLM reasoning asynchronously
+        llm_reason = await LLMReasoningEngine.generate_reasoning(
+            symbol=symbol,
+            ensemble_signal=ensemble.get("action", "HOLD"),
+            confidence=float(ensemble.get("confidence", 50.0)),
+            technicals=technicals_dict,
+            news_sentiment="Neutral",  # In a real pass, fetch from sentiment_analyzer
+        )
+        if llm_reason:
+            reasons = [llm_reason]
     except Exception as re_err:
         logger.warning(f"Failed to generate plain-language reasoning message: {re_err}")
 
@@ -1003,7 +1106,7 @@ async def get_full_prediction(symbol: str, bypass_cache: bool = False, artifact_
         "data_points_used": len(df),
         "is_computed": True,
         "message": reasoning_msg,
-        "model_version": model_version or "latest"
+        "model_version": model_version or "latest",
     }
 
     await _cache_store(symbol, result)

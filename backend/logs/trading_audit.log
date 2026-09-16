@@ -1,2 +1,66 @@
 [2026-07-02T11:01:27.135664+00:00] [KILL SWITCH ACTIVATED] Mode forced to PAPER by user=guest-user (Previous: PAPER)
 [2026-07-17T15:59:10.328824+00:00] [KILL SWITCH ACTIVATED] Mode forced to PAPER by user=guest-user (Previous: PAPER)
+[2026-09-15T19:52:19.909776+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-15T19:52:22.536066+00:00] Restored cached Upstox token successfully.
+[2026-09-15T19:52:23.753263+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-15T19:52:23.809216+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-15T19:52:23.815652+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-15T19:52:23.817783+00:00] Upstox WebSocket Feed error: error
+[2026-09-15T19:52:23.819729+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-15T19:53:31.695601+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-15T19:53:33.692845+00:00] Restored cached Upstox token successfully.
+[2026-09-15T19:53:34.676638+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-15T19:53:34.723954+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-15T19:53:34.725961+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-15T19:53:34.727498+00:00] Upstox WebSocket Feed error: error
+[2026-09-15T19:53:34.728760+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-15T19:56:10.833928+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-15T19:56:12.709145+00:00] Restored cached Upstox token successfully.
+[2026-09-15T19:56:13.438373+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-15T19:56:13.480628+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-15T19:56:13.482019+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-15T19:56:13.483200+00:00] Upstox WebSocket Feed error: error
+[2026-09-15T19:56:13.484353+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-15T19:56:13.873974+00:00] Successfully authenticated Upstox user: Unknown
+[2026-09-15T19:56:14.257780+00:00] Connecting Upstox WebSocket feed for keys: ['key', 'key', 'key', 'key', 'key', 'key', 'key', 'key']
+[2026-09-15T19:56:14.258484+00:00] Failed to start Upstox WebSocket feed: WS Error
+[2026-09-15T20:11:24.119226+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-15T20:11:25.236075+00:00] Restored cached Upstox token successfully.
+[2026-09-15T20:11:25.851220+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-15T20:11:25.887868+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-15T20:11:25.888880+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-15T20:11:25.889681+00:00] Upstox WebSocket Feed error: error
+[2026-09-15T20:11:25.890881+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-15T20:11:26.294081+00:00] Successfully authenticated Upstox user: Unknown
+[2026-09-15T20:11:26.608455+00:00] Connecting Upstox WebSocket feed for keys: ['key', 'key', 'key', 'key', 'key', 'key', 'key', 'key']
+[2026-09-15T20:11:26.609097+00:00] Failed to start Upstox WebSocket feed: WS Error
+[2026-09-15T20:26:50.556010+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-15T20:26:52.504099+00:00] Restored cached Upstox token successfully.
+[2026-09-15T20:26:53.570471+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-15T20:26:53.618347+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-15T20:26:53.620081+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-15T20:26:53.621456+00:00] Upstox WebSocket Feed error: error
+[2026-09-15T20:26:53.623091+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-15T20:26:54.084083+00:00] Successfully authenticated Upstox user: Unknown
+[2026-09-15T20:26:54.415941+00:00] Connecting Upstox WebSocket feed for keys: ['key', 'key', 'key', 'key', 'key', 'key', 'key', 'key']
+[2026-09-15T20:26:54.416482+00:00] Failed to start Upstox WebSocket feed: WS Error
+[2026-09-15T20:28:45.264610+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-15T20:28:46.371074+00:00] Restored cached Upstox token successfully.
+[2026-09-15T20:28:46.993528+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-15T20:28:47.035748+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-15T20:28:47.038570+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-15T20:28:47.040189+00:00] Upstox WebSocket Feed error: error
+[2026-09-15T20:28:47.041695+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-15T20:28:47.435664+00:00] Successfully authenticated Upstox user: Unknown
+[2026-09-15T20:28:47.784913+00:00] Connecting Upstox WebSocket feed for keys: ['key', 'key', 'key', 'key', 'key', 'key', 'key', 'key']
+[2026-09-15T20:28:47.785430+00:00] Failed to start Upstox WebSocket feed: WS Error
+[2026-09-16T05:19:42.533162+00:00] Successfully authenticated Upstox user: Test User
+[2026-09-16T05:19:44.425510+00:00] Restored cached Upstox token successfully.
+[2026-09-16T05:19:45.147434+00:00] Connecting Upstox WebSocket feed for keys: ['key_RELIANCE', 'key_TCS', 'key_INFY', 'key_HDFCBANK', 'key_ICICIBANK', 'key_SBIN', 'key_NIFTY 50', 'key_NIFTY BANK']
+[2026-09-16T05:19:45.187783+00:00] Upstox WebSocket Feed connected successfully.
+[2026-09-16T05:19:45.189428+00:00] Upstox WebSocket Feed closed: 200 - Closed
+[2026-09-16T05:19:45.190784+00:00] Upstox WebSocket Feed error: error
+[2026-09-16T05:19:45.192290+00:00] Upstox WebSocket Feed reconnecting: reconnect
+[2026-09-16T05:19:45.690175+00:00] Successfully authenticated Upstox user: Unknown
+[2026-09-16T05:19:46.108434+00:00] Connecting Upstox WebSocket feed for keys: ['key', 'key', 'key', 'key', 'key', 'key', 'key', 'key']
+[2026-09-16T05:19:46.109772+00:00] Failed to start Upstox WebSocket feed: WS Error

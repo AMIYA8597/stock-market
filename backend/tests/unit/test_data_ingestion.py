@@ -65,7 +65,7 @@ async def test_orchestrator_fallback_source_order_for_nse_symbol() -> None:
         symbol="RELIANCE",
         interval="1d",
         start=datetime.now(UTC) - timedelta(days=5),
-        end=datetime.now(UTC)
+        end=datetime.now(UTC),
     )
 
     assert len(bars) == 1
@@ -82,5 +82,5 @@ async def test_orchestrator_returns_error_when_all_sources_fail() -> None:
             symbol="INVALID",
             interval="1d",
             start=datetime.now(UTC) - timedelta(days=5),
-            end=datetime.now(UTC)
+            end=datetime.now(UTC),
         )

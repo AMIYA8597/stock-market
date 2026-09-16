@@ -30,7 +30,9 @@ async def get_regime_current(
 ) -> RegimeCurrentResponse:
     # 1. Fetch instrument
     clean_symbol = symbol.split(".")[0].upper()
-    inst_res = await db.execute(select(Instrument).where(Instrument.symbol.startswith(clean_symbol)))
+    inst_res = await db.execute(
+        select(Instrument).where(Instrument.symbol.startswith(clean_symbol))
+    )
     instrument = inst_res.scalars().first()
     if not instrument:
         now = datetime.now(UTC)
@@ -38,13 +40,12 @@ async def get_regime_current(
             state="bull",
             state_index=0,
             probs=[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")],
-            transition_matrix=[
-                [Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]
-            ] * 4,
+            transition_matrix=[[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]]
+            * 4,
             cond_vol_1d=Decimal("0.150000"),
             cond_vol_5d=Decimal("0.150000"),
             cond_vol_21d=Decimal("0.150000"),
-            updated_at=now
+            updated_at=now,
         )
 
     # 2. Fetch latest regime state
@@ -63,9 +64,8 @@ async def get_regime_current(
             state="bull",
             state_index=0,
             probs=[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")],
-            transition_matrix=[
-                [Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]
-            ] * 4,
+            transition_matrix=[[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]]
+            * 4,
             cond_vol_1d=Decimal("0.150000"),
             cond_vol_5d=Decimal("0.150000"),
             cond_vol_21d=Decimal("0.150000"),
@@ -78,13 +78,12 @@ async def get_regime_current(
         state=LABELS.get(regime.viterbi_state, "bull"),
         state_index=regime.viterbi_state,
         probs=regime.state_probs,
-        transition_matrix=[
-            [Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]
-        ] * 4, # We aren't storing the transition matrix yet, can return empty for now
+        transition_matrix=[[Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]]
+        * 4,  # We aren't storing the transition matrix yet, can return empty for now
         cond_vol_1d=regime.conditional_vol,
         cond_vol_5d=regime.vol_forecast_5d or regime.conditional_vol,
         cond_vol_21d=regime.vol_forecast_21d or regime.conditional_vol,
-        days_in_state=1, # Would require querying history to compute exact duration
+        days_in_state=1,  # Would require querying history to compute exact duration
         last_transition_date=regime.time,
         timestamp=regime.time,
     )
@@ -92,12 +91,12 @@ async def get_regime_current(
 
 @router.get("/{symbol}/history", response_model=RegimeHistoryResponse)
 async def get_regime_history(
-    symbol: str,
-    days: int = Query(252, ge=1, le=1000),
-    db: AsyncSession = Depends(get_db)
+    symbol: str, days: int = Query(252, ge=1, le=1000), db: AsyncSession = Depends(get_db)
 ) -> RegimeHistoryResponse:
     clean_symbol = symbol.split(".")[0].upper()
-    inst_res = await db.execute(select(Instrument).where(Instrument.symbol.startswith(clean_symbol)))
+    inst_res = await db.execute(
+        select(Instrument).where(Instrument.symbol.startswith(clean_symbol))
+    )
     instrument = inst_res.scalars().first()
     if not instrument:
         raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")

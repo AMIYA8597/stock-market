@@ -51,6 +51,7 @@ class FinBERTSentimentAnalyzer:
 
         try:
             from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
             self.vader = SentimentIntensityAnalyzer()
             logger.info("VADER Sentiment Analyzer initialized.")
         except Exception as e:
@@ -58,7 +59,9 @@ class FinBERTSentimentAnalyzer:
             self.vader = None
 
         if use_fast_fallback:
-            logger.info("Using fast lexicon-based sentiment analyzer fallback (USE_FAST_FALLBACK=true).")
+            logger.info(
+                "Using fast lexicon-based sentiment analyzer fallback (USE_FAST_FALLBACK=true)."
+            )
             self._initialized = True
             self.fast_mode = True
             return
@@ -66,6 +69,7 @@ class FinBERTSentimentAnalyzer:
         self.fast_mode = False
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
+
             logger.info("Initializing FinBERT model...")
             self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
             self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
@@ -73,7 +77,9 @@ class FinBERTSentimentAnalyzer:
             self._initialized = True
             logger.info("FinBERT model initialized successfully.")
         except Exception as e:
-            logger.error(f"Failed to load FinBERT model: {e}. Sentiment analyzer will fall back to lexicon.")
+            logger.error(
+                f"Failed to load FinBERT model: {e}. Sentiment analyzer will fall back to lexicon."
+            )
             self._initialized = True
             self.fast_mode = True
 
@@ -83,11 +89,7 @@ class FinBERTSentimentAnalyzer:
 
         scores = self.vader.polarity_scores(text)
         # Vader provides pos, neg, neu, compound
-        return {
-            "positive": scores["pos"],
-            "negative": scores["neg"],
-            "neutral": scores["neu"]
-        }
+        return {"positive": scores["pos"], "negative": scores["neg"], "neutral": scores["neu"]}
 
     def analyze_sentiment_batch(self, texts: list[str]) -> list[dict[str, float]]:
         """Analyze sentiment of multiple pieces of text in batches.
@@ -112,7 +114,7 @@ class FinBERTSentimentAnalyzer:
             results = []
 
             for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i+batch_size]
+                batch_texts = texts[i : i + batch_size]
                 inputs = self.tokenizer(
                     batch_texts, return_tensors="pt", truncation=True, padding=True, max_length=512
                 )
@@ -122,11 +124,13 @@ class FinBERTSentimentAnalyzer:
 
                 for p in probs:
                     # FinBERT labels: 0: positive, 1: negative, 2: neutral
-                    results.append({
-                        "positive": float(p[0]),
-                        "negative": float(p[1]),
-                        "neutral": float(p[2]),
-                    })
+                    results.append(
+                        {
+                            "positive": float(p[0]),
+                            "negative": float(p[1]),
+                            "neutral": float(p[2]),
+                        }
+                    )
             return results
         except Exception as e:
             logger.error(f"Sentiment inference failed: {e}. Falling back to VADER.")
@@ -142,6 +146,7 @@ class FinBERTSentimentAnalyzer:
 
         try:
             import httpx
+
             with httpx.Client(follow_redirects=True, timeout=3.0) as client:
                 response = client.get(url)
                 return str(response.url)
@@ -152,7 +157,10 @@ class FinBERTSentimentAnalyzer:
     def scrape_market_news(self) -> list[dict[str, Any]]:
         """Scrape market-wide headlines from public RSS feeds."""
         feeds = [
-            ("Economic Times", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+            (
+                "Economic Times",
+                "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms",
+            ),
             ("Moneycontrol", "https://www.moneycontrol.com/rss/MCmarkets.xml"),
         ]
 
@@ -175,9 +183,13 @@ class FinBERTSentimentAnalyzer:
                         text = title.text.strip()
                         date_str = pub_date.text if pub_date is not None else ""
                         link_str = link.text if link is not None else ""
-                        headlines.append({"text": text, "date": date_str, "url": link_str, "source": source_name})
+                        headlines.append(
+                            {"text": text, "date": date_str, "url": link_str, "source": source_name}
+                        )
             except Exception as e:
-                logger.warning(f"No sentiment tilt this cycle: Failed to parse XML/scrape headlines from {url}: {e}")
+                logger.warning(
+                    f"No sentiment tilt this cycle: Failed to parse XML/scrape headlines from {url}: {e}"
+                )
 
         # Dedupe by text
         seen = set()
@@ -192,6 +204,7 @@ class FinBERTSentimentAnalyzer:
     def scrape_google_news(self, query: str) -> list[dict[str, Any]]:
         """Scrape headlines from Google News RSS for a specific query."""
         from urllib.parse import quote
+
         encoded_query = quote(query)
         url = f"https://news.google.com/rss/search?q={encoded_query}&hl=en-IN&gl=IN&ceid=IN:en"
 
@@ -211,13 +224,22 @@ class FinBERTSentimentAnalyzer:
                 if title is not None and title.text:
                     text = title.text.strip()
                     # Clean up " - SourceName" suffix often added by Google News
-                    text = re.sub(r'\s+-\s+[^-\n]+$', '', text)
+                    text = re.sub(r"\s+-\s+[^-\n]+$", "", text)
 
                     date_str = pub_date.text if pub_date is not None else ""
                     link_str = link.text if link is not None else ""
                     resolved_url = self._resolve_google_news_url(link_str)
-                    headlines.append({"text": text, "date": date_str, "url": resolved_url, "source": "Google News"})
+                    headlines.append(
+                        {
+                            "text": text,
+                            "date": date_str,
+                            "url": resolved_url,
+                            "source": "Google News",
+                        }
+                    )
         except Exception as e:
-            logger.warning(f"No sentiment tilt this cycle: Failed to scrape Google News for {query}: {e}")
+            logger.warning(
+                f"No sentiment tilt this cycle: Failed to scrape Google News for {query}: {e}"
+            )
 
         return headlines

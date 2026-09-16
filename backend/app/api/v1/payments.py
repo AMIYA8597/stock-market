@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
-from app.models.payment import PaymentTransaction, Plan, Subscription, WalletLedger, BillingAuditLog
+from app.models.payment import BillingAuditLog, PaymentTransaction, Plan, Subscription, WalletLedger
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -266,7 +266,7 @@ async def subscribe_to_plan(
         "status": "subscribed",
         "plan": plan.name,
         "subscription_id": f"sub_mock_{uuid4().hex[:10]}",
-        "razorpay_key_id": settings.RAZORPAY_KEY_ID
+        "razorpay_key_id": settings.RAZORPAY_KEY_ID,
     }
 
 
@@ -330,6 +330,7 @@ async def get_subscription(
         }
     }
 
+
 @router.post("/webhook")
 async def razorpay_webhook(
     request: Request,
@@ -339,17 +340,15 @@ async def razorpay_webhook(
     signature = request.headers.get("x-razorpay-signature", "")
 
     # 1. Verify Signature
-    from app.core.security import is_test_mode
-    import hmac
     import hashlib
+    import hmac
+
+    from app.core.security import is_test_mode
+
     is_verified = False
     secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "REPLACE_ME")
     if not _is_placeholder(secret):
-        expected_sig = hmac.new(
-            secret.encode(),
-            raw_body,
-            hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         is_verified = hmac.compare_digest(expected_sig, signature)
     elif is_test_mode():
         is_verified = True
@@ -364,7 +363,7 @@ async def razorpay_webhook(
     audit = BillingAuditLog(
         event_type=event_type,
         payload_json=raw_body.decode("utf-8")[:3999],
-        signature_verified=is_verified
+        signature_verified=is_verified,
     )
     db.add(audit)
 
@@ -377,8 +376,15 @@ async def razorpay_webhook(
     payload_entity = payload.get("payload", {}).get("subscription", {}).get("entity", {})
     sub_id = payload_entity.get("id")
 
-    if sub_id and event in ["subscription.activated", "subscription.charged", "subscription.cancelled", "subscription.halted"]:
-        sub_result = await db.execute(select(Subscription).where(Subscription.razorpay_subscription_id == sub_id))
+    if sub_id and event in [
+        "subscription.activated",
+        "subscription.charged",
+        "subscription.cancelled",
+        "subscription.halted",
+    ]:
+        sub_result = await db.execute(
+            select(Subscription).where(Subscription.razorpay_subscription_id == sub_id)
+        )
         sub = sub_result.scalar_one_or_none()
         if sub:
             if event == "subscription.activated" or event == "subscription.charged":

@@ -43,7 +43,9 @@ class YFinanceProvider(MarketDataProvider):
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
     @retry(
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError)),
+        retry=retry_if_exception_type(
+            (aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
@@ -80,7 +82,12 @@ class YFinanceProvider(MarketDataProvider):
                 symbol=symbol,
                 price=meta.get("regularMarketPrice", 0.0),
                 change=meta.get("regularMarketPrice", 0.0) - meta.get("previousClose", 0.0),
-                change_pct=((meta.get("regularMarketPrice", 0.0) / meta.get("previousClose", 1.0)) - 1) * 100 if meta.get("previousClose") else 0.0,
+                change_pct=(
+                    (meta.get("regularMarketPrice", 0.0) / meta.get("previousClose", 1.0)) - 1
+                )
+                * 100
+                if meta.get("previousClose")
+                else 0.0,
                 volume=meta.get("regularMarketVolume", 0.0),
                 timestamp=datetime.now(UTC),
             )
@@ -122,16 +129,18 @@ class YFinanceProvider(MarketDataProvider):
             for i, ts in enumerate(timestamps):
                 if opens[i] is None or closes[i] is None:
                     continue
-                bars.append(OHLCVBar(
-                    time=datetime.fromtimestamp(ts, tz=UTC),
-                    open=float(opens[i]),
-                    high=float(highs[i]),
-                    low=float(lows[i]),
-                    close=float(closes[i]),
-                    volume=float(volumes[i]) if volumes[i] is not None else 0.0,
-                    adjusted_close=float(closes[i]),
-                    interval=interval
-                ))
+                bars.append(
+                    OHLCVBar(
+                        time=datetime.fromtimestamp(ts, tz=UTC),
+                        open=float(opens[i]),
+                        high=float(highs[i]),
+                        low=float(lows[i]),
+                        close=float(closes[i]),
+                        volume=float(volumes[i]) if volumes[i] is not None else 0.0,
+                        adjusted_close=float(closes[i]),
+                        interval=interval,
+                    )
+                )
             return bars
         except Exception as e:
             raise DataUnavailableError(f"{self.name} ohlcv failed for {symbol}: {e}") from e

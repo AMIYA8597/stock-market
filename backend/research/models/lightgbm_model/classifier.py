@@ -7,6 +7,7 @@ from sklearn.calibration import CalibratedClassifierCV
 
 logger = logging.getLogger(__name__)
 
+
 class LightGBMDirectionalClassifier:
     """LightGBM wrapper for directional classification."""
 
@@ -15,7 +16,7 @@ class LightGBMDirectionalClassifier:
         max_depth: int = 5,
         learning_rate: float = 0.05,
         n_estimators: int = 100,
-        calibration: str | None = "isotonic"
+        calibration: str | None = "isotonic",
     ) -> None:
         self.max_depth = max_depth
         self.learning_rate = learning_rate
@@ -33,7 +34,7 @@ class LightGBMDirectionalClassifier:
         self.model = None
         self.features: list[str] = []
 
-    def fit(self, X: pd.DataFrame, y: pd.Series) -> 'LightGBMDirectionalClassifier':
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> "LightGBMDirectionalClassifier":
         self.features = list(X.columns)
 
         # Handle class imbalance
@@ -88,18 +89,18 @@ class LightGBMDirectionalClassifier:
             "max_depth": self.max_depth,
             "learning_rate": self.learning_rate,
             "n_estimators": self.n_estimators,
-            "calibration": self.calibration
+            "calibration": self.calibration,
         }
         joblib.dump(state, filepath)
 
     @classmethod
-    def load(cls, filepath: str) -> 'LightGBMDirectionalClassifier':
+    def load(cls, filepath: str) -> "LightGBMDirectionalClassifier":
         state = joblib.load(filepath)
         instance = cls(
             max_depth=state["max_depth"],
             learning_rate=state["learning_rate"],
             n_estimators=state["n_estimators"],
-            calibration=state["calibration"]
+            calibration=state["calibration"],
         )
         instance.model = state["model"]
         instance.features = state["features"]

@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 _torch_cache = None
 
+
 def _get_torch():
     global _torch_cache
     if _torch_cache is not None:
@@ -23,9 +24,9 @@ def _get_torch():
     import torch
     import torch.nn as nn
     import torch.optim as optim
-    
+
     torch.set_num_threads(1)
-    
+
     class AttentionLayer(nn.Module):
         def __init__(self, hidden_dim: int):
             super().__init__()
@@ -38,14 +39,16 @@ def _get_torch():
             return context, attn_weights
 
     class LSTMAttentionNet(nn.Module):
-        def __init__(self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1, dropout: float = 0.5):
+        def __init__(
+            self, input_dim: int, hidden_dim: int = 32, num_layers: int = 1, dropout: float = 0.5
+        ):
             super().__init__()
             self.lstm = nn.LSTM(
                 input_dim,
                 hidden_dim,
                 num_layers,
                 batch_first=True,
-                dropout=dropout if num_layers > 1 else 0.0
+                dropout=dropout if num_layers > 1 else 0.0,
             )
             self.attention = AttentionLayer(hidden_dim)
             self.dropout = nn.Dropout(dropout)
@@ -84,9 +87,13 @@ class LSTMAttentionClassifier:
     def fit(self, df: pd.DataFrame, y: pd.Series) -> LSTMAttentionClassifier:
         """Fit the scaler, prepare sequences, and train the model with early stopping."""
         torch, nn, optim, LSTMAttentionNet = _get_torch()
-        
+
         if not self.features:
-            self.features = [c for c in df.select_dtypes(include=[np.number]).columns.tolist() if not c.startswith("target_")]
+            self.features = [
+                c
+                for c in df.select_dtypes(include=[np.number]).columns.tolist()
+                if not c.startswith("target_")
+            ]
 
         X_clean = df[self.features].fillna(0)
         y_clean = y.loc[X_clean.index].values
@@ -118,7 +125,7 @@ class LSTMAttentionClassifier:
         criterion = nn.BCELoss()
         optimizer = optim.Adam(self.model.parameters(), lr=self.lr, weight_decay=1e-4)
 
-        best_val_loss = float('inf')
+        best_val_loss = float("inf")
         patience = 5
         patience_counter = 0
         best_state = None
@@ -192,7 +199,7 @@ class LSTMAttentionClassifier:
         padded_X = np.vstack([np.zeros((self.seq_len - 1, len(self.features))), X_scaled])
 
         for i in range(len(X_scaled)):
-            X_seq.append(padded_X[i: i + self.seq_len])
+            X_seq.append(padded_X[i : i + self.seq_len])
 
         X_tensor = torch.tensor(np.array(X_seq), dtype=torch.float32)
 

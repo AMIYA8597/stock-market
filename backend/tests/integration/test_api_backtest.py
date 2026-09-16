@@ -58,7 +58,9 @@ class InMemorySession:
                         # Only apply this if it's not a status array or similar
                         if isinstance(v, (str, uuid.UUID)):
                             try:
-                                objs = [x for x in objs if getattr(x, "id", None) == uuid.UUID(str(v))]
+                                objs = [
+                                    x for x in objs if getattr(x, "id", None) == uuid.UUID(str(v))
+                                ]
                             except Exception:
                                 pass
             except Exception:
@@ -120,8 +122,10 @@ async def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+
 async def override_get_current_user():
     return User(id=uuid.UUID("3b79b787-f2a8-4a48-abf1-0268d6131a5b"))
+
 
 app.dependency_overrides[get_current_user_or_none] = override_get_current_user
 app.dependency_overrides[get_current_user] = override_get_current_user
@@ -138,9 +142,6 @@ backtest_module.async_session_factory = lambda: InMemorySession(shared_store)
 client = TestClient(app)
 
 
-
-
-
 def test_run_status_and_results_flow() -> None:
     """Test the backtest POST endpoint returns 202 + PENDING, and status endpoint works.
 
@@ -149,7 +150,7 @@ def test_run_status_and_results_flow() -> None:
     """
 
     # 1. Post a new backtest run (mock Celery dispatch)
-    with patch("app.api.v1.backtest.run_backtest_job_task.delay") as mock_delay:
+    with patch("celery.app.task.Task.delay") as mock_delay:
         response = client.post(
             "/api/v1/backtest/run",
             json={
@@ -194,11 +195,10 @@ def test_backtest_engine_unit() -> None:
     prices = 100.0 + np.cumsum(np.random.randn(n) * 0.5)
     prices = np.maximum(prices, 10.0)  # prevent negative prices
     signals = np.where(np.arange(n) % 10 < 5, 1.0, -1.0)
-    dates = np.array([f"2025-{(i//30)+1:02d}-{(i%28)+1:02d}" for i in range(n)])
+    dates = np.array([f"2025-{(i // 30) + 1:02d}-{(i % 28) + 1:02d}" for i in range(n)])
 
     bt = EventDrivenBacktester(
-        prices=prices, signals=signals, dates=dates,
-        initial_capital=100000.0, target_vol=0.15
+        prices=prices, signals=signals, dates=dates, initial_capital=100000.0, target_vol=0.15
     )
     result = bt.run()
 
@@ -216,4 +216,3 @@ def test_backtest_engine_unit() -> None:
     assert np.isfinite(s)
     assert dd <= 0  # drawdown is negative or zero
     assert 0 <= wr <= 1
-

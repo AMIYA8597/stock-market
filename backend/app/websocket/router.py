@@ -86,7 +86,7 @@ async def ws_prices(websocket: WebSocket):
                                         },
                                         "ts": datetime.now(UTC).isoformat(),
                                         "source": q.get("source", "yfinance"),
-                                    }
+                                    },
                                 )
                         except Exception as q_err:
                             logger.debug(f"Error sending initial quote snapshot for {sym}: {q_err}")
@@ -220,7 +220,7 @@ async def ws_signals(websocket: WebSocket):
                                 "direction": direction,
                             },
                             "ts": datetime.now(UTC).isoformat(),
-                            "source": "system"
+                            "source": "system",
                         },
                     )
                 except Exception as e:
@@ -320,7 +320,7 @@ async def ws_backtest_progress(websocket: WebSocket):
                             "equity_value": round(1_000_000 * (1 + pct / 1000), 2),
                         },
                         "ts": datetime.now(UTC).isoformat(),
-                        "source": "system"
+                        "source": "system",
                     },
                 )
                 if pct >= 100:
@@ -364,8 +364,8 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
                             "volume": volume,
                         },
                         "ts": datetime.now(UTC).isoformat(),
-                        "source": quote.get("source", "system")
-                    }
+                        "source": quote.get("source", "system"),
+                    },
                 )
             except Exception as e:
                 logger.warning(f"ws_live: Quote fetch failed for {symbol}: {e}")
@@ -387,8 +387,8 @@ async def ws_live_feed(websocket: WebSocket, symbol: str):
                                     "kelly": float(ens.get("kelly", 0.0)),
                                 },
                                 "ts": datetime.now(UTC).isoformat(),
-                                "source": "system"
-                            }
+                                "source": "system",
+                            },
                         )
                 except Exception as e:
                     logger.warning(f"ws_live: Prediction fetch failed for {symbol}: {e}")

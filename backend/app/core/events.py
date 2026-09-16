@@ -179,6 +179,7 @@ async def startup_events() -> dict[str, Any]:
             if settings.is_production:
                 try:
                     from app.workers.alert_evaluator import evaluator as alert_evaluator
+
                     await alert_evaluator.start()
                     if alert_evaluator._task:
                         background_tasks.append(alert_evaluator._task)

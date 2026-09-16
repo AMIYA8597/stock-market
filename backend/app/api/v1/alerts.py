@@ -147,8 +147,10 @@ async def post_alert(
             new_sym = Instrument(
                 symbol=symbol_ticker,
                 name=f"{symbol_ticker} (Auto-added)",
-                exchange="NSE" if symbol_ticker.endswith(".NS") else ("CRYPTO" if "-USD" in symbol_ticker else "NASDAQ"),
-                asset_class="STOCK"
+                exchange="NSE"
+                if symbol_ticker.endswith(".NS")
+                else ("CRYPTO" if "-USD" in symbol_ticker else "NASDAQ"),
+                asset_class="STOCK",
             )
             db.add(new_sym)
             await db.flush()

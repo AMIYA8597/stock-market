@@ -11,8 +11,8 @@ from uuid import UUID, uuid4
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from sqlalchemy import JSON, Boolean, DateTime, String, func
 from sqlalchemy import UUID as SQLA_UUID
-from sqlalchemy import Boolean, DateTime, String, JSON, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database_types import EncryptedString
