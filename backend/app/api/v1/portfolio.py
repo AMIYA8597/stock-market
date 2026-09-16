@@ -69,7 +69,6 @@ async def list_portfolios(
     ]
 
 
-
 @router.get(
     "/holdings",
     response_model=HoldingsResponse,
@@ -624,7 +623,11 @@ async def get_risk_metrics(
 
         # VaR & CVaR 95%
         var_95 = float(np.percentile(port_rets, 5))
-        cvar_95 = float(np.mean(port_rets[port_rets <= var_95])) if len(port_rets[port_rets <= var_95]) > 0 else var_95
+        cvar_95 = (
+            float(np.mean(port_rets[port_rets <= var_95]))
+            if len(port_rets[port_rets <= var_95]) > 0
+            else var_95
+        )
 
         import math
 
@@ -978,6 +981,7 @@ async def post_optimize(
             ).dict(),
         ) from exc
 
+
 @router.get(
     "/{portfolio_id}",
     summary="Get portfolio by ID",
@@ -1018,4 +1022,3 @@ async def get_portfolio(
         "created_at": holdings.timestamp.isoformat(),
         "updated_at": holdings.timestamp.isoformat(),
     }
-

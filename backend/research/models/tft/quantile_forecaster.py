@@ -12,7 +12,6 @@ from pathlib import Path
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
 
 logger = logging.getLogger(__name__)
 

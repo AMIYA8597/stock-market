@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 TRADE_COST_BPS = 0.0010  # 10 bps
 
+
 class TrainingPipeline:
     def __init__(self, symbol: str):
         self.symbol = symbol
@@ -42,6 +43,7 @@ class TrainingPipeline:
                 )
 
         import yfinance as yf
+
         ticker = yf.Ticker(self.symbol)
         df = ticker.history(period="5y", interval="1d")
         if df.empty or len(df) < 252:
@@ -49,7 +51,16 @@ class TrainingPipeline:
             return {}
 
         df = df.reset_index()
-        df = df.rename(columns={"Date": "time", "Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
+        df = df.rename(
+            columns={
+                "Date": "time",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume",
+            }
+        )
         df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
 
         # Add targets
@@ -83,15 +94,28 @@ class TrainingPipeline:
             logger.error("Insufficient data after dropna.")
             return {}
 
-
-        features = [c for c in df.columns if c not in ["time", "symbol", "close", "target_return", "target_direction", "target_direction_1d"]]
+        features = [
+            c
+            for c in df.columns
+            if c
+            not in [
+                "time",
+                "symbol",
+                "close",
+                "target_return",
+                "target_direction",
+                "target_direction_1d",
+            ]
+        ]
         X = df[features]
         y = df["target_direction"]
 
         models_to_evaluate = {
             "Naive": NaiveDirectionalClassifier(),
-            "ARIMA": ARIMADirectionalClassifier(order=(1,0,1)),
-            "XGBoost": XGBoostDirectionalClassifier(n_estimators=50, max_depth=3), # lower estimators for speed
+            "ARIMA": ARIMADirectionalClassifier(order=(1, 0, 1)),
+            "XGBoost": XGBoostDirectionalClassifier(
+                n_estimators=50, max_depth=3
+            ),  # lower estimators for speed
             "LightGBM": LightGBMDirectionalClassifier(n_estimators=50, max_depth=3),
         }
 
@@ -125,14 +149,24 @@ class TrainingPipeline:
                         import optuna
                         from sklearn.model_selection import TimeSeriesSplit
 
-                        def objective(trial):
+                        def objective(trial, name=name, X_train=X_train, y_train=y_train):
                             max_depth = trial.suggest_int("max_depth", 2, 6)
-                            learning_rate = trial.suggest_float("learning_rate", 1e-3, 0.1, log=True)
+                            learning_rate = trial.suggest_float(
+                                "learning_rate", 1e-3, 0.1, log=True
+                            )
 
                             if name == "XGBoost":
-                                temp_model = XGBoostDirectionalClassifier(n_estimators=50, max_depth=max_depth, learning_rate=learning_rate)
+                                temp_model = XGBoostDirectionalClassifier(
+                                    n_estimators=50,
+                                    max_depth=max_depth,
+                                    learning_rate=learning_rate,
+                                )
                             else:
-                                temp_model = LightGBMDirectionalClassifier(n_estimators=50, max_depth=max_depth, learning_rate=learning_rate)
+                                temp_model = LightGBMDirectionalClassifier(
+                                    n_estimators=50,
+                                    max_depth=max_depth,
+                                    learning_rate=learning_rate,
+                                )
 
                             tscv = TimeSeriesSplit(n_splits=3)
                             scores = []
@@ -152,8 +186,10 @@ class TrainingPipeline:
                                 elif isinstance(p, pd.Series):
                                     pass
                                 else:
-                                    if len(p.shape) > 1 and p.shape[1] == 2: p = p[:, 1]
-                                    elif len(p.shape) > 1: p = p.squeeze()
+                                    if len(p.shape) > 1 and p.shape[1] == 2:
+                                        p = p[:, 1]
+                                    elif len(p.shape) > 1:
+                                        p = p.squeeze()
                                     p = pd.Series(p, index=X_v.index)
 
                                 pr = (p > 0.5).astype(int)
@@ -233,17 +269,21 @@ class TrainingPipeline:
             regime_breakdown = {}
             eval_regimes = regimes.loc[eval_idx]
             for reg in eval_regimes.unique():
-                reg_mask = (eval_regimes == reg)
+                reg_mask = eval_regimes == reg
                 if reg_mask.sum() > 0:
                     y_reg = y_eval[reg_mask]
                     p_reg = all_preds[reg_mask]
                     regime_breakdown[str(reg)] = float(accuracy_score(y_reg, p_reg))
 
-            logger.info(f"{name} Results - Acc: {acc:.4f}, AUC: {auc:.4f}, Sharpe: {sharpe:.4f}, AdjSharpe: {cost_adj_sharpe:.4f}")
+            logger.info(
+                f"{name} Results - Acc: {acc:.4f}, AUC: {auc:.4f}, Sharpe: {sharpe:.4f}, AdjSharpe: {cost_adj_sharpe:.4f}"
+            )
 
             # Honesty Law Guard
             if acc > 0.75:
-                logger.warning(f"LEAKAGE DETECTED: {name} model achieved {acc:.2%} accuracy. This violates the Honesty Law (>75%). Result rejected.")
+                logger.warning(
+                    f"LEAKAGE DETECTED: {name} model achieved {acc:.2%} accuracy. This violates the Honesty Law (>75%). Result rejected."
+                )
                 acc = 0.0
                 auc = 0.5
                 sharpe = -99.0
@@ -271,8 +311,13 @@ class TrainingPipeline:
         # If LSTM was highest, it's best_model_name.
         # But let's check specifically if it beats XGBoost.
         if "LSTM" in results and "XGBoost" in results:
-            if results["LSTM"]["cost_adjusted_sharpe"] <= results["XGBoost"]["cost_adjusted_sharpe"]:
-                logger.info("Decision Gate: LSTM did NOT beat XGBoost in walk-forward Sharpe. LSTM is NOT recommended for production.")
+            if (
+                results["LSTM"]["cost_adjusted_sharpe"]
+                <= results["XGBoost"]["cost_adjusted_sharpe"]
+            ):
+                logger.info(
+                    "Decision Gate: LSTM did NOT beat XGBoost in walk-forward Sharpe. LSTM is NOT recommended for production."
+                )
             else:
                 logger.info("Decision Gate: LSTM strictly beat XGBoost! It has earned its place.")
 
@@ -280,7 +325,9 @@ class TrainingPipeline:
         logger.info("| Model | Accuracy | AUC | Sharpe | Cost-Adj Sharpe |")
         logger.info("|-------|----------|-----|--------|-----------------|")
         for m, res in results.items():
-            logger.info(f"| {m} | {res['accuracy']:.4f} | {res['auc']:.4f} | {res['sharpe']:.4f} | {res['cost_adjusted_sharpe']:.4f} |")
+            logger.info(
+                f"| {m} | {res['accuracy']:.4f} | {res['auc']:.4f} | {res['sharpe']:.4f} | {res['cost_adjusted_sharpe']:.4f} |"
+            )
 
         logger.info(f"Best Model Selected: {best_model_name}")
 
@@ -298,17 +345,21 @@ class TrainingPipeline:
             final_model.save(artifact_path)
         else:
             import joblib
+
             joblib.dump(final_model, artifact_path)
 
         async with async_session_factory() as session:
             await session.execute(
-                ModelArtifact.__table__.update().where(ModelArtifact.symbol_id == self.instrument.id).values(is_active=False)
+                ModelArtifact.__table__.update()
+                .where(ModelArtifact.symbol_id == self.instrument.id)
+                .values(is_active=False)
             )
 
             import datetime
+
             timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
             for m_name, metrics in results.items():
-                is_active = (m_name == best_model_name)
+                is_active = m_name == best_model_name
 
                 model_inst = models_to_evaluate[m_name]
                 hyper_params = {}
@@ -324,7 +375,7 @@ class TrainingPipeline:
                     version_tag=f"{m_name.lower()}_{self.symbol}_{timestamp_str}",
                     artifact_path=artifact_path if is_active else "",
                     hyperparameters=hyper_params,
-                    is_active=is_active
+                    is_active=is_active,
                 )
                 session.add(artifact)
                 await session.flush()
@@ -337,7 +388,7 @@ class TrainingPipeline:
                     auc=metrics["auc"],
                     sharpe=metrics["sharpe"],
                     cost_adjusted_sharpe=metrics["cost_adjusted_sharpe"],
-                    regime_breakdown=metrics["regime_breakdown"]
+                    regime_breakdown=metrics["regime_breakdown"],
                 )
                 session.add(metric)
 
@@ -345,7 +396,10 @@ class TrainingPipeline:
 
         return results
 
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
     pipeline = TrainingPipeline("RELIANCE.NS")
     asyncio.run(pipeline.run())

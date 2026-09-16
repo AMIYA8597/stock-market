@@ -87,7 +87,9 @@ class NSEMarketScheduler:
 
     def __init__(self):
         self.scheduler = AsyncIOScheduler()
-        self.orchestrator = DataIngestionOrchestrator(max_concurrency=4) if DataIngestionOrchestrator else None
+        self.orchestrator = (
+            DataIngestionOrchestrator(max_concurrency=4) if DataIngestionOrchestrator else None
+        )
         self._backfill_running = False
 
     async def poll_market_data(self):

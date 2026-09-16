@@ -123,3 +123,6 @@ backend/alembic/versions/*.pyc
 .aider*
 dist/
 .cache/
+
+# Generated test/error logs
+backend/test_errors.txt

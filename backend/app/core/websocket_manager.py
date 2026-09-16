@@ -41,8 +41,9 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket) -> None:
         """Accept a WebSocket connection and start its heartbeat."""
         from fastapi import WebSocketException
+
         client_ip = websocket.client.host if websocket.client else "unknown"
-        
+
         async with self._lock:
             if client_ip != "unknown" and self._ip_counts[client_ip] >= self.MAX_CONNECTIONS_PER_IP:
                 raise WebSocketException(code=1008, reason="Too many connections from this IP")
@@ -69,9 +70,11 @@ class ConnectionManager:
                             "type": "heartbeat",
                             "symbol": None,
                             "payload": {"ping": True},
-                            "ts": __import__("datetime").datetime.now(__import__("datetime").UTC).isoformat(),
-                            "source": "system"
-                        }
+                            "ts": __import__("datetime")
+                            .datetime.now(__import__("datetime").UTC)
+                            .isoformat(),
+                            "source": "system",
+                        },
                     )
                 except Exception:
                     break

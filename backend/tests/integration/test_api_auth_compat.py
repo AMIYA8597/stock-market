@@ -26,16 +26,23 @@ async def test_auth_login_alias_and_profile_logout(client: AsyncClient) -> None:
     # The original test checked /api/v1/auth/me. There is no /auth/me in users.py or auth.py?
     # Let's check if it exists. If it does, we use it. If not, it returns 404.
     # Wait, if I look at the old test, it asserted 200.
-    me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token_payload['access_token']}"})
+    me = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {token_payload['access_token']}"}
+    )
     if me.status_code == 404:
         # fallback if the route is actually /api/v1/users/profile
-        me = await client.get("/api/v1/users/profile", headers={"Authorization": f"Bearer {token_payload['access_token']}"})
+        me = await client.get(
+            "/api/v1/users/profile",
+            headers={"Authorization": f"Bearer {token_payload['access_token']}"},
+        )
 
     assert me.status_code == 200
     me_payload = me.json()
     assert "email" in me_payload
     assert me_payload["is_active"] is True
 
-    logout = await client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token_payload['access_token']}"})
+    logout = await client.post(
+        "/api/v1/auth/logout", headers={"Authorization": f"Bearer {token_payload['access_token']}"}
+    )
     # Since DummySession doesn't store refresh tokens properly unless implemented, logout might return 204 or 200.
     assert logout.status_code in (200, 204)

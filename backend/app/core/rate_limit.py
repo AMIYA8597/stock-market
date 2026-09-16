@@ -1,10 +1,13 @@
 import time
+
 from fastapi import HTTPException
-from app.database.redis_client import _redis_pool_singleton
-from app.core.test_state import is_test_mode
+
 from app.core.logging import get_logger
+from app.core.test_state import is_test_mode
+from app.database.redis_client import _redis_pool_singleton
 
 logger = get_logger(__name__)
+
 
 async def check_rate_limit(key: str, requests: int, window: int) -> None:
     """Check if the given key has exceeded the rate limit.
@@ -27,10 +30,7 @@ async def check_rate_limit(key: str, requests: int, window: int) -> None:
         results = await pipe.execute()
 
         if results[2] > requests:
-            raise HTTPException(
-                status_code=429,
-                detail="Rate limit exceeded."
-            )
+            raise HTTPException(status_code=429, detail="Rate limit exceeded.")
     except HTTPException:
         raise
     except Exception as e:

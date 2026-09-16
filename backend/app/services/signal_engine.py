@@ -10,7 +10,6 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,7 +95,12 @@ class TechnicalSignalEngine:
         trend_score = 0.0
 
         # EMA/SMA Cross (Golden/Death)
-        if last.get("SMA_20") and last.get("SMA_50") and not pd.isna(last["SMA_20"]) and not pd.isna(last["SMA_50"]):
+        if (
+            last.get("SMA_20")
+            and last.get("SMA_50")
+            and not pd.isna(last["SMA_20"])
+            and not pd.isna(last["SMA_50"])
+        ):
             if last["SMA_20"] > last["SMA_50"] and prev["SMA_20"] <= prev["SMA_50"]:
                 trend_score += 0.2
                 breakdown["SMA Cross"] = 0.2
@@ -140,7 +144,7 @@ class TechnicalSignalEngine:
                 breakdown["Supertrend"] = -0.2
 
         # PSAR
-        [c for c in df.columns if c.startswith("PSARr_")] # reversal col
+        [c for c in df.columns if c.startswith("PSARr_")]  # reversal col
         psar_long_col = [c for c in df.columns if c.startswith("PSARl_")]
         if psar_long_col and not pd.isna(last[psar_long_col[0]]):
             trend_score += 0.2
@@ -449,6 +453,7 @@ class SignalEngine:
         realized_vol = np.array([[conditional_vol]])
 
         from research.backtesting.cost_model import compute_indian_costs
+
         cost_arr = compute_indian_costs(trades_abs, prices, adv, realized_vol)
         single_trip_cost = float(cost_arr[0][0])
         round_trip_cost = single_trip_cost * 2.0

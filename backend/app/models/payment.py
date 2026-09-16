@@ -56,10 +56,13 @@ class Subscription(Base):
     user_id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), ForeignKey("users.id"))
     plan_id: Mapped[UUID] = mapped_column(SQLA_UUID(as_uuid=True), ForeignKey("plans.id"))
     status: Mapped[str] = mapped_column(String(50), default="active")
-    razorpay_subscription_id: Mapped[str | None] = mapped_column(String(120), unique=True, nullable=True, index=True)
+    razorpay_subscription_id: Mapped[str | None] = mapped_column(
+        String(120), unique=True, nullable=True, index=True
+    )
     razorpay_customer_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
     current_period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 
 class BillingAuditLog(Base):
     __tablename__ = "billing_audit_logs"

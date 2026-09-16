@@ -1,4 +1,5 @@
 """Celery task for monitoring feature drift and triggering retraining."""
+
 import asyncio
 import logging
 
@@ -16,8 +17,10 @@ from app.services.ml_engine.training_pipeline import TrainingPipeline
 
 logger = logging.getLogger(__name__)
 
+
 def calculate_psi(expected: np.ndarray, actual: np.ndarray, buckets: int = 10) -> float:
     """Calculate the Population Stability Index (PSI)."""
+
     def scale_range(input, min, max):
         input += -(np.min(input))
         input /= np.max(input) / (max - min)
@@ -41,13 +44,16 @@ def calculate_psi(expected: np.ndarray, actual: np.ndarray, buckets: int = 10) -
         value = (e_perc - a_perc) * np.log(e_perc / a_perc)
         return value
 
-    psi_value = np.sum(sub_psi(expected_percents[i], actual_percents[i]) for i in range(len(expected_percents)))
+    psi_value = np.sum(
+        sub_psi(expected_percents[i], actual_percents[i]) for i in range(len(expected_percents))
+    )
     return psi_value
 
 
 @shared_task(name="check_model_drift_and_retrain", bind=True)
 def check_model_drift_and_retrain(self, symbol: str) -> dict:
     return asyncio.run(_check_model_drift_async(symbol))
+
 
 async def _check_model_drift_async(symbol: str) -> dict:
     logger.info(f"Checking model drift for {symbol}...")
@@ -108,11 +114,15 @@ async def _check_model_drift_async(symbol: str) -> dict:
             psi = 0.0
 
         max_psi = max(max_psi, psi)
-        logger.info(f"Drift metrics for {feature} -> KS: {ks_stat:.4f} (p={p_value:.4f}), PSI: {psi:.4f}")
+        logger.info(
+            f"Drift metrics for {feature} -> KS: {ks_stat:.4f} (p={p_value:.4f}), PSI: {psi:.4f}"
+        )
 
         # Threshold: if PSI > 0.2, it's significant drift. Also if KS p_value < 0.05
         if psi > 0.2 or p_value < 0.05:
-            logger.warning(f"Significant drift detected on {feature}! PSI: {psi:.4f}, KS-p: {p_value:.4f}")
+            logger.warning(
+                f"Significant drift detected on {feature}! PSI: {psi:.4f}, KS-p: {p_value:.4f}"
+            )
             drift_detected = True
 
     if drift_detected:
@@ -120,6 +130,7 @@ async def _check_model_drift_async(symbol: str) -> dict:
         return await force_retrain(symbol)
 
     return {"status": "success", "drift_detected": False, "max_psi": max_psi}
+
 
 async def force_retrain(symbol: str) -> dict:
     pipeline = TrainingPipeline(symbol)
@@ -148,7 +159,9 @@ def check_drift_for_watchlist() -> dict:
             results[symbol] = "error"
     return results
 
+
 if __name__ == "__main__":
     import sys
+
     symbol = sys.argv[1] if len(sys.argv) > 1 else "RELIANCE.NS"
     asyncio.run(_check_model_drift_async(symbol))

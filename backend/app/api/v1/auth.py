@@ -1,20 +1,21 @@
 from __future__ import annotations
 
 import hashlib
-import secrets
 import logging
+import secrets
+
 logger = logging.getLogger(__name__)
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pyotp
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.core.rate_limit import check_rate_limit
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.rate_limit import check_rate_limit
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -54,7 +55,9 @@ def _compat_test_mode() -> bool:
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register(payload: UserRegister, request: Request, db: AsyncSession = Depends(get_db)) -> UserResponse:
+async def register(
+    payload: UserRegister, request: Request, db: AsyncSession = Depends(get_db)
+) -> UserResponse:
     client_ip = request.client.host if request.client else "unknown"
     await check_rate_limit(f"auth:register:ip:{client_ip}", requests=3, window=3600)
 
@@ -140,7 +143,9 @@ async def register(payload: UserRegister, request: Request, db: AsyncSession = D
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def login(
+    payload: UserLogin, request: Request, db: AsyncSession = Depends(get_db)
+) -> TokenResponse:
     email = payload.email.lower().strip()
     client_ip = request.client.host if request.client else "unknown"
 
@@ -287,6 +292,7 @@ async def refresh(payload: TokenRefresh, db: AsyncSession = Depends(get_db)) -> 
         )
 
     from uuid import UUID
+
     user_result = await db.execute(select(User).where(User.id == UUID(user_id)))
     user = user_result.scalar_one_or_none()
     if user is None or not user.is_active:
@@ -382,7 +388,7 @@ async def forgot_password(
 ) -> AuthMessage:
     email = payload.email.lower().strip()
     client_ip = request.client.host if request.client else "unknown"
-    
+
     try:
         await check_rate_limit(f"auth:forgot-password:ip:{client_ip}", requests=3, window=3600)
         await check_rate_limit(f"auth:forgot-password:email:{email}", requests=3, window=3600)
@@ -398,10 +404,7 @@ async def forgot_password(
     # Invalidate any prior unused reset tokens for this user
     await db.execute(
         PasswordResetToken.__table__.update()
-        .where(
-            PasswordResetToken.user_id == user.id,
-            PasswordResetToken.consumed_at.is_(None)
-        )
+        .where(PasswordResetToken.user_id == user.id, PasswordResetToken.consumed_at.is_(None))
         .values(consumed_at=datetime.now(UTC))
     )
 
@@ -433,7 +436,7 @@ async def reset_password(
     payload: ResetPasswordConfirm, request: Request, db: AsyncSession = Depends(get_db)
 ) -> AuthMessage:
     client_ip = request.client.host if request.client else "unknown"
-    
+
     try:
         await check_rate_limit(f"auth:reset-password:ip:{client_ip}", requests=3, window=3600)
     except HTTPException:

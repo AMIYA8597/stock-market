@@ -24,9 +24,14 @@ async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UU
     (SQLAlchemy models aren't iterable) for every authenticated request,
     turning into an unhandled 500 rather than the intended 401.
     """
-    if not current_user or not current_user.id:
+    if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    return current_user.id
+    user_id = current_user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    import uuid
+    return uuid.UUID(user_id) if isinstance(user_id, str) else user_id
 
 
 @router.get("", response_model=list[JournalResponse])

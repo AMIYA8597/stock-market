@@ -1095,32 +1095,54 @@
         ]
       }
     },
-    "/api/v1/payments/cancel-subscription": {
-      "post": {
+    "/api/v1/payments/history": {
+      "get": {
         "tags": [
           "payments"
         ],
-        "summary": "Cancel Subscription",
-        "operationId": "cancel_subscription_api_v1_payments_cancel_subscription_post",
+        "summary": "Payment History",
+        "operationId": "payment_history_api_v1_payments_history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
                   "type": "object",
-                  "title": "Response Cancel Subscription Api V1 Payments Cancel Subscription Post"
+                  "additionalProperties": true,
+                  "title": "Response Payment History Api V1 Payments History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/payments/subscription": {
@@ -1167,56 +1189,6 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Razorpay Webhook Api V1 Payments Webhook Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/payments/history": {
-      "get": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Payment History",
-        "operationId": "payment_history_api_v1_payments_history_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Payment History Api V1 Payments History Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1747,6 +1719,30 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Get Providers Health Api V1 Market Providers Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/global-context": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Get Global Context",
+        "description": "Real global-market correlation snapshot for the signal engine and UI.\n\nEach entry is fetched independently \u2014 a failure on one ticker (e.g. a\ntransient provider outage) must not blank out the others, and must never\nbe silently replaced with a fabricated number. Failed entries report\nstatus: \"unavailable\" with no price field, so the UI can render an\nexplicit stale/error state instead of a fake value.",
+        "operationId": "get_global_context_api_v1_market_global_context_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Global Context Api V1 Market Global Context Get"
                 }
               }
             }
@@ -2306,6 +2302,11 @@
         ],
         "summary": "Get Backtest Status",
         "operationId": "get_backtest_status_api_v1_backtest_status__job_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "job_id",
@@ -2348,6 +2349,11 @@
         ],
         "summary": "Get Backtest Results",
         "operationId": "get_backtest_results_api_v1_backtest_results__job_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "job_id",
@@ -2774,6 +2780,11 @@
         ],
         "summary": "Cancel a pending limit order",
         "operationId": "cancel_order_api_v1_paper_trade_cancel__order_id__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "order_id",
@@ -3693,6 +3704,7 @@
           "predictions"
         ],
         "summary": "Generate Forecast",
+        "description": "Multi-horizon SARIMAX price forecast \u2014 real statistical forecasting on\nreal OHLCV history, not a stub. Each horizon reports the actual data\nwindow it was fit on and an honest confidence label; horizons under 1h\nare only ever backed by ~60 days of intraday data (a free-data-source\nlimit, not a modeling choice) and are labeled accordingly.",
         "operationId": "generate_forecast_api_v1_predictions_forecast_post",
         "requestBody": {
           "content": {
@@ -4002,9 +4014,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "additionalProperties": true,
-                "type": "object",
-                "title": "Payload"
+                "$ref": "#/components/schemas/PredictRequest"
               }
             }
           },
@@ -6200,15 +6210,15 @@
           },
           "horizons": {
             "items": {
-              "type": "integer"
+              "type": "string"
             },
             "type": "array",
             "title": "Horizons",
-            "description": "Forecast horizons in days",
+            "description": "Forecast horizon labels: 1m,2m,3m,5m,10m,15m,30m,1h,1d,1w,15d,1mo,1y",
             "default": [
-              1,
-              5,
-              30
+              "1d",
+              "1w",
+              "1mo"
             ]
           },
           "models": {
@@ -7822,6 +7832,22 @@
         ],
         "title": "PerformanceResponse",
         "description": "GET /portfolio/performance response."
+      },
+      "PredictRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "maxLength": 15,
+            "minLength": 1,
+            "title": "Symbol",
+            "description": "Stock ticker symbol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "title": "PredictRequest"
       },
       "QuantEdgeOrderRequest": {
         "properties": {
@@ -10183,6 +10209,11 @@
           },
           "regime": {
             "$ref": "#/components/schemas/RegimeDetails"
+          },
+          "is_fallback": {
+            "type": "boolean",
+            "title": "Is Fallback",
+            "default": false
           }
         },
         "type": "object",

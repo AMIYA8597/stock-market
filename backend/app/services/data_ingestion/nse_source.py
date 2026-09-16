@@ -69,7 +69,14 @@ class NSESource(MarketDataProvider):
             raise DataUnavailableError(f"Failed to bootstrap NSE session: {e}")
 
     @retry(
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError, RateLimitExceededError)),
+        retry=retry_if_exception_type(
+            (
+                aiohttp.ClientError,
+                asyncio.TimeoutError,
+                DataUnavailableError,
+                RateLimitExceededError,
+            )
+        ),
         stop=stop_after_attempt(4),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
@@ -108,6 +115,7 @@ class NSESource(MarketDataProvider):
         url = "https://www.nseindia.com/api/quote-equity"
         try:
             import urllib.parse
+
             data = await self._fetch(url, params={"symbol": urllib.parse.quote(clean_symbol)})
             price_info = data.get("priceInfo", {})
             if not price_info:
@@ -118,8 +126,10 @@ class NSESource(MarketDataProvider):
                 price=float(price_info.get("lastPrice", 0.0)),
                 change=float(price_info.get("change", 0.0)),
                 change_pct=float(price_info.get("pChange", 0.0)),
-                volume=float(data.get("preOpenMarket", {}).get("totalTradedVolume", 0.0)), # Fallback to preopen volume if main not present in priceInfo
-                timestamp=datetime.now(UTC)
+                volume=float(
+                    data.get("preOpenMarket", {}).get("totalTradedVolume", 0.0)
+                ),  # Fallback to preopen volume if main not present in priceInfo
+                timestamp=datetime.now(UTC),
             )
         except Exception as e:
             raise DataUnavailableError(f"NSE quote failed for {symbol}: {e}")
@@ -148,16 +158,18 @@ class NSESource(MarketDataProvider):
                 if not date_str:
                     continue
                 ts = datetime.strptime(date_str, "%d-%b-%Y").replace(tzinfo=UTC)
-                bars.append(OHLCVBar(
-                    time=ts,
-                    open=float(row["CH_OPENING_PRICE"]),
-                    high=float(row["CH_TRADE_HIGH_PRICE"]),
-                    low=float(row["CH_TRADE_LOW_PRICE"]),
-                    close=float(row["CH_CLOSING_PRICE"]),
-                    volume=float(row.get("CH_TOT_TRADED_QTY", 0.0) or 0.0),
-                    adjusted_close=None,
-                    interval="1d",
-                ))
+                bars.append(
+                    OHLCVBar(
+                        time=ts,
+                        open=float(row["CH_OPENING_PRICE"]),
+                        high=float(row["CH_TRADE_HIGH_PRICE"]),
+                        low=float(row["CH_TRADE_LOW_PRICE"]),
+                        close=float(row["CH_CLOSING_PRICE"]),
+                        volume=float(row.get("CH_TOT_TRADED_QTY", 0.0) or 0.0),
+                        adjusted_close=None,
+                        interval="1d",
+                    )
+                )
             bars.sort(key=lambda x: x.time)
             return bars
         except Exception as e:
@@ -171,7 +183,9 @@ class NSESource(MarketDataProvider):
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 async with session.get(url, headers=self.headers) as response:
                     if response.status >= 400:
-                        raise DataUnavailableError(f"Failed to fetch NSE universe: {response.status}")
+                        raise DataUnavailableError(
+                            f"Failed to fetch NSE universe: {response.status}"
+                        )
                     csv_data = await response.text()
 
             f = io.StringIO(csv_data)
@@ -181,12 +195,14 @@ class NSESource(MarketDataProvider):
                 symbol = row.get("SYMBOL")
                 name = row.get("NAME OF COMPANY")
                 if symbol and name:
-                    universe.append({
-                        "symbol": symbol,
-                        "display_name": name,
-                        "exchange": "NSE",
-                        "yfinance_ticker": f"{symbol}.NS"
-                    })
+                    universe.append(
+                        {
+                            "symbol": symbol,
+                            "display_name": name,
+                            "exchange": "NSE",
+                            "yfinance_ticker": f"{symbol}.NS",
+                        }
+                    )
             return universe
         except Exception as e:
             raise DataUnavailableError(f"NSE universe fetch failed: {e}")

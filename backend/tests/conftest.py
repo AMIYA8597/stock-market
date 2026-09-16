@@ -66,9 +66,11 @@ from datetime import UTC, datetime, timedelta
 async def mock_enqueue_email(*args, **kwargs):
     pass
 
+
 import app.services.email_service
 
 app.services.email_service.enqueue_email = mock_enqueue_email
+
 
 async def mock_get_full_prediction(symbol: str) -> dict:
     return {
@@ -289,12 +291,15 @@ def db():
             class ConfigurableResult(DummyResult):
                 def __init__(self, obj=None):
                     self.obj = obj
+
                 def scalar_one_or_none(self):
                     return self.obj
+
                 def scalars(self):
                     class MockScalars:
                         def all(self):
                             return [self.obj] if self.obj else []
+
                     return MockScalars()
 
             stmt_str = str(stmt).lower()
@@ -330,6 +335,7 @@ def db():
                         # we can try to find user_id from TEST_USERS_BY_EMAIL
                         if TEST_USERS_BY_EMAIL:
                             self.user_id = list(TEST_USERS_BY_EMAIL.values())[-1].id
+
                 return ConfigurableResult(MockRefreshSession())
 
             # For update statements
@@ -343,9 +349,13 @@ def db():
             import uuid
 
             from app.core.test_state import TEST_USERS_BY_ID
+
             if hasattr(instance, "id") and getattr(instance, "id", None) is None:
                 instance.id = uuid.uuid4()
-            if hasattr(instance, "failed_login_attempts") and getattr(instance, "failed_login_attempts", None) is None:
+            if (
+                hasattr(instance, "failed_login_attempts")
+                and getattr(instance, "failed_login_attempts", None) is None
+            ):
                 instance.failed_login_attempts = 0
             if hasattr(instance, "email"):
                 TEST_USERS_BY_EMAIL[instance.email] = instance

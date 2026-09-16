@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from typing import Any
+
 import numpy as np
 
 from research.models.ensemble.signal_combiner import CombinedSignal, combine_weighted_signals
+
 
 @dataclass(slots=True)
 class InferenceContext:
@@ -18,15 +20,18 @@ class InferenceContext:
     regime_mean: float
     regime_variance: float
 
+
 @dataclass(slots=True)
 class EnsembleInferenceResult:
     combined: CombinedSignal
+
 
 async def _run_callable(maybe_async_callable: Any, *args: Any, **kwargs: Any) -> Any:
     result = maybe_async_callable(*args, **kwargs)
     if asyncio.iscoroutine(result):
         return await result
     return await asyncio.to_thread(lambda: result)
+
 
 async def run_parallel_inference(
     model_calls: dict[str, tuple[Any, tuple[Any, ...], dict[str, Any]]],
@@ -51,6 +56,7 @@ async def run_parallel_inference(
         else:
             outputs[name] = float(value)
     return outputs
+
 
 def build_ensemble_result(ctx: InferenceContext) -> EnsembleInferenceResult:
     """Compute final combined signal from model outputs."""

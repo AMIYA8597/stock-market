@@ -19,23 +19,15 @@ from app.services.data_ingestion.yfinance_source import YFinanceProvider
 
 logger = logging.getLogger(__name__)
 
+
 class ProviderManager:
     """Orchestrates market data providers with failover and cache-aside logic."""
 
     def __init__(self):
         # Order: yfinance -> nse -> stooq
-        self.providers = [
-            YFinanceProvider(),
-            NSESource(),
-            StooqProvider()
-        ]
+        self.providers = [YFinanceProvider(), NSESource(), StooqProvider()]
         # TTL definitions (seconds)
-        self.ttls = {
-            "quote": 10,
-            "intraday": 60,
-            "daily": 24 * 60 * 60,
-            "index": 30
-        }
+        self.ttls = {"quote": 10, "intraday": 60, "daily": 24 * 60 * 60, "index": 30}
 
     async def get_quote(self, symbol: str) -> Quote:
         """Fetch quote with cache and failover."""
@@ -46,7 +38,11 @@ class ProviderManager:
         cached = await cache_get(redis, cache_key)
         if cached:
             # We enforce stale-while-revalidate pattern
-            as_of = datetime.fromisoformat(cached["as_of"]) if isinstance(cached["as_of"], str) else cached["as_of"]
+            as_of = (
+                datetime.fromisoformat(cached["as_of"])
+                if isinstance(cached["as_of"], str)
+                else cached["as_of"]
+            )
             if (datetime.now(UTC) - as_of).total_seconds() > self.ttls["quote"]:
                 # Stale: kick off background refresh, return stale for now
                 asyncio.create_task(self._fetch_and_cache_quote(symbol, cache_key))
@@ -56,7 +52,7 @@ class ProviderManager:
                 change=cached["change"],
                 change_pct=cached["change_pct"],
                 volume=cached["volume"],
-                timestamp=as_of
+                timestamp=as_of,
             )
 
         # Cache miss, fetch synchronous
@@ -68,15 +64,20 @@ class ProviderManager:
             try:
                 quote = await provider.get_quote(symbol)
                 # Cache it
-                await cache_set(redis, cache_key, {
-                    "symbol": quote.symbol,
-                    "price": quote.price,
-                    "change": quote.change,
-                    "change_pct": quote.change_pct,
-                    "volume": quote.volume,
-                    "as_of": quote.timestamp.isoformat(),
-                    "source": provider.name
-                }, ttl=timedelta(days=1)) # Keep physically cached for 1 day, stale after 10s
+                await cache_set(
+                    redis,
+                    cache_key,
+                    {
+                        "symbol": quote.symbol,
+                        "price": quote.price,
+                        "change": quote.change,
+                        "change_pct": quote.change_pct,
+                        "volume": quote.volume,
+                        "as_of": quote.timestamp.isoformat(),
+                        "source": provider.name,
+                    },
+                    ttl=timedelta(days=1),
+                )  # Keep physically cached for 1 day, stale after 10s
                 return quote
             except ProviderError as e:
                 logger.warning(f"{provider.name} failed quote for {symbol}: {e}")
@@ -98,20 +99,24 @@ class ProviderManager:
         if cached:
             as_of = datetime.fromisoformat(cached["as_of"])
             if (datetime.now(UTC) - as_of).total_seconds() > ttl_seconds:
-                asyncio.create_task(self._fetch_and_cache_ohlcv(symbol, interval, start, end, cache_key))
+                asyncio.create_task(
+                    self._fetch_and_cache_ohlcv(symbol, interval, start, end, cache_key)
+                )
 
             bars = []
             for b in cached["bars"]:
-                bars.append(OHLCVBar(
-                    time=datetime.fromisoformat(b["time"]),
-                    open=b["open"],
-                    high=b["high"],
-                    low=b["low"],
-                    close=b["close"],
-                    volume=b["volume"],
-                    adjusted_close=b.get("adjusted_close"),
-                    interval=interval
-                ))
+                bars.append(
+                    OHLCVBar(
+                        time=datetime.fromisoformat(b["time"]),
+                        open=b["open"],
+                        high=b["high"],
+                        low=b["low"],
+                        close=b["close"],
+                        volume=b["volume"],
+                        adjusted_close=b.get("adjusted_close"),
+                        interval=interval,
+                    )
+                )
             return bars
 
         return await self._fetch_and_cache_ohlcv(symbol, interval, start, end, cache_key)
@@ -128,21 +133,28 @@ class ProviderManager:
                 # Cache it
                 cached_bars = []
                 for b in bars:
-                    cached_bars.append({
-                        "time": b.time.isoformat(),
-                        "open": b.open,
-                        "high": b.high,
-                        "low": b.low,
-                        "close": b.close,
-                        "volume": b.volume,
-                        "adjusted_close": b.adjusted_close
-                    })
+                    cached_bars.append(
+                        {
+                            "time": b.time.isoformat(),
+                            "open": b.open,
+                            "high": b.high,
+                            "low": b.low,
+                            "close": b.close,
+                            "volume": b.volume,
+                            "adjusted_close": b.adjusted_close,
+                        }
+                    )
 
-                await cache_set(redis, cache_key, {
-                    "bars": cached_bars,
-                    "as_of": datetime.now(UTC).isoformat(),
-                    "source": provider.name
-                }, ttl=timedelta(days=7)) # physical ttl
+                await cache_set(
+                    redis,
+                    cache_key,
+                    {
+                        "bars": cached_bars,
+                        "as_of": datetime.now(UTC).isoformat(),
+                        "source": provider.name,
+                    },
+                    ttl=timedelta(days=7),
+                )  # physical ttl
                 return bars
             except ProviderError as e:
                 logger.warning(f"{provider.name} failed ohlcv for {symbol}: {e}")
@@ -163,5 +175,6 @@ class ProviderManager:
             else:
                 health_data[p.name] = res
         return health_data
+
 
 provider_manager = ProviderManager()
