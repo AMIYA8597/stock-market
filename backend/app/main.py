@@ -19,6 +19,11 @@ if _backend_root_str not in sys.path:
 
 from contextlib import asynccontextmanager
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from loguru import logger
+
 # Import (and thereby activate as Celery's "current app") our configured Celery
 # instance before any task modules load. Task files use the generic @shared_task
 # decorator, which binds to whatever Celery app is current at call time — if this
@@ -32,11 +37,6 @@ from app.core.celery_app import celery_app as _celery_app  # noqa: F401
 # would otherwise import this module — and an unregistered @shared_task means
 # beat silently has nothing to run, exactly like the earlier backtest binding bug.
 from app.tasks import retraining_trigger as _retraining_trigger_tasks  # noqa: F401
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from loguru import logger
 
 try:
     import sentry_sdk
@@ -143,12 +143,13 @@ def create_app() -> FastAPI:
             "db": "ok",
             "redis": "ok",
             "providers": "ok",
-            "uptime_seconds": 0.0
+            "uptime_seconds": 0.0,
         }
 
         # Check DB
         try:
             from sqlalchemy import text
+
             async with async_session_factory() as session:
                 await session.execute(text("SELECT 1"))
         except Exception as e:
@@ -175,6 +176,7 @@ def create_app() -> FastAPI:
         # Check Providers
         try:
             from app.services.market_data_service import MarketDataService
+
             providers_health = await MarketDataService.health()
             if not providers_health or providers_health.get("status") != "ok":
                 health_status["providers"] = providers_health.get("status", "unhealthy")
@@ -188,5 +190,6 @@ def create_app() -> FastAPI:
         return health_status
 
     return _app
+
 
 app = create_app()

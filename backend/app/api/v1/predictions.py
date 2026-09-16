@@ -24,9 +24,9 @@ router = APIRouter()
 
 @router.get("/{symbol}")
 async def get_prediction(
-    symbol: str, 
+    symbol: str,
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60)),
 ):
     norm_symbol = MarketDataService._normalize_symbol(symbol)
 
@@ -47,21 +47,21 @@ async def get_prediction(
             status_code=503,
             detail=ErrorResponse.create(
                 code="MODEL_NOT_TRAINED",
-                message=f"ML prediction engine is offline until training phase for {symbol}."
-            ).dict()
+                message=f"ML prediction engine is offline until training phase for {symbol}.",
+            ).dict(),
         )
 
     return await get_full_prediction(
         symbol,
         bypass_cache=False,
         artifact_path=artifact.artifact_path,
-        model_version=artifact.version_tag
+        model_version=artifact.version_tag,
     )
+
 
 @router.post("/forecast")
 async def generate_forecast(
-    payload: ForecastRequest,
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    payload: ForecastRequest, _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
 ):
     """Multi-horizon SARIMAX price forecast — real statistical forecasting on
     real OHLCV history, not a stub. Each horizon reports the actual data
@@ -73,26 +73,28 @@ async def generate_forecast(
     result = await forecast_multi_horizon(norm_symbol, payload.horizons)
     return result
 
+
 @router.get("/latest/{symbol}")
 async def get_latest_forecast(
-    symbol: str, 
+    symbol: str,
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60)),
 ):
     return await get_prediction(symbol, db)
 
+
 @router.get("/ensemble/{symbol}")
 async def get_ensemble_data(
-    symbol: str,
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    symbol: str, _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
 ):
     raise HTTPException(
         status_code=503,
         detail=ErrorResponse.create(
             code="MODEL_NOT_TRAINED",
-            message="ML prediction engine is offline until training phase."
-        ).dict()
+            message="ML prediction engine is offline until training phase.",
+        ).dict(),
     )
+
 
 @router.get("/history/{symbol}")
 async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)):
@@ -118,9 +120,8 @@ async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)
         raise HTTPException(
             status_code=503,
             detail=ErrorResponse.create(
-                code="MODEL_NOT_TRAINED",
-                message="No metrics available."
-            ).dict()
+                code="MODEL_NOT_TRAINED", message="No metrics available."
+            ).dict(),
         )
 
     metric, artifact = row
@@ -132,8 +133,7 @@ async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)
             "recall": metric.recall,
             "sharpe": metric.sharpe,
             "cost_adjusted_sharpe": metric.cost_adjusted_sharpe,
-            "recent_trades": [], # Cannot invent this per honesty law
-            "regime_breakdown": metric.regime_breakdown
+            "recent_trades": [],  # Cannot invent this per honesty law
+            "regime_breakdown": metric.regime_breakdown,
         }
     }
-

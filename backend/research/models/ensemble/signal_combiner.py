@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import numpy as np
 
 from research.models.ensemble.kelly_sizer import half_kelly_capped
+
 
 @dataclass(frozen=True)
 class CombinedSignal:
@@ -45,7 +47,7 @@ def combine_weighted_signals(
 
     score = float(np.clip(fused_score, -1.0, 1.0))
     confidence = float(abs(score))
-    
+
     return CombinedSignal(
         score=score,
         confidence=confidence,

@@ -19,7 +19,7 @@ class TargetBuilder(FeatureBuilder):
 
     def transform(self, frame: pd.DataFrame) -> pd.DataFrame:
         data = frame.copy()
-        
+
         # Next-day return direction: sign(close[t+1] - close[t])
         # We shift(-1) to bring t+1 into the row for t.
         # MUST group by symbol if present to prevent cross-sectional leakage.

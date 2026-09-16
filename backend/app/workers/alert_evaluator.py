@@ -11,6 +11,7 @@ from app.services.data_ingestion.provider_manager import provider_manager
 
 logger = logging.getLogger(__name__)
 
+
 class AlertEvaluator:
     def __init__(self, interval_seconds: int = 60):
         self.interval_seconds = interval_seconds
@@ -46,11 +47,10 @@ class AlertEvaluator:
 
     async def evaluate_alerts(self):
         async with async_session_factory() as session:
-            stmt = select(Alert, Instrument.symbol).outerjoin(
-                Instrument, Alert.instrument_id == Instrument.id
-            ).where(
-                Alert.enabled.is_(True),
-                Alert.is_triggered.is_(False)
+            stmt = (
+                select(Alert, Instrument.symbol)
+                .outerjoin(Instrument, Alert.instrument_id == Instrument.id)
+                .where(Alert.enabled.is_(True), Alert.is_triggered.is_(False))
             )
             result = await session.execute(stmt)
             rows = result.all()
@@ -85,5 +85,6 @@ class AlertEvaluator:
 
                 except Exception as e:
                     logger.warning(f"Failed to evaluate alert {alert.id} for {symbol}: {e}")
+
 
 evaluator = AlertEvaluator()

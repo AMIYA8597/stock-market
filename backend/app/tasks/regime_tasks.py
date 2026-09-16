@@ -50,10 +50,15 @@ async def _update_regime_states_async() -> dict[str, Any]:
                 continue
 
             # Convert to DataFrame (reverse to be chronological)
-            df = pd.DataFrame([{
-                "time": r.time,
-                "close": float(r.close),
-            } for r in reversed(ohlcv_records)])
+            df = pd.DataFrame(
+                [
+                    {
+                        "time": r.time,
+                        "close": float(r.close),
+                    }
+                    for r in reversed(ohlcv_records)
+                ]
+            )
 
             df.set_index("time", inplace=True)
 
@@ -112,8 +117,9 @@ async def _update_regime_states_async() -> dict[str, Any]:
 
             # Upsert into DB
             existing = await session.execute(
-                select(RegimeState)
-                .where(RegimeState.time == latest_time, RegimeState.symbol_id == inst.id)
+                select(RegimeState).where(
+                    RegimeState.time == latest_time, RegimeState.symbol_id == inst.id
+                )
             )
             regime = existing.scalars().first()
 
@@ -142,5 +148,6 @@ async def _update_regime_states_async() -> dict[str, Any]:
 
     logger.info(f"Regime and volatility update complete. Processed {records_updated} symbols.")
     return {"status": "success", "records_updated": records_updated}
+
 
 # We need numpy

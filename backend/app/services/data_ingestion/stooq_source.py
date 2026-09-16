@@ -36,7 +36,9 @@ class StooqProvider(MarketDataProvider):
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
     @retry(
-        retry=retry_if_exception_type((aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError)),
+        retry=retry_if_exception_type(
+            (aiohttp.ClientError, asyncio.TimeoutError, DataUnavailableError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
@@ -108,22 +110,26 @@ class StooqProvider(MarketDataProvider):
             for row in reader:
                 try:
                     dt = datetime.strptime(row["Date"], "%Y-%m-%d").replace(tzinfo=UTC)
-                    start_tz = start.replace(tzinfo=UTC) if start.tzinfo is None else start.astimezone(UTC)
+                    start_tz = (
+                        start.replace(tzinfo=UTC) if start.tzinfo is None else start.astimezone(UTC)
+                    )
                     end_tz = end.replace(tzinfo=UTC) if end.tzinfo is None else end.astimezone(UTC)
 
                     if not (start_tz <= dt <= end_tz):
                         continue
 
-                    bars.append(OHLCVBar(
-                        time=dt,
-                        open=float(row["Open"]),
-                        high=float(row["High"]),
-                        low=float(row["Low"]),
-                        close=float(row["Close"]),
-                        volume=float(row.get("Volume", 0.0) or 0.0),
-                        adjusted_close=None,
-                        interval=interval
-                    ))
+                    bars.append(
+                        OHLCVBar(
+                            time=dt,
+                            open=float(row["Open"]),
+                            high=float(row["High"]),
+                            low=float(row["Low"]),
+                            close=float(row["Close"]),
+                            volume=float(row.get("Volume", 0.0) or 0.0),
+                            adjusted_close=None,
+                            interval=interval,
+                        )
+                    )
                 except Exception:
                     continue
             bars.reverse()

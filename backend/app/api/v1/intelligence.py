@@ -124,8 +124,7 @@ async def get_regime_statistics() -> list[RegimeStatisticsItem]:
 
 @router.get("/explain/shap/{symbol}", response_model=ExplainShapResponse)
 async def get_shap_explainability(
-    symbol: str,
-    _user=Depends(get_current_premium_user)
+    symbol: str, _user=Depends(get_current_premium_user)
 ) -> ExplainShapResponse:
     """Return SHAP feature attribution values for the latest inference."""
     return intelligence_service.get_shap(symbol)
@@ -135,7 +134,7 @@ async def get_shap_explainability(
 async def get_attention_explainability(
     symbol: str,
     model: str = Query(default="tft", pattern="^(tft|lstm_attn)$"),
-    _user=Depends(get_current_premium_user)
+    _user=Depends(get_current_premium_user),
 ) -> ExplainAttentionResponse:
     """Return temporal attention weights from the requested sequence model."""
     return intelligence_service.get_attention(symbol=symbol, model=model)
@@ -143,9 +142,7 @@ async def get_attention_explainability(
 
 @router.post("/explain/counterfactual/{symbol}", response_model=list[CounterfactualResponse])
 async def get_counterfactual(
-    symbol: str, 
-    payload: CounterfactualRequest,
-    _user=Depends(get_current_premium_user)
+    symbol: str, payload: CounterfactualRequest, _user=Depends(get_current_premium_user)
 ) -> list[CounterfactualResponse]:
     """Return counterfactual feature changes that can flip signal direction."""
     return intelligence_service.get_counterfactuals(symbol=symbol, payload=payload)

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import uuid
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,9 @@ async def update_user_role(
         )
 
     user.role = payload.role
-    logger.info(f"Admin action: user {current_user.id} changed role of user {user_id} to {payload.role}")
+    logger.info(
+        f"Admin action: user {current_user.id} changed role of user {user_id} to {payload.role}"
+    )
     await db.commit()
     await db.refresh(user)
 

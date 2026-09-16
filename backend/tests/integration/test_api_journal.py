@@ -120,6 +120,7 @@ from app.core.dependencies import get_current_user_or_none
 async def override_get_current_user_or_none():
     return {"sub": "12345678-1234-5678-1234-567812345678"}
 
+
 app.dependency_overrides[get_db] = override_get_db
 app.dependency_overrides[get_current_user_or_none] = override_get_current_user_or_none
 

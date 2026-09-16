@@ -32,7 +32,7 @@ class XGBoostDirectionalClassifier:
         n_estimators: int = 100,
         max_depth: int = 4,
         learning_rate: float = 0.05,
-        calibration: str = "isotonic"
+        calibration: str = "isotonic",
     ):
         self.n_estimators = n_estimators
         self.max_depth = max_depth
@@ -66,7 +66,7 @@ class XGBoostDirectionalClassifier:
             "sentiment_momentum_3d",
             # Phase A2 features
             "regime_state",
-            "garch_vol"
+            "garch_vol",
         ]
 
     def fit(self, X: pd.DataFrame, y: pd.Series) -> XGBoostDirectionalClassifier:
@@ -101,9 +101,7 @@ class XGBoostDirectionalClassifier:
         # Calibrate probabilities
         if self.calibration:
             self.model = CalibratedClassifierCV(
-                estimator=self.base_model,
-                method=self.calibration,
-                cv=3
+                estimator=self.base_model, method=self.calibration, cv=3
             )
         else:
             self.model = self.base_model
@@ -158,7 +156,7 @@ class XGBoostDirectionalClassifier:
         try:
             from research.explainability.shap_explainer import get_tree_shap
 
-            X_clean = X[self.features].iloc[-1:] # Just the last row
+            X_clean = X[self.features].iloc[-1:]  # Just the last row
             X_scaled = self.scaler.transform(X_clean)
 
             # base_model is an XGBClassifier, we can get booster
@@ -186,7 +184,7 @@ class XGBoostDirectionalClassifier:
             "scaler": self.scaler,
             "features": self.features,
             "model": self.model,
-            "base_model": self.base_model
+            "base_model": self.base_model,
         }
         with open(path, "wb") as f:
             pickle.dump(state, f)

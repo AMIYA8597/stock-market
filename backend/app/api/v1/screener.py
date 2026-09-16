@@ -48,7 +48,7 @@ async def post_screener_run(
         stmt = select(Instrument).where(Instrument.is_active)
         if request.exchange:
             stmt = stmt.where(Instrument.exchange.in_([ex.upper() for ex in request.exchange]))
-        stmt = stmt.limit(1000) # Fetch up to 1000 candidates for screening
+        stmt = stmt.limit(1000)  # Fetch up to 1000 candidates for screening
         res = await db.execute(stmt)
         symbols = res.scalars().all()
 
@@ -122,7 +122,7 @@ async def post_screener_run(
                 sig_conf = 0.5
                 regime_state = "sideways"
 
-            # Fetch PE ratio and market cap from MarketDataService ONLY if we have OHLCV (legacy path)
+                # Fetch PE ratio and market cap from MarketDataService ONLY if we have OHLCV (legacy path)
                 pe_ratio = None
                 mcap = None
                 try:

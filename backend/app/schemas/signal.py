@@ -26,6 +26,7 @@ class SignalResponse(BaseModel):
     take_profit: float = 0.0
     position_size_pct: float = Field(0.0, description="position-size from account-risk %")
 
+
 class BulkSignalResponse(BaseModel):
     """GET /signals/bulk response."""
 
@@ -35,6 +36,7 @@ class BulkSignalResponse(BaseModel):
     total_symbols: int
     processed_symbols: int
 
+
 class HistoricalSignal(BaseModel):
     """Single point in signal history."""
 
@@ -43,6 +45,7 @@ class HistoricalSignal(BaseModel):
     confidence: Decimal = Field(..., ge=0.0, le=1.0)
     direction: str
     actual_return: Decimal | None = Field(None)
+
 
 class SignalHistoryResponse(BaseModel):
     """GET /signals/history/{symbol} response."""

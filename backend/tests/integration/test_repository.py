@@ -9,13 +9,16 @@ from app.repositories.user import UserRepository
 
 pytestmark = pytest.mark.anyio
 
+
 @pytest.fixture
 async def real_db():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    SessionLocal = async_sessionmaker(autocommit=False, autoflush=False, bind=engine, expire_on_commit=False)
+    SessionLocal = async_sessionmaker(
+        autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
+    )
 
     async with SessionLocal() as session:
         yield session
@@ -32,7 +35,7 @@ async def test_user_repository_round_trip(real_db: AsyncSession):
     user = User(
         email=f"repo_test_{uuid4().hex[:8]}@example.com",
         hashed_password="hashed_password",
-        full_name="Repo Test"
+        full_name="Repo Test",
     )
     repo.add(user)
     await real_db.commit()

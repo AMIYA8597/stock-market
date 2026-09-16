@@ -45,8 +45,7 @@ async def run_backtest_async(job_id: str) -> None:
             job.status = "RUNNING"
             await db.commit()
             await ws_manager.broadcast(
-                "signals:backtest-progress",
-                {"job_id": job_id, "status": "RUNNING", "progress": 0}
+                "signals:backtest-progress", {"job_id": job_id, "status": "RUNNING", "progress": 0}
             )
 
             # 2. Fetch history (just using first symbol for now)
@@ -69,16 +68,17 @@ async def run_backtest_async(job_id: str) -> None:
             dates = df.index.astype(str).values
 
             # 3. Fetch Real ML Signals from Database
-            from app.models.signal import EnsembleSignal
             from app.models.instrument import Instrument
+            from app.models.signal import EnsembleSignal
 
-            sig_stmt = select(EnsembleSignal).where(
-                EnsembleSignal.symbol_id == (
-                    select(Instrument.id)
-                    .where(Instrument.symbol == symbol)
-                    .scalar_subquery()
+            sig_stmt = (
+                select(EnsembleSignal)
+                .where(
+                    EnsembleSignal.symbol_id
+                    == (select(Instrument.id).where(Instrument.symbol == symbol).scalar_subquery())
                 )
-            ).order_by(EnsembleSignal.time.asc())
+                .order_by(EnsembleSignal.time.asc())
+            )
             sig_res = await db.execute(sig_stmt)
             signal_records = sig_res.scalars().all()
 
@@ -88,27 +88,28 @@ async def run_backtest_async(job_id: str) -> None:
             for r in signal_records:
                 d = r.time.date() if isinstance(r.time, datetime) else r.time
                 sig_dict[str(d)] = float(r.signal)
-                kelly_dict[str(d)] = float(r.kelly_fraction) if r.kelly_fraction is not None else 0.05
+                kelly_dict[str(d)] = (
+                    float(r.kelly_fraction) if r.kelly_fraction is not None else 0.05
+                )
 
             signals = np.zeros(len(dates))
             kellys = np.ones(len(dates)) * 0.05
 
             for i, d in enumerate(dates):
                 # Ensure date string matches format used in dict
-                d_str = str(d).split('T')[0]
+                d_str = str(d).split("T")[0]
                 if d_str in sig_dict:
                     signals[i] = sig_dict[d_str]
                     kellys[i] = kelly_dict[d_str]
                 else:
                     signals[i] = 0.0
 
-
             # 4. Run Event-Driven Engine
             def progress_cb(pct: int):
                 asyncio.create_task(
                     ws_manager.broadcast(
                         "signals:backtest-progress",
-                        {"job_id": job_id, "status": "RUNNING", "progress": pct}
+                        {"job_id": job_id, "status": "RUNNING", "progress": pct},
                     )
                 )
 
@@ -118,7 +119,7 @@ async def run_backtest_async(job_id: str) -> None:
                 dates=dates,
                 initial_capital=float(job.initial_capital),
                 kelly_fraction=kellys,
-                target_vol=0.15
+                target_vol=0.15,
             )
 
             result = backtester.run(progress_callback=progress_cb)
@@ -158,12 +159,18 @@ async def run_backtest_async(job_id: str) -> None:
             equity = result.equity_curve
             running_max = np.maximum.accumulate(equity)
             drawdown_series = np.where(running_max > 0, (equity - running_max) / running_max, 0.0)
-            ulcer_index = float(np.sqrt(np.mean(np.square(drawdown_series)))) if len(drawdown_series) else 0.0
-            serenity_ratio = float(cagr(result.equity_curve) / ulcer_index) if ulcer_index > 0 else 0.0
+            ulcer_index = (
+                float(np.sqrt(np.mean(np.square(drawdown_series)))) if len(drawdown_series) else 0.0
+            )
+            serenity_ratio = (
+                float(cagr(result.equity_curve) / ulcer_index) if ulcer_index > 0 else 0.0
+            )
             # Deflated Sharpe: penalize the raw Sharpe by sample-size uncertainty (simplified — not a
             # full multiple-testing correction, just a real, computed confidence discount).
             n_obs = len(daily_returns)
-            deflated_sharpe = float(sharpe * np.sqrt(max(n_obs - 1, 1) / max(n_obs, 1))) if n_obs > 0 else 0.0
+            deflated_sharpe = (
+                float(sharpe * np.sqrt(max(n_obs - 1, 1) / max(n_obs, 1))) if n_obs > 0 else 0.0
+            )
 
             metrics = {
                 "total_return": total_return,
@@ -187,7 +194,9 @@ async def run_backtest_async(job_id: str) -> None:
                 "serenity_ratio": serenity_ratio,
                 "deflated_sharpe": deflated_sharpe,
                 "expectancy": float(expectancy),
-                "turnover": float(calculate_turnover(result.positions, prices, float(job.initial_capital))),
+                "turnover": float(
+                    calculate_turnover(result.positions, prices, float(job.initial_capital))
+                ),
             }
 
             # 6. Save Results — build response-schema-shaped structures (EquityCurvePoint,
@@ -197,11 +206,11 @@ async def run_backtest_async(job_id: str) -> None:
 
             equity_curve_points = [
                 {"date": d, "portfolio_value": float(v)}
-                for d, v in zip(date_strs, result.equity_curve)
+                for d, v in zip(date_strs, result.equity_curve, strict=False)
             ]
             drawdown_series_points = [
                 {"date": d, "drawdown_pct": float(dd_val * 100)}
-                for d, dd_val in zip(date_strs, drawdown_series)
+                for d, dd_val in zip(date_strs, drawdown_series, strict=False)
             ]
             trade_log_entries = []
             for tr in result.trades_log:
@@ -236,7 +245,7 @@ async def run_backtest_async(job_id: str) -> None:
             await db.commit()
             await ws_manager.broadcast(
                 "signals:backtest-progress",
-                {"job_id": job_id, "status": "DONE", "progress": 100, "metrics": metrics}
+                {"job_id": job_id, "status": "DONE", "progress": 100, "metrics": metrics},
             )
 
             logger.info(f"BacktestJob {job_id} completed successfully.")
@@ -249,7 +258,7 @@ async def run_backtest_async(job_id: str) -> None:
             await db.commit()
             await ws_manager.broadcast(
                 "signals:backtest-progress",
-                {"job_id": job_id, "status": "FAILED", "progress": 100, "error": str(e)}
+                {"job_id": job_id, "status": "FAILED", "progress": 100, "error": str(e)},
             )
 
 

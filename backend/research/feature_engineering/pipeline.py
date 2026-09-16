@@ -47,9 +47,9 @@ class FeaturePipeline:
 
     def validate_causality(self, frame: pd.DataFrame) -> None:
         """Verify that the pipeline does not suffer from look-ahead bias.
-        
+
         This acts as a strict leakage guard at the feature-engineering level.
-        It runs the pipeline on a full dataset and a truncated dataset, and 
+        It runs the pipeline on a full dataset and a truncated dataset, and
         asserts that the features at the boundary are identical.
         """
         if len(frame) < 20:
@@ -84,4 +84,6 @@ class FeaturePipeline:
                 mismatches.append(f"{col} (full={val_full}, trunc={val_trunc})")
 
         if mismatches:
-            raise ValueError(f"Causality guard failed! Look-ahead bias detected in features: {', '.join(mismatches)}")
+            raise ValueError(
+                f"Causality guard failed! Look-ahead bias detected in features: {', '.join(mismatches)}"
+            )

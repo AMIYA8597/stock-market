@@ -13,7 +13,6 @@ These functions are used as FastAPI `Depends()` parameters in route handlers.
 
 from __future__ import annotations
 
-import time
 from collections.abc import AsyncGenerator
 from typing import Annotated
 
@@ -26,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.core.security import decode_token, oauth2_scheme
-from app.core.test_state import is_test_mode
 from app.database.connection import async_session_factory
 from app.database.redis_client import _redis_pool_singleton
 from app.models.payment import Subscription
@@ -181,6 +179,7 @@ async def get_current_user(
             )
 
         from uuid import UUID
+
         result = await db.execute(select(User).where(User.id == UUID(user_id)))
         user = result.scalar_one_or_none()
         if not user:
@@ -249,7 +248,7 @@ async def get_current_premium_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     """Ensure the authenticated user has an active premium subscription.
-    
+
     If they do not have an active subscription, raise 403 Forbidden.
     """
     result = await db.execute(
@@ -337,15 +336,15 @@ def require_premium_tier():
     Raises:
         HTTPException: 403 if user lacks an active subscription.
     """
+
     async def premium_checker(
         current_user: Annotated[User, Depends(get_current_user)],
         db: Annotated[AsyncSession, Depends(get_db)],
     ) -> User:
-        user_id = str(current_user.id)
         result = await db.execute(
             select(Subscription).where(
                 Subscription.user_id == current_user.id,
-                Subscription.status.in_(["active", "pending_cancellation"])
+                Subscription.status.in_(["active", "pending_cancellation"]),
             )
         )
         sub = result.scalars().first()
@@ -353,7 +352,7 @@ def require_premium_tier():
         if not sub:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Premium subscription required for this action."
+                detail="Premium subscription required for this action.",
             )
 
         return current_user
@@ -453,8 +452,10 @@ def get_rate_limiter(requests: int, window: int):
         requests: Maximum number of requests allowed in the window.
         window: Time window in seconds.
     """
+
     async def _rate_limiter(request: Request):
         from app.core.rate_limit import check_rate_limit
+
         client_ip = request.client.host if request.client else "unknown"
         key = f"route:{request.url.path}:{client_ip}"
         await check_rate_limit(key, requests, window)

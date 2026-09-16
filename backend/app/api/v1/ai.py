@@ -12,7 +12,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 @router.post("/train", status_code=status.HTTP_202_ACCEPTED)
 async def train_endpoint(
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(get_rate_limiter(requests=5, window=60))
+    _rate_limit: None = Depends(get_rate_limiter(requests=5, window=60)),
 ) -> dict[str, str]:
     """Launch model training. Returns 503 if engine not available."""
     try:
@@ -30,15 +30,17 @@ async def train_endpoint(
 
 from pydantic import BaseModel, Field
 
+
 class PredictRequest(BaseModel):
     symbol: str = Field(..., min_length=1, max_length=15, description="Stock ticker symbol")
     # Add any other required fields for inference based on backend structure
-    
+
+
 @router.post("/predict", response_model=dict)
 async def predict_endpoint(
     payload: PredictRequest,
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(get_rate_limiter(requests=5, window=60))
+    _rate_limit: None = Depends(get_rate_limiter(requests=5, window=60)),
 ) -> dict:
     """Run inference. Returns 503 if model not trained."""
     try:

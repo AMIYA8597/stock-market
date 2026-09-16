@@ -31,7 +31,9 @@ class GARCHVolatilityModel:
             valid_returns = returns.dropna() * 100.0
 
             if len(valid_returns) < 50:
-                logger.warning("Not enough data to fit GARCH securely. Needed 50, got %s", len(valid_returns))
+                logger.warning(
+                    "Not enough data to fit GARCH securely. Needed 50, got %s", len(valid_returns)
+                )
                 return
 
             self.model = arch_model(valid_returns, vol="Garch", p=1, q=1, rescale=False)
@@ -67,14 +69,15 @@ class GARCHVolatilityModel:
         import os
 
         import joblib
+
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         joblib.dump(self.result, filepath)
 
     def load_model(self, filepath: str) -> None:
         """Load a fitted GARCH model result using joblib."""
         import joblib
-        self.result = joblib.load(filepath)
 
+        self.result = joblib.load(filepath)
 
 
 class HMMRegimeModel:
@@ -125,7 +128,7 @@ class HMMRegimeModel:
             # We only want to predict the state of the *last* observation based on the sequence
             valid_features = features.dropna()
             if valid_features.empty:
-                 return (0, [0.0] * self.n_states)
+                return (0, [0.0] * self.n_states)
 
             # Predict most likely sequence of states
             hidden_states = self.model.predict(valid_features.values)
@@ -180,10 +183,12 @@ class HMMRegimeModel:
         import os
 
         import joblib
+
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
         joblib.dump(self.model, filepath)
 
     def load_model(self, filepath: str) -> None:
         """Load a fitted HMM model using joblib."""
         import joblib
+
         self.model = joblib.load(filepath)

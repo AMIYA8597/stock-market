@@ -122,8 +122,11 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     hit = np.sign(signals) == np.sign(actual_returns)
     ens_hit = float(np.mean(hit)) if len(hit) > 0 else 0.5
     if ens_hit > 0.75:
-        logger.error(f"Leakage Guard Triggered in Walk-Forward Runner! Hit rate {ens_hit:.2f} is unnaturally high. Aborting!")
+        logger.error(
+            f"Leakage Guard Triggered in Walk-Forward Runner! Hit rate {ens_hit:.2f} is unnaturally high. Aborting!"
+        )
         import sys
+
         sys.exit(1)
 
     # 4. Compute performance metrics using EventDrivenBacktester
@@ -135,7 +138,7 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
         dates=np.array(dates),
         initial_capital=100000.0,
         kelly_fraction=kellys,
-        target_vol=0.15
+        target_vol=0.15,
     )
     result = backtester.run()
 
@@ -149,14 +152,16 @@ async def run_backtest_for_symbol(symbol: str, test_days: int = 150) -> dict:
     model_metrics = {}
     for model, sigs in model_signals_track.items():
         m_sigs = np.array(sigs)
-        m_hit = float(np.mean(np.sign(m_sigs) == np.sign(actual_returns))) if len(m_sigs) > 0 else 0.5
+        m_hit = (
+            float(np.mean(np.sign(m_sigs) == np.sign(actual_returns))) if len(m_sigs) > 0 else 0.5
+        )
         m_backtester = EventDrivenBacktester(
             prices=prices,
             signals=m_sigs,
             dates=np.array(dates),
             initial_capital=100000.0,
             kelly_fraction=kellys,
-            target_vol=0.15
+            target_vol=0.15,
         )
         m_result = m_backtester.run()
         m_rets = m_result.daily_returns

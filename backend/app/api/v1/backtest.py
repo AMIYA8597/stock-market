@@ -10,7 +10,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 
 import numpy as np
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -463,7 +463,7 @@ async def post_backtest_run(
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(get_rate_limiter(requests=2, window=60)),
 ) -> BacktestRunResponse:
-    user_id_str = str(current_user.id)
+    user_id_str = str(current_user.get("sub")) if isinstance(current_user, dict) else str(current_user.id)
 
     job_id = uuid4()
     new_job = BacktestJob(

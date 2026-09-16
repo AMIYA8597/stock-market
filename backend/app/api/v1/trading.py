@@ -79,9 +79,7 @@ async def set_trading_mode(
     old_mode = UpstoxService.TRADING_MODE
     UpstoxService.TRADING_MODE = target_mode
     user_id = (
-        str(current_user.id)
-        if (current_user and isinstance(current_user, dict))
-        else "guest-user"
+        str(current_user.id) if (current_user and isinstance(current_user, dict)) else "guest-user"
     )
     UpstoxService.log_audit(f"TRADING MODE SWITCHED: {old_mode} -> {target_mode} by user={user_id}")
 
@@ -131,9 +129,7 @@ async def emergency_kill_switch(
 ):
     """Emergency Kill Switch: reverts trading mode to PAPER and cancels open orders."""
     user_id = (
-        str(current_user.id)
-        if (current_user and isinstance(current_user, dict))
-        else "guest-user"
+        str(current_user.id) if (current_user and isinstance(current_user, dict)) else "guest-user"
     )
     old_mode = UpstoxService.TRADING_MODE
     UpstoxService.TRADING_MODE = "PAPER"

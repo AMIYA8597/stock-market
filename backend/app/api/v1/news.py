@@ -10,11 +10,14 @@ from app.models.sentiment import NewsSentiment
 
 router = APIRouter(prefix="/news", tags=["news"])
 
+
 @router.get("/{symbol}")
 async def get_news_for_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
     """Get scraped news and sentiment for a specific symbol."""
     clean_symbol = symbol.split(".")[0].upper()
-    inst_res = await db.execute(select(Instrument).where(Instrument.symbol.startswith(clean_symbol)))
+    inst_res = await db.execute(
+        select(Instrument).where(Instrument.symbol.startswith(clean_symbol))
+    )
     instrument = inst_res.scalars().first()
 
     if not instrument:
@@ -33,20 +36,18 @@ async def get_news_for_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
     for a in articles:
         score = float(a.sentiment_score) if a.sentiment_score is not None else 0.0
         total_score += score
-        result.append({
-            "id": a.id,
-            "headline": a.headline,
-            "source": a.source,
-            "published_at": a.published_at.isoformat(),
-            "sentiment_score": score,
-            "sentiment_label": a.sentiment_label,
-            "url": a.url
-        })
+        result.append(
+            {
+                "id": a.id,
+                "headline": a.headline,
+                "source": a.source,
+                "published_at": a.published_at.isoformat(),
+                "sentiment_score": score,
+                "sentiment_label": a.sentiment_label,
+                "url": a.url,
+            }
+        )
 
     daily_mean = total_score / len(articles) if articles else 0.0
 
-    return {
-        "symbol": symbol,
-        "daily_mean": daily_mean,
-        "articles": result
-    }
+    return {"symbol": symbol, "daily_mean": daily_mean, "articles": result}

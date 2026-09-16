@@ -15,8 +15,10 @@ from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
+
 class FeatureMismatchError(ValueError):
     """Raised when features needed for the model prediction are missing in input."""
+
     def __init__(self, missing_features: list[str]):
         self.missing_features = missing_features
         super().__init__(f"model unavailable: missing features {missing_features}")
@@ -51,13 +53,29 @@ class LSTMDirectionalClassifier:
         self.model_state_dict = None  # To persist model weights
 
         self.features = [
-            "ret_1d", "ret_5d", "ret_21d", "momentum_63d",
-            "RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14", "ADX_14",
-            "realized_vol_21d", "yang_zhang_vol_21d", "dist_52w_high", "dist_52w_low",
-            "drawdown", "range_pct", "close_to_open",
-            "sentiment_score", "news_volume", "sentiment_pos_neg_ratio",
-            "market_sentiment_index", "sentiment_momentum_3d",
-            "regime_state", "garch_vol"
+            "ret_1d",
+            "ret_5d",
+            "ret_21d",
+            "momentum_63d",
+            "RSI_14",
+            "MACDh_12_26_9",
+            "BBP_20_2.0",
+            "ATRr_14",
+            "ADX_14",
+            "realized_vol_21d",
+            "yang_zhang_vol_21d",
+            "dist_52w_high",
+            "dist_52w_low",
+            "drawdown",
+            "range_pct",
+            "close_to_open",
+            "sentiment_score",
+            "news_volume",
+            "sentiment_pos_neg_ratio",
+            "market_sentiment_index",
+            "sentiment_momentum_3d",
+            "regime_state",
+            "garch_vol",
         ]
 
     def _create_dataset(self, X: np.ndarray, y: np.ndarray | None = None) -> tuple:
@@ -83,7 +101,7 @@ class LSTMDirectionalClassifier:
                     hidden_size,
                     num_layers,
                     batch_first=True,
-                    dropout=dropout if num_layers > 1 else 0.0
+                    dropout=dropout if num_layers > 1 else 0.0,
                 )
                 self.dropout = nn.Dropout(dropout)
                 self.fc = nn.Linear(hidden_size, 1)
@@ -113,7 +131,7 @@ class LSTMDirectionalClassifier:
         if missing:
             self.features = [f for f in self.features if f in X.columns]
 
-        X_clean = X[self.features].fillna(0) # Simple fill for sequences
+        X_clean = X[self.features].fillna(0)  # Simple fill for sequences
         y_clean = y.loc[X_clean.index]
 
         # Scale data
@@ -132,8 +150,14 @@ class LSTMDirectionalClassifier:
         # Pos weight equivalent (BCEWithLogitsLoss takes pos_weight, but we use BCELoss)
         # We will just use BCELoss and let dropout handle some regularization
 
-        train_data = TensorDataset(torch.tensor(X_t, dtype=torch.float32), torch.tensor(y_t, dtype=torch.float32).unsqueeze(1))
-        val_data = TensorDataset(torch.tensor(X_v, dtype=torch.float32), torch.tensor(y_v, dtype=torch.float32).unsqueeze(1))
+        train_data = TensorDataset(
+            torch.tensor(X_t, dtype=torch.float32),
+            torch.tensor(y_t, dtype=torch.float32).unsqueeze(1),
+        )
+        val_data = TensorDataset(
+            torch.tensor(X_v, dtype=torch.float32),
+            torch.tensor(y_v, dtype=torch.float32).unsqueeze(1),
+        )
 
         train_loader = DataLoader(train_data, batch_size=self.batch_size, shuffle=True)
         val_loader = DataLoader(val_data, batch_size=self.batch_size, shuffle=False)
@@ -144,7 +168,7 @@ class LSTMDirectionalClassifier:
         criterion = nn.BCELoss()
         optimizer = optim.Adam(model.parameters(), lr=self.lr, weight_decay=1e-5)
 
-        best_val_loss = float('inf')
+        best_val_loss = float("inf")
         best_state = None
         patience = 5
         patience_counter = 0
@@ -236,7 +260,7 @@ class LSTMDirectionalClassifier:
             "features": self.features,
             "model_state_dict": self.model_state_dict,
             "window_size": self.window_size,
-            "hidden_size": self.hidden_size
+            "hidden_size": self.hidden_size,
         }
         with open(path, "wb") as f:
             pickle.dump(state, f)
@@ -250,8 +274,7 @@ class LSTMDirectionalClassifier:
                 state = pickle.load(f)
 
             inst = cls(
-                window_size=state.get("window_size", 5),
-                hidden_size=state.get("hidden_size", 16)
+                window_size=state.get("window_size", 5), hidden_size=state.get("hidden_size", 16)
             )
             inst.scaler = state.get("scaler")
             inst.features = state.get("features", inst.features)

@@ -56,7 +56,7 @@ class ARIMADirectionalClassifier:
 
             # predict(start=1, end=len) gives the 1-step ahead forecast for each point
             # shift it so index matches X
-            preds = results.predict(start=0, end=len(returns)-1)
+            preds = results.predict(start=0, end=len(returns) - 1)
 
             # If predicted return > 0 -> Up (prob=1)
             # Actually we can use the logistic function to make it a soft probability

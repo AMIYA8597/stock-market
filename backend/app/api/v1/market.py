@@ -74,8 +74,7 @@ SECTOR_MAP = {
 
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
 async def get_quote(
-    symbol: str,
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    symbol: str, _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
 ) -> QuoteResponse:
     if not symbol.strip():
         raise HTTPException(
@@ -158,7 +157,7 @@ async def get_history(
     symbol: str,
     interval: str = Query("1d", pattern="^(1m|3m|5m|10m|15m|30m|45m|1h|2h|4h|1d|1w|1mo)$"),
     period: str | None = Query(None, pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60)),
 ) -> HistoryResponse:
     if not symbol.strip():
         raise HTTPException(
@@ -173,7 +172,16 @@ async def get_history(
     effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
 
     period_days = {
-        "1d": 1, "5d": 5, "1w": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650,
+        "1d": 1,
+        "5d": 5,
+        "1w": 7,
+        "1mo": 30,
+        "3mo": 90,
+        "6mo": 180,
+        "1y": 365,
+        "2y": 730,
+        "5y": 1825,
+        "max": 3650,
     }
     days = period_days.get(effective_period, 30)
     start_time = datetime.now(UTC) - timedelta(days=days)
@@ -203,6 +211,7 @@ async def get_history(
             elif isinstance(x, dict):
                 return str(x.get("time", ""))
             return ""
+
         bars_data = sorted(bars_data, key=_get_time)
 
         last_time_val = None
@@ -224,6 +233,7 @@ async def get_history(
 
                 def _safe_float(v):
                     import math
+
                     val = float(v)
                     if math.isnan(val):
                         raise ValueError("NaN value")
@@ -232,11 +242,23 @@ async def get_history(
                 bars.append(
                     OHLCVBar(
                         time=time_val,
-                        open=_safe_float(getattr(b, "open", 0.0) if hasattr(b, "open") else b.get("open", 0.0)),
-                        high=_safe_float(getattr(b, "high", 0.0) if hasattr(b, "high") else b.get("high", 0.0)),
-                        low=_safe_float(getattr(b, "low", 0.0) if hasattr(b, "low") else b.get("low", 0.0)),
-                        close=_safe_float(getattr(b, "close", 0.0) if hasattr(b, "close") else b.get("close", 0.0)),
-                        volume=_safe_float(getattr(b, "volume", 0.0) if hasattr(b, "volume") else b.get("volume", 0.0)),
+                        open=_safe_float(
+                            getattr(b, "open", 0.0) if hasattr(b, "open") else b.get("open", 0.0)
+                        ),
+                        high=_safe_float(
+                            getattr(b, "high", 0.0) if hasattr(b, "high") else b.get("high", 0.0)
+                        ),
+                        low=_safe_float(
+                            getattr(b, "low", 0.0) if hasattr(b, "low") else b.get("low", 0.0)
+                        ),
+                        close=_safe_float(
+                            getattr(b, "close", 0.0) if hasattr(b, "close") else b.get("close", 0.0)
+                        ),
+                        volume=_safe_float(
+                            getattr(b, "volume", 0.0)
+                            if hasattr(b, "volume")
+                            else b.get("volume", 0.0)
+                        ),
                     )
                 )
             except Exception as e:
@@ -427,7 +449,14 @@ async def search_symbols(
                 quotes = data.get("quotes", [])
                 for item in quotes:
                     quote_type = item.get("quoteType", "EQUITY")
-                    if quote_type in ("EQUITY", "ETF", "INDEX", "CRYPTOCURRENCY", "MUTUALFUND", "CURRENCY"):
+                    if quote_type in (
+                        "EQUITY",
+                        "ETF",
+                        "INDEX",
+                        "CRYPTOCURRENCY",
+                        "MUTUALFUND",
+                        "CURRENCY",
+                    ):
                         # Ensure we map Yahoo's quoteType to our expected asset_type strings if needed,
                         # but our schema expects string. We map CRYPTOCURRENCY -> CRYPTO.
                         asset_type = "CRYPTO" if quote_type == "CRYPTOCURRENCY" else quote_type
@@ -435,9 +464,11 @@ async def search_symbols(
                         results.append(
                             SearchResult(
                                 ticker=item.get("symbol", ""),
-                                name=item.get("shortname") or item.get("longname") or item.get("symbol", ""),
+                                name=item.get("shortname")
+                                or item.get("longname")
+                                or item.get("symbol", ""),
                                 exchange=item.get("exchDisp") or item.get("exchange", "Unknown"),
-                                asset_type=asset_type
+                                asset_type=asset_type,
                             )
                         )
     except Exception as e:
@@ -486,12 +517,14 @@ async def get_market_universe() -> UniverseResponse:
 
         out = []
         for inst in instruments:
-            out.append(InstrumentInfo(
-                symbol=inst.symbol,
-                displayName=inst.display_name or inst.symbol,
-                exchange=inst.exchange,
-                yfinanceTicker=inst.yfinance_ticker or inst.symbol
-            ))
+            out.append(
+                InstrumentInfo(
+                    symbol=inst.symbol,
+                    displayName=inst.display_name or inst.symbol,
+                    exchange=inst.exchange,
+                    yfinanceTicker=inst.yfinance_ticker or inst.symbol,
+                )
+            )
         return UniverseResponse(instruments=out)
 
 
@@ -499,6 +532,7 @@ async def get_market_universe() -> UniverseResponse:
 async def get_market_status() -> dict:
     """Return the real IST market hours status."""
     return MarketStatusService.get_status()
+
 
 @router.get("/providers/health")
 async def get_providers_health() -> dict:
@@ -571,4 +605,3 @@ async def get_global_context() -> dict:
         "macro_bias": macro_bias,
         "generated_at": datetime.now(UTC).isoformat(),
     }
-

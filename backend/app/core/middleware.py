@@ -118,7 +118,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                             "error": {
                                 "code": "RATE_LIMIT_EXCEEDED",
                                 "message": "Rate limit exceeded. Please retry later.",
-                                "details": [{"field": "request", "message": "Too many requests in the current time window.", "code": "TOO_MANY_REQUESTS"}],
+                                "details": [
+                                    {
+                                        "field": "request",
+                                        "message": "Too many requests in the current time window.",
+                                        "code": "TOO_MANY_REQUESTS",
+                                    }
+                                ],
                             },
                             "request_id": request_id,
                             "retry_after_seconds": retry_after,
@@ -128,6 +134,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             except Exception as e:
                 # Fallback on Redis failure - allow request but log
                 from app.core.logging import get_logger
+
                 get_logger(__name__).error(f"Rate limiter redis error: {e}")
 
         response: Response = await call_next(request)
