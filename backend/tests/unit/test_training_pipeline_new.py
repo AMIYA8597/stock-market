@@ -11,14 +11,14 @@ def mock_db_session():
     with patch("app.services.ml_engine.training_pipeline.async_session_factory") as mock_factory:
         mock_session = AsyncMock()
         mock_factory.return_value.__aenter__.return_value = mock_session
-        
+
         # Setup for first execute (select Instrument)
         mock_result = MagicMock()
         mock_instrument = MagicMock()
         mock_instrument.id = uuid.uuid4()
         mock_result.scalars.return_value.first.return_value = mock_instrument
         mock_session.execute.return_value = mock_result
-        
+
         yield mock_session
 
 @pytest.fixture
@@ -59,15 +59,15 @@ def setup_mock_model(mock_class, has_predict_proba_batch=False, has_save=False):
     instance.fit.return_value = None
     instance.predict_proba.return_value = np.random.rand(63, 2)
     instance.get_feature_importances.return_value = {"feature_1": 0.5, "feature_2": 0.5}
-    
+
     if not has_predict_proba_batch:
         del instance.predict_proba_batch
     else:
         instance.predict_proba_batch.return_value = np.random.rand(63, 2)
-        
+
     if not has_save:
         del instance.save
-        
+
     return instance
 
 @pytest.mark.asyncio
@@ -86,7 +86,7 @@ async def test_training_pipeline_success(
     mock_ticker_instance = MagicMock()
     mock_ticker_instance.history.return_value = dummy_data
     mock_ticker_class.return_value = mock_ticker_instance
-    
+
     # Mock FeaturePipeline
     mock_feature_pipeline_instance = MagicMock()
     mock_feature_pipeline_instance.run.return_value = feature_data
@@ -98,7 +98,7 @@ async def test_training_pipeline_success(
          patch("app.services.ml_engine.training_pipeline.LightGBMDirectionalClassifier") as mock_lgb, \
          patch("app.services.ml_engine.training_pipeline.LSTMAttentionClassifier") as mock_lstm, \
          patch("optuna.create_study") as mock_create_study:
-        
+
         setup_mock_model(mock_naive)
         setup_mock_model(mock_arima)
         setup_mock_model(mock_xgb)
@@ -109,10 +109,10 @@ async def test_training_pipeline_success(
         mock_study = MagicMock()
         mock_study.best_params = {"max_depth": 3, "learning_rate": 0.1}
         mock_create_study.return_value = mock_study
-        
+
         pipeline = TrainingPipeline("AAPL")
         results = await pipeline.run()
-        
+
         assert isinstance(results, dict)
         assert "Naive" in results
         assert "XGBoost" in results
@@ -128,7 +128,7 @@ async def test_training_pipeline_success(
 async def test_training_pipeline_instrument_not_found(mock_db_session):
     mock_db_session.execute.return_value.scalars.return_value.first.return_value = None
     pipeline = TrainingPipeline("UNKNOWN")
-    
+
     with pytest.raises(ValueError, match="not found in DB"):
         await pipeline.run()
 
@@ -138,7 +138,7 @@ async def test_training_pipeline_insufficient_data(mock_ticker_class, mock_db_se
     mock_ticker_instance = MagicMock()
     mock_ticker_instance.history.return_value = pd.DataFrame()
     mock_ticker_class.return_value = mock_ticker_instance
-    
+
     pipeline = TrainingPipeline("AAPL")
     results = await pipeline.run()
     assert results == {}
@@ -150,14 +150,14 @@ async def test_training_pipeline_dropped_data(mock_feature_pipeline_class, mock_
     mock_ticker_instance = MagicMock()
     mock_ticker_instance.history.return_value = dummy_data
     mock_ticker_class.return_value = mock_ticker_instance
-    
+
     # Introduce NaNs in 'open' to cause rows to be dropped (less than 10% to prevent column drop)
     feature_data.loc[:25, "open"] = np.nan
-    
+
     mock_feature_pipeline_instance = MagicMock()
     mock_feature_pipeline_instance.run.return_value = feature_data
     mock_feature_pipeline_class.return_value = mock_feature_pipeline_instance
-    
+
     pipeline = TrainingPipeline("AAPL")
     results = await pipeline.run()
     assert results == {}
@@ -177,7 +177,7 @@ async def test_training_pipeline_honesty_law(
     mock_ticker_instance = MagicMock()
     mock_ticker_instance.history.return_value = dummy_data
     mock_ticker_class.return_value = mock_ticker_instance
-    
+
     mock_feature_pipeline_instance = MagicMock()
     mock_feature_pipeline_instance.run.return_value = feature_data
     mock_feature_pipeline_class.return_value = mock_feature_pipeline_instance
@@ -188,7 +188,7 @@ async def test_training_pipeline_honesty_law(
          patch("app.services.ml_engine.training_pipeline.LightGBMDirectionalClassifier") as mock_lgb, \
          patch("app.services.ml_engine.training_pipeline.LSTMAttentionClassifier") as mock_lstm, \
          patch("optuna.create_study") as mock_create_study:
-        
+
         def mock_predict_proba(X_test):
             indices = X_test.index
             y_test = feature_data.loc[indices, "target_direction"]
@@ -204,9 +204,9 @@ async def test_training_pipeline_honesty_law(
         mock_study = MagicMock()
         mock_study.best_params = {"max_depth": 3, "learning_rate": 0.1}
         mock_create_study.return_value = mock_study
-        
+
         pipeline = TrainingPipeline("AAPL")
         results = await pipeline.run()
-        
+
         assert results["Naive"]["accuracy"] == 0.0
         assert results["Naive"]["sharpe"] == -99.0

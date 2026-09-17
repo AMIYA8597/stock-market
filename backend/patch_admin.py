@@ -1,4 +1,3 @@
-import sys
 
 path = 'app/api/v1/admin.py'
 with open(path, 'r') as f:

@@ -1,4 +1,3 @@
-import asyncio
 import sys
 import os
 
@@ -9,7 +8,7 @@ from app.main import app
 
 def main():
     print("Testing 503 MODEL_NOT_TRAINED path for UNKNOWN.NS...")
-    
+
     with TestClient(app) as client:
         response = client.get("/api/v1/predictions/UNKNOWN.NS")
         print(f"Status Code: {response.status_code}")

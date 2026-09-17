@@ -7,15 +7,15 @@ from app.services.prediction_engine import get_full_prediction
 
 async def main():
     print("Tracing prediction engine for RELIANCE.NS (bypassing cache)...")
-    
+
     start_time = time.time()
-    
+
     try:
         res = await get_full_prediction("RELIANCE.NS", bypass_cache=True)
         end_time = time.time()
-        
+
         print("\n--- Live Prediction Trace ---")
-        print(f"Target: RELIANCE.NS")
+        print("Target: RELIANCE.NS")
         print(f"End-to-End Time: {end_time - start_time:.3f} seconds")
         print(f"Result type: {type(res)}")
         if isinstance(res, dict):
