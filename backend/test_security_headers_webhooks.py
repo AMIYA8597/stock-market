@@ -1,7 +1,5 @@
 import asyncio
 import httpx
-import hmac
-import hashlib
 import json
 
 async def test_security_headers():
@@ -12,14 +10,14 @@ async def test_security_headers():
             headers={"x-forwarded-proto": "https"}
         )
         headers = res.headers
-        
+
         expected = [
             "strict-transport-security",
             "x-content-type-options",
             "x-frame-options",
             "content-security-policy"
         ]
-        
+
         for h in expected:
             if h in headers:
                 print(f"[OK] {h} present")
@@ -46,7 +44,7 @@ async def test_webhook_signatures():
     print("\nTesting Webhook Signatures...")
     payload = {"event": "subscription.activated", "payload": {"subscription": {"entity": {"id": "sub_123"}}}}
     raw_body = json.dumps(payload).encode()
-    
+
     # 1. Test with invalid signature
     async with httpx.AsyncClient() as client:
         res = await client.post(
@@ -54,7 +52,7 @@ async def test_webhook_signatures():
             content=raw_body,
             headers={"x-razorpay-signature": "invalid_sig_123"}
         )
-        
+
         if res.json().get("status") == "logged_unverified":
             print("[OK] Invalid signature correctly rejected!")
         else:

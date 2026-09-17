@@ -1,9 +1,7 @@
 import pytest
-import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock
 from pathlib import Path
 from decimal import Decimal
-import pandas as pd
 
 from app.services.upstox_service import UpstoxService, UPSTOX_TICK_CACHE, SYMBOL_TO_KEY, KEY_TO_SYMBOL
 
@@ -29,9 +27,9 @@ def test_log_audit(tmp_path):
         mock_backend_root = tmp_path / "backend"
         mock_backend_root.mkdir()
         mock_resolve.return_value.parent.parent.parent = mock_backend_root
-        
+
         UpstoxService.log_audit("Test message")
-        
+
         logs_dir = mock_backend_root / "logs"
         audit_file = logs_dir / "trading_audit.log"
         assert audit_file.exists()
@@ -67,17 +65,17 @@ async def test_exchange_code_for_token(mock_start_ws, mock_fetch_profile, mock_s
     mock_settings.return_value.UPSTOX_API_KEY = "key"
     mock_settings.return_value.UPSTOX_API_SECRET = "secret"
     mock_settings.return_value.UPSTOX_REDIRECT_URI = "uri"
-    
+
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.json.return_value = {"access_token": "test_token"}
     mock_post.return_value = mock_response
-    
+
     mock_fetch_profile.return_value = {"user_name": "Test User"}
-    
+
     with patch("app.services.upstox_service.UpstoxService.get_token_cache_path", return_value=tmp_path / "token.txt"):
         res = await UpstoxService.exchange_code_for_token("test_code")
-        
+
         assert res == {"access_token": "test_token"}
         assert UpstoxService.ACCESS_TOKEN == "test_token"
         assert UpstoxService.USER_PROFILE == {"user_name": "Test User"}
@@ -93,7 +91,7 @@ async def test_exchange_code_for_token_failure(mock_settings, mock_post):
     mock_response.status_code = 400
     mock_response.text = "Error"
     mock_post.return_value = mock_response
-    
+
     with pytest.raises(ValueError, match="Token exchange failed"):
         await UpstoxService.exchange_code_for_token("test_code")
 
@@ -106,7 +104,7 @@ async def test_exchange_code_for_token_missing_token(mock_settings, mock_post):
     mock_response.status_code = 200
     mock_response.json.return_value = {}
     mock_post.return_value = mock_response
-    
+
     with pytest.raises(ValueError, match="Access token missing"):
         await UpstoxService.exchange_code_for_token("test_code")
 
@@ -118,7 +116,7 @@ async def test_fetch_profile(mock_get):
     mock_response.status_code = 200
     mock_response.json.return_value = {"data": {"user_name": "Test"}}
     mock_get.return_value = mock_response
-    
+
     profile = await UpstoxService.fetch_profile()
     assert profile == {"user_name": "Test"}
 
@@ -128,7 +126,7 @@ async def test_fetch_profile_failure(mock_get):
     mock_response = MagicMock()
     mock_response.status_code = 401
     mock_get.return_value = mock_response
-    
+
     profile = await UpstoxService.fetch_profile()
     assert profile == {}
 
@@ -139,7 +137,7 @@ async def test_init_service_with_valid_token(mock_start_ws, mock_fetch_profile, 
     token_file = tmp_path / "upstox_token.txt"
     token_file.write_text("valid_token")
     mock_fetch_profile.return_value = {"user_name": "Test"}
-    
+
     with patch("app.services.upstox_service.UpstoxService.get_token_cache_path", return_value=token_file):
         await UpstoxService.init_service()
         assert UpstoxService.ACCESS_TOKEN == "valid_token"
@@ -152,7 +150,7 @@ async def test_init_service_with_invalid_token(mock_fetch_profile, tmp_path):
     token_file = tmp_path / "upstox_token.txt"
     token_file.write_text("invalid_token")
     mock_fetch_profile.return_value = {}
-    
+
     with patch("app.services.upstox_service.UpstoxService.get_token_cache_path", return_value=token_file):
         await UpstoxService.init_service()
         assert UpstoxService.ACCESS_TOKEN is None
@@ -161,7 +159,7 @@ async def test_init_service_with_invalid_token(mock_fetch_profile, tmp_path):
 async def test_resolve_symbol_cache_and_overrides():
     SYMBOL_TO_KEY["RELIANCE"] = "key1"
     assert await UpstoxService.resolve_symbol("RELIANCE") == "key1"
-    
+
     assert await UpstoxService.resolve_symbol("NIFTY 50") == "NSE_INDEX|Nifty 50"
     assert SYMBOL_TO_KEY["NIFTY 50"] == "NSE_INDEX|Nifty 50"
 
@@ -177,7 +175,7 @@ async def test_resolve_symbol_api_search_exact_match(mock_get):
         ]
     }
     mock_get.return_value = mock_response
-    
+
     key = await UpstoxService.resolve_symbol("TCS")
     assert key == "tcs_key"
     assert SYMBOL_TO_KEY["TCS"] == "tcs_key"
@@ -194,7 +192,7 @@ async def test_resolve_symbol_api_search_partial_match(mock_get):
         ]
     }
     mock_get.return_value = mock_response
-    
+
     key = await UpstoxService.resolve_symbol("INFY")
     assert key == "infy_key"
 
@@ -209,12 +207,12 @@ async def test_start_websocket_feed_no_token():
 async def test_start_websocket_feed_success(mock_resolve, mock_upstox_client):
     UpstoxService.ACCESS_TOKEN = "token"
     mock_resolve.side_effect = lambda sym: f"key_{sym}"
-    
+
     mock_streamer = MagicMock()
     mock_upstox_client.MarketDataStreamerV3.return_value = mock_streamer
-    
+
     await UpstoxService.start_websocket_feed()
-    
+
     assert UpstoxService.CONNECTION_STATUS == "connecting"
     assert UpstoxService.STREAMER == mock_streamer
     mock_streamer.connect.assert_called_once()
@@ -225,7 +223,7 @@ async def test_start_websocket_feed_success(mock_resolve, mock_upstox_client):
 async def test_start_websocket_feed_no_symbols(mock_resolve):
     UpstoxService.ACCESS_TOKEN = "token"
     mock_resolve.return_value = None
-    
+
     await UpstoxService.start_websocket_feed()
     assert UpstoxService.STREAMER is None
 
@@ -241,13 +239,13 @@ async def test_stop_websocket_feed():
 def test_streamer_callbacks():
     UpstoxService.on_open()
     assert UpstoxService.CONNECTION_STATUS == "connected"
-    
+
     UpstoxService.on_close(200, "Closed")
     assert UpstoxService.CONNECTION_STATUS == "disconnected"
-    
+
     UpstoxService.on_error("error")
     assert UpstoxService.CONNECTION_STATUS == "error"
-    
+
     UpstoxService.on_reconnecting("reconnect")
     assert UpstoxService.CONNECTION_STATUS == "reconnecting"
 
@@ -257,7 +255,7 @@ def test_on_message(mock_run_coroutine):
     mock_loop.is_running.return_value = True
     UpstoxService.LOOP = mock_loop
     KEY_TO_SYMBOL["key1"] = "RELIANCE"
-    
+
     msg = {
         "feeds": {
             "key1": {
@@ -265,9 +263,9 @@ def test_on_message(mock_run_coroutine):
             }
         }
     }
-    
+
     UpstoxService.on_message(msg)
-    
+
     assert "RELIANCE" in UPSTOX_TICK_CACHE
     tick = UPSTOX_TICK_CACHE["RELIANCE"]
     assert tick["price"] == 105.0
@@ -281,7 +279,7 @@ def test_on_message_ff(mock_run_coroutine):
     mock_loop.is_running.return_value = True
     UpstoxService.LOOP = mock_loop
     KEY_TO_SYMBOL["key2"] = "TCS"
-    
+
     msg = {
         "feeds": {
             "key2": {
@@ -294,9 +292,9 @@ def test_on_message_ff(mock_run_coroutine):
             }
         }
     }
-    
+
     UpstoxService.on_message(msg)
-    
+
     assert "TCS" in UPSTOX_TICK_CACHE
     tick = UPSTOX_TICK_CACHE["TCS"]
     assert tick["price"] == 200.0
@@ -311,15 +309,15 @@ def test_on_message_ff(mock_run_coroutine):
 async def test_publish_tick_to_redis(mock_session_factory, mock_check_orders, mock_enrich, mock_get_redis):
     mock_redis = AsyncMock()
     mock_get_redis.return_value = mock_redis
-    
+
     mock_enrich.return_value = {"symbol": "RELIANCE", "price": 100, "enriched": True}
-    
+
     mock_session = AsyncMock()
     mock_session_factory.return_value.__aenter__.return_value = mock_session
-    
+
     tick = {"symbol": "RELIANCE", "price": 100}
     await UpstoxService.publish_tick_to_redis(tick)
-    
+
     mock_enrich.assert_called_once_with(tick)
     mock_redis.publish.assert_called_once()
     mock_check_orders.assert_called_once_with(mock_session, "RELIANCE", Decimal("100"))
@@ -331,15 +329,15 @@ async def test_enrich_tick_with_indicators(mock_pipeline_run, mock_get_history):
     mock_get_history.return_value = [
         {"open": 90, "high": 110, "low": 80, "close": 100, "volume": 1000}
     ] * 10
-    
+
     def fake_pipeline_run(df):
         return df
     mock_pipeline_run.side_effect = fake_pipeline_run
-    
+
     tick = {"symbol": "RELIANCE", "price": 105.0}
-    
+
     enriched = await UpstoxService.enrich_tick_with_indicators(tick)
-    
+
     assert "ema9" in enriched
     assert "rsi" in enriched
     assert mock_get_history.called
@@ -348,11 +346,11 @@ async def test_enrich_tick_with_indicators(mock_pipeline_run, mock_get_history):
 @patch("app.services.market_data_service.MarketDataService.get_history")
 async def test_enrich_tick_with_indicators_no_history(mock_get_history):
     mock_get_history.return_value = []
-    
+
     tick = {"symbol": "RELIANCE", "price": 105.0}
-    
+
     enriched = await UpstoxService.enrich_tick_with_indicators(tick)
-    
+
     assert enriched["ema9"] is None
 
 
@@ -431,11 +429,9 @@ async def test_enrich_tick_with_indicators_full(tmp_path):
             {'open': 90, 'high': 110, 'low': 80, 'close': 100, 'volume': 1000}
         ] * 10
         def dummy_pipeline(df):
-            import pandas as pd
-            import pandas_ta
             return df
         mock_pipeline.side_effect = dummy_pipeline
-        
+
         tick = {'symbol': 'RELIANCE', 'price': 105.0}
         res = await UpstoxService.enrich_tick_with_indicators(tick)
         assert res['ema9'] is not None
@@ -448,9 +444,9 @@ def test_import_error():
     import importlib
     import app.services.upstox_service
     importlib.reload(app.services.upstox_service)
-    
+
     assert app.services.upstox_service.upstox_client is None
-    
+
     if original:
         sys.modules['upstox_client'] = original
     else:

@@ -1,4 +1,3 @@
-import asyncio
 import sys
 import os
 
@@ -21,10 +20,10 @@ def mock_xgboost_predict_proba(self, X):
 
 def main():
     print("Testing Honesty Law Guard in Training Pipeline...")
-    
+
     # We can mock np.mean so that when it calculates win_rate = np.mean(predictions == actuals), it returns 0.99
     original_mean = np.mean
-    
+
     def side_effect_mean(a, *args, **kwargs):
         if hasattr(a, 'shape') and a.dtype == bool:
             return 0.99 # Mock 99% accuracy

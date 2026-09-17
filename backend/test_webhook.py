@@ -67,9 +67,9 @@ async def run_test():
                 }
             }
         }
-        
+
         payload_bytes = json.dumps(payload).encode("utf-8")
-        
+
         # Sign it
         secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "replace_me")
         signature = hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
@@ -80,7 +80,7 @@ async def run_test():
             content=payload_bytes,
             headers={"x-razorpay-signature": signature, "Content-Type": "application/json"}
         )
-        
+
         print(f"[*] Webhook Response: {response.status_code} {response.json()}")
 
         # 4. Direct DB check
@@ -91,7 +91,7 @@ async def run_test():
         audit_check = await db.execute(select(BillingAuditLog).where(BillingAuditLog.event_type == "subscription.charged").order_by(BillingAuditLog.created_at.desc()))
         audit_log = audit_check.scalars().first()
 
-        print(f"\n--- VERIFICATION DB RESULTS ---")
+        print("\n--- VERIFICATION DB RESULTS ---")
         print(f"Subscription ID: {sub_updated.id}")
         print(f"Razorpay Sub ID: {sub_updated.razorpay_subscription_id}")
         print(f"New Status: {sub_updated.status} (Expected: active)")
