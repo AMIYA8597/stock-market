@@ -1,6 +1,5 @@
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
-from datetime import datetime, UTC, date
 from app.services.intelligence_service import IntelligenceService
 from app.schemas.intelligence import CounterfactualRequest
 
@@ -135,7 +134,7 @@ def test_get_model_accuracy(mock_settings, mock_connect, service):
     mock_cur = MagicMock()
     mock_conn.cursor.return_value = mock_cur
     mock_cur.fetchone.return_value = {"accuracy": 0.8, "precision": 0.7, "recall": 0.75, "auc": 0.85}
-    
+
     res = service.get_model_accuracy()
     assert len(res) > 0
 
@@ -149,7 +148,7 @@ def test_get_drift(mock_settings, mock_connect, service):
     mock_conn.cursor.return_value = mock_cur
     # simulate history length >= 10
     mock_cur.fetchall.return_value = [{"accuracy": 0.9}] * 5 + [{"accuracy": 0.5}] * 5
-    
+
     res = service.get_drift()
     assert len(res) > 0
 
@@ -162,7 +161,7 @@ def test_get_ensemble_weights_history(mock_settings, mock_connect, service):
     mock_cur = MagicMock()
     mock_conn.cursor.return_value = mock_cur
     mock_cur.fetchall.return_value = [{"accuracy": 0.8, "created_at": "2024-01-01T00:00:00"}]
-    
+
     res = service.get_ensemble_weights_history(5)
     assert len(res) > 0
 

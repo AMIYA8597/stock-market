@@ -29,7 +29,7 @@ async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UU
     user_id = current_user.get("sub")
     if not user_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    
+
     import uuid
     return uuid.UUID(user_id) if isinstance(user_id, str) else user_id
 

@@ -1,14 +1,9 @@
 import pytest
 import numpy as np
 import pandas as pd
-from unittest.mock import patch
 
 from app.services.risk_engine.calculator import (
     RiskCalculator,
-    VaRResult,
-    CVaRResult,
-    SkewKurtosis,
-    StressTestResult,
 )
 
 @pytest.fixture
