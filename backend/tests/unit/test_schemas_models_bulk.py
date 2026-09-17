@@ -1,5 +1,4 @@
-﻿import pytest
-import importlib
+﻿import importlib
 import pkgutil
 import app.schemas
 import app.models

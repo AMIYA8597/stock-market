@@ -10,11 +10,11 @@ class LLMReasoningEngine:
     Uses OpenAI, Claude, or Gemini APIs to provide human-readable, AI-driven explanations
     and confidence bounds based on deep learning model outputs, market context, and technicals.
     """
-    
+
     @staticmethod
     async def generate_reasoning(
-        symbol: str, 
-        ensemble_signal: str, 
+        symbol: str,
+        ensemble_signal: str,
         confidence: float,
         technicals: Dict[str, Any],
         news_sentiment: str

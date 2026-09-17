@@ -126,3 +126,17 @@ dist/
 
 # Generated test/error logs
 backend/test_errors.txt
+
+# Generated analysis / lint reports
+apps/web/eslint_report.json
+apps/web/eslint_report.txt
+apps/web/eslint_utf8.json
+apps/web/tsc_report.txt
+backend/bandit_report.json
+
+# Generated code-quality / audit reports
+backend/ruff_report.txt
+backend/ruff_unused.json
+backend/vulture_report.txt
+tree_output.txt
+tree_utf8.txt

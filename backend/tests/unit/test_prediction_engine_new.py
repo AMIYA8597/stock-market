@@ -2,10 +2,8 @@ import pytest
 import pandas as pd
 import numpy as np
 import json
-import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock, mock_open
 from datetime import datetime, UTC
-from pathlib import Path
 
 from app.services import prediction_engine as prediction_engine_module
 import importlib
@@ -17,7 +15,6 @@ importlib.reload(prediction_engine_module)
 from app.services.prediction_engine import (
     _cache_fetch,
     _cache_store,
-    get_sentiment_pipeline,
     detect_regime,
     compute_kelly_fraction,
     standardize_df_columns,
@@ -98,7 +95,7 @@ def test_detect_regime_success(sample_df):
     mock_res.vol_forecast_21d = [0.05]
     mock_engine.predict.return_value = mock_res
     mock_engine.get_transition_matrix.return_value = np.array([[1, 0], [0, 1]])
-    
+
     with patch.dict('sys.modules', {'research.models.hmm_garch.inference': MagicMock(InferenceEngine=mock_engine_class)}):
         res = detect_regime(sample_df)
         assert res["regime"] == "BULL"
@@ -114,7 +111,7 @@ def test_detect_regime_fallback(sample_df):
 def test_compute_kelly_fraction():
     res = compute_kelly_fraction("TEST", 0.5, 0.8)
     assert isinstance(res, float)
-    
+
     with patch("app.services.prediction_engine.Path.exists", return_value=True), \
          patch("builtins.open", mock_open(read_data='{"win_rate": 0.6, "payoff_ratio": 1.5}')):
         res2 = compute_kelly_fraction("TEST2", 0.5, 0.8)
@@ -132,14 +129,14 @@ def test_build_ensemble_signal_sync(sample_df):
     with patch("app.services.prediction_engine.detect_regime") as mock_regime, \
          patch("app.services.prediction_engine.TechnicalSignalEngine.generate_signal") as mock_tech, \
          patch("app.services.prediction_engine.compute_kelly_fraction", return_value=0.1):
-        
+
         mock_regime.return_value = {
-            "regime": "BULL", "bull_prob": 0.8, "bear_prob": 0.1, 
-            "regime_confidence": 0.8, "hmm_used": True, 
+            "regime": "BULL", "bull_prob": 0.8, "bear_prob": 0.1,
+            "regime_confidence": 0.8, "hmm_used": True,
             "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
         }
         mock_tech.return_value = {"score": 0.5}
-        
+
         with patch.dict('sys.modules', {'research.models.xgboost_model.classifier': MagicMock()}):
             res = build_ensemble_signal_sync("TEST", sample_df)
             assert res["model_status"] in ["heuristic", "trained"]
@@ -153,19 +150,19 @@ def test_build_ensemble_signal_all_models(sample_df):
          patch("app.services.prediction_engine.compute_kelly_fraction", return_value=0.1), \
          patch("app.services.sentiment_analyzer.FinBERTSentimentAnalyzer") as mock_sentiment, \
          patch("pathlib.Path.exists", return_value=True):
-        
+
         mock_regime.return_value = {
-            "regime": "BEAR", "bull_prob": 0.1, "bear_prob": 0.8, 
-            "regime_confidence": 0.8, "hmm_used": True, 
+            "regime": "BEAR", "bull_prob": 0.1, "bear_prob": 0.8,
+            "regime_confidence": 0.8, "hmm_used": True,
             "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
         }
         mock_tech.return_value = {"score": 0.5}
-        
+
         mock_sentiment_inst = mock_sentiment.return_value
         mock_sentiment_inst.scrape_google_news.return_value = ["news"]
         mock_sentiment_inst.get_stock_sentiment.return_value = 0.5
         mock_sentiment_inst._initialized = True
-        
+
         xgb_mock = MagicMock()
         xgb_mock.predict_proba.return_value = 0.8
         xgb_mock.get_shap_values.return_value = ([{"name": "f1", "shap_value": 0.1}], 0.5)
@@ -178,21 +175,21 @@ def test_build_ensemble_signal_all_models(sample_df):
         tft_mock.quantiles = [0.1, 0.5, 0.9]
         tft_mock.features = ["close"]
         tft_mock.predict.return_value = (-0.01, 0.05, 0.1)
-        
+
         gnn_mock = MagicMock()
         gnn_mock.compute_risk_factors.return_value = {"raw_signal": 0.6, "contagion_score": 0.2, "corr_to_index": 0.5}
-        
+
         learner_mock = MagicMock()
         learner_mock.features = ["close"]
         learner_mock.predict_proba.return_value = 0.6
-        
+
         import sys
         sys.modules['research.models.xgboost_model.classifier'] = MagicMock(XGBoostDirectionalClassifier=MagicMock(load=MagicMock(return_value=xgb_mock)))
         sys.modules['research.models.lstm_attention.classifier'] = MagicMock(LSTMAttentionClassifier=MagicMock(load=MagicMock(return_value=lstm_mock)))
         sys.modules['research.models.tft.quantile_forecaster'] = MagicMock(QuantileLGBForecaster=MagicMock(load=MagicMock(return_value=tft_mock)))
         sys.modules['research.models.gnn.contagion_risk'] = MagicMock(ContagionRiskAnalyzer=MagicMock(return_value=gnn_mock))
         sys.modules['research.models.online_learner'] = MagicMock(OnlineAdaptiveLearner=MagicMock(load=MagicMock(return_value=learner_mock)))
-        
+
         res = build_ensemble_signal_sync("TEST", sample_df)
         assert res["model_status"] == "trained"
 
@@ -227,7 +224,7 @@ def test_forecast_prices(sample_df):
 async def test_forecast_multi_horizon():
     mock_market = MagicMock()
     mock_market.get_history = AsyncMock(return_value=[{"close": 100 + i} for i in range(100)])
-    
+
     with patch("app.services.market_data_service.MarketDataService.get_history", mock_market.get_history), \
          patch("app.services.prediction_engine._fit_and_forecast", return_value=(np.array([110, 111]), np.array([[105, 115], [106, 116]]))):
         res = await forecast_multi_horizon("TEST", ["1d", "invalid"])
@@ -243,7 +240,7 @@ async def test_get_full_prediction(sample_df):
     mock_bar.low = 95
     mock_bar.close = 100
     mock_bar.volume = 1000
-    
+
     with patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"), \
          patch("app.services.prediction_engine._cache_fetch") as mock_fetch, \
          patch("app.services.data_ingestion.provider_manager.provider_manager.get_ohlcv", new_callable=AsyncMock, return_value=[mock_bar] * 100), \
@@ -259,10 +256,10 @@ async def test_get_full_prediction(sample_df):
          patch("app.services.prediction_engine._cache_store", new_callable=AsyncMock), \
          patch("app.services.sr_service.SupportResistanceEngine.detect_classical_zones", return_value=[{"avg": 99, "type": "support"}]), \
          patch.dict('sys.modules', {'research.models.online_learner': MagicMock()}):
-        
+
         mock_fetch.return_value = None
         mock_build.return_value = {"model_status": "trained", "regime": {"regime": "BULL"}}
-        
+
         res = await get_full_prediction("TEST")
         assert res["symbol"] == "TEST"
 

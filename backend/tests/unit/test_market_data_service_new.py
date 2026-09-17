@@ -1,9 +1,7 @@
 import pytest
 import asyncio
 from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
-from datetime import datetime, UTC
 import pandas as pd
-import math
 import json
 import importlib
 
@@ -11,7 +9,7 @@ import importlib
 import app.services.market_data_service as mds_module
 importlib.reload(mds_module)
 
-from app.services.market_data_service import MarketDataService, HistoryList, safe_float, TokenBucket
+from app.services.market_data_service import MarketDataService, safe_float, TokenBucket
 
 @pytest.fixture
 def mock_redis():
@@ -123,7 +121,7 @@ async def test_get_quote_yfinance_success(mock_redis):
                 mock_ticker.fast_info = mock_info
                 mock_ticker.info = {"marketCap": 1000, "fiftyTwoWeekHigh": 120, "fiftyTwoWeekLow": 80}
                 mock_ticker_cls.return_value = mock_ticker
-                
+
                 res = await MarketDataService.get_quote("RELIANCE")
                 assert res["price"] == 105.0
                 assert res["market_cap"] == 1000.0
@@ -136,9 +134,9 @@ async def test_get_quote_yfinance_fallback_history(mock_redis):
                 mock_ticker = MagicMock()
                 type(mock_ticker).fast_info = PropertyMock(side_effect=Exception("no fast info"))
                 mock_ticker_cls.return_value = mock_ticker
-                
+
                 with patch.object(MarketDataService, "get_history", return_value=[
-                    {"close": 100, "open": 90, "high": 110, "low": 80, "volume": 1000}, 
+                    {"close": 100, "open": 90, "high": 110, "low": 80, "volume": 1000},
                     {"close": 105, "open": 95, "high": 115, "low": 85, "volume": 1100}
                 ]):
                     res = await MarketDataService.get_quote("RELIANCE")
@@ -320,7 +318,7 @@ def test_fetch_movers_sync():
         mock_df = pd.DataFrame(df_data)
         mock_df.columns = pd.MultiIndex.from_tuples([("RELIANCE.NS", "Close"), ("TCS.NS", "Close")])
         mock_yf.return_value = mock_df
-        
+
         res = MarketDataService._fetch_movers_sync()
         assert len(res["gainers"]) > 0 or len(res["losers"]) > 0
 
