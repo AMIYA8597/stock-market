@@ -1,10 +1,12 @@
-import pytest
-import pandas as pd
-import numpy as np
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import numpy as np
+import pandas as pd
+import pytest
+
 from app.services.ml_engine.training_pipeline import TrainingPipeline
+
 
 @pytest.fixture
 def mock_db_session():

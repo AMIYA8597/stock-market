@@ -1,8 +1,10 @@
 import asyncio
-import json
 import base64
+import json
+from datetime import UTC, datetime, timedelta
+
 import httpx
-from datetime import datetime, timezone, timedelta
+
 
 async def main():
     print("Testing JWT alg: none rejection...")
@@ -11,7 +13,7 @@ async def main():
     payload = {
         "sub": "00000000-0000-0000-0000-000000000000",
         "type": "access",
-        "exp": int((datetime.now(timezone.utc) + timedelta(minutes=15)).timestamp())
+        "exp": int((datetime.now(UTC) + timedelta(minutes=15)).timestamp())
     }
 
     header_b64 = base64.urlsafe_b64encode(json.dumps(header).encode()).decode().rstrip("=")

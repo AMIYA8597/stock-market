@@ -1110,3 +1110,5 @@ async def get_full_prediction(
 
     await _cache_store(symbol, result)
     return result
+
+

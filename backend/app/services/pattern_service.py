@@ -267,6 +267,42 @@ def detect_patterns(df: pd.DataFrame) -> list[dict]:
                 )
                 continue
 
+            # Piercing Line
+            if (
+                not prev_bull
+                and bull
+                and curr_open < prev_close
+                and curr_close > (prev_open + prev_close) / 2
+                and curr_close < prev_open
+                and dn_t
+            ):
+                markers.append({
+                    "time": time_val,
+                    "position": "belowBar",
+                    "shape": "arrowUp",
+                    "color": "#00E676",
+                    "text": "Piercing Line",
+                })
+                continue
+
+            # Dark Cloud Cover
+            if (
+                prev_bull
+                and not bull
+                and curr_open > prev_close
+                and curr_close < (prev_open + prev_close) / 2
+                and curr_close > prev_open
+                and up_t
+            ):
+                markers.append({
+                    "time": time_val,
+                    "position": "aboveBar",
+                    "shape": "arrowDown",
+                    "color": "#D81B60",
+                    "text": "Dark Cloud Cover",
+                })
+                continue
+
         if i >= 2:
             p2_bull = is_bullish.iloc[i - 2]
             p2_close = close.iloc[i - 2]

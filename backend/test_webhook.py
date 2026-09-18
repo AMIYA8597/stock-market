@@ -1,15 +1,16 @@
 import asyncio
-import json
-import hmac
 import hashlib
-from datetime import datetime, UTC
+import hmac
+import json
+from datetime import UTC, datetime
 from uuid import uuid4
 
-from app.database.connection import async_session_factory
-from app.models.user import User
-from app.models.payment import Subscription, Plan, BillingAuditLog
-from app.core.config import get_settings
 from sqlalchemy import select
+
+from app.core.config import get_settings
+from app.database.connection import async_session_factory
+from app.models.payment import BillingAuditLog, Plan, Subscription
+from app.models.user import User
 
 settings = get_settings()
 
@@ -52,6 +53,7 @@ async def run_test():
 
         # 3. Fire the webhook via FastAPI TestClient
         from fastapi.testclient import TestClient
+
         from app.main import app
 
         client = TestClient(app)
