@@ -1,12 +1,15 @@
 import os
 import sys
+
 import numpy as np
 
 # Add backend to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from app.services.regime_analyzer import HMMRegimeModel
 import yfinance as yf
+
+from app.services.regime_analyzer import HMMRegimeModel
+
 
 def trace_regime():
     print("Fetching RELIANCE.NS data...")

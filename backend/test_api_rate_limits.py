@@ -1,6 +1,8 @@
 import asyncio
+
 import httpx
 import websockets
+
 
 async def test_auth_rate_limit():
     print("Testing /auth/login rate limits...")
@@ -38,7 +40,7 @@ async def test_websocket_limits():
             # Try to receive to catch the close frame if the server rejected us
             try:
                 await asyncio.wait_for(ws.recv(), timeout=0.5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass # Normal if the server just keeps it open without sending
 
             await asyncio.sleep(0.1)

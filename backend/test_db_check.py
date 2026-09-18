@@ -1,8 +1,11 @@
 import asyncio
 import json
+
 from sqlalchemy import select
+
 from app.database.connection import async_session_factory
-from app.models.payment import Subscription, BillingAuditLog
+from app.models.payment import BillingAuditLog, Subscription
+
 
 async def check():
     async with async_session_factory() as db:

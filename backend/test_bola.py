@@ -1,10 +1,11 @@
 import asyncio
 import uuid
 import warnings
+
 from httpx import ASGITransport, AsyncClient
 
-from app.main import app
 from app.core.dependencies import get_current_user, get_current_user_or_none, require_premium_tier
+from app.main import app
 
 warnings.filterwarnings("ignore")
 

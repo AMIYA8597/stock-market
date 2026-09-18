@@ -1,11 +1,13 @@
-import pytest
-from unittest.mock import AsyncMock, patch
-from decimal import Decimal
-from datetime import date, datetime, timedelta, UTC
 import uuid
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
+from unittest.mock import AsyncMock, patch
 
-from app.models.paper_trading import PaperWallet, PaperPosition, PaperOrder
+import pytest
+
+from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
 from app.services.paper_trading import PaperTradingService
+
 
 class MockScalarResult:
     def __init__(self, items):

@@ -1,7 +1,9 @@
 ﻿import importlib
 import pkgutil
-import app.schemas
+
 import app.models
+import app.schemas
+
 
 def test_import_all_schemas_and_models():
     for _, name, _ in pkgutil.iter_modules(app.schemas.__path__):

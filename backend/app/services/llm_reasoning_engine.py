@@ -1,8 +1,10 @@
-import os
 import json
+import os
+from typing import Any
+
 import httpx
-from typing import Dict, Any
 from loguru import logger
+
 
 class LLMReasoningEngine:
     """
@@ -16,7 +18,7 @@ class LLMReasoningEngine:
         symbol: str,
         ensemble_signal: str,
         confidence: float,
-        technicals: Dict[str, Any],
+        technicals: dict[str, Any],
         news_sentiment: str
     ) -> str:
         """
@@ -98,7 +100,7 @@ class LLMReasoningEngine:
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
 
     @staticmethod
-    def _heuristic_fallback(signal: str, technicals: Dict[str, Any], sentiment: str) -> str:
+    def _heuristic_fallback(signal: str, technicals: dict[str, Any], sentiment: str) -> str:
         rsi = technicals.get("RSI_14", 50)
         rsi_msg = "oversold" if rsi < 30 else "overbought" if rsi > 70 else "neutral"
         return f"Ensemble indicates {signal} with {sentiment} market sentiment and {rsi_msg} RSI momentum."

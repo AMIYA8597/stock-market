@@ -1,9 +1,16 @@
-import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from pathlib import Path
 from decimal import Decimal
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.upstox_service import UpstoxService, UPSTOX_TICK_CACHE, SYMBOL_TO_KEY, KEY_TO_SYMBOL
+import pytest
+
+from app.services.upstox_service import (
+    KEY_TO_SYMBOL,
+    SYMBOL_TO_KEY,
+    UPSTOX_TICK_CACHE,
+    UpstoxService,
+)
+
 
 @pytest.fixture(autouse=True)
 def reset_service_state():
@@ -442,6 +449,7 @@ def test_import_error():
     original = sys.modules.get('upstox_client')
     sys.modules['upstox_client'] = None
     import importlib
+
     import app.services.upstox_service
     importlib.reload(app.services.upstox_service)
 

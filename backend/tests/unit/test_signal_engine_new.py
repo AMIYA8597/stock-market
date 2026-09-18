@@ -1,10 +1,12 @@
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from app.services.signal_engine import TechnicalSignalEngine, SignalEngine
+import numpy as np
+import pandas as pd
+import pytest
+
 from app.models.instrument import Instrument
+from app.services.signal_engine import SignalEngine, TechnicalSignalEngine
+
 
 def create_mock_df(positive: bool = True):
     rows = 60

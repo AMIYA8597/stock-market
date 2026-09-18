@@ -1,15 +1,18 @@
-import pytest
 import asyncio
-from unittest.mock import patch, MagicMock, AsyncMock, PropertyMock
-import pandas as pd
-import json
 import importlib
+import json
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+
+import pandas as pd
+import pytest
 
 # Reload the module to bypass conftest.py global mocks
 import app.services.market_data_service as mds_module
+
 importlib.reload(mds_module)
 
-from app.services.market_data_service import MarketDataService, safe_float, TokenBucket
+from app.services.market_data_service import MarketDataService, TokenBucket, safe_float
+
 
 @pytest.fixture
 def mock_redis():
@@ -323,8 +326,13 @@ def test_fetch_movers_sync():
         assert len(res["gainers"]) > 0 or len(res["losers"]) > 0
 
 def teardown_module(module):
-    from tests.conftest import mock_get_quote, mock_get_history, mock_get_ticker_history_df, mock_get_ticker_info
     from app.services import market_data_service
+    from tests.conftest import (
+        mock_get_history,
+        mock_get_quote,
+        mock_get_ticker_history_df,
+        mock_get_ticker_info,
+    )
     market_data_service.MarketDataService.get_quote = mock_get_quote
     market_data_service.MarketDataService.get_history = mock_get_history
     market_data_service.MarketDataService.get_ticker_history_df = mock_get_ticker_history_df
