@@ -1,11 +1,14 @@
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from tasks.training_tasks import train_single_xgboost
 from unittest.mock import patch
+
 import numpy as np
+
+from tasks.training_tasks import train_single_xgboost
+
 
 def mock_xgboost_fit(self, X, y):
     pass

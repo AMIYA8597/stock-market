@@ -1,7 +1,10 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
-from app.services.intelligence_service import IntelligenceService
+
 from app.schemas.intelligence import CounterfactualRequest
+from app.services.intelligence_service import IntelligenceService
+
 
 @pytest.fixture
 def service():

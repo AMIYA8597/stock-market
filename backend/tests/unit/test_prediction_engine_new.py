@@ -1,12 +1,13 @@
-import pytest
-import pandas as pd
-import numpy as np
+import importlib
 import json
-from unittest.mock import patch, MagicMock, AsyncMock, mock_open
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock, mock_open, patch
+
+import numpy as np
+import pandas as pd
+import pytest
 
 from app.services import prediction_engine as prediction_engine_module
-import importlib
 
 # conftest.py maliciously overrides get_full_prediction globally.
 # We must reload the module to restore the original function for our tests.
@@ -15,17 +16,18 @@ importlib.reload(prediction_engine_module)
 from app.services.prediction_engine import (
     _cache_fetch,
     _cache_store,
-    detect_regime,
-    compute_kelly_fraction,
-    standardize_df_columns,
-    build_ensemble_signal_sync,
-    build_ensemble_signal,
-    forecast_prices,
     _fit_and_forecast,
+    _in_memory_prediction_cache,
+    build_ensemble_signal,
+    build_ensemble_signal_sync,
+    compute_kelly_fraction,
+    detect_regime,
     forecast_multi_horizon,
+    forecast_prices,
     get_full_prediction,
-    _in_memory_prediction_cache
+    standardize_df_columns,
 )
+
 
 @pytest.fixture(autouse=True)
 def clear_caches():
@@ -280,7 +282,7 @@ async def test_get_full_prediction_error():
 
 
 def teardown_module(module):
-    from tests.conftest import mock_get_full_prediction
     from app.services import prediction_engine
+    from tests.conftest import mock_get_full_prediction
     prediction_engine.get_full_prediction = mock_get_full_prediction
 

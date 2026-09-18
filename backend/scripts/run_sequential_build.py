@@ -14,6 +14,7 @@ import asyncio
 import json
 
 from pipelines.data_pipeline import run_full_history
+
 from scripts.compute_features import compute_features
 from scripts.model_trainer import run_training
 from scripts.verify_schema import verify_schema

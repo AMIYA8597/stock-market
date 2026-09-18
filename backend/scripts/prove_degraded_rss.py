@@ -1,8 +1,8 @@
+import logging
 import os
 import sys
-import logging
-import urllib.request
 import urllib.error
+import urllib.request
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 

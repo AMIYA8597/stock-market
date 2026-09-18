@@ -1,14 +1,16 @@
 import asyncio
-import sys
 import os
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import logging
+
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 from app.services.ml_engine.training_pipeline import TrainingPipeline
 from research.feature_engineering.pipeline import FeaturePipeline
+
 
 async def test_honesty_law():
     print("--- PROVING HONESTY LAW ---")

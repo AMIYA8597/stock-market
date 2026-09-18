@@ -1,10 +1,11 @@
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from app.services.risk_engine.calculator import (
     RiskCalculator,
 )
+
 
 @pytest.fixture
 def calc():

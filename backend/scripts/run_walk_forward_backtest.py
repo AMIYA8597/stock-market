@@ -66,7 +66,25 @@ def calculate_metrics(
     losses = net_returns[net_returns < 0]
     win_loss = (np.mean(wins) / abs(np.mean(losses))) if len(losses) > 0 and len(wins) > 0 else 1.0
 
+    
+    tp = np.sum((predictions == 1) & (actual_returns > 0))
+    fp = np.sum((predictions == 1) & (actual_returns <= 0))
+    fn = np.sum((predictions != 1) & (actual_returns > 0))
+    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.5
+    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.5
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.5
+    downside_returns = net_returns[net_returns < 0]
+    downside_std = np.std(downside_returns) if len(downside_returns) > 0 else 1e-6
+    sortino = np.mean(net_returns) / downside_std * np.sqrt(252)
+    profit_factor = np.sum(wins) / abs(np.sum(losses)) if len(losses) > 0 else 1.0
+
     return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "sortino": sortino,
+        "profit_factor": profit_factor,
+
         "hit_rate": hit_rate,
         "sharpe": sharpe,
         "max_dd": max_dd * 100,  # percentage
@@ -184,3 +202,4 @@ The Brier score measures calibration quality (how close predicted probabilities 
 
 if __name__ == "__main__":
     main()
+

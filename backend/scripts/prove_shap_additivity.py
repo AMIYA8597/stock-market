@@ -1,12 +1,13 @@
-import os
-import sys
 import asyncio
 import logging
+import os
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
 from app.services.prediction_engine import get_full_prediction
+
 
 async def prove_shap():
     print("--- PROVING SHAP ADDITIVITY ---")
@@ -43,15 +44,18 @@ async def prove_shap():
     print(f"Note: top_features only includes the top K, so the sum might not perfectly equal the margin if K < total_features. Let's count features: {len(top_features)}")
 
     # We will also load the model directly to prove full additivity
-    from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier
-    import pandas as pd
     from pathlib import Path
+
+    import pandas as pd
+
+    from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier
 
     model_path = Path(__file__).parent.parent / "data" / "models" / f"xgboost_{symbol.upper()}.pkl"
     if model_path.exists():
         clf = XGBoostDirectionalClassifier.load(model_path)
+        from datetime import UTC, datetime, timedelta
+
         from app.services.data_ingestion.provider_manager import provider_manager
-        from datetime import datetime, UTC, timedelta
 
         end_date = datetime.now(UTC)
         start_date = end_date - timedelta(days=60)

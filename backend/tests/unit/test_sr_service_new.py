@@ -1,9 +1,11 @@
-import pytest
-import pandas as pd
-import numpy as np
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from app.services.sr_service import SupportResistanceEngine, SRBiLSTM
+import numpy as np
+import pandas as pd
+import pytest
+
+from app.services.sr_service import SRBiLSTM, SupportResistanceEngine
+
 
 @pytest.fixture
 def dummy_df():

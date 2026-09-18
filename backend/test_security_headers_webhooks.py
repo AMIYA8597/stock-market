@@ -1,6 +1,8 @@
 import asyncio
-import httpx
 import json
+
+import httpx
+
 
 async def test_security_headers():
     print("Testing Security Headers...")
