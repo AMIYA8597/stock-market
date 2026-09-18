@@ -1,13 +1,14 @@
-import os
-import sys
 import asyncio
 import logging
+import os
+import sys
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 logging.basicConfig(level=logging.WARNING, format="%(message)s")
 
-from app.services.prediction_engine import get_full_prediction
 from app.services.intelligence_service import IntelligenceService
+from app.services.prediction_engine import get_full_prediction
+
 
 async def trace_attention():
     print("--- TRACING ATTENTION EXTRACTOR ---")

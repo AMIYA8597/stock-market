@@ -1,6 +1,6 @@
 
 path = 'app/api/v1/payments.py'
-with open(path, 'r') as f:
+with open(path) as f:
     content = f.read()
 
 import_line = "from app.core.security import is_test_mode\n    "

@@ -1,18 +1,20 @@
-# Issues Audit
+# Issues Audit (Phase 1)
 
-## Backend Issues
-- **Unused Code**: `statsmodels.tsa.statespace.sarimax.SARIMAX` was imported but unused in `app/services/prediction_engine.py` (Fixed).
-- **Scalability**: The database logic currently runs all queries directly on PostgreSQL. For high-frequency time series (intraday stock ticks), this might lead to bottlenecks.
+## Backend Issues (Python)
+We ran `ruff` across the entire backend directory, identifying and automatically fixing 94 linting and code quality issues (such as unused imports, unused variables, and style violations). 
+The remaining unresolved issues include:
+- Unused variables inside loop bodies and testing scripts.
+- Bare `except` blocks in `scripts/check_endpoints.py` and `scripts/recover.py` which could silently swallow important errors.
 
-## Frontend Issues
-- Initial scan pending for ESLint unused variables/imports.
+*Status: Fixed 94 minor issues.*
 
-## Structural Issues
-- Heavy ML training tasks (like LightGBM/XGBoost) share the same resource pools as the FastAPI application servers if not deployed separately. This could lead to memory leaks or latency spikes during retraining.
+## Frontend Issues (React / Next.js)
+We ran `next lint` across the Next.js frontend (`apps/web`). The codebase is clean, with only a few hook dependency warnings:
+- `usePriceFeed.ts` & `useSignalFeed.ts`: Missing dependency `symbols`.
 
-## Data Quality Issues
-- The ingestion pipeline occasionally processes ticks that might overlap.
-- Backtesting Engine needs walk-forward validation without data leakage.
+*Status: Non-critical.*
 
-## Security Vulnerabilities
-- Checking dependencies...
+## Structural & Architecture Issues
+- **Microservices Separation**: Currently, ML ingestion, prediction, and API are combined in a monolithic FastAPI app. Moving heavy AI inference to dedicated microservices will improve scalability.
+- **Database Engine**: Transitioning heavy time-series data to TimescaleDB is necessary for performance on OHLCV data.
+- **Data Pipeline**: The ingestion pipeline needs to support WebSocket streaming concurrently with REST polling.

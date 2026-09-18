@@ -1,6 +1,6 @@
 
 path = 'app/api/v1/auth.py'
-with open(path, 'r') as f:
+with open(path) as f:
     content = f.read()
 
 # Add logging import
