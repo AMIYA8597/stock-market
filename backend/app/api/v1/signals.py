@@ -49,18 +49,23 @@ async def get_signals_bulk(
                 code=ErrorCode.VALIDATION_ERROR, message="At least one symbol required."
             ).dict(),
         )
-    if len(parsed) > 50:
+    if len(parsed) > 20:
         raise HTTPException(
             status_code=400,
             detail=ErrorResponse.create(
-                code=ErrorCode.UNPROCESSABLE, message="Maximum 50 symbols."
+                code=ErrorCode.UNPROCESSABLE, message="Maximum 20 symbols."
             ).dict(),
         )
 
     signals = []
 
-    # We fetch serially or gather to avoid overloading providers
-    tasks = [_get_technical_signal(sym) for sym in parsed]
+    sem = asyncio.Semaphore(4)
+
+    async def _fetch_with_sem(sym: str) -> dict:
+        async with sem:
+            return await _get_technical_signal(sym)
+
+    tasks = [_fetch_with_sem(sym) for sym in parsed]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     for symbol, result in zip(parsed, results, strict=False):

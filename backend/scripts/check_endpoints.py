@@ -23,7 +23,7 @@ async def check_endpoints():
                     data = resp.json()
                     # Print first 500 chars to avoid huge outputs
                     print(json.dumps(data, indent=2)[:500] + "...\n")
-                except:
+                except Exception:
                     print(resp.text[:500] + "...\n")
             except Exception as e:
                 print(f"--- {name} ---")

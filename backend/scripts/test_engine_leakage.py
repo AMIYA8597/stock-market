@@ -46,7 +46,7 @@ async def main():
     returns = df["Close"].shift(-1) / df["Close"] - 1.0
     direction = np.sign(returns).fillna(1.0)
 
-    for dt, d in zip(df.index, direction):
+    for dt, d in zip(df.index, direction, strict=False):
         GLOBAL_FUTURE_DIRECTION[dt] = d
 
     # 2. Patch the engine

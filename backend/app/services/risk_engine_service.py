@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+
 class RiskEngine:
     @staticmethod
     def calculate_risk(df: pd.DataFrame) -> dict:
@@ -22,7 +23,7 @@ class RiskEngine:
 
         # Normalize score 0-100 (higher score = higher risk)
         score = min(100, max(0, (volatility * 100) + (abs(max_dd) * 100) + (abs(var_95) * 1000)))
-        
+
         if score > 75:
             risk_level = "HIGH"
         elif score > 40:

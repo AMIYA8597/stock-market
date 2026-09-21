@@ -30,7 +30,7 @@ except ImportError:
 from app.core.config import get_settings
 
 settings = get_settings()
-MODEL_DIR = Path("d:/work/stock-market/backend/data/models")
+MODEL_DIR = Path("./backend/data/models")
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 

@@ -13,6 +13,7 @@ from app.models.auth_token import PasswordResetToken, RefreshSession  # noqa: F4
 # Backtest & Analysis
 from app.models.backtest import BacktestJob  # noqa: F401
 from app.models.blog import BlogPost  # noqa: F401
+from app.models.csrf_token import CSRFToken
 from app.models.email_job import EmailJob  # noqa: F401
 from app.models.feature_vectors import FeatureVector  # noqa: F401
 

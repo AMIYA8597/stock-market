@@ -11,7 +11,7 @@ with open(r"C:\Users\USER\.gemini\antigravity\brain\a9051a8a-c2d5-42a6-a541-390c
                     args_str = func.get("arguments", "{}")
                     try:
                         args = json.loads(args_str)
-                    except:
+                    except Exception:
                         continue
                     if "prediction_engine.py" in args.get("TargetFile", ""):
                         print("FOUND EDIT:", args.get("Instruction", ""))

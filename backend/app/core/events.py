@@ -88,19 +88,17 @@ async def startup_events() -> dict[str, Any]:
             logger.error("startup_redis_failed", error=str(e), exc_info=True)
             logger.warning("Redis is offline. Live WebSocket features will be degraded.")
 
-        # ─── Initialize Database ──────────────────────────────────────────
+        # ─── Initialize Database ───────────────────────────────────────────
         logger.info("startup_database_init")
         try:
-            from app.core.database import engine, init_db
+            from app.core.database import engine
 
             # Test database connection
             async with engine.begin() as conn:
                 await conn.execute(text("SELECT 1") if hasattr(conn, "execute") else "SELECT 1")
             logger.info("startup_database_success", database_url=settings.DATABASE_URL)
 
-            # Automatically create tables if not exists
-            logger.info("startup_database_schema_sync")
-            await init_db()
+            # Schema guard is called dynamically by the schema middleware, but we can also do a quick check here.
         except Exception as e:
             logger.error("startup_database_failed", error=str(e), exc_info=True)
             logger.warning("Database is offline. REST services accessing DB will fail.")
@@ -157,15 +155,6 @@ async def startup_events() -> dict[str, Any]:
                 logger.info("startup_alert_polling_loop_created")
             except Exception as e:
                 logger.error(f"Failed to start alert polling loop background task: {e}")
-
-            # Initialize Upstox Integration
-            try:
-                from app.services.upstox_service import UpstoxService
-
-                await UpstoxService.init_service()
-                logger.info("startup_upstox_service_initialized")
-            except Exception as up_err:
-                logger.error(f"Failed to initialize Upstox service: {up_err}")
 
             # Initialize Background Market Scheduler
             try:

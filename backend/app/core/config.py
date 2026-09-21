@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=(".env", ".env.example"),
+        env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -58,27 +58,28 @@ class Settings(BaseSettings):
     )
     API_V1_PREFIX: str = Field(default="/api/v1", description="Base path for all API v1 endpoints")
 
-    # ─── Database ─────────────────────────────────────────────────────────
+    # ─── Database ─────────────────────────────────────────────────
     DATABASE_URL: str = Field(
-        default="postgresql+asyncpg://neuroquant:changeme@localhost:5432/neuroquant_db",
-        description="Async PostgreSQL database URL (asyncpg driver)",
+        default="",
+        description="Runtime DB URL for API (role nq_api)",
     )
-    SYNC_DATABASE_URL: str = Field(
-        default="", description="Sync database URL (for Alembic migrations)"
+    MIGRATIONS_DATABASE_URL: str = Field(
+        default="", description="DB URL for Alembic migrations (role nq_migrator)"
     )
-    # DEPRECATED: MongoDB is being removed in Phase 2 (defect #25).
-    # All payment/wallet state is migrating to PostgreSQL/SQLite.
-    # Keep field so env files with MONGODB_URL= don't cause ValidationError.
-    MONGODB_URL: str = Field(
-        default="", description="[DEPRECATED] MongoDB URL — being removed in Phase 2"
+    INGEST_DATABASE_URL: str = Field(
+        default="", description="DB URL for market data jobs (role nq_ingest)"
     )
-    DATABASE_POOL_SIZE: int = Field(default=20, description="SQLAlchemy connection pool size")
-    DATABASE_MAX_OVERFLOW: int = Field(
-        default=10, description="Maximum connections to overflow beyond pool_size"
+    DB_POOL_MODE: str = Field(
+        default="session", description="Connection pool mode: 'session' or 'transaction'"
     )
-    DATABASE_POOL_RECYCLE: int = Field(
-        default=3600, description="Recycle connections after N seconds (for connection pooling)"
+    DB_POOL_SIZE: int = Field(default=5, description="SQLAlchemy connection pool size")
+    DB_MAX_OVERFLOW: int = Field(
+        default=2, description="Maximum connections to overflow"
     )
+    DB_POOL_RECYCLE: int = Field(
+        default=1800, description="Recycle connections after N seconds"
+    )
+    DB_SSL_REQUIRED: bool = Field(default=True, description="Require SSL for DB connection")
 
     # ─── Redis ────────────────────────────────────────────────────────────
     REDIS_URL: str = Field(
@@ -384,6 +385,15 @@ class Settings(BaseSettings):
         default=20, description="Number of symbols per batch request to yfinance."
     )
 
+
+    @model_validator(mode="after")
+    def validate_database_user(self) -> Settings:
+        if self.ENVIRONMENT != "test":
+            if "postgres:" in self.DATABASE_URL.lower():
+                if self.ENVIRONMENT == "production":
+                    raise ValueError("Cannot run as postgres superuser in production. Use nq_api role.")
+        return self
+
     @model_validator(mode="after")
     def validate_production_keys(self) -> Settings:
         if self.ENVIRONMENT == "production":
@@ -430,53 +440,14 @@ class Settings(BaseSettings):
         """Get Path object for model checkpoint directory."""
         return Path(self.MODEL_CHECKPOINT_DIR)
 
-    @property
-    def DATABASE_URL_SYNC(self) -> str:
-        """Get sync database URL for Alembic migrations.
-
-        Returns the SYNC_DATABASE_URL if set. Otherwise, dynamically converts
-        DATABASE_URL to its synchronous equivalent.
-        """
-        if self.SYNC_DATABASE_URL:
-            return self.SYNC_DATABASE_URL
-
-        url = self.DATABASE_URL
-        if url.startswith("postgresql+asyncpg://"):
-            return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
-        if url.startswith("sqlite+aiosqlite://"):
-            return url.replace("sqlite+aiosqlite://", "sqlite://")
-        return url
 
 
 # ─── Singleton Getter ──────────────────────────────────────────────────────
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return cached application settings singleton.
+    """Get singleton Settings instance.
 
-    Uses functools.lru_cache to ensure only one Settings instance
-    is created and reused throughout the application lifetime.
-
-    Returns:
-        Settings: The global settings instance.
+    Settings are loaded from environment variables or backend/.env file.
+    The root .env file is no longer used for the backend.
     """
-    import os
-
-    cwd = os.getcwd()
-    env_file = os.path.join(cwd, ".env")
-    if not os.path.exists(env_file):
-        # Check parent folders
-        parent_env = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), "..", "..", "..", ".env")
-        )
-        if os.path.exists(parent_env):
-            env_file = parent_env
-        else:
-            parent_env_2 = os.path.abspath(
-                os.path.join(os.path.dirname(__file__), "..", "..", ".env")
-            )
-            if os.path.exists(parent_env_2):
-                env_file = parent_env_2
-
-    if os.path.exists(env_file):
-        return Settings(_env_file=env_file)
     return Settings()

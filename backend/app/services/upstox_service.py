@@ -33,7 +33,6 @@ KEY_TO_SYMBOL: dict[str, str] = {}
 
 
 class UpstoxService:
-    TRADING_MODE: str = "PAPER"  # ALWAYS defaults to PAPER, not persisted
     ACCESS_TOKEN: str | None = None
     STREAMER: Any | None = None
     CONNECTION_STATUS: str = (
@@ -41,14 +40,6 @@ class UpstoxService:
     )
     USER_PROFILE: dict | None = None
     LOOP: asyncio.AbstractEventLoop | None = None
-
-    @classmethod
-    def get_token_cache_path(cls) -> Path:
-        """Returns path to cached token file in user's home Gemini config directory."""
-        # For ease of local dev and to survive server restarts, cache token under app data / config
-        cache_dir = Path("C:/Users/USER/.gemini/antigravity")
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        return cache_dir / "upstox_token.txt"
 
     @classmethod
     def log_audit(cls, message: str):
@@ -124,11 +115,7 @@ class UpstoxService:
                 raise ValueError("Access token missing in Upstox authorization response.")
 
             cls.ACCESS_TOKEN = token
-            # Store in token cache file
-            try:
-                cls.get_token_cache_path().write_text(token, encoding="utf-8")
-            except Exception as te:
-                logger.warning(f"Could not persist access token to disk cache: {te}")
+            # Store in token cache file is removed
 
             # Fetch profile details
             profile = await cls.fetch_profile()
@@ -155,30 +142,7 @@ class UpstoxService:
                 return res.get("data", {})
             return {}
 
-    @classmethod
-    async def init_service(cls):
-        """Initializes service on boot: restores cached token, verifies it, and auto-starts connection."""
-        cls.TRADING_MODE = "PAPER"  # Force default mode on boot
-        cls.LOOP = asyncio.get_running_loop()
 
-        token_file = cls.get_token_cache_path()
-        if token_file.exists():
-            try:
-                token = token_file.read_text(encoding="utf-8").strip()
-                if token:
-                    cls.ACCESS_TOKEN = token
-                    # Verify by calling profile
-                    profile = await cls.fetch_profile()
-                    if profile:
-                        cls.USER_PROFILE = profile
-                        cls.log_audit("Restored cached Upstox token successfully.")
-                        # Auto connect WS
-                        asyncio.create_task(cls.start_websocket_feed())
-                    else:
-                        cls.ACCESS_TOKEN = None
-                        logger.info("Cached Upstox token has expired or is invalid.")
-            except Exception as e:
-                logger.warning(f"Error restoring cached token: {e}")
 
     @classmethod
     async def resolve_symbol(cls, symbol: str) -> str | None:

@@ -24,7 +24,7 @@ async def client_task(client_id):
             # Listen for 15 seconds
             while time.time() - start_time < 15:
                 try:
-                    msg = await asyncio.wait_for(websocket.recv(), timeout=1.0)
+                    await asyncio.wait_for(websocket.recv(), timeout=1.0)
                     message_count += 1
                 except TimeoutError:
                     continue
