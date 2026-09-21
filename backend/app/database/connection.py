@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 
-from sqlalchemy import event, text
+from sqlalchemy import MetaData, text
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import NullPool
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
@@ -28,37 +28,31 @@ settings = get_settings()
 
 # ─── Engine Configuration ────────────────────────────────────────────────
 def _get_engine_kwargs() -> dict:
-    """Build engine kwargs based on environment configuration.
-
-    Args:
-        None
-
-    Returns:
-        dict: SQLAlchemy AsyncEngine initialization arguments.
-
-    Raises:
-        None
-    """
     kwargs = {
         "echo": settings.DEBUG,
         "echo_pool": settings.DEBUG,
-        "pool_pre_ping": True,  # Execute SELECT 1 before using connection
-        "pool_recycle": settings.DATABASE_POOL_RECYCLE,
     }
 
-    # Use QueuePool for production (persistent pooling)
-    # Use NullPool for testing/development (no pooling)
-    if settings.is_production:
-        kwargs["poolclass"] = QueuePool
-        kwargs["pool_size"] = settings.DATABASE_POOL_SIZE
-        kwargs["max_overflow"] = settings.DATABASE_MAX_OVERFLOW
-    else:
-        kwargs["poolclass"] = NullPool
+    connect_args = {
+        "server_settings": {"application_name": "neuroquant-api"},
+        "command_timeout": 15.0  # roughly equivalent to statement_timeout for asyncpg
+    }
+    if settings.DB_SSL_REQUIRED:
+        connect_args["ssl"] = True
 
+    if settings.DB_POOL_MODE == "transaction":
+        connect_args["statement_cache_size"] = 0
+        connect_args["prepared_statement_cache_size"] = 0
+        kwargs["poolclass"] = NullPool
+    else:
+        kwargs["pool_size"] = settings.DB_POOL_SIZE
+        kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+        kwargs["pool_pre_ping"] = True
+        kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE
+
+    kwargs["connect_args"] = connect_args
     return kwargs
 
-
-# ─── Create Async Engine ──────────────────────────────────────────────────
 engine = create_async_engine(
     settings.DATABASE_URL,
     **_get_engine_kwargs(),
@@ -67,7 +61,7 @@ engine = create_async_engine(
 logger.debug(
     "database_engine_created",
     database_url=settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "***",
-    pool_size=settings.DATABASE_POOL_SIZE,
+    pool_size=settings.DB_POOL_SIZE,
     mode="production" if settings.is_production else "development",
 )
 
@@ -85,7 +79,16 @@ logger.debug("database_session_factory_created")
 
 
 # ─── ORM Base Class ───────────────────────────────────────────────────────
+NAMING_CONVENTION = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
 class Base(DeclarativeBase):
+    metadata = MetaData(naming_convention=NAMING_CONVENTION)
     """Base class for all SQLAlchemy ORM models.
 
     All model classes should inherit from this to be tracked
@@ -106,70 +109,7 @@ class Base(DeclarativeBase):
 # SQLite does not support SET, CREATE EXTENSION, etc.
 _is_postgres = settings.DATABASE_URL.startswith("postgresql")
 
-if _is_postgres:
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def receive_connect(dbapi_conn: any, connection_record: any) -> None:
-        """Configure PostgreSQL connection on creation.
-
-        Called when a new database connection is created.
-        Sets up TimescaleDB-specific settings for hypertables.
-
-        Args:
-            dbapi_conn: Raw database connection (psycopg2).
-            connection_record: SQLAlchemy connection record.
-
-        Returns:
-            None
-
-        Raises:
-            None: Exceptions are logged but don't interrupt connection.
-        """
-        try:
-            cursor = dbapi_conn.cursor()
-            cursor.execute("SET jit = on;")
-            cursor.execute("SET random_page_cost = 1.1;")
-            cursor.close()
-            logger.debug("database_connection_configured")
-        except Exception as e:
-            logger.warning("database_connection_configure_error", error=str(e))
-
-    @event.listens_for(engine.sync_engine, "first_connect")
-    def receive_first_connect(dbapi_conn: any, connection_record: any) -> None:
-        """Initialize database on first connection.
-
-        Called exactly once when the first connection is created.
-        Initializes TimescaleDB extension if not already present.
-
-        Args:
-            dbapi_conn: Raw database connection.
-            connection_record: SQLAlchemy connection record.
-
-        Returns:
-            None
-
-        Raises:
-            None: Exceptions are logged but don't interrupt startup.
-        """
-        try:
-            cursor = dbapi_conn.cursor()
-            cursor.execute("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;")
-            cursor.close()
-            logger.info("database_timescaledb_initialized")
-        except Exception as e:
-            # A failed CREATE EXTENSION leaves the connection's transaction
-            # aborted at the Postgres level — without rolling back here,
-            # every later query reusing this pooled connection (schema
-            # version check, create_all(), ...) fails with
-            # "current transaction is aborted", silently skipping all
-            # schema setup. TimescaleDB isn't available on managed Postgres
-            # like Supabase, so this is expected there — just recover.
-            logger.warning("database_timescaledb_init_error", error=str(e))
-            try:
-                dbapi_conn.rollback()
-            except Exception:
-                pass
-else:
+if not _is_postgres:
     logger.debug(
         "database_skipping_postgres_listeners (using %s)", settings.DATABASE_URL.split(":")[0]
     )
@@ -206,7 +146,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 # ─── Utility Functions ────────────────────────────────────────────────
-async def init_db() -> None:
+async def create_all_for_tests() -> None:
     """Initialize database schema by creating all tables.
 
     Creates all tables defined in Base.metadata.

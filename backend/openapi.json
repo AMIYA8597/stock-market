@@ -40,40 +40,6 @@
         }
       }
     },
-    "/api/v1/debug/trigger-alert-check": {
-      "get": {
-        "summary": "Debug Trigger Alert Check",
-        "description": "Debug endpoint to manually trigger an alert engine cycle.\nReturns the list of alerts that were broadcast.",
-        "operationId": "debug_trigger_alert_check_api_v1_debug_trigger_alert_check_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "debug"
-        ],
-        "summary": "Trigger Alert Check",
-        "operationId": "trigger_alert_check_api_v1_debug_trigger_alert_check_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/ready": {
       "get": {
         "summary": "Readiness Check",
@@ -1653,7 +1619,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/market/universe": {
@@ -1781,6 +1752,11 @@
         "summary": "Get Bulk Signals",
         "description": "Return parallel signal snapshots for up to 50 symbols.",
         "operationId": "get_bulk_signals_api_v1_signals_bulk_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbols",
@@ -1827,6 +1803,11 @@
         "summary": "Get Signal",
         "description": "Return the latest ensemble and model-level signal for a symbol.",
         "operationId": "get_signal_api_v1_signals__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -1867,6 +1848,11 @@
         "summary": "Get Signal History",
         "description": "Return historical signal series and realized returns for model evaluation.",
         "operationId": "get_signal_history_api_v1_signals_history__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -1936,6 +1922,11 @@
         ],
         "summary": "Get Regime Current",
         "operationId": "get_regime_current_api_v1_regime__symbol__current_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -1978,6 +1969,11 @@
         ],
         "summary": "Get Regime History",
         "operationId": "get_regime_history_api_v1_regime__symbol__history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2045,7 +2041,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/news/{symbol}": {
@@ -2829,299 +2830,6 @@
         }
       }
     },
-    "/api/v1/trading/mode": {
-      "get": {
-        "summary": "Get Trading Mode",
-        "description": "Returns the current trading session mode and connectivity state.",
-        "operationId": "get_trading_mode_api_v1_trading_mode_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      },
-      "post": {
-        "summary": "Set Trading Mode",
-        "description": "Toggles trading session mode between PAPER and LIVE.",
-        "operationId": "set_trading_mode_api_v1_trading_mode_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ModeUpdateSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/trading/order": {
-      "post": {
-        "summary": "Submit Order",
-        "description": "Places a simulated or real trade order depending on active trading mode.",
-        "operationId": "submit_order_api_v1_trading_order_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OrderSubmitSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/trading/kill-switch": {
-      "post": {
-        "summary": "Emergency Kill Switch",
-        "description": "Emergency Kill Switch: reverts trading mode to PAPER and cancels open orders.",
-        "operationId": "emergency_kill_switch_api_v1_trading_kill_switch_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/trading/audit-log": {
-      "get": {
-        "summary": "Get Audit Log",
-        "description": "Reads the trailing rows of the audit log file d:\\work\\stock-market\\backend\\logs\\trading_audit.log.",
-        "operationId": "get_audit_log_api_v1_trading_audit_log_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/upstox/login-url": {
-      "get": {
-        "summary": "Get Upstox Login Url",
-        "description": "Exposes the authorization dialog link for Upstox developer integrations.",
-        "operationId": "get_upstox_login_url_api_v1_auth_upstox_login_url_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/auth/upstox/callback": {
-      "get": {
-        "summary": "Upstox Oauth Callback",
-        "description": "OAuth redirect handler callback from Upstox API code consent dialog.",
-        "operationId": "upstox_oauth_callback_api_v1_auth_upstox_callback_get",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Code"
-            }
-          },
-          {
-            "name": "error",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Error"
-            }
-          },
-          {
-            "name": "error_description",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Error Description"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/upstox/status": {
-      "get": {
-        "summary": "Get Upstox Auth Status",
-        "description": "Returns profile and validity details for the active Upstox authentication.",
-        "operationId": "get_upstox_auth_status_api_v1_auth_upstox_status_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/screener/run": {
       "post": {
         "tags": [
@@ -3160,7 +2868,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/screener/presets": {
@@ -3181,7 +2894,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/alerts/history": {
@@ -3422,7 +3140,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/monitor/drift": {
@@ -3445,7 +3168,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/monitor/ensemble-weights-history": {
@@ -3453,6 +3181,11 @@
         "summary": "Get Ensemble Weights History",
         "description": "Return historical dynamic ensemble weights for model governance analysis.",
         "operationId": "get_ensemble_weights_history_api_v1_monitor_ensemble_weights_history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "days",
@@ -3500,6 +3233,11 @@
         "summary": "Get Correlation Graph",
         "description": "Return correlation graph nodes and edges for research workspace.",
         "operationId": "get_correlation_graph_api_v1_research_correlation_graph_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "window_days",
@@ -3543,6 +3281,11 @@
         "summary": "Get Factor Exposure",
         "description": "Return rolling factor exposures and diagnostics for selected symbol.",
         "operationId": "get_factor_exposure_api_v1_research_factor_exposure_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3608,7 +3351,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/regime/history": {
@@ -3616,6 +3364,11 @@
         "summary": "Get Regime History",
         "description": "Return daily regime labels and probabilities for the selected history window.",
         "operationId": "get_regime_history_api_v1_regime_history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "days",
@@ -3665,6 +3418,11 @@
         ],
         "summary": "Get Prediction",
         "operationId": "get_prediction_api_v1_predictions__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3735,7 +3493,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/predictions/latest/{symbol}": {
@@ -3745,6 +3508,11 @@
         ],
         "summary": "Get Latest Forecast",
         "operationId": "get_latest_forecast_api_v1_predictions_latest__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3785,6 +3553,11 @@
         ],
         "summary": "Get Ensemble Data",
         "operationId": "get_ensemble_data_api_v1_predictions_ensemble__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3825,6 +3598,11 @@
         ],
         "summary": "Get Prediction History",
         "operationId": "get_prediction_history_api_v1_predictions_history__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3976,76 +3754,6 @@
         }
       }
     },
-    "/api/v1/ai/train": {
-      "post": {
-        "tags": [
-          "ai"
-        ],
-        "summary": "Train Endpoint",
-        "description": "Launch model training. Returns 503 if engine not available.",
-        "operationId": "train_endpoint_api_v1_ai_train_post",
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Train Endpoint Api V1 Ai Train Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/predict": {
-      "post": {
-        "tags": [
-          "ai"
-        ],
-        "summary": "Predict Endpoint",
-        "description": "Run inference. Returns 503 if model not trained.",
-        "operationId": "predict_endpoint_api_v1_ai_predict_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PredictRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Predict Endpoint Api V1 Ai Predict Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/version": {
       "get": {
         "tags": [
@@ -4069,404 +3777,6 @@
             }
           }
         }
-      }
-    },
-    "/api/ohlc/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Ohlc",
-        "description": "Retrieve historical candle bars (OHLCV) for a given symbol and interval.",
-        "operationId": "get_ohlc_api_ohlc__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          },
-          {
-            "name": "timeframe",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1m|5m|15m|1h|1d)$",
-              "default": "1d",
-              "title": "Timeframe"
-            }
-          },
-          {
-            "name": "period",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$",
-              "default": "1y",
-              "title": "Period"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/indicators/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Indicators",
-        "description": "Compute and return technical indicators for the given symbol.",
-        "operationId": "get_indicators_api_indicators__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          },
-          {
-            "name": "timeframe",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1m|5m|15m|1h|1d)$",
-              "default": "1d",
-              "title": "Timeframe"
-            }
-          },
-          {
-            "name": "period",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$",
-              "default": "1y",
-              "title": "Period"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/zones/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Zones",
-        "description": "Return detected support/resistance zones (DBSCAN baseline vs BiLSTM sequence labeler).",
-        "operationId": "get_zones_api_zones__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/signals/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Signal Quantedge",
-        "description": "Retrieve ensemble prediction signal, confidence, regime, and plain reasoning rationale.",
-        "operationId": "get_signal_quantedge_api_signals__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/regime/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Regime",
-        "description": "Get the active HMM regime detection state, probabilities, and transition parameters.",
-        "operationId": "get_regime_api_regime__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/backtest": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Backtest Report",
-        "description": "Run walk-forward simulation backtest on symbol and return analytical metrics.",
-        "operationId": "get_backtest_report_api_backtest_get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Ticker symbol to backtest",
-              "title": "Symbol"
-            },
-            "description": "Ticker symbol to backtest"
-          },
-          {
-            "name": "strategy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Backtesting strategy selection",
-              "default": "ensemble",
-              "title": "Strategy"
-            },
-            "description": "Backtesting strategy selection"
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Backtesting start date",
-              "default": "2025-01-01",
-              "title": "From"
-            },
-            "description": "Backtesting start date"
-          },
-          {
-            "name": "to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Backtesting end date",
-              "default": "2026-01-01",
-              "title": "To"
-            },
-            "description": "Backtesting end date"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/paper-trade": {
-      "post": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Post Paper Trade",
-        "description": "Submit simulated paper order.",
-        "operationId": "post_paper_trade_api_paper_trade_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/QuantEdgeOrderRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/paper-trade/portfolio": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Paper Portfolio",
-        "description": "Get active positions, cash holdings, and mark-to-market P&L summary.",
-        "operationId": "get_paper_portfolio_api_paper_trade_portfolio_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
       }
     },
     "/health": {
@@ -6846,20 +6156,6 @@
         ],
         "title": "LSTMAttnSignal"
       },
-      "ModeUpdateSchema": {
-        "properties": {
-          "mode": {
-            "type": "string",
-            "title": "Mode",
-            "description": "Target trading mode: 'PAPER' or 'LIVE'"
-          }
-        },
-        "type": "object",
-        "required": [
-          "mode"
-        ],
-        "title": "ModeUpdateSchema"
-      },
       "ModelAccuracyItem": {
         "properties": {
           "model": {
@@ -7607,63 +6903,6 @@
         ],
         "title": "OrderRequest"
       },
-      "OrderSubmitSchema": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol",
-            "description": "Stock or index trading symbol, e.g., 'RELIANCE'"
-          },
-          "side": {
-            "type": "string",
-            "title": "Side",
-            "description": "Transaction direction: 'BUY' or 'SELL'"
-          },
-          "quantity": {
-            "type": "number",
-            "title": "Quantity",
-            "description": "Number of units to trade"
-          },
-          "order_type": {
-            "type": "string",
-            "title": "Order Type",
-            "description": "Execution type: 'MARKET' or 'LIMIT'"
-          },
-          "limit_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Price",
-            "description": "Price boundary for LIMIT orders"
-          },
-          "product": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product",
-            "description": "Product selection: 'I' (Intraday) or 'D' (Delivery)",
-            "default": "I"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "side",
-          "quantity",
-          "order_type"
-        ],
-        "title": "OrderSubmitSchema"
-      },
       "PaymentConfirmRequest": {
         "properties": {
           "intent_id": {
@@ -7832,69 +7071,6 @@
         ],
         "title": "PerformanceResponse",
         "description": "GET /portfolio/performance response."
-      },
-      "PredictRequest": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "maxLength": 15,
-            "minLength": 1,
-            "title": "Symbol",
-            "description": "Stock ticker symbol"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol"
-        ],
-        "title": "PredictRequest"
-      },
-      "QuantEdgeOrderRequest": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "side": {
-            "type": "string",
-            "enum": [
-              "BUY",
-              "SELL"
-            ],
-            "title": "Side"
-          },
-          "quantity": {
-            "type": "number",
-            "title": "Quantity"
-          },
-          "order_type": {
-            "type": "string",
-            "enum": [
-              "MARKET",
-              "LIMIT"
-            ],
-            "title": "Order Type"
-          },
-          "limit_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Price"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "side",
-          "quantity",
-          "order_type"
-        ],
-        "title": "QuantEdgeOrderRequest"
       },
       "QuoteResponse": {
         "properties": {
@@ -10496,7 +9672,11 @@
         "type": "oauth2",
         "flows": {
           "password": {
-            "scopes": {},
+            "scopes": {
+              "read": "Read access",
+              "write": "Write access",
+              "admin": "Admin access"
+            },
             "tokenUrl": "/api/v1/auth/login"
           }
         }

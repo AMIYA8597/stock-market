@@ -8,7 +8,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db, require_premium_tier
+from app.core.dependencies import get_current_user, get_db, require_premium_tier
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
@@ -31,7 +31,7 @@ router = APIRouter(tags=["portfolio"])
     summary="List portfolios for user",
 )
 async def list_portfolios(
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if not current_user:
@@ -75,7 +75,7 @@ async def list_portfolios(
     summary="Live portfolio holdings with P&L",
 )
 async def get_holdings(
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> HoldingsResponse:
     """Return a holdings snapshot for the authenticated user."""
@@ -215,7 +215,7 @@ async def get_holdings(
     summary="Time-series portfolio P&L vs benchmark",
 )
 async def get_performance(
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PerformanceResponse:
     """Return time-series portfolio performance based on live data and current holdings."""
@@ -374,7 +374,7 @@ async def get_performance(
 )
 async def post_transaction(
     request: TransactionRequest,
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TransactionResponse:
     """Record a transaction and update cash/holdings inside SQLAlchemy."""
@@ -558,7 +558,7 @@ async def post_transaction(
     summary="Portfolio risk metrics",
 )
 async def get_risk_metrics(
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RiskMetricsResponse:
     """Return portfolio risk metrics based on actual historical performance."""
@@ -988,7 +988,7 @@ async def post_optimize(
 )
 async def get_portfolio(
     portfolio_id: int,
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     if not current_user:

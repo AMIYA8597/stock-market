@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.services.paper_trading import PaperTradingService
 
@@ -30,7 +30,7 @@ class OrderRequest(BaseModel):
 async def submit_order(
     request: OrderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -82,7 +82,7 @@ async def submit_order(
 @router.get("/positions", summary="Get open paper trading positions")
 async def get_positions(
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -103,7 +103,7 @@ async def get_positions(
 @router.get("/history", summary="Get paper trading order log")
 async def get_history(
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -124,7 +124,7 @@ async def get_history(
 @router.get("/pnl", summary="Get paper trading wallet stats and P&L")
 async def get_pnl(
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -145,7 +145,7 @@ async def get_pnl(
 @router.post("/reset", summary="Reset paper trading wallet")
 async def reset_wallet(
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -171,7 +171,7 @@ async def reset_wallet(
 async def cancel_order(
     order_id: str,
     symbol: str = Query(..., description="Ticker symbol (e.g. RELIANCE.NS)"),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ):
     if not current_user:
         raise HTTPException(status_code=401, detail="Unauthorized")

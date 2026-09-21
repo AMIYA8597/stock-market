@@ -1,8 +1,9 @@
-from sklearn.ensemble import RandomForestClassifier, ExtraTreesClassifier
-import xgboost as xgb
-import lightgbm as lgb
 import catboost as cb
+import lightgbm as lgb
 import pandas as pd
+import xgboost as xgb
+from sklearn.ensemble import ExtraTreesClassifier, RandomForestClassifier
+
 
 class ClassicalEnsembleTrainers:
     @staticmethod

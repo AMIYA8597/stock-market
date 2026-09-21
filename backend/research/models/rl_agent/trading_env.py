@@ -1,20 +1,21 @@
-import numpy as np
 import gym
+import numpy as np
 from gym import spaces
+
 try:
-    from stable_baselines3 import PPO, DQN, A2C
+    from stable_baselines3 import A2C, DQN, PPO
 except ImportError:
     pass
 
 class StockTradingEnv(gym.Env):
     def __init__(self, df, initial_balance=10000):
-        super(StockTradingEnv, self).__init__()
+        super().__init__()
         self.df = df
         self.initial_balance = initial_balance
-        
+
         # 0 = Hold, 1 = Buy, 2 = Sell
         self.action_space = spaces.Discrete(3)
-        
+
         # Observation space depends on columns in df
         obs_shape = df.shape[1]
         self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(obs_shape,), dtype=np.float32)
@@ -66,10 +67,10 @@ class RLAgentTrainer:
 
     def train(self, timesteps=10000):
         self.model.learn(total_timesteps=timesteps)
-        
+
     def save(self, path):
         self.model.save(path)
-        
+
     def predict(self, obs):
         action, _states = self.model.predict(obs)
         return action
