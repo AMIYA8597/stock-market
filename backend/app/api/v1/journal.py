@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user_or_none, get_db
+from app.core.dependencies import get_current_user, get_db
 from app.models.journal import TradeJournal
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.journal import JournalCreate, JournalResponse
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/journal", tags=["journal"])
 async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UUID:
     """Resolve current user's UUID from token or database.
 
-    get_current_user_or_none returns the real User model, not a JWT payload
+    get_current_user returns the real User model, not a JWT payload
     dict — "sub" not in current_user previously raised an uncaught TypeError
     (SQLAlchemy models aren't iterable) for every authenticated request,
     turning into an unhandled 500 rather than the intended 401.
@@ -37,7 +37,7 @@ async def get_db_user_id(current_user: dict | None, db: AsyncSession) -> uuid.UU
 @router.get("", response_model=list[JournalResponse])
 async def get_journals(
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ) -> list[JournalResponse]:
     """Retrieve all trade journal entries for the current user."""
     user_uuid = await get_db_user_id(current_user, db)
@@ -54,7 +54,7 @@ async def get_journals(
 async def create_journal(
     payload: JournalCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ) -> JournalResponse:
     """Create a new trade journal entry."""
     user_uuid = await get_db_user_id(current_user, db)
@@ -79,7 +79,7 @@ async def create_journal(
 async def delete_journal(
     journal_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: dict | None = Depends(get_current_user_or_none),
+    current_user: dict | None = Depends(get_current_user),
 ) -> Response:
     """Delete a trade journal entry by ID."""
     user_uuid = await get_db_user_id(current_user, db)

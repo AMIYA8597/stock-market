@@ -66,7 +66,7 @@ def calculate_metrics(
     losses = net_returns[net_returns < 0]
     win_loss = (np.mean(wins) / abs(np.mean(losses))) if len(losses) > 0 and len(wins) > 0 else 1.0
 
-    
+
     tp = np.sum((predictions == 1) & (actual_returns > 0))
     fp = np.sum((predictions == 1) & (actual_returns <= 0))
     fn = np.sum((predictions != 1) & (actual_returns > 0))

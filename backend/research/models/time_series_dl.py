@@ -1,7 +1,7 @@
 """PyTorch models for Time Series Forecasting: BiLSTM, GRU, CNN+LSTM."""
 
-import torch
 import torch.nn as nn
+
 
 class BiLSTMClassifier(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int = 64, num_layers: int = 2, num_classes: int = 2):
@@ -40,7 +40,7 @@ class CNNLSTMClassifier(nn.Module):
         x = self.conv1(x)
         x = self.relu(x)
         x = x.transpose(1, 2)
-        
+
         out, _ = self.lstm(x)
         out = out[:, -1, :]
         out = self.fc(out)

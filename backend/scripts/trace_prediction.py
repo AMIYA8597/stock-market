@@ -53,7 +53,7 @@ async def run_trace():
     print("\n--- FUSION RULE & FINAL ENSEMBLE ---")
     technical = res["ensemble"]["technical"]["score"]
     ml_score = xgb["xgb_score"] if xgb["status"] == "trained" else 0.0
-    sentiment = res.get("message", "")
+    res.get("message", "")
     print(f"Technical Score: {technical:.4f}")
     print(f"ML Score: {ml_score:.4f}")
     print(f"Fused Raw Ensemble Score: {res['ensemble']['raw_ensemble']:.4f}")

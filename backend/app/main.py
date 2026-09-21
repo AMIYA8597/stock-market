@@ -54,7 +54,6 @@ for _noisy_lib in ("pymongo", "motor", "yfinance", "urllib3", "urllib3.connectio
 
 import time
 
-from app.api.quantedge_router import router as quantedge_router
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
@@ -65,7 +64,6 @@ from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
 from app.database.connection import async_session_factory
 from app.database.redis_client import InMemoryCache, get_redis_client
-from app.websocket.router import router as websocket_router
 
 settings = get_settings()
 
@@ -131,10 +129,9 @@ def create_app() -> FastAPI:
 
     # ─── Mount Routers ─────────────────────────────────────────
     _app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-    _app.include_router(websocket_router)
-    _app.include_router(quantedge_router)
 
     # Health check endpoint
+    from app.core.schema import schema_guard
     @_app.get("/health")
     async def health_check():
         start_time = time.time()
@@ -186,6 +183,10 @@ def create_app() -> FastAPI:
             health_status["providers"] = "unhealthy"
             health_status["status"] = "degraded"
 
+        schema_res = await schema_guard()
+        health_status.update(schema_res)
+        if schema_res["schema"] == "mismatch":
+            health_status["status"] = "mismatch"
         health_status["uptime_seconds"] = round(time.time() - start_time, 3)
         return health_status
 

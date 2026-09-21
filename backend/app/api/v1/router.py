@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
     admin,
-    ai,
     alerts,
     auth,
     backtest,
@@ -26,11 +25,11 @@ from app.api.v1 import (
     regime,
     screener,
     signals,
-    trading,
     users,
     watchlist,
     websocket_url,
 )
+from app.core.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -50,42 +49,23 @@ router.include_router(watchlist.router)
 router.include_router(market.router)
 router.include_router(websocket_url.router)
 
-router.include_router(signals.router)
-router.include_router(regime.router)
+router.include_router(signals.router, dependencies=[Depends(get_current_user)])
+router.include_router(regime.router, dependencies=[Depends(get_current_user)])
 router.include_router(news.router)
-router.include_router(explain.router)
+router.include_router(explain.router, dependencies=[Depends(get_current_user)])
 router.include_router(backtest.router)
 router.include_router(portfolio.router, prefix="/portfolio")
 router.include_router(paper_trading.router)
-router.include_router(trading.router)
-router.include_router(screener.router)
+router.include_router(screener.router, dependencies=[Depends(get_current_user)])
 router.include_router(alerts.router)
-router.include_router(models.router)
-router.include_router(intelligence.router)
-router.include_router(predictions.router, prefix="/predictions", tags=["predictions"])
+router.include_router(models.router, dependencies=[Depends(get_current_user)])
+router.include_router(intelligence.router, dependencies=[Depends(get_current_user)])
+router.include_router(predictions.router, prefix="/predictions", tags=["predictions"], dependencies=[Depends(get_current_user)])
 router.include_router(journal.router)
-
-router.include_router(ai.router)
-
 
 @router.get("/version", tags=["system"])
 async def get_version() -> dict[str, str]:
     return {"version": "2.0.0", "name": "NeuroQuant API"}
-
-
-@router.post("/debug/trigger-alert-check", tags=["debug"])
-async def trigger_alert_check():
-    from app.core.watchlist import WATCHLIST_SYMBOLS
-    from app.services.alert_engine import check_and_fire_alerts
-    from app.websocket.connection_manager import get_connection_manager
-
-    try:
-        manager = get_connection_manager()
-        alerts = await check_and_fire_alerts(WATCHLIST_SYMBOLS, manager)
-        return {"status": "ok", "alerts_fired_count": len(alerts), "alerts": alerts}
-    except Exception as e:
-        logger.error(f"Debug alert check failed: {e}")
-        raise HTTPException(status_code=500, detail="Alert check failed")
 
 
 __all__ = ["router", "api_router"]

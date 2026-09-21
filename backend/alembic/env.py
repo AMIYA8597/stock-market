@@ -4,12 +4,10 @@ Alembic migration environment.
 Configured for async SQLAlchemy with auto-detection of model changes.
 """
 
-import asyncio
 from logging.config import fileConfig
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
-from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import all models so Alembic detects them
 import app.models  # noqa: F401
@@ -25,12 +23,18 @@ settings = get_settings()
 # password (e.g. "%40" for "@") would otherwise raise
 # "invalid interpolation syntax". Escape it as "%%" before handing it to
 # set_main_option, which configparser un-escapes back to a single "%".
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL_SYNC.replace("%", "%%"))
+config.set_main_option("sqlalchemy.url", settings.MIGRATIONS_DATABASE_URL.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+def include_object(object, name, type_, reflected, compare_to):
+    if type_ == "table" and object.schema in ("auth", "storage", "realtime", "extensions", "graphql", "vault", "cron", "net", "supabase_migrations"):
+        return False
+    return True
+
 
 
 def run_migrations_offline() -> None:
@@ -51,33 +55,30 @@ def do_run_migrations(connection: Connection) -> None:
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
-        render_as_batch=True
+        compare_type=True,
+        compare_server_default=True,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
         context.run_migrations()
 
 
-async def run_async_migrations() -> None:
-    """Run migrations in 'online' mode with async engine."""
+def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.DATABASE_URL
+    configuration["sqlalchemy.url"] = settings.MIGRATIONS_DATABASE_URL
+    from sqlalchemy import engine_from_config
 
-    connectable = async_engine_from_config(
+    connectable = engine_from_config(
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
+    with connectable.connect() as connection:
+        do_run_migrations(connection)
 
-    await connectable.dispose()
-
-
-def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-    asyncio.run(run_async_migrations())
+    connectable.dispose()
 
 
 if context.is_offline_mode():

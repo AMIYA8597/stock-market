@@ -26,15 +26,11 @@ out/
 # Environment & Secrets  (NEVER COMMIT THESE)
 # ───────────────────────────────────────────────────
 .env
-.env.local
-.env.production
-.env.staging
-.env.*.local
-.env.key
-backend/.env
-backend/.env.*
-!backend/.env.example
+.env.*
+!.env.example
+*.pem
 keys/
+**/LLM-*
 
 # ───────────────────────────────────────────────────
 # Database files
@@ -42,8 +38,6 @@ keys/
 *.db
 *.sqlite
 *.sqlite3
-dev.db
-backend/dev.db
 pgdata/
 
 # ───────────────────────────────────────────────────
@@ -66,6 +60,7 @@ mlflow-artifacts/
 !backend/ml/models/.gitkeep
 data/models/
 data/backtest_cache/
+backend/data/artifacts/
 
 # ───────────────────────────────────────────────────
 # IDE / OS
@@ -95,7 +90,7 @@ coverage.xml
 .pytest_cache/
 
 # ───────────────────────────────────────────────────
-# Junk / scratch / temp
+# Junk / scratch / temp / leaks
 # ───────────────────────────────────────────────────
 scratch/
 unused_backup/
@@ -105,12 +100,20 @@ prompt.txt
 new-prompt.txt
 new-prompt.md
 new-new-new-new-prompt.txt
-git_diff.txt
 curl_output.txt
 cleanup_unused_modules.ps1
 package-lock.json
 tsconfig.tsbuildinfo
 DEPLOYMENT_CHECKLIST.sh
+*.patch
+*diff*.txt
+gitleaks*
+initial_prompt.txt
+lint-results.json
+ts_errors.txt
+web_build.txt
+*_results.txt
+*_errors.txt
 
 # ───────────────────────────────────────────────────
 # Alembic

@@ -13,12 +13,12 @@ use app.core.dependencies.get_db() for FastAPI dependency injection.
 from app.database.connection import (
     Base,
     async_session_factory,
+    create_all_for_tests,
     drop_db,
     engine,
     get_db,
     get_db_health,
     get_session,
-    init_db,
 )
 
 __all__ = [
@@ -27,7 +27,7 @@ __all__ = [
     "async_session_factory",
     "get_db",
     "get_session",
-    "init_db",
+    "create_all_for_tests",
     "drop_db",
     "get_db_health",
 ]

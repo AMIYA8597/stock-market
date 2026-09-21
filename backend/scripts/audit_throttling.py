@@ -33,7 +33,7 @@ async def main():
     failures = 0
     latency = end_time - start_time
 
-    for sym, res in results.items():
+    for _sym, res in results.items():
         if res and res.get("price") is not None:
             success += 1
         else:
