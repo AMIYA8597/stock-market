@@ -16,7 +16,6 @@ async def run_leakage_test():
 
     # We will monkey-patch the fetch_data in evaluate_models
     # to introduce a leaky feature that gives away the target.
-    original_fetch = scripts.evaluate_models.fetch_data
 
     async def leaky_fetch():
         import numpy as np
@@ -43,10 +42,8 @@ async def run_leakage_test():
         print(f"Evaluate System exit caught with code {e.code}")
 
     print("\n=== TASK 4: ENGINE-LEVEL LEAKAGE TEST (run_walk_forward) ===")
-    import research.backtesting.run_walk_forward as rwf
 
     # Original function
-    original_build_ensemble = rwf.build_ensemble_signal
 
     async def leaky_build_ensemble(symbol, df_slice):
         # Let's peek into the FUTURE to generate an omniscient signal!
@@ -63,7 +60,7 @@ async def run_leakage_test():
 
     # Better approach: We can patch `yf.Ticker.history` so that df contains a leaked signal column,
     # and then patch `build_ensemble_signal` to just return that leaked signal!
-    original_history = pd.DataFrame.history if hasattr(pd.DataFrame, 'history') else None
+    pd.DataFrame.history if hasattr(pd.DataFrame, 'history') else None
 
     async def omniscient_build(symbol, df_slice):
         # We will just generate random noise? No, we need it to trigger > 0.75 hit rate.

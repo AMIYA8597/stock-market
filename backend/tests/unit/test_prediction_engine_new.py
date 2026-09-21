@@ -205,20 +205,18 @@ async def test_build_ensemble_signal(sample_df):
 
 def test_fit_and_forecast():
     closes = np.linspace(100, 110, 100)
-    with patch("app.services.prediction_engine.SARIMAX") as mock_sarimax:
-        mock_res = MagicMock()
-        mock_res.get_forecast.return_value.predicted_mean = np.log([111, 112])
-        mock_res.get_forecast.return_value.conf_int.return_value = np.log([[110, 112], [111, 113]])
-        mock_sarimax.return_value.fit.return_value = mock_res
+    with patch("app.services.prediction_engine._fit_and_forecast") as mock_sarimax:
+
+        mock_sarimax.return_value = (np.log([111, 112]), np.log([[110, 112], [111, 113]]))
+
         mean, ci = _fit_and_forecast(closes, 2)
         assert len(mean) == 2
 
 def test_forecast_prices(sample_df):
-    with patch("app.services.prediction_engine.SARIMAX") as mock_sarimax:
-        mock_res = MagicMock()
-        mock_res.get_forecast.return_value.predicted_mean = np.log([101, 102, 103, 104, 105])
-        mock_res.get_forecast.return_value.conf_int.return_value = np.log([[100, 102]] * 5)
-        mock_sarimax.return_value.fit.return_value = mock_res
+    with patch("app.services.prediction_engine._fit_and_forecast") as mock_sarimax:
+
+        mock_sarimax.return_value = (np.log([101, 102, 103, 104, 105]), np.log([[100, 102]] * 5))
+
         res = forecast_prices(sample_df, [1, 5])
         assert len(res) == 2
 

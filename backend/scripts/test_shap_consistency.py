@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ from research.models.xgboost_model.classifier import XGBoostDirectionalClassifie
 
 def test_shap():
     print("Running SHAP consistency test...")
-    artifact_path = "D:/work/stock-market/backend/data/artifacts/xgboost_A_6d8d915f.pkl"
+    artifact_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../data/artifacts/xgboost_A_6d8d915f.pkl"))
     clf = XGBoostDirectionalClassifier.load(artifact_path)
 
     if not clf:

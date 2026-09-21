@@ -249,14 +249,25 @@ async def ws_alerts(websocket: WebSocket):
 
 
 @router.websocket("/backtest-progress")
-async def ws_backtest_progress(websocket: WebSocket):
+async def ws_backtest_progress(websocket: WebSocket, token: str):
     from uuid import UUID
 
     from sqlalchemy import select
 
     from app.api.v1.backtest import BACKTEST_PROGRESS
+    from app.core.security import decode_token
     from app.database.connection import async_session_factory
     from app.models.backtest import BacktestJob
+
+    try:
+        token_data = decode_token(token)
+        user_id_str = token_data.get("sub")
+        if not user_id_str:
+            await websocket.close(code=1008)
+            return
+    except Exception:
+        await websocket.close(code=1008)
+        return
 
     manager = get_connection_manager()
     await manager.connect(websocket)
@@ -270,22 +281,26 @@ async def ws_backtest_progress(websocket: WebSocket):
             try:
                 msg = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
                 if isinstance(msg, dict) and msg.get("action") == "subscribe":
-                    subscribed_job_id = msg.get("job_id")
+                    requested_job_id = msg.get("job_id")
+                    if requested_job_id:
+                        # Verify ownership
+                        try:
+                            job_uuid = UUID(requested_job_id)
+                            async with async_session_factory() as session:
+                                stmt = select(BacktestJob).where(
+                                    BacktestJob.id == job_uuid,
+                                    BacktestJob.user_id == UUID(user_id_str)
+                                )
+                                res = await session.execute(stmt)
+                                job = res.scalar_one_or_none()
+                                if job:
+                                    subscribed_job_id = requested_job_id
+                        except Exception:
+                            pass
             except TimeoutError:
                 pass
             except Exception:
                 pass
-
-            if not subscribed_job_id:
-                if BACKTEST_PROGRESS:
-                    subscribed_job_id = list(BACKTEST_PROGRESS.keys())[-1]
-                else:
-                    async with async_session_factory() as session:
-                        stmt = select(BacktestJob).order_by(BacktestJob.created_at.desc()).limit(1)
-                        res = await session.execute(stmt)
-                        job = res.scalar_one_or_none()
-                        if job:
-                            subscribed_job_id = str(job.id)
 
             if subscribed_job_id:
                 pct = BACKTEST_PROGRESS.get(subscribed_job_id)
@@ -333,72 +348,4 @@ async def ws_backtest_progress(websocket: WebSocket):
         await manager.disconnect(websocket)
 
 
-@router.websocket("/live/{symbol}")
-async def ws_live_feed(websocket: WebSocket, symbol: str):
-    """Real-time live feed for a single symbol."""
-    manager = get_connection_manager()
-    await manager.connect(websocket)
-    await manager.subscribe(websocket, f"market:{symbol}")
 
-    logger.info(f"ws_live: Client connected for symbol={symbol}")
-
-    tick_count = 0
-
-    try:
-        while True:
-            # 1. Fetch live quote
-            try:
-                quote = await MarketDataService.get_quote(symbol)
-                price = float(quote["price"])
-                change_pct = float(quote.get("change_pct", 0.0))
-                volume = int(quote.get("volume", 0))
-
-                await manager.send_personal(
-                    websocket,
-                    {
-                        "type": "tick",
-                        "symbol": quote["symbol"],
-                        "payload": {
-                            "price": price,
-                            "change_pct": change_pct,
-                            "volume": volume,
-                        },
-                        "ts": datetime.now(UTC).isoformat(),
-                        "source": quote.get("source", "system"),
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"ws_live: Quote fetch failed for {symbol}: {e}")
-
-            # 2. Fetch and push signal every 5 minutes (every 10 ticks of 30s)
-            if tick_count % 10 == 0:
-                try:
-                    pred = await get_full_prediction(symbol)
-                    if pred and pred.get("is_computed", False):
-                        ens = pred.get("ensemble", {})
-                        await manager.send_personal(
-                            websocket,
-                            {
-                                "type": "signal",
-                                "symbol": symbol.upper(),
-                                "payload": {
-                                    "direction": ens.get("direction", "NEUTRAL"),
-                                    "confidence": float(ens.get("confidence", 0.5)),
-                                    "kelly": float(ens.get("kelly", 0.0)),
-                                },
-                                "ts": datetime.now(UTC).isoformat(),
-                                "source": "system",
-                            },
-                        )
-                except Exception as e:
-                    logger.warning(f"ws_live: Prediction fetch failed for {symbol}: {e}")
-
-            tick_count += 1
-            await asyncio.sleep(30)
-
-    except WebSocketDisconnect:
-        logger.info(f"ws_live: Client disconnected for symbol={symbol}")
-    except Exception as e:
-        logger.error(f"ws_live: Connection error for symbol={symbol}: {e}")
-    finally:
-        await manager.disconnect(websocket)

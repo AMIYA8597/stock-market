@@ -1,9 +1,9 @@
 import optuna
-import xgboost as xgb
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
 import pandas as pd
-import numpy as np
+import xgboost as xgb
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+
 
 def objective(trial, X, y):
     params = {
@@ -15,22 +15,22 @@ def objective(trial, X, y):
     }
 
     X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, shuffle=False)
-    
+
     model = xgb.XGBClassifier(**params, random_state=42)
     model.fit(X_train, y_train)
-    
+
     preds = model.predict(X_valid)
     return accuracy_score(y_valid, preds)
 
 def run_tuning(X: pd.DataFrame, y: pd.Series, n_trials=20):
     study = optuna.create_study(direction="maximize")
     study.optimize(lambda trial: objective(trial, X, y), n_trials=n_trials)
-    
+
     print("Best trial:")
     print("  Value: ", study.best_trial.value)
     print("  Params: ")
     for key, value in study.best_trial.params.items():
         print(f"    {key}: {value}")
-        
+
     return study.best_trial.params
 

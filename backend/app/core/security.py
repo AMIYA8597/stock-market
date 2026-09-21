@@ -18,7 +18,6 @@ All cryptographic operations use industry-standard libraries:
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -93,8 +92,7 @@ try:
     JWT_PRIVATE_KEY, JWT_PUBLIC_KEY = _load_jwt_keys()
     JWT_ALGORITHM = settings.JWT_ALGORITHM
 except FileNotFoundError:
-    is_test = bool(os.getenv("PYTEST_CURRENT_TEST"))
-    if settings.is_production and not is_test:
+    if settings.is_production:
         raise RuntimeError(
             "JWT RSA keys are required in production. "
             "Set JWT_PRIVATE_KEY_PATH and JWT_PUBLIC_KEY_PATH to valid PEM files."

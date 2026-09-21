@@ -1,10 +1,10 @@
 import os
+
 import pandas as pd
-from typing import Any
 
 try:
-    from neuralforecast.models import Informer, NBEATS, PatchTST
     from neuralforecast.core import NeuralForecast
+    from neuralforecast.models import NBEATS, Informer, PatchTST
 except ImportError:
     NeuralForecast = None
 
@@ -18,7 +18,7 @@ class NeuralForecastWrapper:
         self.model_type = model_type.lower()
         self.horizon = horizon
         self.input_size = input_size
-        
+
         if NeuralForecast is None:
             raise ImportError("neuralforecast is not installed.")
 
@@ -30,7 +30,7 @@ class NeuralForecastWrapper:
             m = PatchTST(h=horizon, input_size=input_size, max_steps=100)
         else:
             raise ValueError(f"Unknown model type: {model_type}")
-            
+
         self.nf = NeuralForecast(models=[m], freq="1D")
 
     def fit(self, df: pd.DataFrame):
