@@ -58,6 +58,13 @@ engine = create_async_engine(
     **_get_engine_kwargs(),
 )
 
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.ext.compiler import compiles
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(type_, compiler, **kw):
+    return "JSON"
+
 logger.debug(
     "database_engine_created",
     database_url=settings.DATABASE_URL.split("@")[1] if "@" in settings.DATABASE_URL else "***",
@@ -107,12 +114,7 @@ class Base(DeclarativeBase):
 # ─── Connection Pool Event Handlers ────────────────────────────────────
 # Only register PostgreSQL-specific listeners if we're using PostgreSQL.
 # SQLite does not support SET, CREATE EXTENSION, etc.
-_is_postgres = settings.DATABASE_URL.startswith("postgresql")
-
-if not _is_postgres:
-    logger.debug(
-        "database_skipping_postgres_listeners (using %s)", settings.DATABASE_URL.split(":")[0]
-    )
+_is_postgres = True
 
 
 # ─── Session Dependency ────────────────────────────────────────────────

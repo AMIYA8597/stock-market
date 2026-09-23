@@ -46,6 +46,7 @@ router.include_router(payments.router)
 router.include_router(watchlist.router)
 
 
+router.include_router(alerts.router)
 router.include_router(market.router)
 router.include_router(websocket_url.router)
 
@@ -57,7 +58,7 @@ router.include_router(backtest.router)
 router.include_router(portfolio.router, prefix="/portfolio")
 router.include_router(paper_trading.router)
 router.include_router(screener.router, dependencies=[Depends(get_current_user)])
-router.include_router(alerts.router)
+
 router.include_router(models.router, dependencies=[Depends(get_current_user)])
 router.include_router(intelligence.router, dependencies=[Depends(get_current_user)])
 router.include_router(predictions.router, prefix="/predictions", tags=["predictions"], dependencies=[Depends(get_current_user)])

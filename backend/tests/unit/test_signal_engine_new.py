@@ -86,7 +86,7 @@ async def test_process_new_prediction(mock_costs):
     mock_db.execute = AsyncMock()
     mock_db.flush = AsyncMock()
     mock_result = MagicMock()
-    mock_instrument = Instrument(id=1, symbol="RELIANCE")
+    mock_instrument = Instrument(id=1, canonical_symbol="RELIANCE")
     mock_result.scalar_one_or_none.return_value = mock_instrument
     mock_db.execute.return_value = mock_result
 
@@ -119,7 +119,7 @@ async def test_process_new_prediction_no_instrument():
 async def test_process_new_prediction_low_confidence():
     mock_db = AsyncMock()
     mock_result = MagicMock()
-    mock_instrument = Instrument(id=1, symbol="RELIANCE")
+    mock_instrument = Instrument(id=1, canonical_symbol="RELIANCE")
     mock_result.scalar_one_or_none.return_value = mock_instrument
     mock_db.execute.return_value = mock_result
 
@@ -131,7 +131,7 @@ async def test_process_new_prediction_low_confidence():
 async def test_process_new_prediction_incompatible_regime_buy():
     mock_db = AsyncMock()
     mock_result = MagicMock()
-    mock_instrument = Instrument(id=1, symbol="RELIANCE")
+    mock_instrument = Instrument(id=1, canonical_symbol="RELIANCE")
     mock_result.scalar_one_or_none.return_value = mock_instrument
     mock_db.execute.return_value = mock_result
 
@@ -143,7 +143,7 @@ async def test_process_new_prediction_incompatible_regime_buy():
 async def test_process_new_prediction_incompatible_regime_sell():
     mock_db = AsyncMock()
     mock_result = MagicMock()
-    mock_instrument = Instrument(id=1, symbol="RELIANCE")
+    mock_instrument = Instrument(id=1, canonical_symbol="RELIANCE")
     mock_result.scalar_one_or_none.return_value = mock_instrument
     mock_db.execute.return_value = mock_result
 
@@ -157,7 +157,7 @@ async def test_process_new_prediction_low_expected_gain(mock_costs):
     mock_costs.return_value = np.array([[500.0]]) # high cost
     mock_db = AsyncMock()
     mock_result = MagicMock()
-    mock_instrument = Instrument(id=1, symbol="RELIANCE")
+    mock_instrument = Instrument(id=1, canonical_symbol="RELIANCE")
     mock_result.scalar_one_or_none.return_value = mock_instrument
     mock_db.execute.return_value = mock_result
 

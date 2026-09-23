@@ -14,19 +14,28 @@ async def test_auth_lifecycle(
     async def mock_enqueue_email(*args, **kwargs):
         return True
 
-    monkeypatch.setattr("app.api.v1.auth.enqueue_email", mock_enqueue_email)
-
     # Mock DB specifically for this test
     mock_db = {}
 
     async def mock_execute(stmt, *args, **kwargs):
         class MockResult:
             def scalar_one_or_none(self):
-                # Basic mock for select(User).where(User.email == email)
                 for user in mock_db.values():
-                    # Return the first user (we only have one in this test)
+                    if not hasattr(user, "organization_id"):
+                        user.organization_id = "test-org"
+                        user.role = "admin"
                     return user
                 return None
+            def scalars(self):
+                class MockScalars:
+                    def first(self):
+                        for user in mock_db.values():
+                            if not hasattr(user, "organization_id"):
+                                user.organization_id = "test-org"
+                                user.role = "admin"
+                            return user
+                        return None
+                return MockScalars()
 
         return MockResult()
 

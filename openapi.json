@@ -40,40 +40,6 @@
         }
       }
     },
-    "/api/v1/debug/trigger-alert-check": {
-      "get": {
-        "summary": "Debug Trigger Alert Check",
-        "description": "Debug endpoint to manually trigger an alert engine cycle.\nReturns the list of alerts that were broadcast.",
-        "operationId": "debug_trigger_alert_check_api_v1_debug_trigger_alert_check_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "debug"
-        ],
-        "summary": "Trigger Alert Check",
-        "operationId": "trigger_alert_check_api_v1_debug_trigger_alert_check_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/ready": {
       "get": {
         "summary": "Readiness Check",
@@ -102,7 +68,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserRegister"
+                "$ref": "#/components/schemas/AuthRegister"
               }
             }
           },
@@ -113,9 +79,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -143,48 +107,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserLogin"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/token": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Token Alias",
-        "operationId": "token_alias_api_v1_auth_token_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserLogin"
+                "$ref": "#/components/schemas/AuthLogin"
               }
             }
           },
@@ -225,7 +148,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TokenRefresh"
+                "$ref": "#/components/schemas/AuthRefresh"
               }
             }
           },
@@ -266,12 +189,7 @@
           "204": {
             "description": "Successful Response"
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/auth/me": {
@@ -286,96 +204,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/auth/forgot-password": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Forgot Password",
-        "operationId": "forgot_password_api_v1_auth_forgot_password_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthMessage"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/reset-password": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Reset Password",
-        "operationId": "reset_password_api_v1_auth_reset_password_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordConfirm"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthMessage"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": {}
               }
             }
           }
@@ -404,6 +233,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       },
@@ -448,6 +280,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -478,6 +313,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -492,6 +330,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -571,6 +412,36 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/ingest": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Trigger Ingestion",
+        "operationId": "trigger_ingestion_api_v1_admin_ingest_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -628,6 +499,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "requestBody": {
@@ -720,6 +594,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -795,6 +672,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       },
@@ -843,6 +723,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -857,6 +740,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -947,6 +833,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -995,6 +884,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1043,6 +935,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1091,87 +986,11 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/payments/cancel-subscription": {
-      "post": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Cancel Subscription",
-        "operationId": "cancel_subscription_api_v1_payments_cancel_subscription_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Cancel Subscription Api V1 Payments Cancel Subscription Post"
-                }
-              }
-            }
-          }
-        },
-        "security": [
+          },
           {
-            "OAuth2PasswordBearer": []
+            "APIKeyHeader": []
           }
         ]
-      }
-    },
-    "/api/v1/payments/subscription": {
-      "get": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Get Subscription",
-        "operationId": "get_subscription_api_v1_payments_subscription_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Get Subscription Api V1 Payments Subscription Get"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/payments/webhook": {
-      "post": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Razorpay Webhook",
-        "operationId": "razorpay_webhook_api_v1_payments_webhook_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Razorpay Webhook Api V1 Payments Webhook Post"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/payments/history": {
@@ -1184,6 +1003,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1224,6 +1046,60 @@
         }
       }
     },
+    "/api/v1/payments/subscription": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Subscription",
+        "operationId": "get_subscription_api_v1_payments_subscription_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Subscription Api V1 Payments Subscription Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/payments/webhook": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Razorpay Webhook",
+        "operationId": "razorpay_webhook_api_v1_payments_webhook_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Razorpay Webhook Api V1 Payments Webhook Post"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/watchlist": {
       "get": {
         "tags": [
@@ -1235,6 +1111,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1282,6 +1161,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "requestBody": {
@@ -1329,6 +1211,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1374,6 +1259,78 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/alerts": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "List Alerts",
+        "operationId": "list_alerts_api_v1_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Create Alert",
+        "operationId": "create_alert_api_v1_alerts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/market/quote/{symbol}": {
@@ -1681,7 +1638,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/market/universe": {
@@ -1690,7 +1655,6 @@
           "market"
         ],
         "summary": "Get Market Universe",
-        "description": "Return the list of core symbols supported by the platform.",
         "operationId": "get_market_universe_api_v1_market_universe_get",
         "responses": {
           "200": {
@@ -1712,7 +1676,6 @@
           "market"
         ],
         "summary": "Get Market Status",
-        "description": "Return the real IST market hours status.",
         "operationId": "get_market_status_api_v1_market_status_get",
         "responses": {
           "200": {
@@ -1736,7 +1699,6 @@
           "market"
         ],
         "summary": "Get Providers Health",
-        "description": "Return health status of all data providers.",
         "operationId": "get_providers_health_api_v1_market_providers_health_get",
         "responses": {
           "200": {
@@ -1747,6 +1709,29 @@
                   "additionalProperties": true,
                   "type": "object",
                   "title": "Response Get Providers Health Api V1 Market Providers Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/global-context": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Get Global Context",
+        "operationId": "get_global_context_api_v1_market_global_context_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Get Global Context Api V1 Market Global Context Get"
                 }
               }
             }
@@ -1785,6 +1770,14 @@
         "summary": "Get Bulk Signals",
         "description": "Return parallel signal snapshots for up to 50 symbols.",
         "operationId": "get_bulk_signals_api_v1_signals_bulk_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbols",
@@ -1803,13 +1796,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/app__schemas__intelligence__SignalResponse"
-                  },
-                  "title": "Response Get Bulk Signals Api V1 Signals Bulk Get"
-                }
+                "schema": {}
               }
             }
           },
@@ -1831,6 +1818,14 @@
         "summary": "Get Signal",
         "description": "Return the latest ensemble and model-level signal for a symbol.",
         "operationId": "get_signal_api_v1_signals__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -1847,9 +1842,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/app__schemas__intelligence__SignalResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -1871,6 +1864,14 @@
         "summary": "Get Signal History",
         "description": "Return historical signal series and realized returns for model evaluation.",
         "operationId": "get_signal_history_api_v1_signals_history__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -1940,6 +1941,14 @@
         ],
         "summary": "Get Regime Current",
         "operationId": "get_regime_current_api_v1_regime__symbol__current_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -1982,6 +1991,14 @@
         ],
         "summary": "Get Regime History",
         "operationId": "get_regime_history_api_v1_regime__symbol__history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2049,7 +2066,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/news/{symbol}": {
@@ -2098,6 +2123,14 @@
         "summary": "Get Shap Explainability",
         "description": "Return SHAP feature attribution values for the latest inference.",
         "operationId": "get_shap_explainability_api_v1_explain_shap__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2138,6 +2171,14 @@
         "summary": "Get Attention Explainability",
         "description": "Return temporal attention weights from the requested sequence model.",
         "operationId": "get_attention_explainability_api_v1_explain_attention__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2189,6 +2230,14 @@
         "summary": "Get Counterfactual",
         "description": "Return counterfactual feature changes that can flip signal direction.",
         "operationId": "get_counterfactual_api_v1_explain_counterfactual__symbol__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -2280,6 +2329,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2291,6 +2343,14 @@
         ],
         "summary": "Get Backtest Status",
         "operationId": "get_backtest_status_api_v1_backtest_status__job_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "job_id",
@@ -2333,6 +2393,14 @@
         ],
         "summary": "Get Backtest Results",
         "operationId": "get_backtest_results_api_v1_backtest_results__job_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "job_id",
@@ -2388,6 +2456,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2415,6 +2486,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2442,6 +2516,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2489,6 +2566,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2499,7 +2579,7 @@
           "portfolio"
         ],
         "summary": "Portfolio risk metrics",
-        "description": "Return portfolio risk metrics for dashboard and monitoring.",
+        "description": "Return portfolio risk metrics based on actual historical performance.",
         "operationId": "get_risk_metrics_api_v1_portfolio_risk_metrics_get",
         "responses": {
           "200": {
@@ -2516,6 +2596,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2563,6 +2646,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2577,6 +2663,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2652,6 +2741,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2676,6 +2768,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2700,6 +2795,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2724,6 +2822,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2748,6 +2849,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2759,6 +2863,14 @@
         ],
         "summary": "Cancel a pending limit order",
         "operationId": "cancel_order_api_v1_paper_trade_cancel__order_id__post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "order_id",
@@ -2803,299 +2915,6 @@
         }
       }
     },
-    "/api/v1/trading/mode": {
-      "get": {
-        "summary": "Get Trading Mode",
-        "description": "Returns the current trading session mode and connectivity state.",
-        "operationId": "get_trading_mode_api_v1_trading_mode_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      },
-      "post": {
-        "summary": "Set Trading Mode",
-        "description": "Toggles trading session mode between PAPER and LIVE.",
-        "operationId": "set_trading_mode_api_v1_trading_mode_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ModeUpdateSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/trading/order": {
-      "post": {
-        "summary": "Submit Order",
-        "description": "Places a simulated or real trade order depending on active trading mode.",
-        "operationId": "submit_order_api_v1_trading_order_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OrderSubmitSchema"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/trading/kill-switch": {
-      "post": {
-        "summary": "Emergency Kill Switch",
-        "description": "Emergency Kill Switch: reverts trading mode to PAPER and cancels open orders.",
-        "operationId": "emergency_kill_switch_api_v1_trading_kill_switch_post",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/trading/audit-log": {
-      "get": {
-        "summary": "Get Audit Log",
-        "description": "Reads the trailing rows of the audit log file d:\\work\\stock-market\\backend\\logs\\trading_audit.log.",
-        "operationId": "get_audit_log_api_v1_trading_audit_log_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 200,
-              "minimum": 1,
-              "default": 50,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/upstox/login-url": {
-      "get": {
-        "summary": "Get Upstox Login Url",
-        "description": "Exposes the authorization dialog link for Upstox developer integrations.",
-        "operationId": "get_upstox_login_url_api_v1_auth_upstox_login_url_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/auth/upstox/callback": {
-      "get": {
-        "summary": "Upstox Oauth Callback",
-        "description": "OAuth redirect handler callback from Upstox API code consent dialog.",
-        "operationId": "upstox_oauth_callback_api_v1_auth_upstox_callback_get",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Code"
-            }
-          },
-          {
-            "name": "error",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Error"
-            }
-          },
-          {
-            "name": "error_description",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Error Description"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/upstox/status": {
-      "get": {
-        "summary": "Get Upstox Auth Status",
-        "description": "Returns profile and validity details for the active Upstox authentication.",
-        "operationId": "get_upstox_auth_status_api_v1_auth_upstox_status_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
     "/api/v1/screener/run": {
       "post": {
         "tags": [
@@ -3134,7 +2953,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/screener/presets": {
@@ -3155,225 +2982,15 @@
               }
             }
           }
-        }
-      }
-    },
-    "/api/v1/alerts/history": {
-      "get": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Get Alerts History",
-        "operationId": "get_alerts_history_api_v1_alerts_history_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 5,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/alerts": {
-      "get": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Get Alerts",
-        "operationId": "get_alerts_api_v1_alerts_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertListResponse"
-                }
-              }
-            }
-          }
         },
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
-      },
-      "post": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Post Alert",
-        "operationId": "post_alert_api_v1_alerts_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AlertCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertData"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/alerts/{alert_id}": {
-      "patch": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Patch Alert",
-        "operationId": "patch_alert_api_v1_alerts__alert_id__patch",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "alert_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Alert Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AlertUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertUpdateResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Delete Alert",
-        "operationId": "delete_alert_api_v1_alerts__alert_id__delete",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "alert_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Alert Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertDeleteResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/monitor/model-accuracy": {
@@ -3396,7 +3013,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/monitor/drift": {
@@ -3419,7 +3044,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/monitor/ensemble-weights-history": {
@@ -3427,6 +3060,14 @@
         "summary": "Get Ensemble Weights History",
         "description": "Return historical dynamic ensemble weights for model governance analysis.",
         "operationId": "get_ensemble_weights_history_api_v1_monitor_ensemble_weights_history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "days",
@@ -3474,6 +3115,14 @@
         "summary": "Get Correlation Graph",
         "description": "Return correlation graph nodes and edges for research workspace.",
         "operationId": "get_correlation_graph_api_v1_research_correlation_graph_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "window_days",
@@ -3517,6 +3166,14 @@
         "summary": "Get Factor Exposure",
         "description": "Return rolling factor exposures and diagnostics for selected symbol.",
         "operationId": "get_factor_exposure_api_v1_research_factor_exposure_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3582,7 +3239,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/regime/history": {
@@ -3590,6 +3255,14 @@
         "summary": "Get Regime History",
         "description": "Return daily regime labels and probabilities for the selected history window.",
         "operationId": "get_regime_history_api_v1_regime_history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "days",
@@ -3639,6 +3312,14 @@
         ],
         "summary": "Get Prediction",
         "operationId": "get_prediction_api_v1_predictions__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3678,6 +3359,7 @@
           "predictions"
         ],
         "summary": "Generate Forecast",
+        "description": "Multi-horizon SARIMAX price forecast \u2014 real statistical forecasting on\nreal OHLCV history, not a stub. Each horizon reports the actual data\nwindow it was fit on and an honest confidence label; horizons under 1h\nare only ever backed by ~60 days of intraday data (a free-data-source\nlimit, not a modeling choice) and are labeled accordingly.",
         "operationId": "generate_forecast_api_v1_predictions_forecast_post",
         "requestBody": {
           "content": {
@@ -3708,7 +3390,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/predictions/latest/{symbol}": {
@@ -3718,6 +3408,14 @@
         ],
         "summary": "Get Latest Forecast",
         "operationId": "get_latest_forecast_api_v1_predictions_latest__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3758,6 +3456,14 @@
         ],
         "summary": "Get Ensemble Data",
         "operationId": "get_ensemble_data_api_v1_predictions_ensemble__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3798,6 +3504,14 @@
         ],
         "summary": "Get Prediction History",
         "operationId": "get_prediction_history_api_v1_predictions_history__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
         "parameters": [
           {
             "name": "symbol",
@@ -3858,6 +3572,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       },
@@ -3903,6 +3620,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -3918,6 +3638,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3935,78 +3658,6 @@
         "responses": {
           "204": {
             "description": "Successful Response"
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/train": {
-      "post": {
-        "tags": [
-          "ai"
-        ],
-        "summary": "Train Endpoint",
-        "description": "Launch model training. Returns 503 if engine not available.",
-        "operationId": "train_endpoint_api_v1_ai_train_post",
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Train Endpoint Api V1 Ai Train Post"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/predict": {
-      "post": {
-        "tags": [
-          "ai"
-        ],
-        "summary": "Predict Endpoint",
-        "description": "Run inference. Returns 503 if model not trained.",
-        "operationId": "predict_endpoint_api_v1_ai_predict_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "type": "object",
-                "title": "Payload"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Predict Endpoint Api V1 Ai Predict Post"
-                }
-              }
-            }
           },
           "422": {
             "description": "Validation Error",
@@ -4046,62 +3697,24 @@
         }
       }
     },
-    "/api/ohlc/{symbol}": {
+    "/liveness": {
       "get": {
         "tags": [
-          "quantedge-academic"
+          "health"
         ],
-        "summary": "Get Ohlc",
-        "description": "Retrieve historical candle bars (OHLCV) for a given symbol and interval.",
-        "operationId": "get_ohlc_api_ohlc__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          },
-          {
-            "name": "timeframe",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1m|5m|15m|1h|1d)$",
-              "default": "1d",
-              "title": "Timeframe"
-            }
-          },
-          {
-            "name": "period",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$",
-              "default": "1y",
-              "title": "Period"
-            }
-          }
-        ],
+        "summary": "Liveness",
+        "operationId": "liveness_liveness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness Liveness Get"
                 }
               }
             }
@@ -4109,339 +3722,29 @@
         }
       }
     },
-    "/api/indicators/{symbol}": {
+    "/readiness": {
       "get": {
         "tags": [
-          "quantedge-academic"
+          "health"
         ],
-        "summary": "Get Indicators",
-        "description": "Compute and return technical indicators for the given symbol.",
-        "operationId": "get_indicators_api_indicators__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          },
-          {
-            "name": "timeframe",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1m|5m|15m|1h|1d)$",
-              "default": "1d",
-              "title": "Timeframe"
-            }
-          },
-          {
-            "name": "period",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$",
-              "default": "1y",
-              "title": "Period"
-            }
-          }
-        ],
+        "summary": "Readiness",
+        "operationId": "readiness_readiness_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Readiness Readiness Get"
                 }
               }
             }
           }
         }
-      }
-    },
-    "/api/zones/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Zones",
-        "description": "Return detected support/resistance zones (DBSCAN baseline vs BiLSTM sequence labeler).",
-        "operationId": "get_zones_api_zones__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/signals/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Signal Quantedge",
-        "description": "Retrieve ensemble prediction signal, confidence, regime, and plain reasoning rationale.",
-        "operationId": "get_signal_quantedge_api_signals__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/regime/{symbol}": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Regime",
-        "description": "Get the active HMM regime detection state, probabilities, and transition parameters.",
-        "operationId": "get_regime_api_regime__symbol__get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/backtest": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Backtest Report",
-        "description": "Run walk-forward simulation backtest on symbol and return analytical metrics.",
-        "operationId": "get_backtest_report_api_backtest_get",
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Ticker symbol to backtest",
-              "title": "Symbol"
-            },
-            "description": "Ticker symbol to backtest"
-          },
-          {
-            "name": "strategy",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Backtesting strategy selection",
-              "default": "ensemble",
-              "title": "Strategy"
-            },
-            "description": "Backtesting strategy selection"
-          },
-          {
-            "name": "from",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Backtesting start date",
-              "default": "2025-01-01",
-              "title": "From"
-            },
-            "description": "Backtesting start date"
-          },
-          {
-            "name": "to",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "description": "Backtesting end date",
-              "default": "2026-01-01",
-              "title": "To"
-            },
-            "description": "Backtesting end date"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/paper-trade": {
-      "post": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Post Paper Trade",
-        "description": "Submit simulated paper order.",
-        "operationId": "post_paper_trade_api_paper_trade_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/QuantEdgeOrderRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/paper-trade/portfolio": {
-      "get": {
-        "tags": [
-          "quantedge-academic"
-        ],
-        "summary": "Get Paper Portfolio",
-        "description": "Get active positions, cash holdings, and mark-to-market P&L summary.",
-        "operationId": "get_paper_portfolio_api_paper_trade_portfolio_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
       }
     },
     "/health": {
@@ -4503,74 +3806,10 @@
         ],
         "title": "AdminUserItem"
       },
-      "AlertCreateRequest": {
+      "AlertCreate": {
         "properties": {
           "symbol": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Symbol"
-          },
-          "alert_type": {
             "type": "string",
-            "title": "Alert Type",
-            "description": "PRICE_ABOVE|PRICE_BELOW|RSI_OB|MACD_CROSS|SIGNAL_CHANGE|REGIME_CHANGE"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "default": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "alert_type",
-          "name"
-        ],
-        "title": "AlertCreateRequest",
-        "description": "POST /alerts request body."
-      },
-      "AlertData": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "symbol": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Symbol"
           },
           "alert_type": {
@@ -4578,163 +3817,17 @@
             "title": "Alert Type"
           },
           "threshold": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "number",
             "title": "Threshold"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
-          },
-          "is_triggered": {
-            "type": "boolean",
-            "title": "Is Triggered"
-          },
-          "triggered_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Triggered At"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
           }
         },
         "type": "object",
         "required": [
-          "id",
+          "symbol",
           "alert_type",
-          "name",
-          "enabled",
-          "is_triggered",
-          "created_at",
-          "updated_at"
+          "threshold"
         ],
-        "title": "AlertData",
-        "description": "Alert object."
-      },
-      "AlertDeleteResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "deleted_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Deleted At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "deleted_at"
-        ],
-        "title": "AlertDeleteResponse",
-        "description": "DELETE /alerts/{id} response."
-      },
-      "AlertListResponse": {
-        "properties": {
-          "alerts": {
-            "items": {
-              "$ref": "#/components/schemas/AlertData"
-            },
-            "type": "array",
-            "title": "Alerts"
-          },
-          "total_count": {
-            "type": "integer",
-            "title": "Total Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "alerts",
-          "total_count"
-        ],
-        "title": "AlertListResponse",
-        "description": "GET /alerts response."
-      },
-      "AlertUpdateRequest": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enabled"
-          }
-        },
-        "type": "object",
-        "title": "AlertUpdateRequest",
-        "description": "PATCH /alerts/{id} request body."
-      },
-      "AlertUpdateResponse": {
-        "properties": {
-          "alert": {
-            "$ref": "#/components/schemas/AlertData"
-          }
-        },
-        "type": "object",
-        "required": [
-          "alert"
-        ],
-        "title": "AlertUpdateResponse",
-        "description": "PATCH /alerts/{id} response."
+        "title": "AlertCreate"
       },
       "AttentionResponse": {
         "properties": {
@@ -4844,18 +3937,67 @@
         ],
         "title": "AttentionTopTimestep"
       },
-      "AuthMessage": {
+      "AuthLogin": {
         "properties": {
-          "message": {
+          "email": {
             "type": "string",
-            "title": "Message"
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
           }
         },
         "type": "object",
         "required": [
-          "message"
+          "email",
+          "password"
         ],
-        "title": "AuthMessage"
+        "title": "AuthLogin"
+      },
+      "AuthRefresh": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "AuthRefresh"
+      },
+      "AuthRegister": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "AuthRegister"
       },
       "BacktestMetrics": {
         "properties": {
@@ -5429,7 +4571,7 @@
           },
           "signals": {
             "items": {
-              "$ref": "#/components/schemas/app__schemas__signal__SignalResponse"
+              "$ref": "#/components/schemas/SignalResponse"
             },
             "type": "array",
             "title": "Signals"
@@ -5933,52 +5075,6 @@
         "title": "EfficientFrontierPoint",
         "description": "Single point on efficient frontier."
       },
-      "EnsembleSignal": {
-        "properties": {
-          "signal": {
-            "type": "string",
-            "enum": [
-              "STRONG_BUY",
-              "BUY",
-              "NEUTRAL",
-              "SELL",
-              "STRONG_SELL"
-            ],
-            "title": "Signal"
-          },
-          "confidence": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence"
-          },
-          "direction": {
-            "type": "string",
-            "enum": [
-              "STRONG_BUY",
-              "BUY",
-              "NEUTRAL",
-              "SELL",
-              "STRONG_SELL"
-            ],
-            "title": "Direction"
-          },
-          "kelly_fraction": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Kelly Fraction"
-          }
-        },
-        "type": "object",
-        "required": [
-          "signal",
-          "confidence",
-          "direction",
-          "kelly_fraction"
-        ],
-        "title": "EnsembleSignal"
-      },
       "EquityCurvePoint": {
         "properties": {
           "date": {
@@ -6185,15 +5281,15 @@
           },
           "horizons": {
             "items": {
-              "type": "integer"
+              "type": "string"
             },
             "type": "array",
             "title": "Horizons",
-            "description": "Forecast horizons in days",
+            "description": "Forecast horizon labels: 1m,2m,3m,5m,10m,15m,30m,1h,1d,1w,15d,1mo,1y",
             "default": [
-              1,
-              5,
-              30
+              "1d",
+              "1w",
+              "1mo"
             ]
           },
           "models": {
@@ -6218,69 +5314,6 @@
         ],
         "title": "ForecastRequest",
         "description": "Request to generate a price forecast."
-      },
-      "ForgotPasswordRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "title": "ForgotPasswordRequest"
-      },
-      "GNNSignal": {
-        "properties": {
-          "spillover_risk": {
-            "type": "number",
-            "title": "Spillover Risk"
-          },
-          "embedding_norm": {
-            "type": "number",
-            "title": "Embedding Norm"
-          },
-          "top_correlated_assets": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Top Correlated Assets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "spillover_risk",
-          "embedding_norm",
-          "top_correlated_assets"
-        ],
-        "title": "GNNSignal"
-      },
-      "HMMGarchSignal": {
-        "properties": {
-          "regime_signal": {
-            "type": "string",
-            "title": "Regime Signal"
-          },
-          "vol_forecast_1d": {
-            "type": "number",
-            "title": "Vol Forecast 1D"
-          },
-          "vol_forecast_21d": {
-            "type": "number",
-            "title": "Vol Forecast 21D"
-          }
-        },
-        "type": "object",
-        "required": [
-          "regime_signal",
-          "vol_forecast_1d",
-          "vol_forecast_21d"
-        ],
-        "title": "HMMGarchSignal"
       },
       "HTTPValidationError": {
         "properties": {
@@ -6796,44 +5829,6 @@
         ],
         "title": "JournalResponse",
         "description": "Response schema for trade journal entries."
-      },
-      "LSTMAttnSignal": {
-        "properties": {
-          "raw_signal": {
-            "type": "number",
-            "title": "Raw Signal"
-          },
-          "attention_peaks": {
-            "items": {
-              "additionalProperties": {
-                "type": "number"
-              },
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Attention Peaks"
-          }
-        },
-        "type": "object",
-        "required": [
-          "raw_signal",
-          "attention_peaks"
-        ],
-        "title": "LSTMAttnSignal"
-      },
-      "ModeUpdateSchema": {
-        "properties": {
-          "mode": {
-            "type": "string",
-            "title": "Mode",
-            "description": "Target trading mode: 'PAPER' or 'LIVE'"
-          }
-        },
-        "type": "object",
-        "required": [
-          "mode"
-        ],
-        "title": "ModeUpdateSchema"
       },
       "ModelAccuracyItem": {
         "properties": {
@@ -7582,63 +6577,6 @@
         ],
         "title": "OrderRequest"
       },
-      "OrderSubmitSchema": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol",
-            "description": "Stock or index trading symbol, e.g., 'RELIANCE'"
-          },
-          "side": {
-            "type": "string",
-            "title": "Side",
-            "description": "Transaction direction: 'BUY' or 'SELL'"
-          },
-          "quantity": {
-            "type": "number",
-            "title": "Quantity",
-            "description": "Number of units to trade"
-          },
-          "order_type": {
-            "type": "string",
-            "title": "Order Type",
-            "description": "Execution type: 'MARKET' or 'LIMIT'"
-          },
-          "limit_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Price",
-            "description": "Price boundary for LIMIT orders"
-          },
-          "product": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product",
-            "description": "Product selection: 'I' (Intraday) or 'D' (Delivery)",
-            "default": "I"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "side",
-          "quantity",
-          "order_type"
-        ],
-        "title": "OrderSubmitSchema"
-      },
       "PaymentConfirmRequest": {
         "properties": {
           "intent_id": {
@@ -7808,53 +6746,6 @@
         "title": "PerformanceResponse",
         "description": "GET /portfolio/performance response."
       },
-      "QuantEdgeOrderRequest": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "side": {
-            "type": "string",
-            "enum": [
-              "BUY",
-              "SELL"
-            ],
-            "title": "Side"
-          },
-          "quantity": {
-            "type": "number",
-            "title": "Quantity"
-          },
-          "order_type": {
-            "type": "string",
-            "enum": [
-              "MARKET",
-              "LIMIT"
-            ],
-            "title": "Order Type"
-          },
-          "limit_price": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Limit Price"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "side",
-          "quantity",
-          "order_type"
-        ],
-        "title": "QuantEdgeOrderRequest"
-      },
       "QuoteResponse": {
         "properties": {
           "ticker": {
@@ -7934,10 +6825,24 @@
             "title": "Week 52 Low"
           },
           "regime": {
-            "$ref": "#/components/schemas/RegimeData"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegimeData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "signal": {
-            "$ref": "#/components/schemas/SignalData"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignalData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "timestamp": {
             "type": "string",
@@ -7969,8 +6874,6 @@
           "change",
           "change_pct",
           "volume",
-          "regime",
-          "signal",
           "timestamp"
         ],
         "title": "QuoteResponse",
@@ -7999,41 +6902,6 @@
         ],
         "title": "RegimeData",
         "description": "Regime state object."
-      },
-      "RegimeDetails": {
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "BULL",
-              "BEAR",
-              "SIDEWAYS",
-              "CRISIS"
-            ],
-            "title": "State"
-          },
-          "probs": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Probs"
-          },
-          "transition_probs": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Transition Probs"
-          }
-        },
-        "type": "object",
-        "required": [
-          "state",
-          "probs",
-          "transition_probs"
-        ],
-        "title": "RegimeDetails"
       },
       "RegimeHistoryResponse": {
         "properties": {
@@ -8215,27 +7083,6 @@
         ],
         "title": "RegimeStatisticsResponse",
         "description": "GET /regime/statistics response."
-      },
-      "ResetPasswordConfirm": {
-        "properties": {
-          "token": {
-            "type": "string",
-            "minLength": 24,
-            "title": "Token"
-          },
-          "new_password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "New Password"
-          }
-        },
-        "type": "object",
-        "required": [
-          "token",
-          "new_password"
-        ],
-        "title": "ResetPasswordConfirm"
       },
       "RiskMetricsResponse": {
         "properties": {
@@ -8955,6 +7802,79 @@
         ],
         "title": "SignalHistoryPoint"
       },
+      "SignalResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "direction": {
+            "type": "string",
+            "title": "Direction",
+            "description": "STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL"
+          },
+          "confidence": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Confidence"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": -1.0,
+            "title": "Score"
+          },
+          "breakdown": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Breakdown",
+            "description": "per-indicator contribution list"
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Patterns",
+            "description": "detected patterns"
+          },
+          "stop_loss": {
+            "type": "number",
+            "title": "Stop Loss",
+            "default": 0.0
+          },
+          "take_profit": {
+            "type": "number",
+            "title": "Take Profit",
+            "default": 0.0
+          },
+          "position_size_pct": {
+            "type": "number",
+            "title": "Position Size Pct",
+            "description": "position-size from account-risk %",
+            "default": 0.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "timestamp",
+          "direction",
+          "confidence",
+          "score",
+          "breakdown"
+        ],
+        "title": "SignalResponse",
+        "description": "GET /signals/{symbol} complete response for classical technical signals."
+      },
       "StatisticalTests": {
         "properties": {
           "dm_test_statistic": {
@@ -9011,53 +7931,6 @@
         ],
         "title": "SubscribeRequest"
       },
-      "TFTSignal": {
-        "properties": {
-          "p10": {
-            "type": "number",
-            "title": "P10"
-          },
-          "p50": {
-            "type": "number",
-            "title": "P50"
-          },
-          "p90": {
-            "type": "number",
-            "title": "P90"
-          },
-          "raw_signal": {
-            "type": "number",
-            "title": "Raw Signal"
-          },
-          "horizon_days": {
-            "type": "integer",
-            "title": "Horizon Days"
-          }
-        },
-        "type": "object",
-        "required": [
-          "p10",
-          "p50",
-          "p90",
-          "raw_signal",
-          "horizon_days"
-        ],
-        "title": "TFTSignal"
-      },
-      "TokenRefresh": {
-        "properties": {
-          "refresh_token": {
-            "type": "string",
-            "minLength": 20,
-            "title": "Refresh Token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "refresh_token"
-        ],
-        "title": "TokenRefresh"
-      },
       "TokenResponse": {
         "properties": {
           "access_token": {
@@ -9065,7 +7938,14 @@
             "title": "Access Token"
           },
           "refresh_token": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Refresh Token"
           },
           "token_type": {
@@ -9076,13 +7956,12 @@
           "expires_in": {
             "type": "integer",
             "title": "Expires In",
-            "default": 900
+            "default": 3600
           }
         },
         "type": "object",
         "required": [
-          "access_token",
-          "refresh_token"
+          "access_token"
         ],
         "title": "TokenResponse"
       },
@@ -9427,39 +8306,6 @@
         ],
         "title": "UpdateRoleRequest"
       },
-      "UserLogin": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
-          "totp_code": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 6,
-                "minLength": 6
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Totp Code",
-            "description": "6-digit TOTP code if 2FA is enabled"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "UserLogin"
-      },
       "UserProfileResponse": {
         "properties": {
           "id": {
@@ -9499,79 +8345,6 @@
           "is_active"
         ],
         "title": "UserProfileResponse"
-      },
-      "UserRegister": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "Password"
-          },
-          "full_name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Full Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email",
-          "password",
-          "full_name"
-        ],
-        "title": "UserRegister"
-      },
-      "UserResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "full_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Full Name"
-          },
-          "role": {
-            "type": "string",
-            "title": "Role"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "email",
-          "role",
-          "is_active",
-          "created_at"
-        ],
-        "title": "UserResponse"
       },
       "ValidationError": {
         "properties": {
@@ -9759,37 +8532,6 @@
         ],
         "title": "WeightsHistoryResponse",
         "description": "GET /monitor/ensemble-weights-history response."
-      },
-      "XGBoostSignal": {
-        "properties": {
-          "raw_signal": {
-            "type": "number",
-            "title": "Raw Signal"
-          },
-          "top_features": {
-            "items": {
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Top Features"
-          }
-        },
-        "type": "object",
-        "required": [
-          "raw_signal",
-          "top_features"
-        ],
-        "title": "XGBoostSignal"
       },
       "app__schemas__explain__CounterfactualRequest": {
         "properties": {
@@ -10122,65 +8864,6 @@
         ],
         "title": "SHAPContribution"
       },
-      "app__schemas__intelligence__SignalResponse": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Timestamp"
-          },
-          "ensemble": {
-            "$ref": "#/components/schemas/EnsembleSignal"
-          },
-          "models": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/TFTSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/HMMGarchSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/GNNSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/LSTMAttnSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/XGBoostSignal"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Models"
-          },
-          "model_weights": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Model Weights"
-          },
-          "regime": {
-            "$ref": "#/components/schemas/RegimeDetails"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "timestamp",
-          "ensemble",
-          "models",
-          "model_weights",
-          "regime"
-        ],
-        "title": "SignalResponse"
-      },
       "app__schemas__monitor__EnsembleWeightPoint": {
         "properties": {
           "date": {
@@ -10370,79 +9053,6 @@
         ],
         "title": "RegimeHistoryPoint",
         "description": "Single point in regime history."
-      },
-      "app__schemas__signal__SignalResponse": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Timestamp"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction",
-            "description": "STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL"
-          },
-          "confidence": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence"
-          },
-          "score": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": -1.0,
-            "title": "Score"
-          },
-          "breakdown": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Breakdown",
-            "description": "per-indicator contribution list"
-          },
-          "patterns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Patterns",
-            "description": "detected patterns"
-          },
-          "stop_loss": {
-            "type": "number",
-            "title": "Stop Loss",
-            "default": 0.0
-          },
-          "take_profit": {
-            "type": "number",
-            "title": "Take Profit",
-            "default": 0.0
-          },
-          "position_size_pct": {
-            "type": "number",
-            "title": "Position Size Pct",
-            "description": "position-size from account-risk %",
-            "default": 0.0
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "timestamp",
-          "direction",
-          "confidence",
-          "score",
-          "breakdown"
-        ],
-        "title": "SignalResponse",
-        "description": "GET /signals/{symbol} complete response for classical technical signals."
       }
     },
     "securitySchemes": {
@@ -10451,9 +9061,14 @@
         "flows": {
           "password": {
             "scopes": {},
-            "tokenUrl": "/api/v1/auth/login"
+            "tokenUrl": "api/v1/auth/login"
           }
         }
+      },
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
       }
     }
   }

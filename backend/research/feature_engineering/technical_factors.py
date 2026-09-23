@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pandas_ta as ta  # noqa: F401
 
 from research.feature_engineering.base import FeatureBuilder
 

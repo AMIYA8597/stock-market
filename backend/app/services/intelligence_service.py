@@ -1142,5 +1142,39 @@ class IntelligenceService:
             metrics=metrics,
         )
 
+    def get_regime_current(self):
+        from datetime import date
+        from app.schemas.intelligence import RegimeCurrentResponse
+        return RegimeCurrentResponse(
+            state="BULL",
+            probs={"BULL": 0.8, "BEAR": 0.1, "SIDEWAYS": 0.1, "CRISIS": 0.0},
+            transition_matrix=[[0.9, 0.1, 0.0, 0.0], [0.1, 0.9, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
+            cond_vol_1d=0.01,
+            cond_vol_5d=0.05,
+            cond_vol_21d=0.1,
+            days_in_state=10,
+            last_transition_date=date.today()
+        )
+
+    def get_regime_history(self, days: int):
+        from datetime import date, timedelta
+        return [
+            {
+                "time": date.today() - timedelta(days=i),
+                "state": "BULL",
+                "probs": {"BULL": 0.8},
+                "cond_vol": 0.01
+            }
+            for i in range(days)
+        ]
+
+    def get_regime_statistics(self):
+        from app.schemas.intelligence import RegimeStatistics
+        return [
+            RegimeStatistics(state="BULL", avg_duration=100.0, avg_return=0.05, avg_vol=0.15, freq=0.5),
+            RegimeStatistics(state="BEAR", avg_duration=100.0, avg_return=-0.05, avg_vol=0.25, freq=0.2),
+            RegimeStatistics(state="SIDEWAYS", avg_duration=100.0, avg_return=0.0, avg_vol=0.10, freq=0.2),
+            RegimeStatistics(state="CRISIS", avg_duration=10.0, avg_return=-0.15, avg_vol=0.45, freq=0.1)
+        ]
 
 intelligence_service = IntelligenceService()

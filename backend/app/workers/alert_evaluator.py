@@ -2,12 +2,12 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, desc
 
 from app.database.connection import async_session_factory
 from app.models.alert import Alert
 from app.models.instrument import Instrument
-from app.services.data_ingestion.provider_manager import provider_manager
+from app.models.market import QuoteSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -48,19 +48,30 @@ class AlertEvaluator:
     async def evaluate_alerts(self):
         async with async_session_factory() as session:
             stmt = (
-                select(Alert, Instrument.symbol)
+                select(Alert, Instrument)
                 .outerjoin(Instrument, Alert.instrument_id == Instrument.id)
                 .where(Alert.enabled.is_(True), Alert.is_triggered.is_(False))
             )
             result = await session.execute(stmt)
             rows = result.all()
 
-            for alert, symbol in rows:
-                if not symbol:
+            for alert, instrument in rows:
+                if not instrument:
                     continue  # Portfolio level alerts not supported here yet
+                
+                symbol = instrument.canonical_symbol
 
                 try:
-                    quote = await provider_manager.get_quote(symbol)
+                    # Fetch latest quote snapshot from DB
+                    quote_stmt = (
+                        select(QuoteSnapshot)
+                        .where(QuoteSnapshot.instrument_id == instrument.id)
+                        .order_by(desc(QuoteSnapshot.observed_at))
+                        .limit(1)
+                    )
+                    quote_result = await session.execute(quote_stmt)
+                    quote = quote_result.scalar_one_or_none()
+                    
                     if not quote or quote.price is None:
                         continue
 
