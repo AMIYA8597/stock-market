@@ -32,12 +32,6 @@ from loguru import logger
 # isn't running here), instead of our Redis-backed, dev-eager-mode-enabled app.
 from app.core.celery_app import celery_app as _celery_app  # noqa: F401
 
-# check_drift_for_watchlist is only ever invoked via the Celery beat schedule
-# (never through an API route's .delay() call), so nothing else in the process
-# would otherwise import this module — and an unregistered @shared_task means
-# beat silently has nothing to run, exactly like the earlier backtest binding bug.
-from app.tasks import retraining_trigger as _retraining_trigger_tasks  # noqa: F401
-
 try:
     import sentry_sdk
     from sentry_sdk.integrations.fastapi import FastApiIntegration
@@ -70,8 +64,17 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: startup and shutdown hooks."""
-    logger.info("🚀 QuantEdge API starting up...")
+    # Register scheduled tasks after the API object exists so optional research
+    # dependencies cannot block liveness or documentation startup.
+    try:
+        from app.tasks import retraining_trigger as _retraining_trigger_tasks  # noqa: F401
+    except Exception as exc:
+        logger.warning("scheduled_task_registration_deferred", error=str(exc))
+    try:
+        from app.jobs.ingestion import setup_scheduler
+        setup_scheduler(app)
+    except Exception as exc:
+        logger.warning("ingestion_scheduler_unavailable", error=str(exc))
     background_tasks = await startup_events()
     yield
     await shutdown_events(background_tasks)
@@ -130,7 +133,23 @@ def create_app() -> FastAPI:
     # ─── Mount Routers ─────────────────────────────────────────
     _app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
-    # Health check endpoint
+    @_app.get("/liveness", tags=["health"])
+    async def liveness() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @_app.get("/readiness", tags=["health"])
+    async def readiness() -> dict[str, str]:
+        try:
+            from sqlalchemy import text
+
+            async with async_session_factory() as session:
+                await session.execute(text("SELECT 1"))
+        except Exception:
+            return {"status": "not_ready", "database": "unavailable"}
+        return {"status": "ready", "database": "ok"}
+
+    # Health check endpoint. Provider diagnostics are intentionally excluded:
+    # this endpoint must remain cheap and must not make external market calls.
     from app.core.schema import schema_guard
     @_app.get("/health")
     async def health_check():
@@ -168,19 +187,6 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.error(f"Redis health check failed: {e}")
             health_status["redis"] = "unhealthy"
-            health_status["status"] = "degraded"
-
-        # Check Providers
-        try:
-            from app.services.market_data_service import MarketDataService
-
-            providers_health = await MarketDataService.health()
-            if not providers_health or providers_health.get("status") != "ok":
-                health_status["providers"] = providers_health.get("status", "unhealthy")
-                health_status["status"] = "degraded"
-        except Exception as e:
-            logger.error(f"Providers health check failed: {e}")
-            health_status["providers"] = "unhealthy"
             health_status["status"] = "degraded"
 
         schema_res = await schema_guard()

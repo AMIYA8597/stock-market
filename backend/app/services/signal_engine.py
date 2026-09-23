@@ -401,7 +401,7 @@ class SignalEngine:
         prediction: dict,
     ) -> EnsembleSignal | None:
         """Process predictions and generate a trade signal if filters are passed."""
-        stmt = select(Instrument).where(Instrument.symbol == symbol_ticker.upper())
+        stmt = select(Instrument).where(Instrument.canonical_symbol == symbol_ticker.upper())
         res = await db.execute(stmt)
         symbol = res.scalar_one_or_none()
         if not symbol:

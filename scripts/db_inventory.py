@@ -189,6 +189,7 @@ def main():
     # Replace asyncpg dialect with psycopg2 for this script
     if db_url.startswith("postgresql+asyncpg://"):
         db_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+        db_url = db_url.replace("ssl=require", "sslmode=require")
         if "?" not in db_url and "supabase" in db_url:
             db_url += "?sslmode=require"
         

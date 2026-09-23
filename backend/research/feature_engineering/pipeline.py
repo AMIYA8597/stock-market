@@ -46,44 +46,57 @@ class FeaturePipeline:
         return data
 
     def validate_causality(self, frame: pd.DataFrame) -> None:
-        """Verify that the pipeline does not suffer from look-ahead bias.
-
-        This acts as a strict leakage guard at the feature-engineering level.
-        It runs the pipeline on a full dataset and a truncated dataset, and
-        asserts that the features at the boundary are identical.
-        """
+        """Verify that feature rows are invariant to information after their cutoff."""
         if len(frame) < 20:
             return
 
         full_features = self.run(frame)
+        numeric_cols = [
+            col
+            for col in full_features.select_dtypes(include=[np.number]).columns
+            if not col.startswith("target_")
+        ]
+        boundaries = sorted({len(frame) - 1, *range(19, len(frame), max(1, len(frame) // 10))})
 
-        # Truncate the frame by removing the last 5 rows
-        t_idx = len(frame) - 5
-        truncated_frame = frame.iloc[:t_idx].copy()
-        trunc_features = self.run(truncated_frame)
-
-        boundary_idx = truncated_frame.index[-1]
-
-        row_full = full_features.loc[boundary_idx]
-        row_trunc = trunc_features.loc[boundary_idx]
-
-        numeric_cols = full_features.select_dtypes(include=[np.number]).columns
-
-        mismatches = []
-        for col in numeric_cols:
-            if col == "target_direction_1d":
-                continue
-
-            val_full = row_full[col]
-            val_trunc = row_trunc[col]
-
-            if pd.isna(val_full) and pd.isna(val_trunc):
-                continue
-
-            if not np.isclose(val_full, val_trunc, equal_nan=True):
-                mismatches.append(f"{col} (full={val_full}, trunc={val_trunc})")
-
-        if mismatches:
-            raise ValueError(
-                f"Causality guard failed! Look-ahead bias detected in features: {', '.join(mismatches)}"
+        for boundary in boundaries:
+            cutoff = frame.iloc[: boundary + 1].copy()
+            truncated = self.run(cutoff)
+            boundary_index = cutoff.index[-1]
+            mismatches = self._causality_mismatches(
+                full_features.loc[boundary_index], truncated.loc[boundary_index], numeric_cols
             )
+
+            if boundary + 1 < len(frame):
+                perturbed = frame.copy()
+                future_rows = perturbed.index[boundary + 1 :]
+                for column in ("open", "high", "low", "close", "volume"):
+                    if column in perturbed.columns:
+                        perturbed.loc[future_rows, column] = perturbed.loc[future_rows, column] * 1.37
+                perturbed_features = self.run(perturbed)
+                mismatches.extend(
+                    self._causality_mismatches(
+                        full_features.loc[boundary_index],
+                        perturbed_features.loc[boundary_index],
+                        numeric_cols,
+                    )
+                )
+
+            if mismatches:
+                raise ValueError(
+                    "Causality guard failed! Look-ahead bias detected in features: "
+                    + ", ".join(dict.fromkeys(mismatches))
+                )
+
+    @staticmethod
+    def _causality_mismatches(
+        expected: pd.Series, actual: pd.Series, columns: list[str]
+    ) -> list[str]:
+        mismatches = []
+        for column in columns:
+            expected_value = expected[column]
+            actual_value = actual[column]
+            if pd.isna(expected_value) and pd.isna(actual_value):
+                continue
+            if not np.isclose(expected_value, actual_value, equal_nan=True):
+                mismatches.append(f"{column} (full={expected_value}, truncated={actual_value})")
+        return mismatches

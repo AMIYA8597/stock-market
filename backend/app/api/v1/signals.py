@@ -14,7 +14,9 @@ from fastapi import APIRouter, HTTPException, Query
 from app.database.redis_client import get_redis
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.signal import BulkSignalResponse, SignalResponse
-from app.services.market_data_service import MarketDataService
+from app.database.connection import async_session_factory
+from sqlalchemy import select
+from app.models.market import Instrument, OHLCV
 from app.services.signal_engine import TechnicalSignalEngine
 
 logger = logging.getLogger(__name__)
@@ -25,9 +27,34 @@ CACHE_TTL = 300  # seconds (5 minutes)
 
 
 async def _get_technical_signal(symbol: str) -> dict:
-    hist = await MarketDataService.get_history(symbol, interval="1d", period="1y")
-    if not hist:
-        raise ValueError(f"No history available for {symbol}")
+    async with async_session_factory() as session:
+        # Find instrument
+        inst_res = await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+        inst = inst_res.scalars().first()
+        if not inst:
+            raise ValueError(f"No history available for {symbol}")
+        
+        # Get OHLCV
+        ohlcv_res = await session.execute(
+            select(OHLCV)
+            .where((OHLCV.instrument_id == inst.id) & (OHLCV.interval == '1d'))
+            .order_by(OHLCV.timestamp.asc())
+        )
+        bars = ohlcv_res.scalars().all()
+        
+        if not bars:
+            raise ValueError(f"No history available for {symbol}")
+            
+        hist = []
+        for b in bars:
+            hist.append({
+                'time': b.timestamp.timestamp(),
+                'open': float(b.open),
+                'high': float(b.high),
+                'low': float(b.low),
+                'close': float(b.close),
+                'volume': float(b.volume)
+            })
 
     df = pd.DataFrame(hist)
     # convert cols to numeric

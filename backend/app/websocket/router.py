@@ -41,7 +41,10 @@ _SIGNAL_CACHE_TTL = 60.0  # seconds
 
 
 @router.websocket("/prices")
-async def ws_prices(websocket: WebSocket):
+async def ws_prices(websocket: WebSocket, token: str = ""):
+    from app.websocket.ws_auth import authenticate_ws
+    user_id = await authenticate_ws(websocket, token)
+    if not user_id: return
     """WebSocket route for live prices and signals."""
     manager = get_connection_manager()
     await manager.connect(websocket)
@@ -154,7 +157,10 @@ async def ws_prices(websocket: WebSocket):
 
 
 @router.websocket("/signals")
-async def ws_signals(websocket: WebSocket):
+async def ws_signals(websocket: WebSocket, token: str = ""):
+    from app.websocket.ws_auth import authenticate_ws
+    user_id = await authenticate_ws(websocket, token)
+    if not user_id: return
     """Stream real signal_update messages from the 7-layer prediction engine.
 
     Each subscribed symbol is computed via get_full_prediction (with a 60s in-process
@@ -235,9 +241,13 @@ async def ws_signals(websocket: WebSocket):
 
 
 @router.websocket("/alerts")
-async def ws_alerts(websocket: WebSocket):
+async def ws_alerts(websocket: WebSocket, token: str = ""):
+    from app.websocket.ws_auth import authenticate_ws
+    user_id = await authenticate_ws(websocket, token)
+    if not user_id: return
     manager = get_connection_manager()
     await manager.connect(websocket)
+    await manager.subscribe(websocket, f"alerts:{user_id}")
     await manager.subscribe(websocket, "signals:alerts")
     try:
         while True:
@@ -255,18 +265,12 @@ async def ws_backtest_progress(websocket: WebSocket, token: str):
     from sqlalchemy import select
 
     from app.api.v1.backtest import BACKTEST_PROGRESS
-    from app.core.security import decode_token
     from app.database.connection import async_session_factory
     from app.models.backtest import BacktestJob
 
-    try:
-        token_data = decode_token(token)
-        user_id_str = token_data.get("sub")
-        if not user_id_str:
-            await websocket.close(code=1008)
-            return
-    except Exception:
-        await websocket.close(code=1008)
+    from app.websocket.ws_auth import authenticate_ws
+    user_id_str = await authenticate_ws(websocket, token)
+    if not user_id_str:
         return
 
     manager = get_connection_manager()

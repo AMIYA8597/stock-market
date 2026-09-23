@@ -88,20 +88,17 @@ class Settings(BaseSettings):
     )
     REDIS_MAX_CONNECTIONS: int = Field(default=50, description="Maximum Redis connection pool size")
 
-    # ─── Security / JWT (RS256) ───────────────────────────────────────────
-    JWT_PRIVATE_KEY_PATH: str = Field(
-        default="./keys/private.pem", description="Path to RSA private key for JWT signing"
+    # ─── Supabase / Authentication ────────────────────────────────────────
+    SUPABASE_URL: str = Field(
+        default="", description="Supabase project URL"
     )
-    JWT_PUBLIC_KEY_PATH: str = Field(
-        default="./keys/public.pem", description="Path to RSA public key for JWT verification"
+    SUPABASE_JWT_SECRET: str = Field(
+        default="", description="Supabase JWT secret for token verification"
     )
-    JWT_ALGORITHM: str = Field(default="RS256", description="JWT signing algorithm (RS256 for RSA)")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(
-        default=15, description="Access token expiration time in minutes"
+    SUPABASE_SECRET_KEY: str = Field(
+        default="", description="Supabase service role secret key (use with caution)"
     )
-    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(
-        default=7, description="Refresh token expiration time in days"
-    )
+    # Note: local RSA JWT keys have been deprecated in favor of Supabase JWTs
     TOKEN_BLACKLIST_ENABLED: bool = Field(
         default=True, description="Enable JWT token blacklist on logout"
     )
@@ -425,15 +422,7 @@ class Settings(BaseSettings):
         """Check if running in development environment."""
         return self.ENVIRONMENT == "development"
 
-    @property
-    def jwt_private_key_path(self) -> Path:
-        """Get Path object for JWT private key."""
-        return Path(self.JWT_PRIVATE_KEY_PATH)
 
-    @property
-    def jwt_public_key_path(self) -> Path:
-        """Get Path object for JWT public key."""
-        return Path(self.JWT_PUBLIC_KEY_PATH)
 
     @property
     def model_checkpoint_path(self) -> Path:

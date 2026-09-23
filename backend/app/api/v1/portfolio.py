@@ -8,7 +8,8 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.dependencies import get_current_user, get_db, require_premium_tier
+from app.core.dependencies import get_current_user, get_db
+from app.core.entitlements import require_feature
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
@@ -668,7 +669,7 @@ async def get_risk_metrics(
 async def post_optimize(
     request: OptimizationRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_premium_tier()),
+    current_user: dict = Depends(require_feature("PREMIUM")),
 ) -> OptimizationResponse:
     """Return normalized optimization output for requested universe and method."""
     try:

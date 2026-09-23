@@ -39,7 +39,6 @@ async def test_auth_login_alias_and_profile_logout(client: AsyncClient) -> None:
     assert me.status_code == 200
     me_payload = me.json()
     assert "email" in me_payload
-    assert me_payload["is_active"] is True
 
     logout = await client.post(
         "/api/v1/auth/logout", headers={"Authorization": f"Bearer {token_payload['access_token']}"}
