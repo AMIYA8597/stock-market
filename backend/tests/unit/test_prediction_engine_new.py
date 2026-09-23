@@ -243,7 +243,7 @@ async def test_get_full_prediction(sample_df):
 
     with patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"), \
          patch("app.services.prediction_engine._cache_fetch") as mock_fetch, \
-         patch("app.services.data_ingestion.provider_manager.provider_manager.get_ohlcv", new_callable=AsyncMock, return_value=[mock_bar] * 100), \
+         patch("app.services.prediction_engine.async_session_factory", new_callable=MagicMock) as mock_db_factory, \
          patch("research.feature_engineering.pipeline.FeaturePipeline.run", return_value=sample_df), \
          patch("pandas_ta.core.rsi"), patch("pandas_ta.core.macd"), \
          patch("pandas_ta.core.ema"), patch("pandas_ta.core.bbands"), \
@@ -259,6 +259,14 @@ async def test_get_full_prediction(sample_df):
 
         mock_fetch.return_value = None
         mock_build.return_value = {"model_status": "trained", "regime": {"regime": "BULL"}}
+        
+        mock_session = AsyncMock()
+        mock_inst_result = MagicMock()
+        mock_inst_result.scalars().first.return_value = MagicMock(id=1)
+        mock_bars_result = MagicMock()
+        mock_bars_result.scalars().all.return_value = [mock_bar] * 100
+        mock_session.execute.side_effect = [mock_inst_result, mock_bars_result]
+        mock_db_factory.return_value.__aenter__.return_value = mock_session
 
         res = await get_full_prediction("TEST")
         assert res["symbol"] == "TEST"
@@ -274,7 +282,10 @@ async def test_get_full_prediction_cached():
 @pytest.mark.asyncio
 async def test_get_full_prediction_error():
     with patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"), \
-         patch("app.services.data_ingestion.provider_manager.provider_manager.get_ohlcv", new_callable=AsyncMock, side_effect=Exception("Fetch error")):
+         patch("app.services.prediction_engine.async_session_factory", new_callable=MagicMock) as mock_db_factory:
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = Exception("Fetch error")
+        mock_db_factory.return_value.__aenter__.return_value = mock_session
         with pytest.raises(ValueError):
             await get_full_prediction("TEST", bypass_cache=True)
 

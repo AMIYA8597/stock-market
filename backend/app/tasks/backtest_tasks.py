@@ -11,7 +11,8 @@ from sqlalchemy import select
 
 from app.database.connection import async_session_factory
 from app.models.backtest import BacktestJob
-from app.services.market_data_service import MarketDataService
+from sqlalchemy import select
+from app.models.market import Instrument, OHLCV
 from app.websocket.connection_manager import get_connection_manager
 
 ws_manager = get_connection_manager()
@@ -48,13 +49,32 @@ async def run_backtest_async(job_id: str) -> None:
                 "signals:backtest-progress", {"job_id": job_id, "status": "RUNNING", "progress": 0}
             )
 
-            # 2. Fetch history (just using first symbol for now)
+            # 2. Fetch history from DB
             symbol = job.universe[0]
             import pandas as pd
-
-            # Since backtests usually take years, default to "2y" for interval "1d"
-            history_data = await MarketDataService.get_history(symbol, interval="1d", period="2y")
-            df = pd.DataFrame(history_data)
+            
+            inst_res = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+            inst = inst_res.scalars().first()
+            if not inst:
+                df = pd.DataFrame()
+            else:
+                ohlcv_res = await db.execute(
+                    select(OHLCV)
+                    .where((OHLCV.instrument_id == inst.id) & (OHLCV.interval == '1d'))
+                    .order_by(OHLCV.timestamp.asc())
+                )
+                bars = ohlcv_res.scalars().all()
+                if not bars:
+                    df = pd.DataFrame()
+                else:
+                    df = pd.DataFrame([{
+                        'time': b.timestamp,
+                        'open': float(b.open),
+                        'high': float(b.high),
+                        'low': float(b.low),
+                        'close': float(b.close),
+                        'volume': float(b.volume)
+                    } for b in bars])
             if not df.empty and "time" in df.columns:
                 # Try parsing as ISO format first, fallback to numeric/s if needed
                 df["time"] = pd.to_datetime(df["time"], utc=True)

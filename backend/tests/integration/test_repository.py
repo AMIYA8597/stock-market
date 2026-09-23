@@ -34,7 +34,6 @@ async def test_user_repository_round_trip(real_db: AsyncSession):
     # Create user
     user = User(
         email=f"repo_test_{uuid4().hex[:8]}@example.com",
-        hashed_password="hashed_password",
         full_name="Repo Test",
     )
     repo.add(user)

@@ -68,7 +68,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserRegister"
+                "$ref": "#/components/schemas/AuthRegister"
               }
             }
           },
@@ -79,9 +79,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
+                "schema": {}
               }
             }
           },
@@ -109,48 +107,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/UserLogin"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TokenResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/token": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Token Alias",
-        "operationId": "token_alias_api_v1_auth_token_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UserLogin"
+                "$ref": "#/components/schemas/AuthLogin"
               }
             }
           },
@@ -191,7 +148,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TokenRefresh"
+                "$ref": "#/components/schemas/AuthRefresh"
               }
             }
           },
@@ -232,12 +189,7 @@
           "204": {
             "description": "Successful Response"
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/auth/me": {
@@ -252,96 +204,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/auth/forgot-password": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Forgot Password",
-        "operationId": "forgot_password_api_v1_auth_forgot_password_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ForgotPasswordRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthMessage"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/auth/reset-password": {
-      "post": {
-        "tags": [
-          "auth"
-        ],
-        "summary": "Reset Password",
-        "operationId": "reset_password_api_v1_auth_reset_password_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ResetPasswordConfirm"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AuthMessage"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": {}
               }
             }
           }
@@ -370,6 +233,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       },
@@ -414,6 +280,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -444,6 +313,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -458,6 +330,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -537,6 +412,36 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/ingest": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Trigger Ingestion",
+        "operationId": "trigger_ingestion_api_v1_admin_ingest_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -594,6 +499,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "requestBody": {
@@ -686,6 +594,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -761,6 +672,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       },
@@ -809,6 +723,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -823,6 +740,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -913,6 +833,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -961,6 +884,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1009,6 +935,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1057,6 +986,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1071,6 +1003,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1135,6 +1070,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1173,6 +1111,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1220,6 +1161,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "requestBody": {
@@ -1267,6 +1211,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1312,6 +1259,78 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/alerts": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "List Alerts",
+        "operationId": "list_alerts_api_v1_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Create Alert",
+        "operationId": "create_alert_api_v1_alerts_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/market/quote/{symbol}": {
@@ -1623,6 +1642,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -1633,7 +1655,6 @@
           "market"
         ],
         "summary": "Get Market Universe",
-        "description": "Return the list of core symbols supported by the platform.",
         "operationId": "get_market_universe_api_v1_market_universe_get",
         "responses": {
           "200": {
@@ -1655,7 +1676,6 @@
           "market"
         ],
         "summary": "Get Market Status",
-        "description": "Return the real IST market hours status.",
         "operationId": "get_market_status_api_v1_market_status_get",
         "responses": {
           "200": {
@@ -1679,7 +1699,6 @@
           "market"
         ],
         "summary": "Get Providers Health",
-        "description": "Return health status of all data providers.",
         "operationId": "get_providers_health_api_v1_market_providers_health_get",
         "responses": {
           "200": {
@@ -1703,7 +1722,6 @@
           "market"
         ],
         "summary": "Get Global Context",
-        "description": "Real global-market correlation snapshot for the signal engine and UI.\n\nEach entry is fetched independently \u2014 a failure on one ticker (e.g. a\ntransient provider outage) must not blank out the others, and must never\nbe silently replaced with a fabricated number. Failed entries report\nstatus: \"unavailable\" with no price field, so the UI can render an\nexplicit stale/error state instead of a fake value.",
         "operationId": "get_global_context_api_v1_market_global_context_get",
         "responses": {
           "200": {
@@ -1755,6 +1773,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1806,6 +1827,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1851,6 +1875,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1925,6 +1952,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -1972,6 +2002,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2045,6 +2078,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2098,6 +2134,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2143,6 +2182,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2199,6 +2241,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2292,6 +2337,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2306,6 +2354,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2353,6 +2404,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2410,6 +2464,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2437,6 +2494,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2464,6 +2524,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2511,6 +2574,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2538,6 +2604,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2585,6 +2654,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2599,6 +2671,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2674,6 +2749,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2698,6 +2776,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2722,6 +2803,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2746,6 +2830,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2770,6 +2857,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2784,6 +2874,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -2872,6 +2965,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -2898,226 +2994,11 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
-      }
-    },
-    "/api/v1/alerts/history": {
-      "get": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Get Alerts History",
-        "operationId": "get_alerts_history_api_v1_alerts_history_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 5,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/alerts": {
-      "get": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Get Alerts",
-        "operationId": "get_alerts_api_v1_alerts_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertListResponse"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      },
-      "post": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Post Alert",
-        "operationId": "post_alert_api_v1_alerts_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AlertCreateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertData"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/alerts/{alert_id}": {
-      "patch": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Patch Alert",
-        "operationId": "patch_alert_api_v1_alerts__alert_id__patch",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "alert_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Alert Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/AlertUpdateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertUpdateResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Delete Alert",
-        "operationId": "delete_alert_api_v1_alerts__alert_id__delete",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "alert_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Alert Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AlertDeleteResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
       }
     },
     "/api/v1/monitor/model-accuracy": {
@@ -3144,6 +3025,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -3172,6 +3056,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -3184,6 +3071,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3236,6 +3126,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3284,6 +3177,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3355,6 +3251,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -3367,6 +3266,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3421,6 +3323,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3497,6 +3402,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -3511,6 +3419,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3556,6 +3467,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3601,6 +3515,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3663,6 +3580,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       },
@@ -3708,6 +3628,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ]
       }
@@ -3723,6 +3646,9 @@
         "security": [
           {
             "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
           }
         ],
         "parameters": [
@@ -3772,6 +3698,56 @@
                   },
                   "type": "object",
                   "title": "Response Get Version Api V1 Version Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/liveness": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness",
+        "operationId": "liveness_liveness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Liveness Liveness Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readiness": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness",
+        "operationId": "readiness_readiness_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Readiness Readiness Get"
                 }
               }
             }
@@ -3838,74 +3814,10 @@
         ],
         "title": "AdminUserItem"
       },
-      "AlertCreateRequest": {
+      "AlertCreate": {
         "properties": {
           "symbol": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Symbol"
-          },
-          "alert_type": {
             "type": "string",
-            "title": "Alert Type",
-            "description": "PRICE_ABOVE|PRICE_BELOW|RSI_OB|MACD_CROSS|SIGNAL_CHANGE|REGIME_CHANGE"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "name": {
-            "type": "string",
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled",
-            "default": true
-          }
-        },
-        "type": "object",
-        "required": [
-          "alert_type",
-          "name"
-        ],
-        "title": "AlertCreateRequest",
-        "description": "POST /alerts request body."
-      },
-      "AlertData": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "symbol": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
             "title": "Symbol"
           },
           "alert_type": {
@@ -3913,163 +3825,17 @@
             "title": "Alert Type"
           },
           "threshold": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "number",
             "title": "Threshold"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
-          },
-          "is_triggered": {
-            "type": "boolean",
-            "title": "Is Triggered"
-          },
-          "triggered_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Triggered At"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
           }
         },
         "type": "object",
         "required": [
-          "id",
+          "symbol",
           "alert_type",
-          "name",
-          "enabled",
-          "is_triggered",
-          "created_at",
-          "updated_at"
+          "threshold"
         ],
-        "title": "AlertData",
-        "description": "Alert object."
-      },
-      "AlertDeleteResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "deleted_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Deleted At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "deleted_at"
-        ],
-        "title": "AlertDeleteResponse",
-        "description": "DELETE /alerts/{id} response."
-      },
-      "AlertListResponse": {
-        "properties": {
-          "alerts": {
-            "items": {
-              "$ref": "#/components/schemas/AlertData"
-            },
-            "type": "array",
-            "title": "Alerts"
-          },
-          "total_count": {
-            "type": "integer",
-            "title": "Total Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "alerts",
-          "total_count"
-        ],
-        "title": "AlertListResponse",
-        "description": "GET /alerts response."
-      },
-      "AlertUpdateRequest": {
-        "properties": {
-          "name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          },
-          "threshold": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Threshold"
-          },
-          "enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Enabled"
-          }
-        },
-        "type": "object",
-        "title": "AlertUpdateRequest",
-        "description": "PATCH /alerts/{id} request body."
-      },
-      "AlertUpdateResponse": {
-        "properties": {
-          "alert": {
-            "$ref": "#/components/schemas/AlertData"
-          }
-        },
-        "type": "object",
-        "required": [
-          "alert"
-        ],
-        "title": "AlertUpdateResponse",
-        "description": "PATCH /alerts/{id} response."
+        "title": "AlertCreate"
       },
       "AttentionResponse": {
         "properties": {
@@ -4179,18 +3945,67 @@
         ],
         "title": "AttentionTopTimestep"
       },
-      "AuthMessage": {
+      "AuthLogin": {
         "properties": {
-          "message": {
+          "email": {
             "type": "string",
-            "title": "Message"
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
           }
         },
         "type": "object",
         "required": [
-          "message"
+          "email",
+          "password"
         ],
-        "title": "AuthMessage"
+        "title": "AuthLogin"
+      },
+      "AuthRefresh": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "AuthRefresh"
+      },
+      "AuthRegister": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "AuthRegister"
       },
       "BacktestMetrics": {
         "properties": {
@@ -5553,20 +5368,6 @@
         ],
         "title": "ForecastRequest",
         "description": "Request to generate a price forecast."
-      },
-      "ForgotPasswordRequest": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email"
-        ],
-        "title": "ForgotPasswordRequest"
       },
       "GNNSignal": {
         "properties": {
@@ -7151,10 +6952,24 @@
             "title": "Week 52 Low"
           },
           "regime": {
-            "$ref": "#/components/schemas/RegimeData"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegimeData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "signal": {
-            "$ref": "#/components/schemas/SignalData"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignalData"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "timestamp": {
             "type": "string",
@@ -7186,8 +7001,6 @@
           "change",
           "change_pct",
           "volume",
-          "regime",
-          "signal",
           "timestamp"
         ],
         "title": "QuoteResponse",
@@ -7432,27 +7245,6 @@
         ],
         "title": "RegimeStatisticsResponse",
         "description": "GET /regime/statistics response."
-      },
-      "ResetPasswordConfirm": {
-        "properties": {
-          "token": {
-            "type": "string",
-            "minLength": 24,
-            "title": "Token"
-          },
-          "new_password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "New Password"
-          }
-        },
-        "type": "object",
-        "required": [
-          "token",
-          "new_password"
-        ],
-        "title": "ResetPasswordConfirm"
       },
       "RiskMetricsResponse": {
         "properties": {
@@ -8261,20 +8053,6 @@
         ],
         "title": "TFTSignal"
       },
-      "TokenRefresh": {
-        "properties": {
-          "refresh_token": {
-            "type": "string",
-            "minLength": 20,
-            "title": "Refresh Token"
-          }
-        },
-        "type": "object",
-        "required": [
-          "refresh_token"
-        ],
-        "title": "TokenRefresh"
-      },
       "TokenResponse": {
         "properties": {
           "access_token": {
@@ -8282,7 +8060,14 @@
             "title": "Access Token"
           },
           "refresh_token": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Refresh Token"
           },
           "token_type": {
@@ -8293,13 +8078,12 @@
           "expires_in": {
             "type": "integer",
             "title": "Expires In",
-            "default": 900
+            "default": 3600
           }
         },
         "type": "object",
         "required": [
-          "access_token",
-          "refresh_token"
+          "access_token"
         ],
         "title": "TokenResponse"
       },
@@ -8644,39 +8428,6 @@
         ],
         "title": "UpdateRoleRequest"
       },
-      "UserLogin": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "title": "Password"
-          },
-          "totp_code": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 6,
-                "minLength": 6
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Totp Code",
-            "description": "6-digit TOTP code if 2FA is enabled"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email",
-          "password"
-        ],
-        "title": "UserLogin"
-      },
       "UserProfileResponse": {
         "properties": {
           "id": {
@@ -8716,79 +8467,6 @@
           "is_active"
         ],
         "title": "UserProfileResponse"
-      },
-      "UserRegister": {
-        "properties": {
-          "email": {
-            "type": "string",
-            "format": "email",
-            "title": "Email"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 8,
-            "title": "Password"
-          },
-          "full_name": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Full Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "email",
-          "password",
-          "full_name"
-        ],
-        "title": "UserRegister"
-      },
-      "UserResponse": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "full_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Full Name"
-          },
-          "role": {
-            "type": "string",
-            "title": "Role"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "email",
-          "role",
-          "is_active",
-          "created_at"
-        ],
-        "title": "UserResponse"
       },
       "ValidationError": {
         "properties": {
@@ -9672,14 +9350,15 @@
         "type": "oauth2",
         "flows": {
           "password": {
-            "scopes": {
-              "read": "Read access",
-              "write": "Write access",
-              "admin": "Admin access"
-            },
-            "tokenUrl": "/api/v1/auth/login"
+            "scopes": {},
+            "tokenUrl": "api/v1/auth/login"
           }
         }
+      },
+      "APIKeyHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
       }
     }
   }

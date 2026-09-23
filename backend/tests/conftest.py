@@ -296,9 +296,12 @@ def db():
                     return self.obj
 
                 def scalars(self):
+                    outer_obj = self.obj
                     class MockScalars:
                         def all(self):
-                            return [self.obj] if self.obj else []
+                            return [outer_obj] if outer_obj else []
+                        def first(self):
+                            return outer_obj
 
                     return MockScalars()
 
@@ -358,6 +361,9 @@ def db():
             ):
                 instance.failed_login_attempts = 0
             if hasattr(instance, "email"):
+                if instance.email in TEST_USERS_BY_EMAIL:
+                    from sqlalchemy.exc import IntegrityError
+                    raise IntegrityError("duplicate email", params=None, orig=Exception("duplicate email"))
                 TEST_USERS_BY_EMAIL[instance.email] = instance
                 # Update dict for endpoints that use TEST_USERS_BY_ID directly
                 TEST_USERS_BY_ID[str(instance.id)] = {

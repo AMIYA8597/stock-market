@@ -220,6 +220,8 @@ async def startup_events() -> dict[str, Any]:
             logger.warning("startup_health_check_failed", error=str(e))
 
         logger.info("startup_complete", services_initialized=list(services.keys()))
+        from app.core.websocket_manager import ws_manager
+        await ws_manager.startup()
         return services
 
     except Exception as e:

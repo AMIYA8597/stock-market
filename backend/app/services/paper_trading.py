@@ -14,6 +14,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
+from app.models.ledger import PaperAccount, PaperLedgerEntry
 from app.services.market_data_service import MarketDataService
 from research.backtesting.cost_model import compute_indian_costs
 
@@ -355,9 +356,30 @@ class PaperTradingService:
             net_amount=net_amount,
             signal_relation=signal_relation,
         )
+
         db.add(new_order)
+        await db.flush()  # So we get new_order.id
+
+        account_stmt = select(PaperAccount).where(PaperAccount.user_id == user_id)
+        account_res = await db.execute(account_stmt)
+        account = account_res.scalar_one_or_none()
+        
+        if account:
+            # Add double entry
+            entry_amount = -float(net_amount) if side == "BUY" else float(net_amount)
+            ledger_entry = PaperLedgerEntry(
+                account_id=account.id,
+                entry_type="TRADE_EXECUTION",
+                amount=entry_amount,
+                currency="INR",
+                reference_type="PAPER_ORDER",
+                reference_id=str(new_order.id)
+            )
+            db.add(ledger_entry)
+
         await db.commit()
         await db.refresh(new_order)
+
         logger.info(
             f"Executed MARKET order for user_id={user_id}, symbol={sym}, side={side}, net_amount={net_amount}"
         )
@@ -486,11 +508,28 @@ class PaperTradingService:
             order.stt = stt
             order.slippage = slippage
             order.net_amount = net_amount
+
             order.timestamp = datetime.now(UTC)
             filled_count += 1
             logger.info(
                 f"FILLED pending limit order {order.id} for user {order.user_id} at {execute_price}"
             )
+
+            account_stmt = select(PaperAccount).where(PaperAccount.user_id == order.user_id)
+            account_res = await db.execute(account_stmt)
+            account = account_res.scalar_one_or_none()
+            if account:
+                entry_amount = -float(net_amount) if order.side == "BUY" else float(net_amount)
+                ledger_entry = PaperLedgerEntry(
+                    account_id=account.id,
+                    entry_type="TRADE_EXECUTION",
+                    amount=entry_amount,
+                    currency="INR",
+                    reference_type="PAPER_ORDER",
+                    reference_id=str(order.id)
+                )
+                db.add(ledger_entry)
+
 
         if filled_count > 0:
             await db.commit()

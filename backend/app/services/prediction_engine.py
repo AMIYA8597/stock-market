@@ -915,13 +915,42 @@ async def get_full_prediction(
 
     import pandas as pd
 
-    from app.services.data_ingestion.provider_manager import provider_manager
+    
 
     end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=2 * 365)  # 2 years
 
     try:
-        bars = await provider_manager.get_ohlcv(symbol, "1d", start_date, end_date)
+        from app.database.connection import async_session_factory
+        from sqlalchemy import select
+        from app.models.market import Instrument, OHLCV
+        
+        async with async_session_factory() as session:
+            inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
+            if not inst:
+                bars = []
+            else:
+                bars = (await session.execute(
+                    select(OHLCV)
+                    .where(
+                        (OHLCV.instrument_id == inst.id) & 
+                        (OHLCV.interval == '1d') & 
+                        (OHLCV.timestamp >= start_date) & 
+                        (OHLCV.timestamp <= end_date)
+                    )
+                    .order_by(OHLCV.timestamp.asc())
+                )).scalars().all()
+                
+        class DummyBar:
+            def __init__(self, time, open, high, low, close, volume):
+                self.time = time
+                self.open = open
+                self.high = high
+                self.low = low
+                self.close = close
+                self.volume = volume
+
+        bars = [DummyBar(b.timestamp, float(b.open), float(b.high), float(b.low), float(b.close), float(b.volume)) for b in bars]
         if not bars or len(bars) < 60:
             raise ValueError(f"Insufficient OHLCV data for {symbol} (need at least 60 rows)")
 

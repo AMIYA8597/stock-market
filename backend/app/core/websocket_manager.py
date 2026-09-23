@@ -32,11 +32,59 @@ class ConnectionManager:
         self._heartbeats: dict[WebSocket, asyncio.Task] = {}
         # Maps IP -> count of active connections
         self._ip_counts: dict[str, int] = defaultdict(int)
-        # A single browser can legitimately open several sockets from one IP
-        # (prices, signals, alerts, plus multiple tabs) — this caps abuse, not
-        # normal multi-tab usage.
         self.MAX_CONNECTIONS_PER_IP = 30
         self._lock = asyncio.Lock()
+        
+        self._redis_task: asyncio.Task | None = None
+
+    async def startup(self):
+        """Start the Redis subscriber loop."""
+        if self._redis_task is None:
+            self._redis_task = asyncio.create_task(self._redis_listener())
+            
+    async def shutdown(self):
+        """Stop the Redis subscriber loop."""
+        if self._redis_task:
+            self._redis_task.cancel()
+            try:
+                await self._redis_task
+            except asyncio.CancelledError:
+                pass
+            
+    async def _redis_listener(self):
+        from app.database.redis_client import get_redis_client
+        import json
+        try:
+            redis_client = await get_redis_client()
+            pubsub = redis_client.pubsub()
+            await pubsub.subscribe("ws_broadcasts")
+            try:
+                while True:
+                    message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+                    if message and message.get("type") == "message":
+                        try:
+                            payload_raw = message.get("data")
+                            payload = json.loads(payload_raw) if isinstance(payload_raw, str) else payload_raw
+                            channel = payload.get("channel")
+                            data = payload.get("data")
+                            if channel and data:
+                                await self._local_broadcast(channel, data)
+                        except Exception as e:
+                            logger.debug(f"Error processing ws_broadcasts message: {e}")
+                    await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.debug(f"Redis listener error: {e}")
+            finally:
+                try:
+                    await pubsub.unsubscribe("ws_broadcasts")
+                    await pubsub.close()
+                except:
+                    pass
+        except Exception as e:
+            logger.debug(f"Redis listener outer error: {e}")
+
 
     async def connect(self, websocket: WebSocket) -> None:
         """Accept a WebSocket connection and start its heartbeat."""
@@ -123,6 +171,19 @@ class ConnectionManager:
         logger.info("WebSocket disconnected cleanly")
 
     async def broadcast(self, channel: str, data: Any) -> None:
+        """Publish a broadcast message to Redis so all workers get it."""
+        from app.database.redis_client import get_redis_client
+        import json
+        try:
+            redis_client = await get_redis_client()
+            payload = json.dumps({"channel": channel, "data": data})
+            await redis_client.publish("ws_broadcasts", payload)
+        except Exception as e:
+            logger.warning(f"Failed to publish broadcast to redis: {e}")
+            # Fallback to local broadcast if redis fails
+            await self._local_broadcast(channel, data)
+
+    async def _local_broadcast(self, channel: str, data: Any) -> None:
         """
         Broadcast a JSON message to all connections on a channel.
         Automatically removes dead connections.
