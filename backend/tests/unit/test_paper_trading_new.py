@@ -24,8 +24,16 @@ class MockScalarResult:
 
 @pytest.fixture
 def mock_db():
+    from unittest.mock import MagicMock
     db = AsyncMock()
+    db.add = MagicMock()
     return db
+
+@pytest.fixture(autouse=True)
+def mock_prediction_engine():
+    with patch("app.services.prediction_engine.get_full_prediction", new_callable=AsyncMock) as mock_pred:
+        mock_pred.return_value = {"is_computed": False}
+        yield mock_pred
 
 @pytest.fixture
 def test_wallet():
@@ -242,10 +250,11 @@ async def test_check_and_execute_limit_orders(mock_get_wallet, mock_compute, moc
         quantity=Decimal("10.0"),
         status="PENDING"
     )
-    # mock_db.execute is called twice: first for finding orders, second for finding position
+    # mock_db.execute is called three times: orders, position, account
     mock_db.execute.side_effect = [
         MockScalarResult([order]), # For orders
-        MockScalarResult([])       # For position (returns none)
+        MockScalarResult([]),      # For position (returns none)
+        MockScalarResult([test_wallet]) # For account
     ]
     mock_get_wallet.return_value = test_wallet
     mock_compute.return_value = {"brokerage": 20.0, "stt": 1.0, "slippage": 5.0, "txn_charge": 0.5, "sebi_fee": 0.1, "gst": 3.0, "stamp_duty": 0.1}

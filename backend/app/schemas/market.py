@@ -42,8 +42,8 @@ class QuoteResponse(BaseModel):
     pe_ratio: Decimal | None = Field(None)
     week_52_high: Decimal | None = Field(None)
     week_52_low: Decimal | None = Field(None)
-    regime: RegimeData
-    signal: SignalData
+    regime: RegimeData | None = None
+    signal: SignalData | None = None
     timestamp: datetime
     data_freshness_seconds: int | None = None
     source: str = "realtime"

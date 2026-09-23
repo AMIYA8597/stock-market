@@ -114,15 +114,17 @@ async def override_get_db():
     yield InMemorySession(shared_store)
 
 
-from app.core.dependencies import get_current_user_or_none
+from app.core.dependencies import get_current_user
 
 
-async def override_get_current_user_or_none():
-    return {"sub": "12345678-1234-5678-1234-567812345678"}
+async def override_get_current_user():
+    class DummyUser:
+        id = uuid.UUID("12345678-1234-5678-1234-567812345678")
+    return DummyUser()
 
 
 app.dependency_overrides[get_db] = override_get_db
-app.dependency_overrides[get_current_user_or_none] = override_get_current_user_or_none
+app.dependency_overrides[get_current_user] = override_get_current_user
 
 client = TestClient(app)
 

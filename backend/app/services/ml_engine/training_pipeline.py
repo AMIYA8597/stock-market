@@ -30,8 +30,22 @@ class TrainingPipeline:
         self.instrument = None
         self.feature_pipeline = FeaturePipeline(symbol)
 
-    async def run(self) -> dict:
+    async def run(self, frame: pd.DataFrame | None = None) -> dict:
         logger.info(f"Starting A4/A5 Training Pipeline for {self.symbol}")
+
+        if frame is None:
+            raise ValueError(
+                "CANONICAL_DATASET_REQUIRED: training requires a point-in-time dataset "
+                "frame supplied by the canonical data platform"
+            )
+
+        required_columns = {"time", "open", "high", "low", "close", "volume"}
+        missing_columns = sorted(required_columns - set(frame.columns))
+        if missing_columns:
+            raise ValueError(
+                "CANONICAL_DATASET_INVALID: missing required columns: "
+                + ", ".join(missing_columns)
+            )
 
         async with async_session_factory() as session:
             res = await session.execute(select(Instrument).where(Instrument.symbol == self.symbol))
@@ -42,25 +56,11 @@ class TrainingPipeline:
                     "before training — refusing to persist model artifacts against a fake instrument id."
                 )
 
-        import yfinance as yf
-
-        ticker = yf.Ticker(self.symbol)
-        df = ticker.history(period="5y", interval="1d")
+        df = frame.copy()
         if df.empty or len(df) < 252:
             logger.error("Insufficient data for training. Need at least 252 days.")
             return {}
 
-        df = df.reset_index()
-        df = df.rename(
-            columns={
-                "Date": "time",
-                "Open": "open",
-                "High": "high",
-                "Low": "low",
-                "Close": "close",
-                "Volume": "volume",
-            }
-        )
         df["time"] = pd.to_datetime(df["time"]).dt.tz_localize(None)
 
         # Add targets
@@ -234,9 +234,9 @@ class TrainingPipeline:
                     all_probs = pd.concat([all_probs, pd.Series(probs, index=X_test.index)])
                 except Exception as e:
                     logger.error(f"Error evaluating {name} at fold {start_idx}: {e}")
-                    # fill with zeros if error
-                    all_preds = pd.concat([all_preds, pd.Series(0, index=X_test.index)])
-                    all_probs = pd.concat([all_probs, pd.Series(0.5, index=X_test.index)])
+                    raise RuntimeError(
+                        f"TRAINING_FOLD_FAILED: {name} at fold {start_idx}"
+                    ) from e
 
             # Compute metrics for this model
             eval_idx = all_preds.index
@@ -279,15 +279,12 @@ class TrainingPipeline:
                 f"{name} Results - Acc: {acc:.4f}, AUC: {auc:.4f}, Sharpe: {sharpe:.4f}, AdjSharpe: {cost_adj_sharpe:.4f}"
             )
 
-            # Honesty Law Guard
-            if acc > 0.75:
+            governance_status = "HOLD_FOR_REVIEW" if acc > 0.75 else "UNASSESSED"
+            if governance_status == "HOLD_FOR_REVIEW":
                 logger.warning(
-                    f"LEAKAGE DETECTED: {name} model achieved {acc:.2%} accuracy. This violates the Honesty Law (>75%). Result rejected."
+                    f"Governance review required for {name}: accuracy {acc:.2%} "
+                    "exceeds the configured suspicious-performance threshold."
                 )
-                acc = 0.0
-                auc = 0.5
-                sharpe = -99.0
-                cost_adj_sharpe = -99.0
 
             results[name] = {
                 "accuracy": float(acc),
@@ -297,6 +294,7 @@ class TrainingPipeline:
                 "sharpe": float(sharpe),
                 "cost_adjusted_sharpe": float(cost_adj_sharpe),
                 "regime_breakdown": regime_breakdown,
+                "governance_status": governance_status,
             }
 
             # Keep track of winner among tradeable ML models (not Naive/ARIMA which are just baselines)

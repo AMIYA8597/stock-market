@@ -123,3 +123,14 @@ async def content_control(
             for post in posts
         ]
     }
+
+from app.core.security import get_current_context, RequestContext
+@router.post("/ingest")
+async def trigger_ingestion(context: RequestContext = Depends(get_current_context)):
+    if context.organization_role != "SUPERADMIN":
+        raise HTTPException(status_code=403, detail="SUPERADMIN role required")
+    from app.jobs.ingestion import IngestionPipeline
+    pipeline = IngestionPipeline()
+    import asyncio
+    asyncio.create_task(pipeline.run_full_ingestion())
+    return {"message": "Ingestion triggered"}

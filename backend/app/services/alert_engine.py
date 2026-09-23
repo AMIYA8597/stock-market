@@ -13,7 +13,7 @@ from sqlalchemy import and_, select
 from app.database.connection import async_session_factory
 from app.models.alert import Alert
 from app.models.instrument import Instrument
-from app.services.market_data_service import MarketDataService
+
 from app.services.signal_engine import TechnicalSignalEngine
 
 logger = logging.getLogger(__name__)
@@ -27,9 +27,36 @@ ALERT_THRESHOLDS = {
 
 
 async def _get_signal_for_alert(symbol: str) -> dict:
-    hist = await MarketDataService.get_history(symbol, interval="1d", period="1y")
-    if not hist:
-        raise ValueError(f"No history available for {symbol}")
+    from app.database.connection import async_session_factory
+    from sqlalchemy import select
+    from app.models.market import Instrument, OHLCV
+    
+    async with async_session_factory() as session:
+        inst_res = await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+        inst = inst_res.scalars().first()
+        if not inst:
+            raise ValueError(f"No history available for {symbol}")
+            
+        ohlcv_res = await session.execute(
+            select(OHLCV)
+            .where((OHLCV.instrument_id == inst.id) & (OHLCV.interval == '1d'))
+            .order_by(OHLCV.timestamp.asc())
+        )
+        bars = ohlcv_res.scalars().all()
+        
+        if not bars:
+            raise ValueError(f"No history available for {symbol}")
+            
+        hist = []
+        for b in bars:
+            hist.append({
+                'time': b.timestamp.timestamp(),
+                'open': float(b.open),
+                'high': float(b.high),
+                'low': float(b.low),
+                'close': float(b.close),
+                'volume': float(b.volume)
+            })
 
     df = pd.DataFrame(hist)
     for col in ["open", "high", "low", "close", "volume"]:
@@ -142,7 +169,7 @@ async def check_and_fire_alerts(symbols: list[str], websocket_manager) -> list[d
 
                     # Broadcast to user alerts channel
                     try:
-                        await websocket_manager.broadcast("signals:alerts", user_alert_payload)
+                        await websocket_manager.broadcast(f"alerts:{alert.user_id}", user_alert_payload)
                         logger.info(f"User alert triggered & broadcasted: {trigger_message}")
                     except Exception as b_err:
                         logger.warning(f"Failed to broadcast user alert: {b_err}")

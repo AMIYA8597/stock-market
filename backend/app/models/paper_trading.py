@@ -1,228 +1,51 @@
-"""SQLAlchemy ORM models for Paper Trading.
-
-Tracks virtual account balance, open positions, and executed/pending orders.
-"""
-
-from __future__ import annotations
-
-from datetime import date, datetime
-from decimal import Decimal
-from uuid import UUID, uuid4
-
-from sqlalchemy import UUID as SQLA_UUID
-from sqlalchemy import Date, DateTime, Numeric, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
-
+from datetime import datetime, date
+import uuid
+from sqlalchemy import Boolean, DateTime, String, ForeignKey, Numeric, UniqueConstraint, Date, Enum
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import UUID
 from app.database.connection import Base
 
-
 class PaperWallet(Base):
-    """Virtual paper trading wallet for tracking user capital."""
-
     __tablename__ = "paper_wallets"
-
-    id: Mapped[UUID] = mapped_column(
-        SQLA_UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4,
-        doc="Unique wallet identifier",
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(255),
-        unique=True,
-        nullable=False,
-        index=True,
-        doc="Username or email or user UUID",
-    )
-    balance: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        default=Decimal("100000.00"),
-        nullable=False,
-        doc="Cash balance available to trade",
-    )
-    locked_margin: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Margin locked for open positions",
-    )
-    realized_pnl: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Total realized P&L across all closed positions",
-    )
-    daily_loss_limit: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        default=Decimal("5000.00"),
-        nullable=False,
-        doc="Maximum allowed loss per day",
-    )
-    last_reset_date: Mapped[date | None] = mapped_column(
-        Date,
-        nullable=True,
-        doc="Last date when daily realized loss was checked or reset",
-    )
-    daily_realized_loss: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Accumulated realized loss for the current day",
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-        doc="Last updated timestamp",
-    )
-
-    def __repr__(self) -> str:
-        return f"<PaperWallet(user_id='{self.user_id}', balance={self.balance})>"
-
-
-class PaperPosition(Base):
-    """User open positions in paper trading mode."""
-
-    __tablename__ = "paper_positions"
-    __table_args__ = (UniqueConstraint("user_id", "symbol", name="uq_paper_position_user_symbol"),)
-
-    id: Mapped[UUID] = mapped_column(
-        SQLA_UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4,
-        doc="Unique position identifier",
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        index=True,
-        doc="Owner of the position",
-    )
-    symbol: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        index=True,
-        doc="Ticker symbol (e.g. RELIANCE.NS, BTC-USD)",
-    )
-    quantity: Mapped[Decimal] = mapped_column(
-        Numeric(20, 8),
-        nullable=False,
-        doc="Quantity of shares or units held",
-    )
-    avg_buy_price: Mapped[Decimal] = mapped_column(
-        Numeric(20, 8),
-        nullable=False,
-        doc="Weighted average buy price",
-    )
-    realized_pnl: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Realized P&L from partial exits of this position",
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-        nullable=False,
-        doc="Last updated timestamp",
-    )
-
-    def __repr__(self) -> str:
-        return f"<PaperPosition(user_id='{self.user_id}', symbol='{self.symbol}', qty={self.quantity})>"
-
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    balance: Mapped[float] = mapped_column(Numeric(18, 2), default=100000.00)
+    locked_margin: Mapped[float] = mapped_column(Numeric(18, 2), default=0.00)
+    realized_pnl: Mapped[float] = mapped_column(Numeric(18, 2), default=0.00)
+    daily_loss_limit: Mapped[float] = mapped_column(Numeric(18, 2), default=5000.00)
+    daily_realized_loss: Mapped[float] = mapped_column(Numeric(18, 2), default=0.00)
+    last_reset_date: Mapped[date] = mapped_column(Date, default=date.today)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class PaperOrder(Base):
-    """Order logs and history for paper trading."""
-
     __tablename__ = "paper_orders"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(100), nullable=False)
+    side: Mapped[str] = mapped_column(String(10), nullable=False) # BUY, SELL
+    quantity: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
+    price: Mapped[float | None] = mapped_column(Numeric(18, 6)) # Execution price
+    order_type: Mapped[str] = mapped_column(String(20), nullable=False) # MARKET, LIMIT
+    limit_price: Mapped[float | None] = mapped_column(Numeric(18, 6))
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING") # PENDING, FILLED, CANCELLED, REJECTED
+    brokerage: Mapped[float] = mapped_column(Numeric(18, 6), default=0.0)
+    stt: Mapped[float] = mapped_column(Numeric(18, 6), default=0.0)
+    slippage: Mapped[float] = mapped_column(Numeric(18, 6), default=0.0)
+    net_amount: Mapped[float] = mapped_column(Numeric(18, 6), default=0.0)
+    signal_relation: Mapped[str | None] = mapped_column(String(50)) # AGREEMENT, AGAINST, INDEPENDENT
+    timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    id: Mapped[UUID] = mapped_column(
-        SQLA_UUID(as_uuid=True),
-        primary_key=True,
-        default=uuid4,
-        doc="Unique order identifier",
-    )
-    user_id: Mapped[str] = mapped_column(
-        String(255),
-        nullable=False,
-        index=True,
-        doc="Owner of the order",
-    )
-    symbol: Mapped[str] = mapped_column(
-        String(32),
-        nullable=False,
-        index=True,
-        doc="Ticker symbol",
-    )
-    side: Mapped[str] = mapped_column(
-        String(8),
-        nullable=False,
-        doc="Transaction side (BUY or SELL)",
-    )
-    quantity: Mapped[Decimal] = mapped_column(
-        Numeric(20, 8),
-        nullable=False,
-        doc="Quantity ordered",
-    )
-    price: Mapped[Decimal] = mapped_column(
-        Numeric(20, 8),
-        nullable=False,
-        doc="Execution price (or target limit price)",
-    )
-    order_type: Mapped[str] = mapped_column(
-        String(8),
-        nullable=False,
-        doc="Order type (MARKET or LIMIT)",
-    )
-    limit_price: Mapped[Decimal | None] = mapped_column(
-        Numeric(20, 8),
-        nullable=True,
-        doc="Trigger price for limit order",
-    )
-    status: Mapped[str] = mapped_column(
-        String(16),
-        default="PENDING",
-        nullable=False,
-        doc="Status (PENDING, FILLED, CANCELLED)",
-    )
-    brokerage: Mapped[Decimal] = mapped_column(
-        Numeric(12, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Brokerage fee paid",
-    )
-    stt: Mapped[Decimal] = mapped_column(
-        Numeric(12, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Securities Transaction Tax paid",
-    )
-    slippage: Mapped[Decimal] = mapped_column(
-        Numeric(12, 4),
-        default=Decimal("0.00"),
-        nullable=False,
-        doc="Slippage amount modeled",
-    )
-    net_amount: Mapped[Decimal] = mapped_column(
-        Numeric(20, 4),
-        nullable=False,
-        doc="Net amount debited/credited (qty * price +/- friction)",
-    )
-    signal_relation: Mapped[str | None] = mapped_column(
-        String(32),
-        default="INDEPENDENT",
-        nullable=True,
-        doc="Relationship of order to system's signal at time of placement (AGREEMENT, AGAINST, INDEPENDENT)",
-    )
-    timestamp: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-        index=True,
-        doc="Order timestamp (UTC)",
-    )
-
-    def __repr__(self) -> str:
-        return f"<PaperOrder(user_id='{self.user_id}', symbol='{self.symbol}', side='{self.side}', status='{self.status}')>"
+class PaperPosition(Base):
+    __tablename__ = "paper_positions"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    symbol: Mapped[str] = mapped_column(String(100), nullable=False)
+    quantity: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
+    avg_buy_price: Mapped[float] = mapped_column(Numeric(18, 6), nullable=False)
+    realized_pnl: Mapped[float] = mapped_column(Numeric(18, 6), default=0.00)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    __table_args__ = (UniqueConstraint("user_id", "symbol", name="uq_paper_pos_user_symbol"),)

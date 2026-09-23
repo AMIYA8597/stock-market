@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.core.dependencies import get_current_premium_user
+from app.core.entitlements import require_feature
+from app.core.dependencies import get_current_user
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.intelligence import (
     CorrelationGraphResponse,
@@ -51,10 +52,10 @@ async def get_factor_exposure(
     return intelligence_service.get_factor_exposure(symbol=symbol, window_days=window_days)
 
 
-@router.get("/signals/bulk", response_model=list[SignalResponse])
+@router.get("/signals/bulk")
 async def get_bulk_signals(
     symbols: str = Query(..., description="Comma separated symbols, max 50"),
-) -> list[SignalResponse]:
+):
     """Return parallel signal snapshots for up to 50 symbols."""
     parsed = [item.strip().upper() for item in symbols.split(",") if item.strip()]
     if not parsed:
@@ -76,8 +77,8 @@ async def get_bulk_signals(
     return intelligence_service.get_bulk_signals(parsed)
 
 
-@router.get("/signals/{symbol}", response_model=SignalResponse)
-async def get_signal(symbol: str) -> SignalResponse:
+@router.get("/signals/{symbol}")
+async def get_signal(symbol: str):
     """Return the latest ensemble and model-level signal for a symbol."""
     if len(symbol.strip()) < 2:
         raise HTTPException(
@@ -124,7 +125,7 @@ async def get_regime_statistics() -> list[RegimeStatisticsItem]:
 
 @router.get("/explain/shap/{symbol}", response_model=ExplainShapResponse)
 async def get_shap_explainability(
-    symbol: str, _user=Depends(get_current_premium_user)
+    symbol: str, _user=Depends(get_current_user)
 ) -> ExplainShapResponse:
     """Return SHAP feature attribution values for the latest inference."""
     return intelligence_service.get_shap(symbol)
@@ -134,7 +135,7 @@ async def get_shap_explainability(
 async def get_attention_explainability(
     symbol: str,
     model: str = Query(default="tft", pattern="^(tft|lstm_attn)$"),
-    _user=Depends(get_current_premium_user),
+    _user=Depends(get_current_user),
 ) -> ExplainAttentionResponse:
     """Return temporal attention weights from the requested sequence model."""
     return intelligence_service.get_attention(symbol=symbol, model=model)
@@ -142,7 +143,7 @@ async def get_attention_explainability(
 
 @router.post("/explain/counterfactual/{symbol}", response_model=list[CounterfactualResponse])
 async def get_counterfactual(
-    symbol: str, payload: CounterfactualRequest, _user=Depends(get_current_premium_user)
+    symbol: str, payload: CounterfactualRequest, _user=Depends(get_current_user)
 ) -> list[CounterfactualResponse]:
     """Return counterfactual feature changes that can flip signal direction."""
     return intelligence_service.get_counterfactuals(symbol=symbol, payload=payload)
