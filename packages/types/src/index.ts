@@ -1,3 +1,9 @@
+export * from "./zod-schemas";
+import { components } from "./api";
+export type { components } from "./api";
+
+type Schemas = components['schemas'];
+
 import { z } from "zod";
 
 // ─── Auth Types ──────────────────────────────────────────────
@@ -623,4 +629,5 @@ export interface SignalResponse {
   is_computed?: boolean;
   message?: string;
 }
+
 

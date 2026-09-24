@@ -48,6 +48,8 @@ def fit_garch_11(eps: np.ndarray) -> GarchParams:
 
     bounds = [(1e-12, None), (0.0, 0.999), (0.0, 0.999)]
     result = minimize(_nll, x0=x0, args=(e,), method="L-BFGS-B", bounds=bounds)
+    if not result.success:
+        return GarchParams(omega=var, alpha=0.0, beta=0.0)
 
     omega, alpha, beta = result.x
     if alpha + beta >= 0.999:

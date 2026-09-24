@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.config import get_settings
 from app.database.connection import get_db
@@ -90,12 +90,21 @@ async def get_current_context(
         if not api_key_record:
             raise HTTPException(status_code=401, detail="Invalid API Key")
         
-        return RequestContext(
+        ctx = RequestContext(
             user_id=str(api_key_record.created_by_id) if api_key_record.created_by_id else None,
             organization_id=str(api_key_record.organization_id),
             auth_method="API_KEY",
             request_id=req_id
         )
+        
+        # Set RLS context for the transaction
+        if ctx.user_id:
+            await db.execute(
+                text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
+                {"uid": ctx.user_id}
+            )
+            
+        return ctx
 
     # 2. Supabase JWT Auth
     if token:
@@ -136,7 +145,7 @@ async def get_current_context(
             if membership:
                 org_id = str(membership.organization_id)
 
-        return RequestContext(
+        ctx = RequestContext(
             user_id=str(user.id),
             organization_id=org_id,
             membership_id=str(membership.id) if membership else None,
@@ -144,6 +153,15 @@ async def get_current_context(
             auth_method="SUPABASE_JWT",
             request_id=req_id
         )
+        
+        # Set RLS context for the transaction
+        if ctx.user_id:
+            await db.execute(
+                text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
+                {"uid": ctx.user_id}
+            )
+            
+        return ctx
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

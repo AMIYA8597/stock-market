@@ -66,7 +66,7 @@ app.include_router(backtest_router, prefix="/api/v1")
 
 
 shared_store = {}
-from app.models.user import User
+from app.models.identity import User
 u = User(id=uuid.UUID('3b79b787-f2a8-4a48-abf1-0268d6131a5b'), email='test@test.com')
 shared_store[u.id] = u
 
@@ -76,7 +76,7 @@ async def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
-from app.models.user import User
+from app.models.identity import User
 
 from app.core.security import get_current_context, RequestContext
 async def override_get_current_context():

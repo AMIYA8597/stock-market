@@ -54,14 +54,7 @@ export function PricingPage(): JSX.Element {
       
       const res = await paymentsApi.subscribe(plan.id);
       
-      if (res.subscription_id.startsWith("sub_mock_")) {
-         pushToast({
-           tone: "success",
-           title: "Mock Subscription Created",
-           message: "Test mode: Subscription activated instantly."
-         });
-         return;
-      }
+      
       
       const options = {
         key: res.razorpay_key_id,
@@ -268,9 +261,7 @@ export function CheckoutPage(): JSX.Element {
         description: "Wallet Top-up",
       });
 
-      // 2. Simulate user interacting with a payment gateway
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
+      
       // 3. Confirm intent
       await paymentsApi.confirmIntent(intent.intent_id, `paper_txn_${Date.now().toString(36)}`);
       

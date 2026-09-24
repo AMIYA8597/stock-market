@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.notification import Notification
-from app.models.user import User
+from app.models.identity import User
 from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])

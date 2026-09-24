@@ -5,6 +5,7 @@ import logging
 from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
+    organizations,
     admin,
     alerts,
     auth,
@@ -24,7 +25,6 @@ from app.api.v1 import (
     predictions,
     regime,
     screener,
-    signals,
     users,
     watchlist,
     websocket_url,
@@ -39,6 +39,7 @@ api_router = router
 router.include_router(health.router)
 router.include_router(auth.router)
 router.include_router(users.router)
+router.include_router(organizations.router)
 router.include_router(admin.router)
 router.include_router(blog.router)
 router.include_router(notifications.router)
@@ -50,7 +51,6 @@ router.include_router(alerts.router)
 router.include_router(market.router)
 router.include_router(websocket_url.router)
 
-router.include_router(signals.router, dependencies=[Depends(get_current_user)])
 router.include_router(regime.router, dependencies=[Depends(get_current_user)])
 router.include_router(news.router)
 router.include_router(explain.router, dependencies=[Depends(get_current_user)])

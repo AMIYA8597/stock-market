@@ -353,11 +353,17 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
           <div className="grid w-full grid-cols-2 gap-2 text-xs sm:w-auto items-center">
             <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2 flex items-center gap-2">
               Price {formatInr(latestPrice)}
-              {liveTick?.source && (
-                <span className="ml-2 rounded-full bg-[rgba(0,212,245,0.1)] px-2 py-0.5 text-xs text-[var(--nq-accent-cyan)] border border-[var(--nq-accent-cyan)]">
-                  {liveTick.source}
-                </span>
-              )}
+              <span
+                className={`ml-2 rounded border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${
+                  (liveTick?.source === "realtime" || quote?.source === "realtime")
+                    ? "text-[#00E676] border-[#00E676] bg-[rgba(0,230,118,0.1)]"
+                    : (liveTick?.source === "computed" || quote?.source === "computed")
+                      ? "text-[#B388FF] border-[#B388FF] bg-[rgba(179,136,255,0.1)]"
+                      : "text-[#FFB800] border-[#FFB800] bg-[rgba(255,184,0,0.1)]"
+                }`}
+              >
+                {(liveTick?.source === "realtime" || quote?.source === "realtime") ? "Real-time" : (liveTick?.source === "computed" || quote?.source === "computed") ? "Computed" : "Delayed"}
+              </span>
             </div>
             <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] px-3 py-2">Day {formatPercent(latestChangePct)}</div>
           </div>

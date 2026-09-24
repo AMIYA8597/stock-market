@@ -100,8 +100,10 @@ class XGBoostDirectionalClassifier:
 
         # Calibrate probabilities
         if self.calibration:
+            from sklearn.model_selection import TimeSeriesSplit
+            tscv = TimeSeriesSplit(n_splits=3)
             self.model = CalibratedClassifierCV(
-                estimator=self.base_model, method=self.calibration, cv=3
+                estimator=self.base_model, method=self.calibration, cv=tscv
             )
         else:
             self.model = self.base_model

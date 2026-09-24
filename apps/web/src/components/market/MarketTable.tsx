@@ -180,11 +180,25 @@ export function MarketTable({ instruments, isLoading = false }: MarketTableProps
                       <span className="text-xs text-nq-text-tertiary md:hidden">
                         LTP
                       </span>
-                      <span className="font-mono text-sm md:text-base">
+                      <span className="font-mono text-sm md:text-base flex items-center gap-2">
                         ₹{Number(price).toLocaleString("en-IN", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
+                        {live?.source && (
+                          <span
+                            className={cn(
+                              "text-[8px] px-1.5 py-0.5 rounded border uppercase tracking-wider font-sans",
+                              live.source === "realtime"
+                                ? "text-[#00E676] border-[#00E676] bg-[rgba(0,230,118,0.1)]"
+                                : live.source === "computed"
+                                ? "text-[#B388FF] border-[#B388FF] bg-[rgba(179,136,255,0.1)]"
+                                : "text-[#FFB800] border-[#FFB800] bg-[rgba(255,184,0,0.1)]"
+                            )}
+                          >
+                            {live.source === "realtime" ? "Real-time" : live.source === "computed" ? "Computed" : "Delayed"}
+                          </span>
+                        )}
                       </span>
                     </div>
 

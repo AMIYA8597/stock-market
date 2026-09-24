@@ -25,7 +25,7 @@ export function SignalsFeedPage() {
         setSymbols(toSubscribe);
       } catch (err) {
         console.error("Failed to load universe", err);
-        setSymbols(["RELIANCE", "TCS", "INFY", "HDFCBANK", "ICICIBANK"]);
+        setSymbols([]);
       } finally {
         setLoading(false);
       }

@@ -145,7 +145,20 @@ export function CryptoCoinLiveContent({ coin }: CryptoCoinLiveContentProps): JSX
           <div className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4">
             <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Price + Volatility</h2>
             <div className="mb-3 grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded border border-[var(--nq-border)] px-2 py-1">Price {formatNumber(livePrice)}</div>
+              <div className="rounded border border-[var(--nq-border)] px-2 py-1 flex items-center gap-2">
+                Price {formatNumber(livePrice)}
+                <span
+                  className={`ml-1 rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider ${
+                    (liveTick?.source === "realtime" || quote?.source === "realtime")
+                      ? "text-[#00E676] border-[#00E676] bg-[rgba(0,230,118,0.1)]"
+                      : (liveTick?.source === "computed" || quote?.source === "computed")
+                        ? "text-[#B388FF] border-[#B388FF] bg-[rgba(179,136,255,0.1)]"
+                        : "text-[#FFB800] border-[#FFB800] bg-[rgba(255,184,0,0.1)]"
+                  }`}
+                >
+                  {(liveTick?.source === "realtime" || quote?.source === "realtime") ? "Real-time" : (liveTick?.source === "computed" || quote?.source === "computed") ? "Computed" : "Delayed"}
+                </span>
+              </div>
               <div className="rounded border border-[var(--nq-border)] px-2 py-1">Move {formatPct(liveMove)}</div>
             </div>
             <div className="h-64 rounded bg-[rgba(255,255,255,0.03)] p-2 sm:h-72">

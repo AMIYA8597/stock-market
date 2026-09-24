@@ -195,7 +195,7 @@ class StudentTHMM:
         return ll_trace
 
     def posterior(self, returns: np.ndarray) -> np.ndarray:
-        """Return smoothed posterior probabilities gamma_t(k)."""
+        """Return smoothed posterior probabilities gamma_t(k) (LEAKS FUTURE)."""
         r = np.asarray(returns, dtype=float).reshape(-1)
         log_b = self._emission_logprob(r)
         alpha_hat, c, _ = self._forward(log_b)
@@ -203,6 +203,13 @@ class StudentTHMM:
         gamma = alpha_hat * beta
         gamma /= np.sum(gamma, axis=1, keepdims=True) + _EPS
         return gamma
+
+    def predict_live_filter(self, returns: np.ndarray) -> np.ndarray:
+        """Return live filtered probabilities alpha_t(k) (NO FUTURE LEAKAGE)."""
+        r = np.asarray(returns, dtype=float).reshape(-1)
+        log_b = self._emission_logprob(r)
+        alpha_hat, _, _ = self._forward(log_b)
+        return alpha_hat
 
     def viterbi(self, returns: np.ndarray) -> np.ndarray:
         """Decode optimal hidden-state sequence using Viterbi algorithm."""

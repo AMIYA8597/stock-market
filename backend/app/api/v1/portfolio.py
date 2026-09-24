@@ -42,13 +42,11 @@ async def list_portfolios(
 
     from sqlalchemy import and_, func, select
 
-    from app.models.payment import PaymentTransaction
+    from app.models.paper_trading import PaperWallet
 
     uid = uuid.UUID(str(current_user.id))
     deposits_res = await db.execute(
-        select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
-            and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded")
-        )
+        select(PaperWallet.balance).where(PaperWallet.user_id == uid)
     )
     initial_cap = float(deposits_res.scalar_one()) or 0.0
 
@@ -86,7 +84,7 @@ async def get_holdings(
         from sqlalchemy import and_, func, select
 
         from app.models.instrument import Instrument
-        from app.models.payment import PaymentTransaction
+        from app.models.paper_trading import PaperWallet
         from app.models.portfolio import PortfolioHolding
         from app.models.transactions import Transaction
         from app.services.market_data_service import MarketDataService
@@ -113,9 +111,7 @@ async def get_holdings(
             return _empty_holdings()
 
         deposits_res = await db.execute(
-            select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
-                and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded")
-            )
+            select(PaperWallet.balance).where(PaperWallet.user_id == uid)
         )
         total_deposits = Decimal(str(deposits_res.scalar_one()))
 
@@ -385,7 +381,7 @@ async def post_transaction(
         from sqlalchemy import and_, func, select
 
         from app.models.instrument import Instrument
-        from app.models.payment import PaymentTransaction
+        from app.models.paper_trading import PaperWallet
         from app.models.portfolio import PortfolioHolding
         from app.models.transactions import Transaction
 
@@ -999,13 +995,11 @@ async def get_portfolio(
 
     from sqlalchemy import and_, func, select
 
-    from app.models.payment import PaymentTransaction
+    from app.models.paper_trading import PaperWallet
 
     uid = uuid.UUID(str(current_user.id))
     deposits_res = await db.execute(
-        select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
-            and_(PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded")
-        )
+        select(PaperWallet.balance).where(PaperWallet.user_id == uid)
     )
     initial_cap = float(deposits_res.scalar_one()) or 0.0
 

@@ -31,17 +31,7 @@ function getMarketRoute(item: SearchItem): string {
   return `/markets/stocks/${encodeURIComponent(item.symbol)}`;
 }
 
-const POPULAR_SEARCHES: SearchItem[] = [
-  { symbol: "RELIANCE.NS", name: "Reliance Industries", type: "stock", exchange: "NSE" },
-  { symbol: "TCS.NS", name: "Tata Consultancy Services", type: "stock", exchange: "NSE" },
-  { symbol: "INFY.NS", name: "Infosys", type: "stock", exchange: "NSE" },
-  { symbol: "HDFCBANK.NS", name: "HDFC Bank", type: "stock", exchange: "NSE" },
-  { symbol: "AAPL", name: "Apple Inc.", type: "stock", exchange: "NASDAQ" },
-  { symbol: "MSFT", name: "Microsoft Corporation", type: "stock", exchange: "NASDAQ" },
-  { symbol: "GOOGL", name: "Alphabet Inc.", type: "stock", exchange: "NASDAQ" },
-  { symbol: "BTC-USD", name: "Bitcoin", type: "crypto" },
-  { symbol: "ETH-USD", name: "Ethereum", type: "crypto" },
-];
+const POPULAR_SEARCHES: SearchItem[] = [];
 
 const typeIcons: Record<string, typeof TrendingUp> = {
   stock: TrendingUp,

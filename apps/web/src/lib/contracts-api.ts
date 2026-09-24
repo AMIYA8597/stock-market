@@ -1,3 +1,4 @@
+import { createClient } from '@/lib/supabase/client';
 export interface MarketIndex {
   name: string;
   ticker: string;
@@ -404,15 +405,15 @@ function normalizeRegimeProbabilities(value: unknown): Record<string, number> {
   };
 }
 
-const ACCESS_TOKEN_KEY = "nq_access_token";
-
-function getAccessToken(): string | null {
+async function getAccessToken(): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  return session?.access_token || null;
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -429,7 +430,7 @@ async function getJson<T>(path: string): Promise<T> {
 }
 
 async function postJson<TResponse, TBody>(path: string, body: TBody): Promise<TResponse> {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -653,7 +654,7 @@ export const contractsApi = {
         benchmark: payload.benchmark ?? "^NSEI",
         ...(payload.parameters || {}),
       },
-      universe: symbols.length > 0 ? symbols : ["RELIANCE.NS"],
+      universe: symbols,
       date_from: payload.start_date || new Date(Date.now() - 365*24*60*60*1000).toISOString().split('T')[0],
       date_to: payload.end_date || new Date().toISOString().split('T')[0],
       initial_capital: payload.initial_capital ?? 1000000,
@@ -723,7 +724,7 @@ export const contractsApi = {
     return getJson<CorrelationGraphResponse>(`/research/correlation-graph?window_days=${windowDays}`);
   },
 
-  getFactorExposure(symbol: string = "RELIANCE.NS", windowDays: number = 126): Promise<FactorExposureResponse> {
+  getFactorExposure(symbol: string, windowDays: number = 126): Promise<FactorExposureResponse> {
     return getJson<FactorExposureResponse>(`/research/factor-exposure?symbol=${encodeURIComponent(symbol)}&window_days=${windowDays}`);
   },
 

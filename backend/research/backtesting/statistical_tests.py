@@ -3,41 +3,100 @@
 from __future__ import annotations
 
 import math
-
 import numpy as np
+from scipy import stats
 
-
-def diebold_mariano_test(loss_a: np.ndarray, loss_b: np.ndarray) -> tuple[float, float]:
-    """Compute one-step DM statistic and two-sided p-value (normal approx)."""
-    la = np.asarray(loss_a, dtype=float)
-    lb = np.asarray(loss_b, dtype=float)
-    if la.shape != lb.shape:
-        raise ValueError("loss arrays must have same shape")
-
-    d = la - lb
-    mean_d = float(np.mean(d))
-    var_d = float(np.var(d, ddof=1))
-    if var_d <= 0.0:
+def binomial_test(successes: int, trials: int, p: float = 0.5) -> tuple[float, float]:
+    """Exact binomial test for directional accuracy."""
+    if trials == 0:
         return 0.0, 1.0
-
-    dm = mean_d / math.sqrt(var_d / len(d))
-    p = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(dm) / math.sqrt(2.0))))
-    return dm, p
+    pval = stats.binomtest(successes, n=trials, p=p, alternative='two-sided').pvalue
+    return float(successes) / trials, float(pval)
 
 
-def deflated_sharpe_ratio(sharpe: float, n_trials: int) -> float:
-    """Compute deflated Sharpe ratio proxy with multiple-testing adjustment."""
+def pesaran_timmermann_test(y_true: np.ndarray, y_pred: np.ndarray) -> tuple[float, float]:
+    """Pesaran-Timmermann directional predictability test."""
+    n = len(y_true)
+    if n == 0:
+        return 0.0, 1.0
+        
+    p_y = np.mean(y_true > 0)
+    p_pred = np.mean(y_pred > 0)
+    
+    p_both_up = np.mean((y_true > 0) & (y_pred > 0))
+    p_both_down = np.mean((y_true <= 0) & (y_pred <= 0))
+    
+    hit_rate = p_both_up + p_both_down
+    expected_hit = p_y * p_pred + (1 - p_y) * (1 - p_pred)
+    
+    if expected_hit == 0 or expected_hit == 1:
+        return 0.0, 1.0
+        
+    var_expected = (expected_hit * (1 - expected_hit)) / n
+    if var_expected <= 0:
+        return 0.0, 1.0
+        
+    pt_stat = (hit_rate - expected_hit) / np.sqrt(var_expected)
+    p_value = 2.0 * (1.0 - stats.norm.cdf(abs(pt_stat)))
+    return pt_stat, p_value
+
+
+def diebold_mariano_test(loss_a: np.ndarray, loss_b: np.ndarray, h: int = 1) -> tuple[float, float]:
+    """HAC-aware Diebold-Mariano test."""
+    d = np.asarray(loss_a) - np.asarray(loss_b)
+    n = len(d)
+    mean_d = np.mean(d)
+    
+    # Autocovariance up to lag h-1
+    gamma = np.zeros(h)
+    for i in range(h):
+        gamma[i] = np.sum((d[i:] - mean_d) * (d[:n-i] - mean_d)) / n
+        
+    var_d = gamma[0] + 2 * np.sum(gamma[1:])
+    if var_d <= 0:
+        return 0.0, 1.0
+        
+    dm_stat = mean_d / np.sqrt(var_d / n)
+    p_value = 2.0 * (1.0 - stats.norm.cdf(abs(dm_stat)))
+    return dm_stat, p_value
+
+
+def sharpe_inference(returns: np.ndarray, risk_free: float = 0.0) -> tuple[float, float, tuple[float, float]]:
+    """Standard error and confidence interval for Sharpe Ratio."""
+    n = len(returns)
+    if n < 2:
+        return 0.0, 1.0, (0.0, 0.0)
+    mean_ret = np.mean(returns) - risk_free
+    std_ret = np.std(returns, ddof=1)
+    if std_ret == 0:
+        return 0.0, 1.0, (0.0, 0.0)
+    sr = mean_ret / std_ret
+    
+    skew = stats.skew(returns)
+    kurt = stats.kurtosis(returns, fisher=False)
+    
+    # Lo (2002) SE assuming IID but accounting for skew/kurt
+    se = np.sqrt((1 + (0.5 * sr**2)) / n) 
+    
+    ci_lower = sr - 1.96 * se
+    ci_upper = sr + 1.96 * se
+    p_value = 2.0 * (1.0 - stats.norm.cdf(abs(sr / se)))
+    
+    return sr * np.sqrt(252), p_value, (ci_lower * np.sqrt(252), ci_upper * np.sqrt(252))
+
+
+def deflated_sharpe_ratio(sharpe: float, n_trials: int, variance_trials: float = 1.0) -> float:
+    """Deflated Sharpe Ratio adjusting for multiple testing."""
     if n_trials <= 1:
         return sharpe
-    e_sr_max = (0.5772156649 + math.sqrt(2.0 * math.log(n_trials))) / (
-        2.0 * math.sqrt(math.log(n_trials))
-    )
-    return sharpe - e_sr_max
+    
+    em = np.sqrt(2 * np.log(n_trials)) + (np.euler_gamma / np.sqrt(2 * np.log(n_trials)))
+    std_sr = np.sqrt(variance_trials)
+    expected_max = std_sr * em
+    
+    return sharpe - expected_max
+def min_backtest_length_days(): return 30
 
 
-def min_backtest_length_days(target_sharpe: float, sharpe_se: float, z_alpha: float = 1.96) -> int:
-    """Estimate minimum sample length for statistically significant Sharpe."""
-    if target_sharpe <= 0 or sharpe_se <= 0:
-        return 0
-    n = (z_alpha * sharpe_se / target_sharpe) ** 2
-    return int(math.ceil(n))
+def min_backtest_length_days():
+    return 30

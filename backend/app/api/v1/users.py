@@ -1,96 +1,60 @@
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
 
-from app.core.dependencies import get_current_user, get_db
-from app.core.test_state import TEST_USERS_BY_ID, is_test_mode
-from app.models.user import User
+from app.core.security import get_current_context, RequestContext
+from app.database.connection import get_db
+from app.models.identity import User
 from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-
 class UpdateProfileRequest(BaseModel):
     full_name: str = Field(..., min_length=1, max_length=120)
-
 
 class UserProfileResponse(BaseModel):
     id: str
     email: str
     full_name: str | None
-    role: str
-    is_active: bool
-
+    status: str
 
 @router.get("/profile", response_model=UserProfileResponse)
 async def get_profile(
-    current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+    ctx: RequestContext = Depends(get_current_context), db: AsyncSession = Depends(get_db)
 ) -> UserProfileResponse:
-    if is_test_mode():
-        user = TEST_USERS_BY_ID.get(str(current_user.id))
-        if user is None:
-            raise HTTPException(
-                status_code=404,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.RESOURCE_NOT_FOUND,
-                    message="User profile not found.",
-                ).dict(),
-            )
-
-        return UserProfileResponse(
-            id=str(user["id"]),
-            email=str(user["email"]),
-            full_name=user.get("full_name"),
-            role=str(user.get("role", "USER")),
-            is_active=bool(user.get("is_active", True)),
-        )
-
-    result = await db.execute(select(User).where(User.id == current_user.id))
+    uid = uuid.UUID(ctx.user_id)
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.create(
-                code=ErrorCode.RESOURCE_NOT_FOUND,
-                message="User profile not found.",
-            ).dict(),
-        )
+        raise HTTPException(status_code=404, detail="User profile not found.")
 
     return UserProfileResponse(
         id=str(user.id),
         email=user.email,
         full_name=user.full_name,
-        role=user.role,
-        is_active=user.is_active,
+        status=user.status,
     )
-
 
 @router.patch("/profile", response_model=UserProfileResponse)
 async def update_profile(
     payload: UpdateProfileRequest,
-    current_user: User = Depends(get_current_user),
+    ctx: RequestContext = Depends(get_current_context),
     db: AsyncSession = Depends(get_db),
 ) -> UserProfileResponse:
-    result = await db.execute(select(User).where(User.id == current_user.id))
+    uid = uuid.UUID(ctx.user_id)
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user is None:
-        raise HTTPException(
-            status_code=404,
-            detail=ErrorResponse.create(
-                code=ErrorCode.RESOURCE_NOT_FOUND,
-                message="User profile not found.",
-            ).dict(),
-        )
+        raise HTTPException(status_code=404, detail="User profile not found.")
 
     user.full_name = payload.full_name
+    await db.commit()
 
     return UserProfileResponse(
         id=str(user.id),
         email=user.email,
         full_name=user.full_name,
-        role=user.role,
-        is_active=user.is_active,
+        status=user.status,
     )

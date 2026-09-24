@@ -30,7 +30,7 @@ def detect_regime(returns: np.ndarray, hmm: StudentTHMM | None = None) -> Regime
         model.fitted = True
 
     states = model.viterbi(r)
-    probs = model.posterior(r)
+    probs = model.predict_live_filter(r)
 
     state_params: dict[int, GarchParams] = {}
     cond_vol = np.zeros_like(r)

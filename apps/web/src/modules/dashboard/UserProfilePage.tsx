@@ -51,7 +51,7 @@ export function UserProfilePage(): JSX.Element {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <Avatar className="h-16 w-16" fallback="AK" />
+              <Avatar className="h-16 w-16" fallback={fullName ? fullName.substring(0, 2).toUpperCase() : "U"} />
               <button className="absolute -right-1 -bottom-1 rounded-full border border-[var(--ds-border-subtle)] bg-[var(--ds-surface-2)] p-1.5 text-[var(--ds-text-secondary)] hover:text-[var(--ds-text-primary)]">
                 <Camera className="h-3.5 w-3.5" />
               </button>
