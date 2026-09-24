@@ -8,12 +8,7 @@ import { watchlistApi } from "@/lib/api-client";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
 import type { SignalResponse } from "@/types/intelligence";
 
-const FALLBACK_SYMBOLS = [
-  "RELIANCE.NS", "TCS.NS", "HDFCBANK.NS", "ICICIBANK.NS", "BHARTIARTL.NS", 
-  "SBIN.NS", "INFY.NS", "LICI.NS", "ITC.NS", "HINDUNILVR.NS",
-  "LT.NS", "BAJFINANCE.NS", "HCLTECH.NS", "MARUTI.NS", "SUNPHARMA.NS", 
-  "TATAMOTORS.NS", "TATASTEEL.NS", "ONGC.NS", "KOTAKBANK.NS", "M&M.NS"
-];
+
 
 interface TerminalDataState {
   symbols: string[];
@@ -34,7 +29,7 @@ interface TerminalDataState {
 export const useTerminalData = (): TerminalDataState => {
   const [symbols, setSymbols] = useState<string[]>([]);
   const [wlLists, setWlLists] = useState<string[][]>([[], [], [], []]);
-  const [selectedSymbol, setSelectedSymbol] = useState<string>(FALLBACK_SYMBOLS[0] ?? "RELIANCE.NS");
+  const [selectedSymbol, setSelectedSymbol] = useState<string>("");
   const [selectedSignal, setSelectedSignal] = useState<SignalResponse | null>(null);
   const [watchlistSignals, setWatchlistSignals] = useState<SignalResponse[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -65,10 +60,10 @@ export const useTerminalData = (): TerminalDataState => {
       console.warn("Failed to load user watchlist, falling back to defaults", err);
     }
 
-    symbolsRef.current = FALLBACK_SYMBOLS;
-    setSymbols(FALLBACK_SYMBOLS);
-    setWlLists([FALLBACK_SYMBOLS, [], [], []]);
-    return FALLBACK_SYMBOLS;
+    symbolsRef.current = [];
+    setSymbols([]);
+    setWlLists([[], [], [], []]);
+    return [];
   }, []);
 
   const refreshAll = useCallback(
@@ -89,10 +84,10 @@ export const useTerminalData = (): TerminalDataState => {
       }
 
       if (!symbolsToLoad.includes(selectedSymbol)) {
-        setSelectedSymbol(symbolsToLoad[0] ?? "RELIANCE.NS");
+        if (symbolsToLoad[0]) setSelectedSymbol(symbolsToLoad[0]);
       }
 
-      const targetSymbol = symbolsToLoad.includes(selectedSymbol) ? selectedSymbol : (symbolsToLoad[0] ?? "RELIANCE.NS");
+      const targetSymbol = symbolsToLoad.includes(selectedSymbol) ? selectedSymbol : (symbolsToLoad[0] ?? "");
 
       const [bulkResult, singleResult] = await Promise.allSettled([
         intelligenceApi.getBulkSignals(symbolsToLoad),

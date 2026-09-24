@@ -37,10 +37,11 @@ __all__ = [
     "generate_cpcv_splits",
     "max_drawdown",
     "merton_jump_diffusion_paths",
-    "min_backtest_length_days",
     "omega_ratio",
     "run_vectorized_backtest",
     "sharpe_ratio",
     "sortino_ratio",
     "summarize_monte_carlo",
 ]
+
+__all__.append('min_backtest_length_days')

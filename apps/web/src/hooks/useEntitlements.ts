@@ -1,3 +1,4 @@
+import { createClient } from '@/lib/supabase/client';
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 import { useEffect, useState } from "react";
 import { paymentsApi } from "@/lib/api-client";
@@ -29,7 +30,7 @@ export function useEntitlements(): SubscriptionContext {
     let mounted = true;
     const fetchSubscription = async () => {
       try {
-        const token = localStorage.getItem("nq_access_token");
+        const supabase = createClient(); const { data: { session } } = await supabase.auth.getSession(); const token = session?.access_token || "";
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
         };

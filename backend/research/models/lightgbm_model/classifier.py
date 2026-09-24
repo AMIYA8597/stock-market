@@ -44,7 +44,9 @@ class LightGBMDirectionalClassifier:
         self.base_model.set_params(scale_pos_weight=pos_weight)
 
         if self.calibration:
-            self.model = CalibratedClassifierCV(self.base_model, method=self.calibration, cv=5)
+            from sklearn.model_selection import TimeSeriesSplit
+            tscv = TimeSeriesSplit(n_splits=3)
+            self.model = CalibratedClassifierCV(self.base_model, method=self.calibration, cv=tscv)
             self.model.fit(X, y)
             # Also fit base_model to get feature importances
             self.base_model.fit(X, y)

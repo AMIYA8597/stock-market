@@ -597,8 +597,23 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       <div className="mb-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.01)] p-3">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-xs uppercase tracking-[0.12em] text-[var(--nq-text-secondary)]">Live Quote Snapshot</p>
-          <span className="text-[10px] font-mono text-[var(--nq-text-secondary)]">
-            {quoteLoading ? "Refreshing..." : quote ? "Live quote loaded" : "Quote unavailable"}
+          <span className="flex items-center gap-2">
+            <span className="text-[10px] font-mono text-[var(--nq-text-secondary)]">
+              {quoteLoading ? "Refreshing..." : quote ? "Live quote loaded" : "Quote unavailable"}
+            </span>
+            {quote && (
+              <span
+                className={`rounded border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wider ${
+                  (liveTick?.source === "realtime" || quote.source === "realtime")
+                    ? "text-[#00E676] border-[#00E676] bg-[rgba(0,230,118,0.1)]"
+                    : (liveTick?.source === "computed" || quote.source === "computed")
+                      ? "text-[#B388FF] border-[#B388FF] bg-[rgba(179,136,255,0.1)]"
+                      : "text-[#FFB800] border-[#FFB800] bg-[rgba(255,184,0,0.1)]"
+                }`}
+              >
+                {(liveTick?.source === "realtime" || quote.source === "realtime") ? "Real-time" : (liveTick?.source === "computed" || quote.source === "computed") ? "Computed" : "Delayed"}
+              </span>
+            )}
           </span>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">

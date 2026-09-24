@@ -12,6 +12,6 @@ export type SupportedChartTypes =
   
 export interface ChartConfig {
     type: SupportedChartTypes;
-    data: any[];
+    data: unknown[];
 }
 

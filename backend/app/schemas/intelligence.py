@@ -53,13 +53,17 @@ class RegimeDetails(BaseModel):
     transition_probs: dict[str, float]
 
 
+class ModelUnavailable(BaseModel):
+    status: Literal["UNAVAILABLE", "UNTRAINED"]
+    reason: str
+
 class SignalResponse(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
 
     symbol: str
     timestamp: datetime
     ensemble: EnsembleSignal
-    models: dict[str, TFTSignal | HMMGarchSignal | GNNSignal | LSTMAttnSignal | XGBoostSignal]
+    models: dict[str, TFTSignal | HMMGarchSignal | GNNSignal | LSTMAttnSignal | XGBoostSignal | ModelUnavailable]
     model_weights: dict[str, float]
     regime: RegimeDetails
     # True when no trained model could be loaded and every field above is a

@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.database.connection import Base
-from app.models.user import User
+from app.models.identity import User
 from app.repositories.user import UserRepository
 
 pytestmark = pytest.mark.anyio
