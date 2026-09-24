@@ -1,14 +1,17 @@
 /** @type {import('next').NextConfig} */
+const createNextIntlPlugin = require('next-intl/plugin');
+const withNextIntl = createNextIntlPlugin('./src/i18n.ts');
+
 function normalizeApiBase(url) {
   const candidate = (url || "http://localhost:8000").replace(/\/+$/, "");
   return candidate.replace(/\/api\/v1\/?$/i, "");
 }
 
 const nextConfig = {
-  reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
+  reactStrictMode: true,
   transpilePackages: ["@neuroquant/ui", "@neuroquant/types", "react-resizable-panels"],
   images: {
     remotePatterns: [
@@ -51,8 +54,6 @@ const nextConfig = {
         destination: `${apiBase}/api/v1/:path*`,
       },
       {
-        // Legacy `quantedge_router` endpoints (e.g. /api/zones/:symbol) are mounted
-        // on the backend without the /api/v1 prefix — proxy those too.
         source: "/api/:path((?!v1/).*)",
         destination: `${apiBase}/api/:path*`,
       },
@@ -60,4 +61,4 @@ const nextConfig = {
   },
 };
 
-module.exports = nextConfig;
+module.exports = withNextIntl(nextConfig);

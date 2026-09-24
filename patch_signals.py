@@ -1,45 +1,7 @@
+with open('apps/web/src/components/terminal/panes/SignalsTab.tsx', 'r', encoding='utf-8') as f:
+    text = f.read()
 import re
-
-with open('backend/app/api/v1/signals.py', 'r') as f:
-    content = f.read()
-
-content = content.replace('from app.services.market_data_service import MarketDataService', '')
-content = re.sub(
-    r'hist = await MarketDataService\.get_history\(symbol, interval="1d", period="1y"\)',
-    'hist = {"bars": [{"close": 100} for _ in range(250)]}',
-    content,
-    flags=re.DOTALL
-)
-
-with open('backend/app/api/v1/signals.py', 'w') as f:
-    f.write(content)
-
-
-with open('backend/app/services/intelligence_service.py', 'r') as f:
-    content = f.read()
-
-content = content.replace('from app.services.data_ingestion.provider_manager import provider_manager', '')
-content = re.sub(
-    r'bars = asyncio\.run\(provider_manager\.get_ohlcv\(symbol, "1d", start_date, end_date\)\)',
-    'bars = []',
-    content,
-    flags=re.DOTALL
-)
-
-with open('backend/app/services/intelligence_service.py', 'w') as f:
-    f.write(content)
-
-
-with open('backend/app/services/prediction_engine.py', 'r') as f:
-    content = f.read()
-
-content = content.replace('from app.services.data_ingestion.provider_manager import provider_manager', '')
-content = re.sub(
-    r'bars = await provider_manager\.get_ohlcv\(symbol, "1d", start_date, end_date\)',
-    'bars = []',
-    content,
-    flags=re.DOTALL
-)
-
-with open('backend/app/services/prediction_engine.py', 'w') as f:
-    f.write(content)
+text = re.sub(r'₹\{pt\.predicted_price\.toLocaleString\([^)]*\)\}', r'{typeof pt.predicted_price === "number" ? `₹${pt.predicted_price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "N/A"}', text)
+with open('apps/web/src/components/terminal/panes/SignalsTab.tsx', 'w', encoding='utf-8') as f:
+    f.write(text)
+print("Patched SignalsTab")

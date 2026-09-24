@@ -21,9 +21,10 @@ import {
 } from "lucide-react";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
+import { OrgSwitcher } from "./org-switcher";
 
 const navItems = [
-  { label: "Terminal", href: "/terminal", icon: LayoutDashboard },
+  { label: "Terminal", href: "/", icon: LayoutDashboard },
   { label: "Markets", href: "/markets", icon: TrendingUp },
   { label: "Research", href: "/research", icon: BookOpen },
   { label: "Signals", href: "/signals", icon: Activity },
@@ -61,12 +62,14 @@ export function Sidebar() {
         )}
       </div>
 
+      <OrgSwitcher collapsed={sidebarCollapsed} />
+
       {/* Navigation */}
       <nav className="flex-1 space-y-1 px-2 py-4">
         {navItems.map((item) => {
           const isActive =
-            item.href === "/terminal"
-              ? pathname === "/terminal"
+            item.href === "/"
+              ? pathname === "/"
               : pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
 

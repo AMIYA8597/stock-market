@@ -25,25 +25,13 @@ import type {
   UniverseResponse,
 } from "@neuroquant/types";
 import { getApiBaseUrl } from "@/lib/runtime-config";
+import { createClient } from './supabase/client';
+import { z } from "zod";
 
 const API_BASE = getApiBaseUrl();
 const API_PREFIX = "/api/v1";
-const ACCESS_TOKEN_KEY = "nq_access_token";
-const REFRESH_TOKEN_KEY = "nq_refresh_token";
 
 type UnknownRecord = Record<string, unknown>;
-
-function parseNumber(value: unknown, fallback = 0): number {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : fallback;
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-  return fallback;
-}
-
 
 export class ApiError extends Error {
   constructor(
@@ -58,81 +46,15 @@ export class ApiError extends Error {
   }
 }
 
-let refreshPromise: Promise<string | null> | null = null;
-
-function getAccessToken(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  return localStorage.getItem(ACCESS_TOKEN_KEY);
-}
-
-function getRefreshToken(): string | null {
-  if (typeof window === "undefined") {
-    return null;
-  }
-  return localStorage.getItem(REFRESH_TOKEN_KEY);
-}
-
-export function setAuthTokens(tokens: { access_token: string; refresh_token: string }): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
-  localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
-}
-
-export function clearAuthTokens(): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-  localStorage.removeItem(ACCESS_TOKEN_KEY);
-  localStorage.removeItem(REFRESH_TOKEN_KEY);
-}
-
-async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = getRefreshToken();
-  if (!refreshToken) {
-    clearAuthTokens();
-    return null;
-  }
-
-  if (!refreshPromise) {
-    refreshPromise = (async () => {
-      const url = `${API_BASE}${API_PREFIX}/auth/refresh`;
-      const response = await fetch(url, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      });
-
-      if (!response.ok) {
-        clearAuthTokens();
-        return null;
-      }
-
-      const data = (await response.json()) as TokenResponse;
-      setAuthTokens({
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
-      });
-      return data.access_token;
-    })().finally(() => {
-      refreshPromise = null;
-    });
-  }
-
-  return refreshPromise;
-}
-
 async function fetchApi<T>(
   path: string,
-  options: RequestInit = {},
-  retryCount = 0
+  options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${API_PREFIX}${path}`;
-  const token = getAccessToken();
+  
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -146,17 +68,9 @@ async function fetchApi<T>(
   const response = await fetch(url, {
     ...options,
     headers,
-    credentials: "include",
   });
 
   if (!response.ok) {
-    if (response.status === 401 && retryCount < 1) {
-      const nextToken = await refreshAccessToken();
-      if (nextToken) {
-        return fetchApi<T>(path, options, retryCount + 1);
-      }
-    }
-
     const body = await response.json().catch(() => null);
     throw new ApiError(response.status, response.statusText, body);
   }
@@ -168,51 +82,8 @@ async function fetchApi<T>(
 // ─── Auth ────────────────────────────────────────────
 
 export const authApi = {
-  register(data: {
-    email: string;
-    password: string;
-    full_name: string;
-  }): Promise<{ id: string; email: string; full_name: string; created_at: string }> {
-    return fetchApi("/auth/register", {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
-  },
-
-  login(email: string, password: string): Promise<TokenResponse> {
-    return fetchApi("/auth/login", {
-      method: "POST",
-      body: JSON.stringify({ email, password }),
-    });
-  },
-
-  refreshToken(refresh_token: string): Promise<TokenResponse> {
-    return fetchApi("/auth/refresh", {
-      method: "POST",
-      body: JSON.stringify({ refresh_token }),
-    });
-  },
-
   getProfile(): Promise<UserProfile> {
     return fetchApi("/users/profile");
-  },
-
-  logout(): Promise<void> {
-    return fetchApi("/auth/logout", { method: "POST" });
-  },
-
-  forgotPassword(email: string): Promise<{ message: string }> {
-    return fetchApi("/auth/forgot-password", {
-      method: "POST",
-      body: JSON.stringify({ email }),
-    });
-  },
-
-  resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
-    return fetchApi("/auth/reset-password", {
-      method: "POST",
-      body: JSON.stringify({ token, new_password: newPassword }),
-    });
   },
 };
 
@@ -326,24 +197,31 @@ const normalizeInterval = (interval: string): string => {
   return map[upper] ?? interval.toLowerCase();
 };
 
+const numberOrNull = z.preprocess((val) => {
+  if (typeof val === 'number') return val;
+  if (typeof val === 'string' && val.trim() !== '') {
+    const parsed = Number(val);
+    if (!isNaN(parsed)) return parsed;
+  }
+  return null;
+}, z.number().nullable());
+
 const mapQuote = (raw: UnknownRecord): Quote => {
-  const price = parseNumber(raw.price);
-  const change = parseNumber(raw.change);
-  const changePct = parseNumber(
-    raw.change_percent !== undefined ? raw.change_percent : raw.change_pct
-  );
+  const price = numberOrNull.parse(raw.price);
+  const change = numberOrNull.parse(raw.change);
+  const changePct = numberOrNull.parse(raw.change_percent !== undefined ? raw.change_percent : raw.change_pct);
   const symbol = typeof raw.symbol === "string" ? raw.symbol : typeof raw.ticker === "string" ? raw.ticker : "UNKNOWN";
 
   return {
     symbol,
-    price,
-    change,
-    change_percent: changePct,
-    volume: parseNumber(raw.volume),
-    high: parseNumber(raw.high !== undefined ? raw.high : raw.high_52w, price),
-    low: parseNumber(raw.low !== undefined ? raw.low : raw.low_52w, price),
-    open: parseNumber(raw.open, price - change),
-    previous_close: parseNumber(raw.previous_close, price - change),
+    price: price as any,
+    change: change as any,
+    change_percent: changePct as any,
+    volume: numberOrNull.parse(raw.volume) as any,
+    high: numberOrNull.parse(raw.high !== undefined ? raw.high : raw.high_52w) ?? (price as any),
+    low: numberOrNull.parse(raw.low !== undefined ? raw.low : raw.low_52w) ?? (price as any),
+    open: numberOrNull.parse(raw.open) ?? ((price && change) ? price - change : null) as any,
+    previous_close: numberOrNull.parse(raw.previous_close) ?? ((price && change) ? price - change : null) as any,
     timestamp: typeof raw.timestamp === "string" ? raw.timestamp : new Date().toISOString(),
     source: typeof raw.source === "string" ? raw.source : undefined,
   };
@@ -374,36 +252,33 @@ const mapHistory = (raw: UnknownRecord): HistoryResponse => {
     return {
       timestamp,
       _tsNum: tsNum, // temporary numeric value for sorting and deduplication
-      open: parseNumber(bar.open),
-      high: parseNumber(bar.high),
-      low: parseNumber(bar.low),
-      close: parseNumber(bar.close),
-      volume: parseNumber(bar.volume),
-      adjusted_close:
-        bar.adjusted_close !== undefined && bar.adjusted_close !== null
-          ? parseNumber(bar.adjusted_close)
-          : undefined,
+      open: numberOrNull.parse(bar.open) as any,
+      high: numberOrNull.parse(bar.high) as any,
+      low: numberOrNull.parse(bar.low) as any,
+      close: numberOrNull.parse(bar.close) as any,
+      volume: numberOrNull.parse(bar.volume) as any,
+      adjusted_close: bar.adjusted_close !== undefined && bar.adjusted_close !== null
+        ? numberOrNull.parse(bar.adjusted_close) as any
+        : undefined,
     };
   }).filter((b) => b !== null);
 
   // Sort ascending by time
-  validBars.sort((a, b) => a._tsNum - b._tsNum);
+  validBars.sort((a, b) => (a as any)._tsNum - (b as any)._tsNum);
 
   // De-duplicate exactly identical timestamps (last one wins)
   const dedupedMap = new Map();
   for (const b of validBars) {
-    dedupedMap.set(b._tsNum, b);
+    dedupedMap.set((b as any)._tsNum, b);
   }
   
-  const finalBars = Array.from(dedupedMap.values()).map(({ _tsNum, ...rest }) => rest);
-
-  console.log(`[HOP 4 api-client] count_out=${finalBars.length}, first=${finalBars[0]?.timestamp}, last=${finalBars[finalBars.length - 1]?.timestamp}`);
+  const finalBars = Array.from(dedupedMap.values()).map(({ _tsNum, ...rest }: any) => rest);
 
   return {
     symbol: typeof raw.symbol === "string" ? raw.symbol : "UNKNOWN",
     interval: typeof raw.interval === "string" ? raw.interval : "1d",
     bars: finalBars,
-    count: parseNumber(raw.count, finalBars.length),
+    count: (numberOrNull.parse(raw.count) ?? finalBars.length) as any,
     source: typeof raw.source === "string" ? raw.source : undefined,
   };
 };
@@ -413,6 +288,12 @@ export const marketApi = {
     return fetchApi<UnknownRecord>(`/market/quote/${encodeURIComponent(symbol)}`).then(
       mapQuote
     );
+  },
+  getZones(symbol: string): Promise<any> {
+    return fetchApi(`/zones/${encodeURIComponent(symbol)}`);
+  },
+  getPatterns(symbol: string): Promise<any> {
+    return fetchApi(`/market/patterns/${encodeURIComponent(symbol)}`);
   },
 
   getHistory(
@@ -492,13 +373,13 @@ export const screenerApi = {
               ? item.symbol
               : "UNKNOWN";
 
-        const price = parseNumber(item.price);
-        const changePercent = parseNumber(item.change_pct ?? item.change_percent ?? item.sharpe_21d);
-        const volume = parseNumber(item.volume ?? item.volume_ratio);
-        const marketCap = item.market_cap !== undefined && item.market_cap !== null ? parseNumber(item.market_cap) : null;
-        const rsi = item.rsi !== undefined && item.rsi !== null ? parseNumber(item.rsi) : null;
+        const price = numberOrNull.parse(item.price);
+        const changePercent = numberOrNull.parse(item.change_pct ?? item.change_percent ?? item.sharpe_21d);
+        const volume = numberOrNull.parse(item.volume ?? item.volume_ratio);
+        const marketCap = numberOrNull.parse(item.market_cap);
+        const rsi = numberOrNull.parse(item.rsi);
         const mlSignal = typeof item.signal_direction === "string" ? item.signal_direction : typeof item.signal === "string" ? item.signal : null;
-        const mlConfidence = item.signal_confidence !== undefined && item.signal_confidence !== null ? parseNumber(item.signal_confidence) : item.ml_confidence !== undefined && item.ml_confidence !== null ? parseNumber(item.ml_confidence) : null;
+        const mlConfidence = numberOrNull.parse(item.signal_confidence ?? item.ml_confidence);
 
         return {
           symbol,
@@ -506,13 +387,13 @@ export const screenerApi = {
           asset_class: typeof item.asset_type === "string" ? item.asset_type : "equity",
           exchange: typeof item.exchange === "string" ? item.exchange : "NSE",
           sector: typeof item.sector === "string" ? item.sector : null,
-          price,
-          change_percent: changePercent,
-          volume,
-          market_cap: marketCap,
-          rsi,
+          price: price as any,
+          change_percent: changePercent as any,
+          volume: volume as any,
+          market_cap: marketCap as any,
+          rsi: rsi as any,
           ml_signal: mlSignal,
-          ml_confidence: mlConfidence,
+          ml_confidence: mlConfidence as any,
         };
       });
 
@@ -864,4 +745,3 @@ export const watchlistApi = {
     });
   },
 };
-

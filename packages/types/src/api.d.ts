@@ -44,28 +44,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/debug/trigger-alert-check": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Debug Trigger Alert Check
-         * @description Debug endpoint to manually trigger an alert engine cycle.
-         *     Returns the list of alerts that were broadcast.
-         */
-        get: operations["debug_trigger_alert_check_api_v1_debug_trigger_alert_check_get"];
-        put?: never;
-        /** Trigger Alert Check */
-        post: operations["trigger_alert_check_api_v1_debug_trigger_alert_check_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -114,23 +92,6 @@ export interface paths {
         put?: never;
         /** Login */
         post: operations["login_api_v1_auth_login_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/token": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Token Alias */
-        post: operations["token_alias_api_v1_auth_token_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -188,40 +149,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/auth/forgot-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Forgot Password */
-        post: operations["forgot_password_api_v1_auth_forgot_password_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/reset-password": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Reset Password */
-        post: operations["reset_password_api_v1_auth_reset_password_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/users/profile": {
         parameters: {
             query?: never;
@@ -238,6 +165,75 @@ export interface paths {
         head?: never;
         /** Update Profile */
         patch: operations["update_profile_api_v1_users_profile_patch"];
+        trace?: never;
+    };
+    "/api/v1/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List User Organizations */
+        get: operations["list_user_organizations_api_v1_organizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Members */
+        get: operations["list_members_api_v1_organizations__org_id__members_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite Member */
+        post: operations["invite_member_api_v1_organizations__org_id__invitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{org_id}/api-keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Api Keys */
+        get: operations["list_api_keys_api_v1_organizations__org_id__api_keys_get"];
+        put?: never;
+        /** Create Api Key */
+        post: operations["create_api_key_api_v1_organizations__org_id__api_keys_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/admin/users": {
@@ -285,6 +281,23 @@ export interface paths {
         get: operations["content_control_api_v1_admin_content_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ingest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Trigger Ingestion */
+        post: operations["trigger_ingestion_api_v1_admin_ingest_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -379,91 +392,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/payments/balance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Wallet Balance */
-        get: operations["wallet_balance_api_v1_payments_balance_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/payments/intents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Create Intent */
-        post: operations["create_intent_api_v1_payments_intents_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/payments/confirm": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Confirm Intent */
-        post: operations["confirm_intent_api_v1_payments_confirm_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/payments/subscribe": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Subscribe To Plan */
-        post: operations["subscribe_to_plan_api_v1_payments_subscribe_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/payments/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Payment History */
-        get: operations["payment_history_api_v1_payments_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/payments/subscription": {
         parameters: {
             query?: never;
@@ -475,6 +403,85 @@ export interface paths {
         get: operations["get_subscription_api_v1_payments_subscription_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Razorpay Webhook */
+        post: operations["razorpay_webhook_api_v1_payments_webhook_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get user watchlist
+         * @description Retrieve the current user's watchlist for a specific tab.
+         */
+        get: operations["get_watchlist_api_v1_watchlist_get"];
+        put?: never;
+        /**
+         * Add symbol to watchlist
+         * @description Add a symbol to the current user's watchlist for a specific tab.
+         */
+        post: operations["add_to_watchlist_api_v1_watchlist_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watchlist/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove symbol from watchlist
+         * @description Remove a symbol from the current user's watchlist tab.
+         */
+        delete: operations["remove_from_watchlist_api_v1_watchlist__symbol__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Alerts */
+        get: operations["list_alerts_api_v1_alerts_get"];
+        put?: never;
+        /** Create Alert */
+        post: operations["create_alert_api_v1_alerts_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -610,10 +617,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Market Universe
-         * @description Return the list of core symbols supported by the platform.
-         */
+        /** Get Market Universe */
         get: operations["get_market_universe_api_v1_market_universe_get"];
         put?: never;
         post?: never;
@@ -630,10 +634,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Market Status
-         * @description Return the real IST market hours status.
-         */
+        /** Get Market Status */
         get: operations["get_market_status_api_v1_market_status_get"];
         put?: never;
         post?: never;
@@ -650,11 +651,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Providers Health
-         * @description Return health status of all data providers.
-         */
+        /** Get Providers Health */
         get: operations["get_providers_health_api_v1_market_providers_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/market/global-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Global Context */
+        get: operations["get_global_context_api_v1_market_global_context_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -686,18 +701,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/signals/bulk": {
+    "/api/v1/regime/{symbol}/current": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Bulk Signals
-         * @description Return parallel signal snapshots for up to 50 symbols.
-         */
-        get: operations["get_bulk_signals_api_v1_signals_bulk_get"];
+        /** Get Regime Current */
+        get: operations["get_regime_current_api_v1_regime__symbol__current_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -706,78 +718,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/signals/{symbol}": {
+    "/api/v1/regime/{symbol}/history": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Signal
-         * @description Return the latest ensemble and model-level signal for a symbol.
-         */
-        get: operations["get_signal_api_v1_signals__symbol__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/signals/history/{symbol}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Signal History
-         * @description Return historical signal series and realized returns for model evaluation.
-         */
-        get: operations["get_signal_history_api_v1_signals_history__symbol__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/regime/current": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Regime Current
-         * @description Return current regime state, transition matrix, and conditional volatility.
-         */
-        get: operations["get_regime_current_api_v1_regime_current_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/regime/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Regime History
-         * @description Return daily regime labels and probabilities for the selected history window.
-         */
-        get: operations["get_regime_history_api_v1_regime_history_get"];
+        /** Get Regime History */
+        get: operations["get_regime_history_api_v1_regime__symbol__history_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -798,6 +747,26 @@ export interface paths {
          * @description Return aggregate per-regime summary statistics.
          */
         get: operations["get_regime_statistics_api_v1_regime_statistics_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/news/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get News For Symbol
+         * @description Get scraped news and sentiment for a specific symbol.
+         */
+        get: operations["get_news_for_symbol_api_v1_news__symbol__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -934,23 +903,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/portfolio/{portfolio_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get portfolio by ID */
-        get: operations["get_portfolio_api_v1_portfolio__portfolio_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/portfolio/holdings": {
         parameters: {
             query?: never;
@@ -963,6 +915,26 @@ export interface paths {
          * @description Return a holdings snapshot for the authenticated user.
          */
         get: operations["get_holdings_api_v1_portfolio_holdings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/performance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Time-series portfolio P&L vs benchmark
+         * @description Return time-series portfolio performance based on live data and current holdings.
+         */
+        get: operations["get_performance_api_v1_portfolio_performance_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -991,26 +963,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/portfolio/performance": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Time-series portfolio P&L vs benchmark
-         * @description Return time-series portfolio performance based on live data and current holdings.
-         */
-        get: operations["get_performance_api_v1_portfolio_performance_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/portfolio/risk-metrics": {
         parameters: {
             query?: never;
@@ -1020,7 +972,7 @@ export interface paths {
         };
         /**
          * Portfolio risk metrics
-         * @description Return portfolio risk metrics for dashboard and monitoring.
+         * @description Return portfolio risk metrics based on actual historical performance.
          */
         get: operations["get_risk_metrics_api_v1_portfolio_risk_metrics_get"];
         put?: never;
@@ -1045,6 +997,23 @@ export interface paths {
          * @description Return normalized optimization output for requested universe and method.
          */
         post: operations["post_optimize_api_v1_portfolio_optimize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/portfolio/{portfolio_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get portfolio by ID */
+        get: operations["get_portfolio_api_v1_portfolio__portfolio_id__get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1153,150 +1122,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trading/mode": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Trading Mode
-         * @description Returns the current trading session mode and connectivity state.
-         */
-        get: operations["get_trading_mode_api_v1_trading_mode_get"];
-        put?: never;
-        /**
-         * Set Trading Mode
-         * @description Toggles trading session mode between PAPER and LIVE.
-         */
-        post: operations["set_trading_mode_api_v1_trading_mode_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trading/order": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Submit Order
-         * @description Places a simulated or real trade order depending on active trading mode.
-         */
-        post: operations["submit_order_api_v1_trading_order_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trading/kill-switch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Emergency Kill Switch
-         * @description Emergency Kill Switch: reverts trading mode to PAPER and cancels open orders.
-         */
-        post: operations["emergency_kill_switch_api_v1_trading_kill_switch_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trading/audit-log": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Audit Log
-         * @description Reads the trailing rows of the audit log file d:\work\stock-market\backend\logs\trading_audit.log.
-         */
-        get: operations["get_audit_log_api_v1_trading_audit_log_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/upstox/login-url": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Upstox Login Url
-         * @description Exposes the authorization dialog link for Upstox developer integrations.
-         */
-        get: operations["get_upstox_login_url_api_v1_auth_upstox_login_url_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/upstox/callback": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Upstox Oauth Callback
-         * @description OAuth redirect handler callback from Upstox API code consent dialog.
-         */
-        get: operations["upstox_oauth_callback_api_v1_auth_upstox_callback_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/auth/upstox/status": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Upstox Auth Status
-         * @description Returns profile and validity details for the active Upstox authentication.
-         */
-        get: operations["get_upstox_auth_status_api_v1_auth_upstox_status_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/screener/run": {
         parameters: {
             query?: never;
@@ -1329,59 +1154,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
-        trace?: never;
-    };
-    "/api/v1/alerts/history": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Alerts History */
-        get: operations["get_alerts_history_api_v1_alerts_history_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/alerts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Alerts */
-        get: operations["get_alerts_api_v1_alerts_get"];
-        put?: never;
-        /** Post Alert */
-        post: operations["post_alert_api_v1_alerts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/alerts/{alert_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Alert */
-        delete: operations["delete_alert_api_v1_alerts__alert_id__delete"];
-        options?: never;
-        head?: never;
-        /** Patch Alert */
-        patch: operations["patch_alert_api_v1_alerts__alert_id__patch"];
         trace?: never;
     };
     "/api/v1/monitor/model-accuracy": {
@@ -1484,7 +1256,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/predictions/{symbol}": {
+    "/api/v1/signals/bulk": {
         parameters: {
             query?: never;
             header?: never;
@@ -1492,9 +1264,106 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Prediction
-         * @description Prediction endpoints are stubbed until Part 3.
+         * Get Bulk Signals
+         * @description Return parallel signal snapshots for up to 50 symbols.
          */
+        get: operations["get_bulk_signals_api_v1_signals_bulk_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/signals/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signal
+         * @description Return the latest ensemble and model-level signal for a symbol.
+         */
+        get: operations["get_signal_api_v1_signals__symbol__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/signals/history/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signal History
+         * @description Return historical signal series and realized returns for model evaluation.
+         */
+        get: operations["get_signal_history_api_v1_signals_history__symbol__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regime/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Regime Current
+         * @description Return current regime state, transition matrix, and conditional volatility.
+         */
+        get: operations["get_regime_current_api_v1_regime_current_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/regime/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Regime History
+         * @description Return daily regime labels and probabilities for the selected history window.
+         */
+        get: operations["get_regime_history_api_v1_regime_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prediction */
         get: operations["get_prediction_api_v1_predictions__symbol__get"];
         put?: never;
         post?: never;
@@ -1515,7 +1384,11 @@ export interface paths {
         put?: never;
         /**
          * Generate Forecast
-         * @description Prediction endpoints are stubbed until Part 3.
+         * @description Multi-horizon SARIMAX price forecast — real statistical forecasting on
+         *     real OHLCV history, not a stub. Each horizon reports the actual data
+         *     window it was fit on and an honest confidence label; horizons under 1h
+         *     are only ever backed by ~60 days of intraday data (a free-data-source
+         *     limit, not a modeling choice) and are labeled accordingly.
          */
         post: operations["generate_forecast_api_v1_predictions_forecast_post"];
         delete?: never;
@@ -1531,10 +1404,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Latest Forecast
-         * @description Prediction endpoints are stubbed until Part 3.
-         */
+        /** Get Latest Forecast */
         get: operations["get_latest_forecast_api_v1_predictions_latest__symbol__get"];
         put?: never;
         post?: never;
@@ -1551,11 +1421,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Ensemble Data
-         * @description Prediction endpoints are stubbed until Part 3.
-         */
+        /** Get Ensemble Data */
         get: operations["get_ensemble_data_api_v1_predictions_ensemble__symbol__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/predictions/history/{symbol}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Prediction History */
+        get: operations["get_prediction_history_api_v1_predictions_history__symbol__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1608,46 +1492,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ai/train": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Train Endpoint
-         * @description Launch model training. Returns 503 if engine not available.
-         */
-        post: operations["train_endpoint_api_v1_ai_train_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ai/predict": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Predict Endpoint
-         * @description Run inference. Returns 503 if model not trained.
-         */
-        post: operations["predict_endpoint_api_v1_ai_predict_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/version": {
         parameters: {
             query?: never;
@@ -1665,18 +1509,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ohlc/{symbol}": {
+    "/liveness": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Ohlc
-         * @description Retrieve historical candle bars (OHLCV) for a given symbol and interval.
-         */
-        get: operations["get_ohlc_api_ohlc__symbol__get"];
+        /** Liveness */
+        get: operations["liveness_liveness_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1685,138 +1526,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/indicators/{symbol}": {
+    "/readiness": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get Indicators
-         * @description Compute and return technical indicators for the given symbol.
-         */
-        get: operations["get_indicators_api_indicators__symbol__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/zones/{symbol}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Zones
-         * @description Return detected support/resistance zones (DBSCAN baseline vs BiLSTM sequence labeler).
-         */
-        get: operations["get_zones_api_zones__symbol__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/signals/{symbol}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Signal Quantedge
-         * @description Retrieve ensemble prediction signal, confidence, regime, and plain reasoning rationale.
-         */
-        get: operations["get_signal_quantedge_api_signals__symbol__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/regime/{symbol}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Regime
-         * @description Get the active HMM regime detection state, probabilities, and transition parameters.
-         */
-        get: operations["get_regime_api_regime__symbol__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/backtest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Backtest Report
-         * @description Run walk-forward simulation backtest on symbol and return analytical metrics.
-         */
-        get: operations["get_backtest_report_api_backtest_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/paper-trade": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Post Paper Trade
-         * @description Submit simulated paper order.
-         */
-        post: operations["post_paper_trade_api_paper_trade_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/paper-trade/portfolio": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Paper Portfolio
-         * @description Get active positions, cash holdings, and mark-to-market P&L summary.
-         */
-        get: operations["get_paper_portfolio_api_paper_trade_portfolio_get"];
+        /** Readiness */
+        get: operations["readiness_readiness_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1846,114 +1564,21 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        /** AdminUserItem */
-        AdminUserItem: {
-            /** Id */
-            id: string;
-            /** Email */
-            email: string;
-            /** Full Name */
-            full_name: string | null;
-            /** Role */
-            role: string;
-            /** Is Active */
-            is_active: boolean;
-        };
-        /**
-         * AlertCreateRequest
-         * @description POST /alerts request body.
-         */
-        AlertCreateRequest: {
+        /** AlertCreate */
+        AlertCreate: {
             /** Symbol */
-            symbol?: string | null;
-            /**
-             * Alert Type
-             * @description PRICE_ABOVE|PRICE_BELOW|RSI_OB|MACD_CROSS|SIGNAL_CHANGE|REGIME_CHANGE
-             */
-            alert_type: string;
-            /** Threshold */
-            threshold?: number | string | null;
-            /** Name */
-            name: string;
-            /**
-             * Enabled
-             * @default true
-             */
-            enabled: boolean;
-        };
-        /**
-         * AlertData
-         * @description Alert object.
-         */
-        AlertData: {
-            /** Id */
-            id: string;
-            /** Symbol */
-            symbol?: string | null;
+            symbol: string;
             /** Alert Type */
             alert_type: string;
             /** Threshold */
-            threshold?: string | null;
+            threshold: number;
+        };
+        /** ApiKeyCreate */
+        ApiKeyCreate: {
             /** Name */
             name: string;
-            /** Enabled */
-            enabled: boolean;
-            /** Is Triggered */
-            is_triggered: boolean;
-            /** Triggered At */
-            triggered_at?: string | null;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-        };
-        /**
-         * AlertDeleteResponse
-         * @description DELETE /alerts/{id} response.
-         */
-        AlertDeleteResponse: {
-            /** Id */
-            id: string;
-            /**
-             * Deleted At
-             * Format: date-time
-             */
-            deleted_at: string;
-        };
-        /**
-         * AlertListResponse
-         * @description GET /alerts response.
-         */
-        AlertListResponse: {
-            /** Alerts */
-            alerts: components["schemas"]["AlertData"][];
-            /** Total Count */
-            total_count: number;
-        };
-        /**
-         * AlertUpdateRequest
-         * @description PATCH /alerts/{id} request body.
-         */
-        AlertUpdateRequest: {
-            /** Name */
-            name?: string | null;
-            /** Threshold */
-            threshold?: number | string | null;
-            /** Enabled */
-            enabled?: boolean | null;
-        };
-        /**
-         * AlertUpdateResponse
-         * @description PATCH /alerts/{id} response.
-         */
-        AlertUpdateResponse: {
-            alert: components["schemas"]["AlertData"];
+            /** Scopes */
+            scopes: string;
         };
         /**
          * AttentionResponse
@@ -2012,10 +1637,32 @@ export interface components {
             /** Weight */
             weight: number;
         };
-        /** AuthMessage */
-        AuthMessage: {
-            /** Message */
-            message: string;
+        /** AuthLogin */
+        AuthLogin: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /** AuthRefresh */
+        AuthRefresh: {
+            /** Refresh Token */
+            refresh_token: string;
+        };
+        /** AuthRegister */
+        AuthRegister: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /** Password */
+            password: string;
+            /** Full Name */
+            full_name?: string | null;
         };
         /**
          * BacktestMetrics
@@ -2227,25 +1874,6 @@ export interface components {
             /** Status */
             status?: ("draft" | "published") | null;
         };
-        /**
-         * BulkSignalResponse
-         * @description GET /signals/bulk response.
-         */
-        BulkSignalResponse: {
-            /** Symbols */
-            symbols: string[];
-            /** Signals */
-            signals: components["schemas"]["app__schemas__signal__SignalResponse"][];
-            /**
-             * Generated At
-             * Format: date-time
-             */
-            generated_at: string;
-            /** Total Symbols */
-            total_symbols: number;
-            /** Processed Symbols */
-            processed_symbols: number;
-        };
         /** CorrelationEdge */
         CorrelationEdge: {
             /** Source */
@@ -2453,23 +2081,6 @@ export interface components {
                 [key: string]: string;
             };
         };
-        /** EnsembleSignal */
-        EnsembleSignal: {
-            /**
-             * Signal
-             * @enum {string}
-             */
-            signal: "STRONG_BUY" | "BUY" | "NEUTRAL" | "SELL" | "STRONG_SELL";
-            /** Confidence */
-            confidence: number;
-            /**
-             * Direction
-             * @enum {string}
-             */
-            direction: "STRONG_BUY" | "BUY" | "NEUTRAL" | "SELL" | "STRONG_SELL";
-            /** Kelly Fraction */
-            kelly_fraction: number;
-        };
         /**
          * EquityCurvePoint
          * @description Single point in equity curve.
@@ -2558,45 +2169,19 @@ export interface components {
             symbol: string;
             /**
              * Horizons
-             * @description Forecast horizons in days
+             * @description Forecast horizon labels: 1m,2m,3m,5m,10m,15m,30m,1h,1d,1w,15d,1mo,1y
              * @default [
-             *       1,
-             *       5,
-             *       30
+             *       "1d",
+             *       "1w",
+             *       "1mo"
              *     ]
              */
-            horizons: number[];
+            horizons: string[];
             /**
              * Models
              * @description Specific models to use. None = all available.
              */
             models?: string[] | null;
-        };
-        /** ForgotPasswordRequest */
-        ForgotPasswordRequest: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-        };
-        /** GNNSignal */
-        GNNSignal: {
-            /** Spillover Risk */
-            spillover_risk: number;
-            /** Embedding Norm */
-            embedding_norm: number;
-            /** Top Correlated Assets */
-            top_correlated_assets: string[];
-        };
-        /** HMMGarchSignal */
-        HMMGarchSignal: {
-            /** Regime Signal */
-            regime_signal: string;
-            /** Vol Forecast 1D */
-            vol_forecast_1d: number;
-            /** Vol Forecast 21D */
-            vol_forecast_21d: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -2740,6 +2325,19 @@ export interface components {
             /** Yfinanceticker */
             yfinanceTicker: string;
         };
+        /** InviteRequest */
+        InviteRequest: {
+            /**
+             * Email
+             * Format: email
+             */
+            email: string;
+            /**
+             * Role
+             * @default VIEWER
+             */
+            role: string;
+        };
         /**
          * JournalCreate
          * @description Schema for creating a trade journal entry.
@@ -2814,22 +2412,20 @@ export interface components {
              */
             created_at: string;
         };
-        /** LSTMAttnSignal */
-        LSTMAttnSignal: {
-            /** Raw Signal */
-            raw_signal: number;
-            /** Attention Peaks */
-            attention_peaks: {
-                [key: string]: number;
-            }[];
-        };
-        /** ModeUpdateSchema */
-        ModeUpdateSchema: {
-            /**
-             * Mode
-             * @description Target trading mode: 'PAPER' or 'LIVE'
-             */
-            mode: string;
+        /** MemberResponse */
+        MemberResponse: {
+            /** Id */
+            id: string;
+            /** User Id */
+            user_id: string;
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
         };
         /** ModelAccuracyItem */
         ModelAccuracyItem: {
@@ -3168,70 +2764,16 @@ export interface components {
              */
             signal_relation: ("AGREEMENT" | "AGAINST" | "INDEPENDENT" | "AUTO") | null;
         };
-        /** OrderSubmitSchema */
-        OrderSubmitSchema: {
-            /**
-             * Symbol
-             * @description Stock or index trading symbol, e.g., 'RELIANCE'
-             */
-            symbol: string;
-            /**
-             * Side
-             * @description Transaction direction: 'BUY' or 'SELL'
-             */
-            side: string;
-            /**
-             * Quantity
-             * @description Number of units to trade
-             */
-            quantity: number;
-            /**
-             * Order Type
-             * @description Execution type: 'MARKET' or 'LIMIT'
-             */
-            order_type: string;
-            /**
-             * Limit Price
-             * @description Price boundary for LIMIT orders
-             */
-            limit_price?: number | null;
-            /**
-             * Product
-             * @description Product selection: 'I' (Intraday) or 'D' (Delivery)
-             * @default I
-             */
-            product: string | null;
-        };
-        /** PaymentConfirmRequest */
-        PaymentConfirmRequest: {
-            /** Intent Id */
-            intent_id: string;
-            /** Razorpay Payment Id */
-            razorpay_payment_id: string;
-            /** Razorpay Order Id */
-            razorpay_order_id?: string | null;
-            /** Razorpay Signature */
-            razorpay_signature?: string | null;
-        };
-        /** PaymentIntentRequest */
-        PaymentIntentRequest: {
-            /** Amount */
-            amount: number | string;
-            /**
-             * Currency
-             * @default INR
-             */
-            currency: string;
-            /**
-             * Method
-             * @default RAZORPAY
-             */
-            method: string;
-            /**
-             * Description
-             * @default Wallet top-up
-             */
-            description: string;
+        /** OrganizationResponse */
+        OrganizationResponse: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slug */
+            slug: string;
+            /** Role */
+            role: string;
         };
         /**
          * PerformancePoint
@@ -3276,25 +2818,6 @@ export interface components {
             /** Excess Return */
             excess_return: string;
         };
-        /** QuantEdgeOrderRequest */
-        QuantEdgeOrderRequest: {
-            /** Symbol */
-            symbol: string;
-            /**
-             * Side
-             * @enum {string}
-             */
-            side: "BUY" | "SELL";
-            /** Quantity */
-            quantity: number;
-            /**
-             * Order Type
-             * @enum {string}
-             */
-            order_type: "MARKET" | "LIMIT";
-            /** Limit Price */
-            limit_price?: number | null;
-        };
         /**
          * QuoteResponse
          * @description GET /market/quote/{symbol} response.
@@ -3320,8 +2843,8 @@ export interface components {
             week_52_high?: string | null;
             /** Week 52 Low */
             week_52_low?: string | null;
-            regime: components["schemas"]["RegimeData"];
-            signal: components["schemas"]["SignalData"];
+            regime?: components["schemas"]["RegimeData"] | null;
+            signal?: components["schemas"]["SignalData"] | null;
             /**
              * Timestamp
              * Format: date-time
@@ -3350,22 +2873,6 @@ export interface components {
              * @description [P(bull), P(bear), P(sideways), P(crisis)]
              */
             probs: number[];
-        };
-        /** RegimeDetails */
-        RegimeDetails: {
-            /**
-             * State
-             * @enum {string}
-             */
-            state: "BULL" | "BEAR" | "SIDEWAYS" | "CRISIS";
-            /** Probs */
-            probs: {
-                [key: string]: number;
-            };
-            /** Transition Probs */
-            transition_probs: {
-                [key: string]: number;
-            };
         };
         /**
          * RegimeHistoryResponse
@@ -3453,13 +2960,6 @@ export interface components {
             most_common_state: string;
             /** Mean Duration All States */
             mean_duration_all_states: string;
-        };
-        /** ResetPasswordConfirm */
-        ResetPasswordConfirm: {
-            /** Token */
-            token: string;
-            /** New Password */
-            new_password: string;
         };
         /**
          * RiskMetricsResponse
@@ -3772,35 +3272,23 @@ export interface components {
              */
             multiple_testing_correction: string;
         };
-        /** SubscribeRequest */
-        SubscribeRequest: {
-            /** Plan Id */
-            plan_id: string;
-        };
-        /** TFTSignal */
-        TFTSignal: {
-            /** P10 */
-            p10: number;
-            /** P50 */
-            p50: number;
-            /** P90 */
-            p90: number;
-            /** Raw Signal */
-            raw_signal: number;
-            /** Horizon Days */
-            horizon_days: number;
-        };
-        /** TokenRefresh */
-        TokenRefresh: {
-            /** Refresh Token */
-            refresh_token: string;
+        /** SubscriptionResponse */
+        SubscriptionResponse: {
+            /** Id */
+            id: string;
+            /** Status */
+            status: string;
+            /** Plan Name */
+            plan_name: string;
+            /** Current Period End */
+            current_period_end: string | null;
         };
         /** TokenResponse */
         TokenResponse: {
             /** Access Token */
             access_token: string;
             /** Refresh Token */
-            refresh_token: string;
+            refresh_token?: string | null;
             /**
              * Token Type
              * @default bearer
@@ -3808,7 +3296,7 @@ export interface components {
             token_type: string;
             /**
              * Expires In
-             * @default 900
+             * @default 3600
              */
             expires_in: number;
         };
@@ -3940,26 +3428,6 @@ export interface components {
             /** Full Name */
             full_name: string;
         };
-        /** UpdateRoleRequest */
-        UpdateRoleRequest: {
-            /** Role */
-            role: string;
-        };
-        /** UserLogin */
-        UserLogin: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Password */
-            password: string;
-            /**
-             * Totp Code
-             * @description 6-digit TOTP code if 2FA is enabled
-             */
-            totp_code?: string | null;
-        };
         /** UserProfileResponse */
         UserProfileResponse: {
             /** Id */
@@ -3968,40 +3436,8 @@ export interface components {
             email: string;
             /** Full Name */
             full_name: string | null;
-            /** Role */
-            role: string;
-            /** Is Active */
-            is_active: boolean;
-        };
-        /** UserRegister */
-        UserRegister: {
-            /**
-             * Email
-             * Format: email
-             */
-            email: string;
-            /** Password */
-            password: string;
-            /** Full Name */
-            full_name: string;
-        };
-        /** UserResponse */
-        UserResponse: {
-            /** Id */
-            id: string;
-            /** Email */
-            email: string;
-            /** Full Name */
-            full_name?: string | null;
-            /** Role */
-            role: string;
-            /** Is Active */
-            is_active: boolean;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
+            /** Status */
+            status: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -4061,6 +3497,26 @@ export interface components {
             /** P Value */
             p_value: string;
         };
+        /** WatchlistAddRequest */
+        WatchlistAddRequest: {
+            /** Symbol */
+            symbol: string;
+            /**
+             * List Id
+             * @default 0
+             */
+            list_id: number;
+        };
+        /** WatchlistResponse */
+        WatchlistResponse: {
+            /** Symbols */
+            symbols: string[];
+            /**
+             * List Id
+             * @default 0
+             */
+            list_id: number;
+        };
         /**
          * WeightsHistoryResponse
          * @description GET /monitor/ensemble-weights-history response.
@@ -4083,15 +3539,6 @@ export interface components {
              * Format: date-time
              */
             end_date: string;
-        };
-        /** XGBoostSignal */
-        XGBoostSignal: {
-            /** Raw Signal */
-            raw_signal: number;
-            /** Top Features */
-            top_features: {
-                [key: string]: number | string;
-            }[];
         };
         /**
          * CounterfactualRequest
@@ -4249,26 +3696,6 @@ export interface components {
             /** Pct Rank */
             pct_rank: number;
         };
-        /** SignalResponse */
-        app__schemas__intelligence__SignalResponse: {
-            /** Symbol */
-            symbol: string;
-            /**
-             * Timestamp
-             * Format: date-time
-             */
-            timestamp: string;
-            ensemble: components["schemas"]["EnsembleSignal"];
-            /** Models */
-            models: {
-                [key: string]: components["schemas"]["TFTSignal"] | components["schemas"]["HMMGarchSignal"] | components["schemas"]["GNNSignal"] | components["schemas"]["LSTMAttnSignal"] | components["schemas"]["XGBoostSignal"];
-            };
-            /** Model Weights */
-            model_weights: {
-                [key: string]: number;
-            };
-            regime: components["schemas"]["RegimeDetails"];
-        };
         /**
          * EnsembleWeightPoint
          * @description Single point in ensemble weights history.
@@ -4357,56 +3784,6 @@ export interface components {
             /** Cond Vol 21D */
             cond_vol_21d?: string | null;
         };
-        /**
-         * SignalResponse
-         * @description GET /signals/{symbol} complete response for classical technical signals.
-         */
-        app__schemas__signal__SignalResponse: {
-            /** Symbol */
-            symbol: string;
-            /**
-             * Timestamp
-             * Format: date-time
-             */
-            timestamp: string;
-            /**
-             * Direction
-             * @description STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL
-             */
-            direction: string;
-            /** Confidence */
-            confidence: number;
-            /** Score */
-            score: number;
-            /**
-             * Breakdown
-             * @description per-indicator contribution list
-             */
-            breakdown: {
-                [key: string]: number;
-            };
-            /**
-             * Patterns
-             * @description detected patterns
-             */
-            patterns?: string[];
-            /**
-             * Stop Loss
-             * @default 0
-             */
-            stop_loss: number;
-            /**
-             * Take Profit
-             * @default 0
-             */
-            take_profit: number;
-            /**
-             * Position Size Pct
-             * @description position-size from account-risk %
-             * @default 0
-             */
-            position_size_pct: number;
-        };
     };
     responses: never;
     parameters: never;
@@ -4456,46 +3833,6 @@ export interface operations {
             };
         };
     };
-    debug_trigger_alert_check_api_v1_debug_trigger_alert_check_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    trigger_alert_check_api_v1_debug_trigger_alert_check_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     readiness_check_api_v1_ready_get: {
         parameters: {
             query?: never;
@@ -4525,7 +3862,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UserRegister"];
+                "application/json": components["schemas"]["AuthRegister"];
             };
         };
         responses: {
@@ -4535,7 +3872,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserResponse"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -4558,40 +3895,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["UserLogin"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TokenResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    token_alias_api_v1_auth_token_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UserLogin"];
+                "application/json": components["schemas"]["AuthLogin"];
             };
         };
         responses: {
@@ -4624,7 +3928,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TokenRefresh"];
+                "application/json": components["schemas"]["AuthRefresh"];
             };
         };
         responses: {
@@ -4681,73 +3985,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["UserResponse"];
-                };
-            };
-        };
-    };
-    forgot_password_api_v1_auth_forgot_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ForgotPasswordRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthMessage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reset_password_api_v1_auth_reset_password_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ResetPasswordConfirm"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthMessage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": unknown;
                 };
             };
         };
@@ -4805,6 +4043,158 @@ export interface operations {
             };
         };
     };
+    list_user_organizations_api_v1_organizations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationResponse"][];
+                };
+            };
+        };
+    };
+    list_members_api_v1_organizations__org_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    invite_member_api_v1_organizations__org_id__invitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_api_keys_api_v1_organizations__org_id__api_keys_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_api_key_api_v1_organizations__org_id__api_keys_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                org_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApiKeyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_users_api_v1_admin_users_get: {
         parameters: {
             query?: never;
@@ -4820,7 +4210,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUserItem"][];
+                    "application/json": unknown;
                 };
             };
         };
@@ -4834,11 +4224,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRoleRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -4846,7 +4232,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUserItem"];
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -4875,11 +4261,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: {
-                            [key: string]: string;
-                        }[];
-                    };
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    trigger_ingestion_api_v1_admin_ingest_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };
@@ -5127,169 +4529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-        };
-    };
-    wallet_balance_api_v1_payments_balance_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    create_intent_api_v1_payments_intents_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PaymentIntentRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    confirm_intent_api_v1_payments_confirm_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PaymentConfirmRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    subscribe_to_plan_api_v1_payments_subscribe_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubscribeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    payment_history_api_v1_payments_history_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": unknown;
                 };
             };
         };
@@ -5309,9 +4549,177 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["SubscriptionResponse"] | null;
+                };
+            };
+        };
+    };
+    razorpay_webhook_api_v1_payments_webhook_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    get_watchlist_api_v1_watchlist_get: {
+        parameters: {
+            query?: {
+                list_id?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_to_watchlist_api_v1_watchlist_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WatchlistAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_from_watchlist_api_v1_watchlist__symbol__delete: {
+        parameters: {
+            query?: {
+                list_id?: number;
+            };
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WatchlistResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_alerts_api_v1_alerts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    create_alert_api_v1_alerts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5580,6 +4988,28 @@ export interface operations {
             };
         };
     };
+    get_global_context_api_v1_market_global_context_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
     get_ws_url_api_v1_ws_url_get: {
         parameters: {
             query?: never;
@@ -5602,39 +5032,7 @@ export interface operations {
             };
         };
     };
-    get_bulk_signals_api_v1_signals_bulk_get: {
-        parameters: {
-            query: {
-                /** @description Comma separated symbols, max 50 */
-                symbols: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__schemas__intelligence__SignalResponse"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_signal_api_v1_signals__symbol__get: {
+    get_regime_current_api_v1_regime__symbol__current_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -5651,7 +5049,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["app__schemas__intelligence__SignalResponse"];
+                    "application/json": components["schemas"]["app__schemas__regime__RegimeCurrentResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5665,10 +5063,9 @@ export interface operations {
             };
         };
     };
-    get_signal_history_api_v1_signals_history__symbol__get: {
+    get_regime_history_api_v1_regime__symbol__history_get: {
         parameters: {
             query?: {
-                model?: string;
                 days?: number;
             };
             header?: never;
@@ -5685,58 +5082,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SignalHistoryPoint"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_regime_current_api_v1_regime_current_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__schemas__intelligence__RegimeCurrentResponse"];
-                };
-            };
-        };
-    };
-    get_regime_history_api_v1_regime_history_get: {
-        parameters: {
-            query?: {
-                days?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["app__schemas__intelligence__RegimeHistoryPoint"][];
+                    "application/json": components["schemas"]["RegimeHistoryResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5766,6 +5112,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegimeStatisticsItem"][];
+                };
+            };
+        };
+    };
+    get_news_for_symbol_api_v1_news__symbol__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5984,37 +5361,6 @@ export interface operations {
             };
         };
     };
-    get_portfolio_api_v1_portfolio__portfolio_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                portfolio_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_holdings_api_v1_portfolio_holdings_get: {
         parameters: {
             query?: never;
@@ -6031,6 +5377,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HoldingsResponse"];
+                };
+            };
+        };
+    };
+    get_performance_api_v1_portfolio_performance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerformanceResponse"];
                 };
             };
         };
@@ -6064,26 +5430,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_performance_api_v1_portfolio_performance_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PerformanceResponse"];
                 };
             };
         };
@@ -6128,6 +5474,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OptimizationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_portfolio_api_v1_portfolio__portfolio_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                portfolio_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -6288,216 +5665,6 @@ export interface operations {
             };
         };
     };
-    get_trading_mode_api_v1_trading_mode_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    set_trading_mode_api_v1_trading_mode_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModeUpdateSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_order_api_v1_trading_order_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["OrderSubmitSchema"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    emergency_kill_switch_api_v1_trading_kill_switch_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_audit_log_api_v1_trading_audit_log_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_upstox_login_url_api_v1_auth_upstox_login_url_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    upstox_oauth_callback_api_v1_auth_upstox_callback_get: {
-        parameters: {
-            query?: {
-                code?: string | null;
-                error?: string | null;
-                error_description?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_upstox_auth_status_api_v1_auth_upstox_status_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
     post_screener_run_api_v1_screener_run_post: {
         parameters: {
             query?: never;
@@ -6547,156 +5714,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScreenerPresetsResponse"];
-                };
-            };
-        };
-    };
-    get_alerts_history_api_v1_alerts_history_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_alerts_api_v1_alerts_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlertListResponse"];
-                };
-            };
-        };
-    };
-    post_alert_api_v1_alerts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AlertCreateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlertData"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_alert_api_v1_alerts__alert_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                alert_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlertDeleteResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    patch_alert_api_v1_alerts__alert_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                alert_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AlertUpdateRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AlertUpdateResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -6822,6 +5839,154 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FactorExposureResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_bulk_signals_api_v1_signals_bulk_get: {
+        parameters: {
+            query: {
+                /** @description Comma separated symbols, max 50 */
+                symbols: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signal_api_v1_signals__symbol__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signal_history_api_v1_signals_history__symbol__get: {
+        parameters: {
+            query?: {
+                model?: string;
+                days?: number;
+            };
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignalHistoryPoint"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_regime_current_api_v1_regime_current_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__schemas__intelligence__RegimeCurrentResponse"];
+                };
+            };
+        };
+    };
+    get_regime_history_api_v1_regime_history_get: {
+        parameters: {
+            query?: {
+                days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["app__schemas__intelligence__RegimeHistoryPoint"][];
                 };
             };
             /** @description Validation Error */
@@ -6961,6 +6126,37 @@ export interface operations {
             };
         };
     };
+    get_prediction_history_api_v1_predictions_history__symbol__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                symbol: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_journals_api_v1_journal_get: {
         parameters: {
             query?: never;
@@ -7043,65 +6239,6 @@ export interface operations {
             };
         };
     };
-    train_endpoint_api_v1_ai_train_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: string;
-                    };
-                };
-            };
-        };
-    };
-    predict_endpoint_api_v1_ai_predict_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_version_api_v1_version_get: {
         parameters: {
             query?: never;
@@ -7124,239 +6261,7 @@ export interface operations {
             };
         };
     };
-    get_ohlc_api_ohlc__symbol__get: {
-        parameters: {
-            query?: {
-                timeframe?: string;
-                period?: string;
-            };
-            header?: never;
-            path: {
-                symbol: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_indicators_api_indicators__symbol__get: {
-        parameters: {
-            query?: {
-                timeframe?: string;
-                period?: string;
-            };
-            header?: never;
-            path: {
-                symbol: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_zones_api_zones__symbol__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                symbol: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_signal_quantedge_api_signals__symbol__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                symbol: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_regime_api_regime__symbol__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                symbol: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_backtest_report_api_backtest_get: {
-        parameters: {
-            query: {
-                /** @description Ticker symbol to backtest */
-                symbol: string;
-                /** @description Backtesting strategy selection */
-                strategy?: string;
-                /** @description Backtesting start date */
-                from?: string;
-                /** @description Backtesting end date */
-                to?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    post_paper_trade_api_paper_trade_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["QuantEdgeOrderRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_paper_portfolio_api_paper_trade_portfolio_get: {
+    liveness_liveness_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -7371,7 +6276,31 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+        };
+    };
+    readiness_readiness_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
                 };
             };
         };

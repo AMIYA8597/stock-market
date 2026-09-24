@@ -319,14 +319,16 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
               </span>
               {tick?.source && (
                 <span
-                  className={`rounded px-1 py-0.2 text-[7px] font-mono font-semibold uppercase tracking-wider shrink-0 ${
-                    tick.source.toLowerCase() === "nse"
-                      ? "bg-[rgba(0,230,118,0.12)] text-[#00E676]"
-                      : "bg-[rgba(255,255,255,0.05)] text-[var(--nq-text-muted)]"
+                  className={`rounded border px-1 py-0.2 text-[7px] font-mono font-semibold uppercase tracking-wider shrink-0 ${
+                    tick.source === "realtime"
+                      ? "bg-[rgba(0,230,118,0.1)] text-[#00E676] border-[#00E676]"
+                      : tick.source === "computed"
+                      ? "bg-[rgba(179,136,255,0.1)] text-[#B388FF] border-[#B388FF]"
+                      : "bg-[rgba(255,184,0,0.1)] text-[#FFB800] border-[#FFB800]"
                   }`}
-                  title={tick.source.toLowerCase() === "nse" ? "NSE live" : `${tick.source} (delayed)`}
+                  title={tick.source === "realtime" ? "Real-time" : tick.source === "computed" ? "Computed" : "Delayed"}
                 >
-                  {tick.source.toLowerCase() === "nse" ? "LIVE" : "DLY"}
+                  {tick.source === "realtime" ? "REAL-TIME" : tick.source === "computed" ? "COMPUTED" : "DELAYED"}
                 </span>
               )}
             </div>

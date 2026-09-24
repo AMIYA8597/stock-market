@@ -27,7 +27,7 @@ import {
   calculateVolumeProfile,
   calculateMarketProfile,
 } from "@/utils/chartFormatters";
-import { getApiBaseUrl } from "@/lib/runtime-config";
+import { marketApi } from "@/lib/api-client";
 
 import {
   useChartInstance,
@@ -247,27 +247,21 @@ export function LightweightCandlestickChart({
     let active = true;
     async function fetchZones() {
       try {
-        const baseUrl = getApiBaseUrl();
-        const res = await fetch(
-          `${baseUrl}/api/zones/${encodeURIComponent(symbol)}`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (active) {
-            const allZones = [
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ...(data.classical_zones || []).map((z: any) => ({
-                ...z,
-                mode: "Classical",
-              })),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              ...(data.deep_learning_zones || []).map((z: any) => ({
-                ...z,
-                mode: "DL",
-              })),
-            ];
-            setZones(allZones);
-          }
+        const data = await marketApi.getZones(symbol!);
+        if (active) {
+          const allZones = [
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...(data.classical_zones || []).map((z: any) => ({
+              ...z,
+              mode: "Classical",
+            })),
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            ...(data.deep_learning_zones || []).map((z: any) => ({
+              ...z,
+              mode: "DL",
+            })),
+          ];
+          setZones(allZones);
         }
       } catch (e) {
         console.error("Failed to fetch S/R zones for chart", e);
@@ -279,15 +273,9 @@ export function LightweightCandlestickChart({
     async function fetchPatterns() {
       if (!patterns) return;
       try {
-        const baseUrl = getApiBaseUrl();
-        const res = await fetch(
-          `${baseUrl}/api/v1/market/patterns/${encodeURIComponent(symbol)}`,
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (active) {
-            setPatternMarkers(data.markers || []);
-          }
+        const data = await marketApi.getPatterns(symbol!);
+        if (active) {
+          setPatternMarkers(data.markers || []);
         }
       } catch (e) {
         console.error("Failed to fetch patterns for chart", e);
@@ -1189,8 +1177,17 @@ export function LightweightCandlestickChart({
     <div className="flex flex-col gap-1.5 h-full w-full relative overflow-y-auto ds-scrollable">
       {legend && (
         <div className="absolute top-2 left-12 z-[99] pointer-events-none flex flex-wrap gap-x-2 gap-y-0.5 rounded bg-[rgba(10,14,24,0.72)] backdrop-blur-sm border border-[rgba(255,255,255,0.08)] px-2 py-0.5 text-[10px] font-mono text-[var(--nq-text-secondary)] shadow-md select-none">
-          <span className="font-semibold text-[var(--nq-text-primary)] mr-1.5">
+          <span className="font-semibold text-[var(--nq-text-primary)] mr-1.5 flex items-center gap-1.5">
             {cleanSymbol}
+            {liveTick?.source && (
+              <span className={`rounded border px-1 py-px text-[8px] font-medium uppercase tracking-wider ${
+                liveTick.source === "realtime" ? "text-[#00E676] border-[#00E676] bg-[rgba(0,230,118,0.1)]" :
+                liveTick.source === "computed" ? "text-[#B388FF] border-[#B388FF] bg-[rgba(179,136,255,0.1)]" :
+                "text-[#FFB800] border-[#FFB800] bg-[rgba(255,184,0,0.1)]"
+              }`}>
+                {liveTick.source === "realtime" ? "Real-time" : liveTick.source === "computed" ? "Computed" : "Delayed"}
+              </span>
+            )}
           </span>
           <span>
             O:

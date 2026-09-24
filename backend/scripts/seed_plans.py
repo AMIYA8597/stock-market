@@ -5,7 +5,7 @@ from decimal import Decimal
 from sqlalchemy import select
 
 from app.database.connection import async_session_factory
-from app.models.payment import Plan
+from app.models.billing import Plan
 
 
 async def seed_plans():

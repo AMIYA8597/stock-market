@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-from app.services.signal_engine import TechnicalSignalEngine
 
 logger = logging.getLogger(__name__)
 
@@ -345,10 +344,10 @@ def build_ensemble_signal_sync(
     model_statuses = {}
 
     # --- XGBoost ---
-    xgb_score = 0.0
-    xgb_confidence = 0.5
+    xgb_score = None
+    xgb_confidence = None
     xgb_top_features = []
-    xgb_base_value = 0.5
+    xgb_base_value = None
     xgb_status = "untrained"
     try:
         from research.models.xgboost_model.classifier import (
@@ -389,8 +388,8 @@ def build_ensemble_signal_sync(
     model_statuses["xgboost"] = xgb_status
 
     # --- LSTM-Attention ---
-    lstm_score = 0.0
-    lstm_confidence = 0.5
+    lstm_score = None
+    lstm_confidence = None
     lstm_attn_peaks = []
     lstm_status = "untrained"
     try:
@@ -427,10 +426,10 @@ def build_ensemble_signal_sync(
     model_statuses["lstm_attention"] = lstm_status
 
     # --- TFT (Quantile LGBM) ---
-    tft_score = 0.0
-    tft_confidence = 0.5
+    tft_score = None
+    tft_confidence = None
     tft_status = "untrained"
-    tft_p10, tft_p50, tft_p90 = -0.015, 0.002, 0.015
+    tft_p10, tft_p50, tft_p90 = None, None, None
     try:
         from research.models.tft.quantile_forecaster import QuantileLGBForecaster
     except ImportError:
@@ -476,8 +475,8 @@ def build_ensemble_signal_sync(
     model_statuses["hmm_garch"] = hmm_status
 
     # --- GNN ---
-    gnn_score = 0.0
-    gnn_confidence = 0.5
+    gnn_score = None
+    gnn_confidence = None
     gnn_top_correlated = []
     gnn_status = "untrained"
     gnn_res = None
@@ -543,17 +542,13 @@ def build_ensemble_signal_sync(
             logger.warning(f"Failed to load or run OnlineAdaptiveLearner for {symbol}: {e}")
 
     # 3. Dynamic Weight Management and Ensemble Combining
-    # EXPLICIT FUSION RULE (Phase A6)
-    # final = (0.4 * technical) + (0.6 * ML) + sentiment_tilt + regime_gate
-
-    technical = TechnicalSignalEngine.generate_signal(df)
-    tech_score = technical["score"]
-
-    # True lookahead-free local FinBERT sentiment score
+    # METALEARNER ENSEMBLE COMBINING
+    tech_score = 0.0 # TechnicalSignalEngine is eradicated
+    
+    # FinBERT sentiment
     sentiment_score = 0.0
     try:
         from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
-
         analyzer = FinBERTSentimentAnalyzer()
         if getattr(analyzer, "_initialized", False) or getattr(analyzer, "vader", None):
             headlines = analyzer.scrape_google_news(f"{symbol} stock India")
@@ -562,19 +557,36 @@ def build_ensemble_signal_sync(
     except Exception as e:
         logger.warning(f"FinBERT sentiment extraction failed: {e}")
 
-    sentiment_tilt = sentiment_score * 0.15
-
     ml_score = xgb_score if xgb_status == "trained" else 0.0
 
-    fused_score = (0.4 * tech_score) + (0.6 * ml_score) + sentiment_tilt
+    try:
+        from research.models.ensemble.meta_learner import EnsembleMetaLearner
+        meta_learner = EnsembleMetaLearner.load()
+        if meta_learner:
+            # Requires OOF predictions: XGB, LSTM, TFT, HMM, etc.
+            scores = [
+                model_signals.get("xgboost", 0.0),
+                model_signals.get("lstm_attention", 0.0),
+                model_signals.get("tft", 0.0),
+                model_signals.get("hmm_garch", 0.0),
+                model_signals.get("gnn", 0.0),
+                sentiment_score
+            ]
+            prob_up = meta_learner.predict_proba(scores)
+            raw_ensemble = float((prob_up - 0.5) * 2.0)
+        else:
+            raise ValueError("No meta_learner loaded")
+    except Exception as e:
+        # Fallback if meta-learner is untrained/missing
+        fused_score = (0.7 * ml_score) + (0.3 * (model_signals.get("tft") or 0.0)) + (0.1 * sentiment_score)
+        
+        regime = regime_info.get("regime", "NEUTRAL")
+        if regime in ("BEAR", "CRISIS") and fused_score > 0:
+            fused_score = min(fused_score, 0.2)
+        elif regime == "BULL" and fused_score < 0:
+            fused_score = max(fused_score, -0.2)
 
-    regime = regime_info["regime"]
-    if regime in ("BEAR", "CRISIS") and fused_score > 0:
-        fused_score = min(fused_score, 0.2)  # Suppress BUY
-    elif regime == "BULL" and fused_score < 0:
-        fused_score = max(fused_score, -0.2)  # Suppress SELL
-
-    raw_ensemble = float(np.clip(fused_score, -1.0, 1.0))
+        raw_ensemble = float(np.clip(fused_score, -1.0, 1.0))
     prob_up = (raw_ensemble / 2.0) + 0.5
     ensemble_confidence = float(abs(prob_up - 0.5) * 2.0)
 
@@ -971,50 +983,16 @@ async def get_full_prediction(
         logger.error(f"Failed to fetch market data for {symbol}: {e}")
         raise ValueError(f"Failed to fetch market data for {symbol}") from e
 
-    # Prepare DataFrame by running all builders and indicators
-    df.index = pd.DatetimeIndex(df["time"])
-    df.index.name = None
-
-    # Import pipeline dynamically to avoid circular references
+    # -------------------------------------------------------------
+    # NEW POINT-IN-TIME FEATURE LIBRARY CALL (Part 3 V2-3)
+    # -------------------------------------------------------------
     import sys
-
+    from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-    from research.feature_engineering.pipeline import FeaturePipeline
+    from research.feature_engineering.api import build_features
 
-    # Run the full causality-safe sequential feature pipeline
-    df = FeaturePipeline().run(df)
-
-    # Compute pandas-ta indicators
-    df.ta.rsi(length=14, append=True)
-    df.ta.macd(fast=12, slow=26, signal=9, append=True)
-    df.ta.ema(length=9, append=True)
-    df.ta.ema(length=21, append=True)
-    df.ta.ema(length=50, append=True)
-    df.ta.ema(length=200, append=True)
-    df.ta.bbands(length=20, std=2, append=True)
-    df.ta.atr(length=14, append=True)
-    df.ta.vwap(append=True)
-    df.ta.adx(length=14, append=True)
-    df.ta.stoch(k=14, d=3, append=True)
-    df.ta.obv(append=True)
-    df.ta.supertrend(length=10, multiplier=3.0, append=True)
-    df.ta.cdl_pattern(name="all", append=True)
-
-    # Deduplicate columns (e.g. RSI_14, MACD, etc. added by both builders and df.ta)
-    df = df.loc[:, ~df.columns.duplicated()].copy()
-
-    # Ensure database-derived features are present (fallback to 0 if missing during live inference)
-    for col in [
-        "sentiment_score",
-        "news_volume",
-        "sentiment_pos_neg_ratio",
-        "market_sentiment_index",
-        "sentiment_momentum_3d",
-        "regime_state",
-        "garch_vol",
-    ]:
-        if col not in df.columns:
-            df[col] = 0.0
+    df = build_features(df, mode="serving")
+    # -------------------------------------------------------------
 
     # Incremental update for OnlineAdaptiveLearner
     try:

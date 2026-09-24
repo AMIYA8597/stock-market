@@ -348,7 +348,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
                     <td className="py-1 font-bold text-[var(--nq-text-primary)]">{pt.horizon}</td>
                     <td className="py-1 opacity-60" title={pt.data_window}>{pt.data_window}</td>
                     <td className="py-1 text-right text-[var(--nq-text-primary)] font-semibold">
-                      ₹{pt.predicted_price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {typeof pt.predicted_price === "number" ? `₹${pt.predicted_price.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "N/A"}
                     </td>
                     <td className={`py-1 text-right font-semibold ${isPositive ? "text-[var(--nq-accent-green)]" : "text-[var(--nq-accent-red)]"}`}>
                       {isPositive ? "+" : ""}{safeFormat(changePct * 100, 2)}%

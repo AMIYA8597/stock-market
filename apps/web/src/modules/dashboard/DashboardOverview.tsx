@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { BellRing, BrainCircuit, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { createChart, ColorType, AreaSeries, LineSeries } from "lightweight-charts";
+import { useRef, useEffect } from "react";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Modal, Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
 import { alertsApi, paperTradingApi, portfolioApi } from "@/lib/api-client";
@@ -259,28 +260,35 @@ export function DashboardOverview(): JSX.Element {
           </CardHeader>
           <CardContent>
             <div className="h-[320px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={performanceSeries}>
-                  <defs>
-                    <linearGradient id="portfolio-fill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#00D4F5" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#00D4F5" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                  <XAxis dataKey="day" stroke="rgba(255,255,255,0.45)" fontSize={11} />
-                  <YAxis stroke="rgba(255,255,255,0.45)" fontSize={11} />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(12, 16, 24, 0.96)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      borderRadius: 16,
-                    }}
-                  />
-                  <Area type="monotone" dataKey="benchmark" stroke="#8B9BB4" strokeWidth={2} fill="transparent" />
-                  <Area type="monotone" dataKey="value" stroke="#00D4F5" strokeWidth={2.5} fill="url(#portfolio-fill)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              <div className="h-[320px]" ref={(node) => {
+                if (node) {
+                  // Only run once when the node mounts or data changes
+                  if ((node as any)._chart) return;
+                  const chart = createChart(node, {
+                    layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: 'rgba(255,255,255,0.45)' },
+                    grid: { vertLines: { color: 'rgba(255,255,255,0.08)' }, horzLines: { color: 'rgba(255,255,255,0.08)' } },
+                    rightPriceScale: { borderVisible: false },
+                    timeScale: { borderVisible: false, timeVisible: true }
+                  });
+                  (node as any)._chart = chart;
+
+                  const benchmarkSeries = chart.addSeries(LineSeries, {
+                    color: '#8B9BB4', lineWidth: 2
+                  });
+                  const portfolioSeries = chart.addSeries(AreaSeries, {
+                    lineColor: '#00D4F5', topColor: 'rgba(0, 212, 245, 0.35)', bottomColor: 'rgba(0, 212, 245, 0.02)', lineWidth: 2
+                  });
+                  
+                  const benchData = performanceSeries.map((d, i) => ({ time: i, value: d.benchmark }));
+                  const portData = performanceSeries.map((d, i) => ({ time: i, value: d.value }));
+                  benchmarkSeries.setData(benchData as any);
+                  portfolioSeries.setData(portData as any);
+                  chart.timeScale().fitContent();
+                  
+                  const resize = () => { chart.applyOptions({ width: node.clientWidth }); };
+                  window.addEventListener('resize', resize);
+                }
+              }} />
             </div>
           </CardContent>
         </Card>

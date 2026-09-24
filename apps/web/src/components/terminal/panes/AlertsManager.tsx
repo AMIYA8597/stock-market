@@ -1,3 +1,4 @@
+import { createClient } from '@/lib/supabase/client';
 import { useState, useEffect } from "react";
 import { Bell, Plus, Trash2 } from "lucide-react";
 
@@ -26,8 +27,10 @@ export default function AlertsManager() {
 
   const fetchAlerts = async () => {
     try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token || "";
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const token = localStorage.getItem("nq_access_token") || "";
       const res = await fetch(`${apiUrl}/api/v1/alerts`, {
         headers: { "Authorization": `Bearer ${token}` }
       });
@@ -46,7 +49,7 @@ export default function AlertsManager() {
     if (!newSymbol || !newThreshold) return;
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const token = localStorage.getItem("nq_access_token") || "";
+      const supabase = createClient(); const { data: { session } } = await supabase.auth.getSession(); const token = session?.access_token || "";
       const payload = {
         symbol: newSymbol.toUpperCase(),
         alert_type: newType,
@@ -80,7 +83,7 @@ export default function AlertsManager() {
   const deleteAlert = async (id: string) => {
     try {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const token = localStorage.getItem("nq_access_token") || "";
+      const supabase = createClient(); const { data: { session } } = await supabase.auth.getSession(); const token = session?.access_token || "";
       const res = await fetch(`${apiUrl}/api/v1/alerts/${id}`, {
         method: "DELETE",
         headers: { "Authorization": `Bearer ${token}` }

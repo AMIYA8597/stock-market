@@ -14,7 +14,7 @@ from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
 from app.models.regime_states import RegimeState
-from app.services.regime_analyzer import GARCHVolatilityModel, HMMRegimeModel
+from research.models.hmm_garch.inference import InferenceEngine
 
 logger = logging.getLogger(__name__)
 
@@ -68,45 +68,36 @@ async def _update_regime_states_async() -> dict[str, Any]:
             # Compute a rolling volatility (used as a 2nd feature for HMM)
             df["volatility_20d"] = df["returns"].rolling(20).std() * np.sqrt(252)
 
-            # Run GARCH model
-            garch = GARCHVolatilityModel()
-            garch.fit(df["returns"])
-
-            # Forecast cond. vol for 1, 5, 21 days
-            vol_forecast = garch.forecast(horizon=21)
-            cond_vol_1d = vol_forecast[0] if len(vol_forecast) > 0 else 0.0
-            cond_vol_5d = vol_forecast[4] if len(vol_forecast) >= 5 else 0.0
-            cond_vol_21d = vol_forecast[-1] if len(vol_forecast) >= 21 else 0.0
-
-            # Run HMM Regime model
-            hmm = HMMRegimeModel(n_states=3)
-            # Use returns and 20d rolling vol as features
-            features = df[["returns", "volatility_20d"]].dropna()
-            hmm.fit(features)
-
-            viterbi_state, state_probs = hmm.predict(features)
-
-            # Map state to our consistent ordering (0=bull, 1=bear, 2=sideways)
-            mapping = hmm.map_states_to_labels(features)
-            label = mapping.get(viterbi_state, "bull")
-
-            canonical_state_idx = 0
-            if label == "bear":
-                canonical_state_idx = 1
-            elif label == "sideways":
-                canonical_state_idx = 2
-
-            # Align the probabilities to the canonical ordering
-            # (mapping keys are the raw HMM states)
-            canonical_probs = [0.0, 0.0, 0.0, 0.0]  # bull, bear, sideways, crisis
-            for raw_state, lbl in mapping.items():
-                prob = state_probs[raw_state]
-                if lbl == "bull":
-                    canonical_probs[0] = prob
-                elif lbl == "bear":
-                    canonical_probs[1] = prob
-                elif lbl == "sideways":
-                    canonical_probs[2] = prob
+            # Use the canonical InferenceEngine which wraps StudentTHMM and arch GARCH
+            # We rebuild df correctly from ohlcv_records
+            df_full = pd.DataFrame([
+                {
+                    "time": r.time,
+                    "open": float(r.open) if hasattr(r, 'open') else float(r.close),
+                    "high": float(r.high) if hasattr(r, 'high') else float(r.close),
+                    "low": float(r.low) if hasattr(r, 'low') else float(r.close),
+                    "close": float(r.close),
+                    "volume": float(r.volume) if hasattr(r, 'volume') else 0.0
+                }
+                for r in reversed(ohlcv_records)
+            ])
+            df_full.set_index("time", inplace=True)
+            
+            ohlcv_data = df_full[["open", "high", "low", "close", "volume"]].astype(float).values
+            
+            engine = InferenceEngine()
+            res = engine.predict(ohlcv_data, train=True)
+            
+            canonical_state_idx = res.current_state
+            
+            canonical_probs = [0.0, 0.0, 0.0, 0.0]
+            for i in range(len(res.state_probs)):
+                if i < 4:
+                    canonical_probs[i] = float(res.state_probs[i])
+                    
+            cond_vol_1d = float(res.conditional_vol)
+            cond_vol_5d = float(res.vol_forecast_5d)
+            cond_vol_21d = float(res.vol_forecast_21d)
 
             # Safe boundary checks
             cond_vol_1d = max(0.001, min(2.0, cond_vol_1d))
