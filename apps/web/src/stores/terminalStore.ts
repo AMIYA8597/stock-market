@@ -41,7 +41,7 @@ interface TerminalState {
 export const useTerminalStore = create<TerminalState>()(
   devtools(
     (set) => ({
-      selectedSymbol: 'RELIANCE.NS',
+      selectedSymbol: '',
       timeframe: '1d',
       setSelectedSymbol: (symbol: string) => set({ selectedSymbol: symbol }),
       setTimeframe: (timeframe) => set({ timeframe }),

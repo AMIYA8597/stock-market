@@ -287,6 +287,255 @@
         ]
       }
     },
+    "/api/v1/organizations": {
+      "get": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "List User Organizations",
+        "operationId": "list_user_organizations_api_v1_organizations_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/OrganizationResponse"
+                  },
+                  "type": "array",
+                  "title": "Response List User Organizations Api V1 Organizations Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/organizations/{org_id}/members": {
+      "get": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "List Members",
+        "operationId": "list_members_api_v1_organizations__org_id__members_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MemberResponse"
+                  },
+                  "title": "Response List Members Api V1 Organizations  Org Id  Members Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{org_id}/invitations": {
+      "post": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "Invite Member",
+        "operationId": "invite_member_api_v1_organizations__org_id__invitations_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{org_id}/api-keys": {
+      "post": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "Create Api Key",
+        "operationId": "create_api_key_api_v1_organizations__org_id__api_keys_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "List Api Keys",
+        "operationId": "list_api_keys_api_v1_organizations__org_id__api_keys_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "org_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Org Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/users": {
       "get": {
         "tags": [
@@ -299,13 +548,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AdminUserItem"
-                  },
-                  "type": "array",
-                  "title": "Response List Users Api V1 Admin Users Get"
-                }
+                "schema": {}
               }
             }
           }
@@ -346,24 +589,12 @@
             }
           }
         ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateRoleRequest"
-              }
-            }
-          }
-        },
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserItem"
-                }
+                "schema": {}
               }
             }
           },
@@ -392,19 +623,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "items": {
-                      "additionalProperties": {
-                        "type": "string"
-                      },
-                      "type": "object"
-                    },
-                    "type": "array"
-                  },
-                  "type": "object",
-                  "title": "Response Content Control Api V1 Admin Content Get"
-                }
+                "schema": {}
               }
             }
           }
@@ -796,250 +1015,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Get Plans Api V1 Payments Plans Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/payments/balance": {
-      "get": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Wallet Balance",
-        "operationId": "wallet_balance_api_v1_payments_balance_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Wallet Balance Api V1 Payments Balance Get"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/payments/intents": {
-      "post": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Create Intent",
-        "operationId": "create_intent_api_v1_payments_intents_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PaymentIntentRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Create Intent Api V1 Payments Intents Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/payments/confirm": {
-      "post": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Confirm Intent",
-        "operationId": "confirm_intent_api_v1_payments_confirm_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PaymentConfirmRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Confirm Intent Api V1 Payments Confirm Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/payments/subscribe": {
-      "post": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Subscribe To Plan",
-        "operationId": "subscribe_to_plan_api_v1_payments_subscribe_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SubscribeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Subscribe To Plan Api V1 Payments Subscribe Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/api/v1/payments/history": {
-      "get": {
-        "tags": [
-          "payments"
-        ],
-        "summary": "Payment History",
-        "operationId": "payment_history_api_v1_payments_history_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "title": "Limit"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Payment History Api V1 Payments History Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
+                "schema": {}
               }
             }
           }
@@ -1059,8 +1035,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/SubscriptionResponse"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
                   "title": "Response Get Subscription Api V1 Payments Subscription Get"
                 }
               }
@@ -1089,11 +1071,7 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "type": "object",
-                  "title": "Response Razorpay Webhook Api V1 Payments Webhook Post"
-                }
+                "schema": {}
               }
             }
           }
@@ -1758,183 +1736,6 @@
                   },
                   "type": "object",
                   "title": "Response Get Ws Url Api V1 Ws Url Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/signals/bulk": {
-      "get": {
-        "summary": "Get Bulk Signals",
-        "description": "Return parallel signal snapshots for up to 50 symbols.",
-        "operationId": "get_bulk_signals_api_v1_signals_bulk_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "symbols",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "Comma separated symbols, max 50",
-              "title": "Symbols"
-            },
-            "description": "Comma separated symbols, max 50"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/app__schemas__intelligence__SignalResponse"
-                  },
-                  "title": "Response Get Bulk Signals Api V1 Signals Bulk Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/signals/{symbol}": {
-      "get": {
-        "summary": "Get Signal",
-        "description": "Return the latest ensemble and model-level signal for a symbol.",
-        "operationId": "get_signal_api_v1_signals__symbol__get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/app__schemas__intelligence__SignalResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/signals/history/{symbol}": {
-      "get": {
-        "summary": "Get Signal History",
-        "description": "Return historical signal series and realized returns for model evaluation.",
-        "operationId": "get_signal_history_api_v1_signals_history__symbol__get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "symbol",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Symbol"
-            }
-          },
-          {
-            "name": "model",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(ensemble|tft|hmm_garch|gnn|lstm_attn|xgboost)$",
-              "default": "ensemble",
-              "title": "Model"
-            }
-          },
-          {
-            "name": "days",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 252,
-              "minimum": 30,
-              "default": 90,
-              "title": "Days"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SignalHistoryPoint"
-                  },
-                  "title": "Response Get Signal History Api V1 Signals History  Symbol  Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -3231,6 +3032,175 @@
         }
       }
     },
+    "/api/v1/signals/bulk": {
+      "get": {
+        "summary": "Get Bulk Signals",
+        "description": "Return parallel signal snapshots for up to 50 symbols.",
+        "operationId": "get_bulk_signals_api_v1_signals_bulk_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "symbols",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Comma separated symbols, max 50",
+              "title": "Symbols"
+            },
+            "description": "Comma separated symbols, max 50"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/{symbol}": {
+      "get": {
+        "summary": "Get Signal",
+        "description": "Return the latest ensemble and model-level signal for a symbol.",
+        "operationId": "get_signal_api_v1_signals__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/signals/history/{symbol}": {
+      "get": {
+        "summary": "Get Signal History",
+        "description": "Return historical signal series and realized returns for model evaluation.",
+        "operationId": "get_signal_history_api_v1_signals_history__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(ensemble|tft|hmm_garch|gnn|lstm_attn|xgboost)$",
+              "default": "ensemble",
+              "title": "Model"
+            }
+          },
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 252,
+              "minimum": 30,
+              "default": 90,
+              "title": "Days"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SignalHistoryPoint"
+                  },
+                  "title": "Response Get Signal History Api V1 Signals History  Symbol  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/regime/current": {
       "get": {
         "summary": "Get Regime Current",
@@ -3774,46 +3744,6 @@
   },
   "components": {
     "schemas": {
-      "AdminUserItem": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "email": {
-            "type": "string",
-            "title": "Email"
-          },
-          "full_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Full Name"
-          },
-          "role": {
-            "type": "string",
-            "title": "Role"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "email",
-          "full_name",
-          "role",
-          "is_active"
-        ],
-        "title": "AdminUserItem"
-      },
       "AlertCreate": {
         "properties": {
           "symbol": {
@@ -3836,6 +3766,24 @@
           "threshold"
         ],
         "title": "AlertCreate"
+      },
+      "ApiKeyCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "scopes": {
+            "type": "string",
+            "title": "Scopes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "scopes"
+        ],
+        "title": "ApiKeyCreate"
       },
       "AttentionResponse": {
         "properties": {
@@ -4568,47 +4516,6 @@
         "type": "object",
         "title": "BlogPostUpdate"
       },
-      "BulkSignalResponse": {
-        "properties": {
-          "symbols": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Symbols"
-          },
-          "signals": {
-            "items": {
-              "$ref": "#/components/schemas/app__schemas__signal__SignalResponse"
-            },
-            "type": "array",
-            "title": "Signals"
-          },
-          "generated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Generated At"
-          },
-          "total_symbols": {
-            "type": "integer",
-            "title": "Total Symbols"
-          },
-          "processed_symbols": {
-            "type": "integer",
-            "title": "Processed Symbols"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbols",
-          "signals",
-          "generated_at",
-          "total_symbols",
-          "processed_symbols"
-        ],
-        "title": "BulkSignalResponse",
-        "description": "GET /signals/bulk response."
-      },
       "CorrelationEdge": {
         "properties": {
           "source": {
@@ -5083,52 +4990,6 @@
         "title": "EfficientFrontierPoint",
         "description": "Single point on efficient frontier."
       },
-      "EnsembleSignal": {
-        "properties": {
-          "signal": {
-            "type": "string",
-            "enum": [
-              "STRONG_BUY",
-              "BUY",
-              "NEUTRAL",
-              "SELL",
-              "STRONG_SELL"
-            ],
-            "title": "Signal"
-          },
-          "confidence": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence"
-          },
-          "direction": {
-            "type": "string",
-            "enum": [
-              "STRONG_BUY",
-              "BUY",
-              "NEUTRAL",
-              "SELL",
-              "STRONG_SELL"
-            ],
-            "title": "Direction"
-          },
-          "kelly_fraction": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Kelly Fraction"
-          }
-        },
-        "type": "object",
-        "required": [
-          "signal",
-          "confidence",
-          "direction",
-          "kelly_fraction"
-        ],
-        "title": "EnsembleSignal"
-      },
       "EquityCurvePoint": {
         "properties": {
           "date": {
@@ -5368,55 +5229,6 @@
         ],
         "title": "ForecastRequest",
         "description": "Request to generate a price forecast."
-      },
-      "GNNSignal": {
-        "properties": {
-          "spillover_risk": {
-            "type": "number",
-            "title": "Spillover Risk"
-          },
-          "embedding_norm": {
-            "type": "number",
-            "title": "Embedding Norm"
-          },
-          "top_correlated_assets": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Top Correlated Assets"
-          }
-        },
-        "type": "object",
-        "required": [
-          "spillover_risk",
-          "embedding_norm",
-          "top_correlated_assets"
-        ],
-        "title": "GNNSignal"
-      },
-      "HMMGarchSignal": {
-        "properties": {
-          "regime_signal": {
-            "type": "string",
-            "title": "Regime Signal"
-          },
-          "vol_forecast_1d": {
-            "type": "number",
-            "title": "Vol Forecast 1D"
-          },
-          "vol_forecast_21d": {
-            "type": "number",
-            "title": "Vol Forecast 21D"
-          }
-        },
-        "type": "object",
-        "required": [
-          "regime_signal",
-          "vol_forecast_1d",
-          "vol_forecast_21d"
-        ],
-        "title": "HMMGarchSignal"
       },
       "HTTPValidationError": {
         "properties": {
@@ -5715,6 +5527,25 @@
         "title": "InstrumentInfo",
         "description": "Core instrument details."
       },
+      "InviteRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "title": "Email"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "default": "VIEWER"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "InviteRequest"
+      },
       "JournalCreate": {
         "properties": {
           "symbol": {
@@ -5933,29 +5764,50 @@
         "title": "JournalResponse",
         "description": "Response schema for trade journal entries."
       },
-      "LSTMAttnSignal": {
+      "MemberResponse": {
         "properties": {
-          "raw_signal": {
-            "type": "number",
-            "title": "Raw Signal"
+          "id": {
+            "type": "string",
+            "title": "Id"
           },
-          "attention_peaks": {
-            "items": {
-              "additionalProperties": {
-                "type": "number"
+          "user_id": {
+            "type": "string",
+            "title": "User Id"
+          },
+          "email": {
+            "type": "string",
+            "title": "Email"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
               },
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Attention Peaks"
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
           }
         },
         "type": "object",
         "required": [
-          "raw_signal",
-          "attention_peaks"
+          "id",
+          "user_id",
+          "email",
+          "full_name",
+          "role",
+          "status"
         ],
-        "title": "LSTMAttnSignal"
+        "title": "MemberResponse"
       },
       "ModelAccuracyItem": {
         "properties": {
@@ -6704,88 +6556,33 @@
         ],
         "title": "OrderRequest"
       },
-      "PaymentConfirmRequest": {
+      "OrganizationResponse": {
         "properties": {
-          "intent_id": {
+          "id": {
             "type": "string",
-            "title": "Intent Id"
+            "title": "Id"
           },
-          "razorpay_payment_id": {
+          "name": {
             "type": "string",
-            "title": "Razorpay Payment Id"
+            "title": "Name"
           },
-          "razorpay_order_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Razorpay Order Id"
+          "slug": {
+            "type": "string",
+            "title": "Slug"
           },
-          "razorpay_signature": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Razorpay Signature"
+          "role": {
+            "type": "string",
+            "title": "Role"
           }
         },
         "type": "object",
         "required": [
-          "intent_id",
-          "razorpay_payment_id"
+          "id",
+          "name",
+          "slug",
+          "role"
         ],
-        "title": "PaymentConfirmRequest"
-      },
-      "PaymentIntentRequest": {
-        "properties": {
-          "amount": {
-            "anyOf": [
-              {
-                "type": "number",
-                "exclusiveMinimum": 0.0
-              },
-              {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
-              }
-            ],
-            "title": "Amount"
-          },
-          "currency": {
-            "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Currency",
-            "default": "INR"
-          },
-          "method": {
-            "type": "string",
-            "maxLength": 20,
-            "minLength": 3,
-            "title": "Method",
-            "default": "RAZORPAY"
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 120,
-            "minLength": 1,
-            "title": "Description",
-            "default": "Wallet top-up"
-          }
-        },
-        "type": "object",
-        "required": [
-          "amount"
-        ],
-        "title": "PaymentIntentRequest"
+        "title": "OrganizationResponse"
       },
       "PerformancePoint": {
         "properties": {
@@ -7029,41 +6826,6 @@
         ],
         "title": "RegimeData",
         "description": "Regime state object."
-      },
-      "RegimeDetails": {
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "BULL",
-              "BEAR",
-              "SIDEWAYS",
-              "CRISIS"
-            ],
-            "title": "State"
-          },
-          "probs": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Probs"
-          },
-          "transition_probs": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Transition Probs"
-          }
-        },
-        "type": "object",
-        "required": [
-          "state",
-          "probs",
-          "transition_probs"
-        ],
-        "title": "RegimeDetails"
       },
       "RegimeHistoryResponse": {
         "properties": {
@@ -8007,51 +7769,40 @@
         "title": "StatisticalTests",
         "description": "Statistical significance tests."
       },
-      "SubscribeRequest": {
+      "SubscriptionResponse": {
         "properties": {
-          "plan_id": {
+          "id": {
             "type": "string",
-            "title": "Plan Id"
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "plan_name": {
+            "type": "string",
+            "title": "Plan Name"
+          },
+          "current_period_end": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Period End"
           }
         },
         "type": "object",
         "required": [
-          "plan_id"
+          "id",
+          "status",
+          "plan_name",
+          "current_period_end"
         ],
-        "title": "SubscribeRequest"
-      },
-      "TFTSignal": {
-        "properties": {
-          "p10": {
-            "type": "number",
-            "title": "P10"
-          },
-          "p50": {
-            "type": "number",
-            "title": "P50"
-          },
-          "p90": {
-            "type": "number",
-            "title": "P90"
-          },
-          "raw_signal": {
-            "type": "number",
-            "title": "Raw Signal"
-          },
-          "horizon_days": {
-            "type": "integer",
-            "title": "Horizon Days"
-          }
-        },
-        "type": "object",
-        "required": [
-          "p10",
-          "p50",
-          "p90",
-          "raw_signal",
-          "horizon_days"
-        ],
-        "title": "TFTSignal"
+        "title": "SubscriptionResponse"
       },
       "TokenResponse": {
         "properties": {
@@ -8414,20 +8165,6 @@
         ],
         "title": "UpdateProfileRequest"
       },
-      "UpdateRoleRequest": {
-        "properties": {
-          "role": {
-            "type": "string",
-            "pattern": "^(ADMIN|USER)$",
-            "title": "Role"
-          }
-        },
-        "type": "object",
-        "required": [
-          "role"
-        ],
-        "title": "UpdateRoleRequest"
-      },
       "UserProfileResponse": {
         "properties": {
           "id": {
@@ -8449,13 +8186,9 @@
             ],
             "title": "Full Name"
           },
-          "role": {
+          "status": {
             "type": "string",
-            "title": "Role"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active"
+            "title": "Status"
           }
         },
         "type": "object",
@@ -8463,8 +8196,7 @@
           "id",
           "email",
           "full_name",
-          "role",
-          "is_active"
+          "status"
         ],
         "title": "UserProfileResponse"
       },
@@ -8654,37 +8386,6 @@
         ],
         "title": "WeightsHistoryResponse",
         "description": "GET /monitor/ensemble-weights-history response."
-      },
-      "XGBoostSignal": {
-        "properties": {
-          "raw_signal": {
-            "type": "number",
-            "title": "Raw Signal"
-          },
-          "top_features": {
-            "items": {
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "type": "object"
-            },
-            "type": "array",
-            "title": "Top Features"
-          }
-        },
-        "type": "object",
-        "required": [
-          "raw_signal",
-          "top_features"
-        ],
-        "title": "XGBoostSignal"
       },
       "app__schemas__explain__CounterfactualRequest": {
         "properties": {
@@ -9017,70 +8718,6 @@
         ],
         "title": "SHAPContribution"
       },
-      "app__schemas__intelligence__SignalResponse": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Timestamp"
-          },
-          "ensemble": {
-            "$ref": "#/components/schemas/EnsembleSignal"
-          },
-          "models": {
-            "additionalProperties": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/TFTSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/HMMGarchSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/GNNSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/LSTMAttnSignal"
-                },
-                {
-                  "$ref": "#/components/schemas/XGBoostSignal"
-                }
-              ]
-            },
-            "type": "object",
-            "title": "Models"
-          },
-          "model_weights": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Model Weights"
-          },
-          "regime": {
-            "$ref": "#/components/schemas/RegimeDetails"
-          },
-          "is_fallback": {
-            "type": "boolean",
-            "title": "Is Fallback",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "timestamp",
-          "ensemble",
-          "models",
-          "model_weights",
-          "regime"
-        ],
-        "title": "SignalResponse"
-      },
       "app__schemas__monitor__EnsembleWeightPoint": {
         "properties": {
           "date": {
@@ -9270,79 +8907,6 @@
         ],
         "title": "RegimeHistoryPoint",
         "description": "Single point in regime history."
-      },
-      "app__schemas__signal__SignalResponse": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Timestamp"
-          },
-          "direction": {
-            "type": "string",
-            "title": "Direction",
-            "description": "STRONG_BUY|BUY|NEUTRAL|SELL|STRONG_SELL"
-          },
-          "confidence": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": 0.0,
-            "title": "Confidence"
-          },
-          "score": {
-            "type": "number",
-            "maximum": 1.0,
-            "minimum": -1.0,
-            "title": "Score"
-          },
-          "breakdown": {
-            "additionalProperties": {
-              "type": "number"
-            },
-            "type": "object",
-            "title": "Breakdown",
-            "description": "per-indicator contribution list"
-          },
-          "patterns": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Patterns",
-            "description": "detected patterns"
-          },
-          "stop_loss": {
-            "type": "number",
-            "title": "Stop Loss",
-            "default": 0.0
-          },
-          "take_profit": {
-            "type": "number",
-            "title": "Take Profit",
-            "default": 0.0
-          },
-          "position_size_pct": {
-            "type": "number",
-            "title": "Position Size Pct",
-            "description": "position-size from account-risk %",
-            "default": 0.0
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "timestamp",
-          "direction",
-          "confidence",
-          "score",
-          "breakdown"
-        ],
-        "title": "SignalResponse",
-        "description": "GET /signals/{symbol} complete response for classical technical signals."
       }
     },
     "securitySchemes": {

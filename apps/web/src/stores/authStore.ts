@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { authApi, setAuthTokens, clearAuthTokens } from "@/lib/api-client";
-import { ApiError } from "@/lib/api-client";
+import { authApi, ApiError } from "@/lib/api-client";
+import { createClient } from "@/lib/supabase/client";
 import type { UserProfile } from "@neuroquant/types";
 
 interface AuthState {
@@ -12,53 +12,47 @@ interface AuthState {
   
   // Actions
   setUser: (user: UserProfile | null) => void;
-  setTokens: (tokens: { access_token: string; refresh_token: string }) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       user: null,
       isAuthenticated: false,
-      isLoading: true, // start loading initially to allow profile fetch on hydration
+      isLoading: true,
       error: null,
 
       setUser: (user) => set({ user, isAuthenticated: !!user, isLoading: false }),
 
-      setTokens: async (tokens) => {
-        setAuthTokens(tokens);
-        set({ isAuthenticated: true, isLoading: true, error: null });
-        await get().fetchProfile();
-      },
-
       logout: async () => {
         try {
-          // Attempt server logout, but always clear local state regardless
-          await authApi.logout();
+          const supabase = createClient();
+          await supabase.auth.signOut();
         } catch (e) {
-          console.error("Server logout failed", e);
+          console.error("Supabase logout failed", e);
         } finally {
-          clearAuthTokens();
           set({ user: null, isAuthenticated: false, error: null, isLoading: false });
         }
       },
 
       fetchProfile: async () => {
-        if (typeof window !== "undefined" && !localStorage.getItem("nq_access_token")) {
-          set({ isAuthenticated: false, isLoading: false, user: null });
-          return;
-        }
-
         set({ isLoading: true, error: null });
         try {
+          const supabase = createClient();
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            set({ isAuthenticated: false, isLoading: false, user: null });
+            return;
+          }
           const profile = await authApi.getProfile();
           set({ user: profile, isAuthenticated: true, isLoading: false });
         } catch (err: unknown) {
           console.error("fetchProfile failed:", err);
           if (err instanceof ApiError && err.status === 401) {
-            clearAuthTokens();
+            const supabase = createClient();
+            await supabase.auth.signOut();
             set({ user: null, isAuthenticated: false, isLoading: false, error: "Session expired. Please log in again." });
           } else {
             set({ isLoading: false, error: "Unable to load profile. Please try again later." });
@@ -68,7 +62,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "auth-storage",
-      partialize: (state) => ({ isAuthenticated: state.isAuthenticated }), // Only persist auth boolean for instant UI, but always re-fetch user
+      partialize: (state) => ({ isAuthenticated: state.isAuthenticated }),
     }
   )
 );

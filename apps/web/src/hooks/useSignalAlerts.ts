@@ -1,117 +1,78 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { getWsBaseUrl } from "@/lib/runtime-config";
+import { realtime } from "@/lib/realtime";
 
 export interface SignalAlert {
-  type: "signal_alert";
+  type: "signal_alert" | "signal" | "progress";
   symbol: string;
   direction: string;
   signal_score: number;
   confidence: number;
   current_price: number;
-  kelly_fraction: number;
-  regime: string;
-  patterns_detected: string[];
-  prob_buy: number;
-  prob_sell: number;
-  target_price_5d: number;
-  stop_loss: number;
-  forecast_5d: number;
+  kelly_fraction?: number;
+  regime?: string;
+  patterns_detected?: string[];
+  prob_buy?: number;
+  prob_sell?: number;
+  target_price_5d?: number;
+  stop_loss?: number;
+  forecast_5d?: number;
   timestamp: string;
   message: string;
+  payload?: any;
 }
 
-let ws: WebSocket | null = null;
 let alerts: SignalAlert[] = [];
 let latestAlert: SignalAlert | null = null;
 let unread = 0;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let reconnectDelay = 5000;
 const subscribers = new Set<() => void>();
-let isConnecting = false;
+
+let initialized = false;
 
 function notifySubscribers() {
   subscribers.forEach((cb) => cb());
 }
 
-function connectWs() {
-  if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-    return;
-  }
-  if (isConnecting) return;
-  isConnecting = true;
+function initGlobalListener() {
+  if (initialized) return;
+  initialized = true;
 
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
-
-  const cleanWsUrl = getWsBaseUrl();
-  const base = cleanWsUrl.replace(/\/+$/, "");
-  const cleanBase = base.replace(/\/ws$/i, "");
-  const wsUrl = `${cleanBase}/ws/alerts`; 
-
-  ws = new WebSocket(wsUrl);
-
-  ws.onopen = () => {
-    isConnecting = false;
-    reconnectDelay = 5000;
-  };
-
-  ws.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data);
-      if (data && data.type === "signal_alert") {
-        const alert = {
-          ...data,
-          patterns_detected: data.patterns || data.patterns_detected || [],
-        } as SignalAlert;
-        
-        alerts = [alert, ...alerts];
-        if (alerts.length > 50) {
-          alerts = alerts.slice(0, 50);
-        }
-
-        latestAlert = alert;
-        unread += 1;
-
-        if (
-          typeof window !== "undefined" &&
-          "Notification" in window &&
-          Notification.permission === "granted"
-        ) {
-          new Notification(`${alert.direction} Alert: ${alert.symbol}`, {
-            body: alert.message,
-            icon: "/favicon.ico",
-            tag: alert.symbol,
-          });
-        }
-        
-        notifySubscribers();
+  realtime.onMessage((message) => {
+    if (message.type === "signal" || message.type === "signal_alert") {
+      const alert = {
+        ...message,
+        patterns_detected: message.patterns || message.patterns_detected || [],
+      } as SignalAlert;
+      
+      alerts = [alert, ...alerts];
+      if (alerts.length > 50) {
+        alerts = alerts.slice(0, 50);
       }
-    } catch (err) {
-      // Suppress
+
+      latestAlert = alert;
+      unread += 1;
+
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        new Notification(`${alert.payload?.direction || alert.direction} Alert: ${alert.symbol}`, {
+          body: alert.message || `Confidence: ${alert.payload?.confidence || alert.confidence}`,
+          icon: "/favicon.ico",
+          tag: alert.symbol,
+        });
+      }
+      
+      notifySubscribers();
     }
-  };
+  });
 
-  ws.onclose = () => {
-    ws = null;
-    isConnecting = false;
-    reconnectTimer = setTimeout(() => {
-      connectWs();
-    }, reconnectDelay);
-  };
-
-  ws.onerror = () => {
-    ws?.close();
-  };
+  realtime.connect();
 }
 
 export function useSignalAlerts() {
-  // Seed with static defaults, not the live singleton — see usePriceFeed.ts for why
-  // (avoids a hydration mismatch when the singleton has already advanced by the time
-  // a later component mounts). The mount effect below syncs to the real value immediately.
   const [localAlerts, setLocalAlerts] = useState<SignalAlert[]>(() => []);
   const [localLatest, setLocalLatest] = useState<SignalAlert | null>(() => null);
   const [localUnread, setLocalUnread] = useState<number>(() => 0);
@@ -140,9 +101,7 @@ export function useSignalAlerts() {
     subscribers.add(handleChange);
     handleChange(); // Initial sync
 
-    if (!ws && !isConnecting) {
-      connectWs();
-    }
+    initGlobalListener();
 
     return () => {
       subscribers.delete(handleChange);

@@ -47,23 +47,18 @@ class FinBERTSentimentAnalyzer:
         if self._initialized:
             return
 
-        use_fast_fallback = os.getenv("USE_FAST_FALLBACK", "true").lower() == "true"
-
         try:
-            from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-            self.vader = SentimentIntensityAnalyzer()
-            logger.info("VADER Sentiment Analyzer initialized.")
-        except Exception as e:
-            logger.error(f"Failed to load VADER: {e}")
-            self.vader = None
-
-        if use_fast_fallback:
-            logger.info(
-                "Using fast lexicon-based sentiment analyzer fallback (USE_FAST_FALLBACK=true)."
-            )
+            logger.info("Initializing FinBERT model...")
+            self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
+            self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+            self.model.eval()
             self._initialized = True
-            self.fast_mode = True
+            logger.info("FinBERT model initialized successfully.")
+        except Exception as e:
+            logger.error(f"Failed to load FinBERT model: {e}")
+            raise RuntimeError(f"Canonical sentiment analyzer FinBERT failed to load: {e}")
             return
 
         self.fast_mode = False
@@ -83,28 +78,42 @@ class FinBERTSentimentAnalyzer:
             self._initialized = True
             self.fast_mode = True
 
-    def _vader_fallback(self, text: str) -> dict[str, float]:
-        if not self.vader:
-            return {"positive": 0.05, "negative": 0.05, "neutral": 0.90}
 
-        scores = self.vader.polarity_scores(text)
-        # Vader provides pos, neg, neu, compound
-        return {"positive": scores["pos"], "negative": scores["neg"], "neutral": scores["neu"]}
 
     def analyze_sentiment_batch(self, texts: list[str]) -> list[dict[str, float]]:
-        """Analyze sentiment of multiple pieces of text in batches.
-
-        Returns:
-            List of Dicts with probabilities for positive, negative, and neutral.
-        """
         if not texts:
             return []
 
         if not self._initialized:
             self.initialize()
 
-        if getattr(self, "fast_mode", False) or not hasattr(self, "model"):
-            return [self._vader_fallback(t) for t in texts]
+        try:
+            import torch
+
+            batch_size = 32
+            results = []
+
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i : i + batch_size]
+                inputs = self.tokenizer(
+                    batch_texts, return_tensors="pt", truncation=True, padding=True, max_length=512
+                )
+                with torch.no_grad():
+                    outputs = self.model(**inputs)
+                    probs = torch.softmax(outputs.logits, dim=-1).tolist()
+
+                for p in probs:
+                    results.append(
+                        {
+                            "positive": float(p[0]),
+                            "negative": float(p[1]),
+                            "neutral": float(p[2]),
+                        }
+                    )
+            return results
+        except Exception as e:
+            logger.error(f"Sentiment inference failed: {e}")
+            raise RuntimeError(f"Canonical sentiment inference failed: {e}")
 
         try:
             import torch

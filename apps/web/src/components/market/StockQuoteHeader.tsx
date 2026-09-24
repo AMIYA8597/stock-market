@@ -42,11 +42,18 @@ export function StockQuoteHeader({ symbol, quote, livePrice, liveChange }: Stock
         <div>
           <h1 className="text-3xl font-bold text-nq-text-primary uppercase tracking-tight flex items-center gap-3">
             {symbol}
-            {isDelayed && (
-              <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-[var(--nq-bg-elevated)] border border-[var(--nq-border)] text-nq-text-tertiary uppercase tracking-wider">
-                <Clock className="w-3 h-3" /> Delayed ~15m
-              </span>
-            )}
+            <span
+              className={cn(
+                "flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded border uppercase tracking-wider",
+                (quote.source === "realtime")
+                  ? "text-[#00E676] border-[#00E676] bg-[rgba(0,230,118,0.1)]"
+                  : (quote.source === "computed")
+                    ? "text-[#B388FF] border-[#B388FF] bg-[rgba(179,136,255,0.1)]"
+                    : "text-[#FFB800] border-[#FFB800] bg-[rgba(255,184,0,0.1)]"
+              )}
+            >
+              {quote.source === "realtime" ? "Real-time" : quote.source === "computed" ? "Computed" : "Delayed"}
+            </span>
             {isClosed && (
               <span className="flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded bg-[var(--nq-bg-elevated)] border border-[var(--nq-border)] text-nq-text-tertiary uppercase tracking-wider">
                 Market Closed

@@ -30,9 +30,9 @@ export function GlobalToast() {
             exit={{ opacity: 0, scale: 0.95 }}
             className={cn(
               "w-80 rounded-[var(--ds-radius-lg)] border bg-[var(--ds-surface-1)] p-4 shadow-[var(--ds-shadow-lg)]",
-              visibleAlert.direction.includes("BUY") 
+              visibleAlert.direction!.includes("BUY") 
                 ? "border-nq-bull text-nq-bull" 
-                : visibleAlert.direction.includes("SELL")
+                : visibleAlert.direction!.includes("SELL")
                 ? "border-nq-bear text-nq-bear"
                 : "border-[var(--ds-border-subtle)] text-[var(--ds-text-primary)]"
             )}
@@ -41,7 +41,7 @@ export function GlobalToast() {
               <div className="flex items-start gap-2">
                 <BellRing className="mt-0.5 h-4 w-4 shrink-0" />
                 <div>
-                  <p className="text-sm font-semibold">{visibleAlert.symbol} - {visibleAlert.direction}</p>
+                  <p className="text-sm font-semibold">{visibleAlert.symbol} - {visibleAlert.direction!}</p>
                   <p className="mt-1 text-xs text-[var(--ds-text-secondary)]">{visibleAlert.message}</p>
                 </div>
               </div>

@@ -32,8 +32,14 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
       return;
     }
 
-    const parsedPrice = orderType === "MARKET" ? (liveTick?.price || 0) : Number(price);
-    if (orderType === "LIMIT" && (!Number.isFinite(parsedPrice) || parsedPrice <= 0)) {
+    
+    const parsedPrice = orderType === "MARKET" ? liveTick?.price : Number(price);
+    if (orderType === "MARKET" && typeof parsedPrice !== "number") {
+      setMessage({ type: "error", text: "Cannot place MARKET order: Live price unavailable." });
+      return;
+    }
+
+    if (orderType === "LIMIT" && (!Number.isFinite(parsedPrice) || (parsedPrice as number) <= 0)) {
       setMessage({ type: "error", text: "Price must be greater than zero for LIMIT orders." });
       return;
     }
@@ -47,7 +53,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
         side,
         quantity: parsedQty,
         order_type: orderType,
-        limit_price: orderType === "LIMIT" ? parsedPrice : undefined,
+        limit_price: orderType === "LIMIT" ? (parsedPrice as number) : undefined,
       });
 
       setMessage({ type: "success", text: `Successfully placed ${side} order for ${parsedQty} ${selectedSymbol}` });
@@ -129,7 +135,7 @@ export default function PaperTradePanel({ selectedSymbol }: PaperTradePanelProps
           )}
 
           <div className="mt-2 text-xs text-[var(--text-secondary)]">
-            Est. Value: ₹{((orderType === "MARKET" ? (liveTick?.price || 0) : Number(price)) * Number(quantity) || 0).toLocaleString()}
+            Est. Value: { (orderType === "MARKET" && typeof liveTick?.price === "number" || orderType === "LIMIT" && Number(price) > 0) ? `₹${(((orderType === "MARKET" ? liveTick!.price! : Number(price)) * Number(quantity)) || 0).toLocaleString()}` : "N/A" }
           </div>
 
           <button
