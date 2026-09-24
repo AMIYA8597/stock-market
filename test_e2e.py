@@ -60,7 +60,7 @@ def test_backend_api():
 
     # AI Predictions (Part 3)
     # Testing unauthenticated, expecting 401
-    res = requests.get(f"{BACKEND_URL}/api/v1/predictions/RELIANCE.NS/latest")
+    res = requests.get(f"{BACKEND_URL}/api/v1/predictions/latest/RELIANCE.NS")
     if res.status_code == 401:
         print("PASS: /api/v1/predictions/... correctly secured behind auth (401)")
     else:

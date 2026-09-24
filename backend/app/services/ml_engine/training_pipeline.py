@@ -48,7 +48,7 @@ class TrainingPipeline:
             )
 
         async with async_session_factory() as session:
-            res = await session.execute(select(Instrument).where(Instrument.symbol == self.symbol))
+            res = await session.execute(select(Instrument).where(Instrument.canonical_symbol == self.symbol))
             self.instrument = res.scalars().first()
             if not self.instrument:
                 raise ValueError(
