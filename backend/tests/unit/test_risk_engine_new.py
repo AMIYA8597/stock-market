@@ -122,8 +122,13 @@ def test_fit_gpd_tail_index_large(calc, sample_returns):
     assert isinstance(result, float)
 
 def test_correlation_matrix_shrinkage(calc, sample_df_returns):
-    with pytest.raises(ValueError):
-        calc.correlation_matrix_shrinkage(sample_df_returns)
+    # sample_df_returns has real, non-degenerate variance across 3 assets, so
+    # shrinkage should succeed and return a valid correlation matrix - not raise.
+    corr_matrix = calc.correlation_matrix_shrinkage(sample_df_returns)
+    n_assets = sample_df_returns.shape[1]
+    assert corr_matrix.shape == (n_assets, n_assets)
+    assert np.allclose(np.diag(corr_matrix), 1.0)
+    assert np.all(np.isfinite(corr_matrix))
 
 def test_correlation_matrix_shrinkage_zero_variance():
     # this might trigger some specific edge cases in correlation matrix shrinkage

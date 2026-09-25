@@ -465,13 +465,25 @@ class RiskCalculator:
         target = np.eye(n_assets) * cov_matrix.values.diagonal().mean()
 
         # Optimal shrinkage intensity
-        delta = np.sum((cov_matrix - target) ** 2) / np.sum(cov_matrix**2)
+        denom = np.sum(cov_matrix.to_numpy() ** 2)
+        if denom == 0 or not np.isfinite(denom):
+            raise ValueError(
+                "Cannot compute correlation matrix shrinkage: covariance matrix is "
+                "degenerate (zero or non-finite total variance, e.g. all-constant "
+                "return series)."
+            )
+        delta = np.sum((cov_matrix - target) ** 2) / denom
         alpha = min(1.0, max(0.0, delta))
 
         shrunk_cov = alpha * target + (1 - alpha) * cov_matrix
 
         # Convert to correlation
         diag = np.sqrt(np.diag(shrunk_cov))
+        if np.any(diag == 0) or not np.all(np.isfinite(diag)):
+            raise ValueError(
+                "Cannot convert shrunk covariance to a correlation matrix: one or "
+                "more assets have zero or non-finite variance."
+            )
         corr_matrix = shrunk_cov / np.outer(diag, diag)
 
         return corr_matrix
