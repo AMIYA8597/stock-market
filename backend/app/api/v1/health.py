@@ -25,7 +25,7 @@ async def health_check():
 @router.get("/health/live-data")
 async def health_live_data():
     """Returns cached provider status without synchronous network probing."""
-    from app.core.dependencies import get_redis_client
+    from app.database.redis_client import get_redis_client
     import json
     
     status = {"yfinance": "unknown", "nse": "unknown", "coingecko": "unknown", "fred": "unknown"}
