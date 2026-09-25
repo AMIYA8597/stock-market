@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 import yfinance as yf
 
 from app.core.logging import get_logger
-from app.services.indian_stock_api import IndianStockAPI
 
 logger = get_logger(__name__)
 

@@ -1,5 +1,4 @@
 from decimal import Decimal
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -328,7 +327,9 @@ async def test_enrich_tick_with_indicators_no_history(mock_get_history):
 
 
 def test_log_audit_exception():
-    with patch('app.services.upstox_service.Path.resolve', side_effect=Exception('Test Error')):
+    """log_audit's except branch (logger.error fallback) must not raise even
+    if the primary logger.info call itself fails."""
+    with patch('app.services.upstox_service.logger.info', side_effect=Exception('Test Error')):
         UpstoxService.log_audit('msg')
 
 @pytest.mark.asyncio
