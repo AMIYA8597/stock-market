@@ -20,9 +20,16 @@ VALID_ORG_ROLES = {"OWNER", "ADMIN", "BILLING_ADMIN", "RESEARCHER", "ANALYST", "
 FRONTEND_ROLE_ALIASES = {"USER": "VIEWER"}
 
 
-def _require_superadmin(ctx: RequestContext) -> None:
-    if ctx.organization_role != "SUPERADMIN" and ctx.platform_role != "SUPERADMIN":
-        raise HTTPException(status_code=403, detail="Superadmin access is required.")
+def _require_org_admin(ctx: RequestContext) -> None:
+    """Gate access to this organization's admin console (members/content/ingestion).
+
+    This is deliberately org-scoped, not a platform-wide superadmin check: every
+    endpoint below is already restricted to ctx.organization_id via
+    _require_org_context. A separate platform_role-based cross-organization admin
+    surface does not exist yet in this codebase and must not be faked here.
+    """
+    if ctx.organization_role not in ("OWNER", "ADMIN"):
+        raise HTTPException(status_code=403, detail="Organization admin access is required.")
 
 
 def _require_org_context(ctx: RequestContext) -> uuid.UUID:
@@ -43,7 +50,7 @@ async def list_users(
     ctx: RequestContext = Depends(get_current_context),
     db: AsyncSession = Depends(get_db),
 ):
-    _require_superadmin(ctx)
+    _require_org_admin(ctx)
     org_id = _require_org_context(ctx)
 
     stmt = (
@@ -73,7 +80,7 @@ async def update_user_role(
     ctx: RequestContext = Depends(get_current_context),
     db: AsyncSession = Depends(get_db),
 ):
-    _require_superadmin(ctx)
+    _require_org_admin(ctx)
     org_id = _require_org_context(ctx)
 
     requested_role = request.role.upper().strip()
@@ -124,7 +131,7 @@ async def content_control(
     ctx: RequestContext = Depends(get_current_context),
     db: AsyncSession = Depends(get_db),
 ):
-    _require_superadmin(ctx)
+    _require_org_admin(ctx)
     from app.models.blog import BlogPost
 
     stmt = select(BlogPost).order_by(BlogPost.created_at.desc()).limit(100)
@@ -146,7 +153,7 @@ async def content_control(
 
 @router.post("/ingest")
 async def trigger_ingestion(ctx: RequestContext = Depends(get_current_context)):
-    _require_superadmin(ctx)
+    _require_org_admin(ctx)
     import asyncio
 
     from app.jobs.ingestion import IngestionPipeline
