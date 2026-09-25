@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_db
-from app.models.prediction import MLPrediction
+from app.models.research import Prediction as MLPrediction
 from app.schemas.monitor import (
     DriftDistribution,
     DriftResponse,

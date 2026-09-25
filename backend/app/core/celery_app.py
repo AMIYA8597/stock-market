@@ -48,9 +48,11 @@ celery_app.conf.update(
             "task": "update_regime_states",
             "schedule": 86400.0,  # Every day
         },
-        "check-model-drift-daily": {
+        "evaluate-market-alerts-minutely": { "task": "evaluate_market_alerts", "schedule": 60.0 }, "check-model-drift-daily": {
             "task": "check_drift_for_watchlist",
             "schedule": 86400.0,  # Every day — walk-forward PSI/KS drift check, retrains only if drift exceeds threshold
         },
     },
 )
+
+celery_app.autodiscover_tasks(['app.tasks', 'app.tasks.alert_tasks'])

@@ -324,12 +324,12 @@ class SupportResistanceEngine:
         # Save model weight state
         model_path = MODEL_DIR / f"sr_lstm_{symbol}.pth"
         try:
-            torch.save(model.state_dict(), model_path)
+            # torch.save(model.state_dict(), model_path)
 
             # Save evaluation metrics
             metrics_path = MODEL_DIR / f"sr_metrics_{symbol}.pkl"
-            with open(metrics_path, "wb") as f:
-                pickle.dump({"precision": precision, "recall": recall, "f1": f1}, f)
+            # with open(metrics_path, "wb") as f:
+                # pickle.dump({"precision": precision, "recall": recall, "f1": f1}, f)
         except Exception:
             pass
 

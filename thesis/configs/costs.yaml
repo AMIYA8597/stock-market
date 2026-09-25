@@ -1,0 +1,23 @@
+# Indian Transaction Costs (Zerodha / NSE)
+# Verified for 2026
+
+delivery:
+  stt: 0.001          # 0.1% on buy and sell
+  stamp_duty: 0.00015 # 0.015% on buy only
+  exchange: 0.0000345 # ~0.00345% on buy and sell (NSE)
+  sebi: 0.000001      # ₹10 per crore
+  gst: 0.18           # 18% on (brokerage + exchange + sebi)
+  brokerage: 0.0      # Zero brokerage on delivery
+  dp_charge: 15.93    # ₹15.93 per scrip per sell day (flat absolute amount)
+  slippage: 0.0010    # 10 bps assumption
+
+intraday:
+  stt: 0.00025        # 0.025% on sell only
+  stamp_duty: 0.00003 # 0.003% on buy only
+  exchange: 0.0000345
+  sebi: 0.000001
+  gst: 0.18
+  brokerage: 0.0003   # 0.03% or ₹20 (min)
+  brokerage_max: 20.0
+  dp_charge: 0.0
+  slippage: 0.0010
