@@ -1,9 +1,12 @@
-from datetime import datetime
 import uuid
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database.connection import Base
+
 
 class Dataset(Base):
     __tablename__ = "datasets"

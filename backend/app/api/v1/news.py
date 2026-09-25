@@ -16,7 +16,7 @@ async def get_news_for_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
     """Get scraped news and sentiment for a specific symbol."""
     clean_symbol = symbol.split(".")[0].upper()
     inst_res = await db.execute(
-        select(Instrument).where(Instrument.symbol.startswith(clean_symbol))
+        select(Instrument).where(Instrument.canonical_symbol.startswith(clean_symbol))
     )
     instrument = inst_res.scalars().first()
 

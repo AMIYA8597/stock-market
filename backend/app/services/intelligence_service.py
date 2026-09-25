@@ -18,7 +18,6 @@ from datetime import UTC, date, datetime, timedelta
 import numpy as np
 
 from app.schemas.intelligence import (
-    ModelUnavailable,
     CorrelationEdge,
     CorrelationGraphResponse,
     CorrelationNode,
@@ -59,7 +58,7 @@ MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
 
 @dataclass(frozen=True)
 class IntelligenceService:
-    async def _direction(self, score: float) -> str:
+    def _direction(self, score: float) -> str:
         if score > 0.35:
             return "STRONG_BUY"
         if score > 0.12:
@@ -252,7 +251,7 @@ class IntelligenceService:
         )
 
     async def get_bulk_signals(self, symbols: list[str]) -> list[SignalResponse]:
-        return [self.get_signal(symbol) for symbol in symbols]
+        return await asyncio.gather(*(self.get_signal(symbol) for symbol in symbols))
 
     async def get_signal_history(self, symbol: str, model: str, days: int) -> list[SignalHistoryPoint]:
         try:
@@ -708,8 +707,9 @@ class IntelligenceService:
             return rows
 
     async def get_model_accuracy(self) -> list[ModelAccuracyItem]:
-        from app.database.connection import async_session_factory
         from sqlalchemy import text
+
+        from app.database.connection import async_session_factory
         rows = []
         try:
             async with async_session_factory() as session:
@@ -730,8 +730,9 @@ class IntelligenceService:
         return rows
 
     async def get_drift(self) -> list[DriftItem]:
-        from app.database.connection import async_session_factory
         from sqlalchemy import text
+
+        from app.database.connection import async_session_factory
         rows = []
         try:
             async with async_session_factory() as session:
@@ -955,40 +956,5 @@ class IntelligenceService:
             exposures=exposures,
             metrics=metrics,
         )
-
-    async def get_regime_current(self):
-        from datetime import date
-        from app.schemas.intelligence import RegimeCurrentResponse
-        return RegimeCurrentResponse(
-            state="BULL",
-            probs={"BULL": 0.8, "BEAR": 0.1, "SIDEWAYS": 0.1, "CRISIS": 0.0},
-            transition_matrix=[[0.9, 0.1, 0.0, 0.0], [0.1, 0.9, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]],
-            cond_vol_1d=0.01,
-            cond_vol_5d=0.05,
-            cond_vol_21d=0.1,
-            days_in_state=10,
-            last_transition_date=date.today()
-        )
-
-    async def get_regime_history(self, days: int):
-        from datetime import date, timedelta
-        return [
-            {
-                "time": date.today() - timedelta(days=i),
-                "state": "BULL",
-                "probs": {"BULL": 0.8},
-                "cond_vol": 0.01
-            }
-            for i in range(days)
-        ]
-
-    async def get_regime_statistics(self):
-        from app.schemas.intelligence import RegimeStatistics
-        return [
-            RegimeStatistics(state="BULL", avg_duration=100.0, avg_return=0.05, avg_vol=0.15, freq=0.5),
-            RegimeStatistics(state="BEAR", avg_duration=100.0, avg_return=-0.05, avg_vol=0.25, freq=0.2),
-            RegimeStatistics(state="SIDEWAYS", avg_duration=100.0, avg_return=0.0, avg_vol=0.10, freq=0.2),
-            RegimeStatistics(state="CRISIS", avg_duration=10.0, avg_return=-0.15, avg_vol=0.45, freq=0.1)
-        ]
 
 intelligence_service = IntelligenceService()

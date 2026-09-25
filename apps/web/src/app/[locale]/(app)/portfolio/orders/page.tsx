@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 
 import { useOrderHistory } from "@/hooks/use-order-history";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 export default function PortfolioOrdersPage(): JSX.Element {
   const { orders, clearOrders } = useOrderHistory();
@@ -15,6 +16,7 @@ export default function PortfolioOrdersPage(): JSX.Element {
   }, [orders]);
 
   return (
+    <AuthGuard>
     <main className="min-h-screen bg-[var(--nq-bg-base)] p-6 text-[var(--nq-text-primary)]">
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -83,5 +85,6 @@ export default function PortfolioOrdersPage(): JSX.Element {
         </div>
       </section>
     </main>
+    </AuthGuard>
   );
 }

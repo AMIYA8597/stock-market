@@ -10,12 +10,21 @@ import {
   SimpleDonutChart,
   type DonutSlice,
 } from "@/components/charts";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(2)}%`;
 }
 
-export default function PortfolioOptimizerPage(): JSX.Element {
+export default function PortfolioOptimizerRoutePage(): JSX.Element {
+  return (
+    <AuthGuard>
+      <PortfolioOptimizerPage />
+    </AuthGuard>
+  );
+}
+
+function PortfolioOptimizerPage(): JSX.Element {
   const [method, setMethod] = useState<"hrp" | "max_sharpe" | "min_volatility" | "efficient_risk">("max_sharpe");
   const [targetReturn, setTargetReturn] = useState<number>(0.15);
   

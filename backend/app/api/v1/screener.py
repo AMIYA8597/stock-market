@@ -18,7 +18,6 @@ from app.schemas.screener import (
     ScreenerRunResponse,
 )
 
-
 router = APIRouter(prefix="/screener", tags=["screener"])
 
 
@@ -57,8 +56,8 @@ async def post_screener_run(
             # Query latest 30 daily OHLCV bars for this symbol
             ohlcv_stmt = (
                 select(OHLCV)
-                .where(OHLCV.symbol_id == s.id, OHLCV.interval == "1d")
-                .order_by(OHLCV.time.desc())
+                .where(OHLCV.instrument_id == s.id, OHLCV.interval == "1d")
+                .order_by(OHLCV.timestamp.desc())
                 .limit(30)
             )
             ohlcv_res = await db.execute(ohlcv_stmt)
@@ -112,6 +111,13 @@ async def post_screener_run(
             sig_res = await db.execute(sig_stmt)
             latest_sig = sig_res.scalar_one_or_none()
 
+            # PE ratio / market cap: no fundamentals provider is wired into this
+            # codebase today, so these are honestly reported as unavailable
+            # (None) rather than fabricated, consistent with the rest of the
+            # API (see models.py/explain.py's "omit rather than invent" rule).
+            pe_ratio = None
+            mcap = None
+
             if latest_sig:
                 sig_dir = latest_sig.direction
                 sig_conf = float(latest_sig.confidence)
@@ -121,20 +127,6 @@ async def post_screener_run(
                 sig_dir = "NEUTRAL"
                 sig_conf = 0.5
                 regime_state = "sideways"
-
-                # Fetch PE ratio and market cap from MarketDataService ONLY if we have OHLCV (legacy path)
-                pe_ratio = None
-                mcap = None
-                try:
-                    info = {"pe_ratio": 15.0, "market_cap": 1e10}
-                    pe_raw = info.get("trailingPE") or info.get("forwardPE")
-                    mc_raw = info.get("marketCap")
-                    if pe_raw is not None:
-                        pe_ratio = float(pe_raw)
-                    if mc_raw is not None:
-                        mcap = float(mc_raw) / 1e7  # convert to crores for display
-                except Exception:
-                    pass
 
             results.append(
                 {

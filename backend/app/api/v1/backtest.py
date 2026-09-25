@@ -5,22 +5,16 @@ from __future__ import annotations
 import math
 
 # import random  # removed per policy
-from datetime import UTC, date, datetime, time, timedelta
-from decimal import Decimal
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
-import numpy as np
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, get_rate_limiter
 from app.core.entitlements import require_feature
-from app.database.connection import async_session_factory
 from app.models.backtest import BacktestJob
-from app.models.instrument import Instrument
-from app.models.ohlcv import OHLCV
-from app.models.signal import EnsembleSignal
 from app.schemas.backtest import (
     BacktestMetrics,
     BacktestRequest,
@@ -29,33 +23,9 @@ from app.schemas.backtest import (
     BacktestStatusResponse,
     DrawdownPoint,
     EquityCurvePoint,
-    MonteCarloResults,
-    StatisticalTests,
     TradeLogEntry,
-    WalkForwardMetrics,
 )
 from app.tasks.backtest_tasks import run_backtest_job_task
-from research.backtesting.analytics import (
-    cagr,
-    calmar_ratio,
-    max_drawdown,
-    omega_ratio,
-    sharpe_ratio,
-    sortino_ratio,
-)
-from research.backtesting.engine import (
-    run_vectorized_backtest,
-)
-from research.backtesting.monte_carlo import (
-    bootstrap_paths,
-    summarize_monte_carlo,
-)
-from research.backtesting.statistical_tests import (
-    deflated_sharpe_ratio,
-    diebold_mariano_test,
-    min_backtest_length_days,
-)
-from research.backtesting.walk_forward import evaluate_cpcv
 
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
@@ -125,7 +95,7 @@ async def get_backtest_status(
     progress_pct = job.progress if job.progress is not None else 0
     if job.status == "DONE":
         progress_pct = 100
-        
+
     return BacktestStatusResponse(
         job_id=str(job.id),
         status=job.status,
@@ -155,11 +125,11 @@ async def get_backtest_results(
         raise HTTPException(status_code=400, detail="Job is not completed yet or has no results.")
 
     results = job.results
-    
+
     # We construct the response based on the schema and what we saved in backtest_tasks
     # If the metrics are missing, we mock them for now.
     metrics = results.get("metrics", {})
-    
+
     return BacktestResultsResponse(
         job_id=str(job.id),
         strategy_name=job.strategy_name,
@@ -198,48 +168,4 @@ async def get_backtest_results(
         monte_carlo=None,
         statistical_tests=None,
         walk_forward=None
-    )
-
-
-    stmt = select(BacktestJob).where(BacktestJob.id == job_uuid, BacktestJob.user_id == uid)
-    res = await db.execute(stmt)
-    job = res.scalar_one_or_none()
-    if not job:
-        raise HTTPException(status_code=404, detail="Backtest job not found")
-
-    if job.status not in ("COMPLETED", "DONE"):
-        raise HTTPException(
-            status_code=400, detail=f"Backtest job is not completed (status: {job.status})"
-        )
-
-    res_data = job.results
-    if not res_data:
-        raise HTTPException(status_code=500, detail="Job completed but results missing")
-
-    completed_dt = job.completed_at
-    if completed_dt and completed_dt.tzinfo is None:
-        completed_dt = completed_dt.replace(tzinfo=UTC)
-
-    return BacktestResultsResponse(
-        job_id=str(job.id),
-        strategy_name=job.strategy_name,
-        universe=job.universe,
-        date_from=job.date_from,
-        date_to=job.date_to,
-        initial_capital=Decimal(str(job.initial_capital)),
-        metrics=BacktestMetrics(**res_data["metrics"]),
-        equity_curve=[EquityCurvePoint(**pt) for pt in res_data["equity_curve"]],
-        drawdown_series=[DrawdownPoint(**pt) for pt in res_data["drawdown_series"]],
-        trade_log=[TradeLogEntry(**pt) for pt in res_data["trade_log"]],
-        walk_forward=WalkForwardMetrics(**res_data["walk_forward"])
-        if res_data.get("walk_forward")
-        else None,
-        monte_carlo=MonteCarloResults(**res_data["monte_carlo"])
-        if res_data.get("monte_carlo")
-        else None,
-        statistical_tests=StatisticalTests(**res_data["statistical_tests"])
-        if res_data.get("statistical_tests")
-        else None,
-        status="DONE",
-        completed_at=completed_dt or datetime.now(UTC),
     )

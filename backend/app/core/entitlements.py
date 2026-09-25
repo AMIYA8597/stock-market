@@ -5,7 +5,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import get_current_context, RequestContext
+from app.core.security import RequestContext, get_current_context
 from app.database.connection import get_db
 from app.models.billing import OrganizationSubscription, Plan, PlanEntitlement
 
@@ -35,7 +35,7 @@ def require_feature(feature_key: str) -> Callable:
         entitlement = result.scalars().first()
         if not entitlement:
             raise HTTPException(
-                status_code=403, 
+                status_code=403,
                 detail=f"Feature '{feature_key}' requires a premium plan or is not enabled for your organization."
             )
         return ctx
@@ -67,11 +67,11 @@ def require_quota(feature_key: str, increment: int = 1) -> Callable:
         entitlement = result.scalars().first()
         if not entitlement:
             raise HTTPException(status_code=403, detail=f"Feature '{feature_key}' is not available.")
-        
-        # Skipping actual usage row lock and increment logic here for brevity, 
+
+        # Skipping actual usage row lock and increment logic here for brevity,
         # but the guard is structurally in place.
         if entitlement.quota_limit is not None and entitlement.quota_limit < increment:
             raise HTTPException(status_code=403, detail=f"Quota exceeded for '{feature_key}'.")
-            
+
         return ctx
     return _dependency

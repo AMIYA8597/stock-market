@@ -9,6 +9,8 @@ torch-geometric>=2.4.0
 transformers>=5.14.1
 vaderSentiment>=3.3.2
 hmmlearn>=0.3.0
+river>=0.21.0
+optuna>=3.6.0
 arch>=6.0.0
 
 xgboost>=2.0.3

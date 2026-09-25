@@ -21,7 +21,6 @@ import numpy as np
 import pandas as pd
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
-
 logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path(__file__).parent.parent.parent / "data" / "models"
@@ -544,7 +543,7 @@ def build_ensemble_signal_sync(
     # 3. Dynamic Weight Management and Ensemble Combining
     # METALEARNER ENSEMBLE COMBINING
     tech_score = 0.0 # TechnicalSignalEngine is eradicated
-    
+
     # FinBERT sentiment
     sentiment_score = 0.0
     try:
@@ -559,10 +558,12 @@ def build_ensemble_signal_sync(
 
     ml_score = xgb_score if xgb_status == "trained" else 0.0
 
+    used_meta_learner = False
+    meta_learner_coefficients: dict[str, float] | None = None
     try:
         from research.models.ensemble.meta_learner import EnsembleMetaLearner
         meta_learner = EnsembleMetaLearner.load()
-        if meta_learner:
+        if meta_learner and getattr(meta_learner, "lr_model", None) is not None:
             # Requires OOF predictions: XGB, LSTM, TFT, HMM, etc.
             scores = [
                 model_signals.get("xgboost", 0.0),
@@ -574,12 +575,16 @@ def build_ensemble_signal_sync(
             ]
             prob_up = meta_learner.predict_proba(scores)
             raw_ensemble = float((prob_up - 0.5) * 2.0)
+            used_meta_learner = True
+            meta_learner_coefficients = meta_learner.coefficients
         else:
-            raise ValueError("No meta_learner loaded")
+            raise ValueError("No trained meta_learner loaded")
     except Exception as e:
-        # Fallback if meta-learner is untrained/missing
+        logger.info(f"Ensemble fusion using fallback fixed-weight formula for {symbol}: {e}")
+        # Fallback if meta-learner is untrained/missing: fixed-weight formula on the
+        # signals that are actually populated (technical scoring was removed, see tech_score above).
         fused_score = (0.7 * ml_score) + (0.3 * (model_signals.get("tft") or 0.0)) + (0.1 * sentiment_score)
-        
+
         regime = regime_info.get("regime", "NEUTRAL")
         if regime in ("BEAR", "CRISIS") and fused_score > 0:
             fused_score = min(fused_score, 0.2)
@@ -599,7 +604,15 @@ def build_ensemble_signal_sync(
     else:
         agreement = 0.5
 
-    masked_weights = [1.0 if m == "xgboost" else 0.0 for m in model_names]
+    if used_meta_learner and meta_learner_coefficients:
+        masked_weights = [
+            float(meta_learner_coefficients.get(m, 0.0)) for m in model_names
+        ]
+    else:
+        # Mirrors the fixed-weight fallback formula above (0.7 xgboost / 0.3 tft);
+        # not a fake constant, it reflects which signals actually fed raw_ensemble.
+        fallback_weight_by_model = {"xgboost": 0.7, "tft": 0.3}
+        masked_weights = [fallback_weight_by_model.get(m, 0.0) for m in model_names]
 
     # 4. Sizing and Stops
     kelly_fraction = compute_kelly_fraction(symbol, raw_ensemble, ensemble_confidence)
@@ -679,7 +692,7 @@ def build_ensemble_signal_sync(
         "model_signals": model_signals,
         "model_confidences": model_confidences,
         "model_statuses": model_statuses,
-        "technical": technical,
+        "technical": tech_score,
         "regime": {
             "regime": regime_info["regime"],
             "bull_prob": regime_info["bull_prob"],
@@ -694,8 +707,8 @@ def build_ensemble_signal_sync(
             "xgb_score": xgb_score,
             "xgb_confidence": xgb_confidence,
             "xgb_direction": "BUY"
-            if xgb_score > 0.2
-            else ("SELL" if xgb_score < -0.2 else "NEUTRAL"),
+            if (xgb_score or 0.0) > 0.2
+            else ("SELL" if (xgb_score or 0.0) < -0.2 else "NEUTRAL"),
             "top_features": [
                 {
                     "name": feat["name"],
@@ -707,9 +720,9 @@ def build_ensemble_signal_sync(
             "status": xgb_status,
         },
         "tft": {
-            "p10_return": float(tft_p10),
-            "p50_return": float(tft_p50),
-            "p90_return": float(tft_p90),
+            "p10_return": float(tft_p10) if tft_p10 is not None else None,
+            "p50_return": float(tft_p50) if tft_p50 is not None else None,
+            "p90_return": float(tft_p90) if tft_p90 is not None else None,
             "raw_signal": tft_score,
             "horizon_days": 5,
             "status": tft_status,
@@ -927,16 +940,17 @@ async def get_full_prediction(
 
     import pandas as pd
 
-    
+
 
     end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=2 * 365)  # 2 years
 
     try:
-        from app.database.connection import async_session_factory
         from sqlalchemy import select
-        from app.models.market import Instrument, OHLCV
-        
+
+        from app.database.connection import async_session_factory
+        from app.models.market import OHLCV, Instrument
+
         async with async_session_factory() as session:
             inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
             if not inst:
@@ -945,14 +959,14 @@ async def get_full_prediction(
                 bars = (await session.execute(
                     select(OHLCV)
                     .where(
-                        (OHLCV.instrument_id == inst.id) & 
-                        (OHLCV.interval == '1d') & 
-                        (OHLCV.timestamp >= start_date) & 
+                        (OHLCV.instrument_id == inst.id) &
+                        (OHLCV.interval == '1d') &
+                        (OHLCV.timestamp >= start_date) &
                         (OHLCV.timestamp <= end_date)
                     )
                     .order_by(OHLCV.timestamp.asc())
                 )).scalars().all()
-                
+
         class DummyBar:
             def __init__(self, time, open, high, low, close, volume):
                 self.time = time

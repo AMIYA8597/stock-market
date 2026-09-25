@@ -1,17 +1,17 @@
+import hashlib
+import secrets
+import uuid
+from datetime import UTC, datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, delete
-import uuid
-import secrets
-import hashlib
-from datetime import datetime, timedelta, timezone
 
-from app.core.security import get_current_context, RequestContext
-from app.database.connection import get_db
-from app.models.identity import Organization, OrgMember, Invitation, ApiKey, User
 from app.core.dependencies import require_role
-from app.core.entitlements import require_feature, require_quota
+from app.core.security import RequestContext, get_current_context
+from app.database.connection import get_db
+from app.models.identity import ApiKey, Invitation, Organization, OrgMember, User
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -52,7 +52,7 @@ class MemberResponse(BaseModel):
     full_name: str | None
     role: str
     status: str
-    
+
 @router.get("/{org_id}/members", response_model=list[MemberResponse])
 async def list_members(
     org_id: str,
@@ -61,7 +61,7 @@ async def list_members(
 ):
     if ctx.organization_id != org_id:
         raise HTTPException(status_code=403, detail="Cross-organization access denied")
-        
+
     result = await db.execute(
         select(OrgMember, User)
         .join(User, User.id == OrgMember.user_id)
@@ -93,10 +93,10 @@ async def invite_member(
 ):
     if ctx.organization_id != org_id:
         raise HTTPException(status_code=403, detail="Cross-organization access denied")
-        
+
     # Check seat limits here
     # A complete implementation would check OrgMember count vs Plan limit
-    
+
     # Check if already invited
     org_uuid = uuid.UUID(org_id)
     existing_invite = await db.execute(
@@ -104,10 +104,10 @@ async def invite_member(
     )
     if existing_invite.first():
         raise HTTPException(status_code=409, detail="Invitation already pending")
-    
+
     token = secrets.token_urlsafe(32)
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    
+
     invitation = Invitation(
         organization_id=org_uuid,
         inviter_id=uuid.UUID(ctx.user_id),
@@ -115,11 +115,11 @@ async def invite_member(
         role=payload.role.upper(),
         token_hash=token_hash,
         status="pending",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7)
+        expires_at=datetime.now(UTC) + timedelta(days=7)
     )
     db.add(invitation)
     await db.commit()
-    
+
     # In real world, send email with `token` here
     return {"success": True, "message": "Invitation created", "token": token}
 
@@ -137,11 +137,11 @@ async def create_api_key(
 ):
     if ctx.organization_id != org_id:
         raise HTTPException(status_code=403, detail="Cross-organization access denied")
-        
+
     raw_key = secrets.token_urlsafe(32)
     key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
     prefix = raw_key[:8]
-    
+
     api_key = ApiKey(
         organization_id=uuid.UUID(org_id),
         created_by_id=uuid.UUID(ctx.user_id),
@@ -153,9 +153,9 @@ async def create_api_key(
     )
     db.add(api_key)
     await db.commit()
-    
+
     return {
-        "success": True, 
+        "success": True,
         "data": {
             "id": str(api_key.id),
             "key": raw_key, # Show only once!
@@ -172,12 +172,12 @@ async def list_api_keys(
 ):
     if ctx.organization_id != org_id:
         raise HTTPException(status_code=403, detail="Cross-organization access denied")
-        
+
     result = await db.execute(
         select(ApiKey).where(ApiKey.organization_id == uuid.UUID(org_id), ApiKey.status == "active")
     )
     keys = result.scalars().all()
-    
+
     return {
         "success": True,
         "data": [
