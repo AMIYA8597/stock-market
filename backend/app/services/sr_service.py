@@ -9,7 +9,6 @@ Provides out-of-sample Precision, Recall, and F1 metrics on historical zone touc
 
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
 from typing import Any
 
