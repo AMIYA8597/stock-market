@@ -1,28 +1,38 @@
 "use client";
 
-import { create } from "zustand";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { paperTradingApi } from "@/lib/api-client";
 import type { PortfolioTransactionResponse } from "@/lib/contracts-api";
 
 export interface OrderHistoryItem extends PortfolioTransactionResponse {
   source: "api" | "local";
 }
 
-interface OrderHistoryStore {
-  orders: OrderHistoryItem[];
-  addOrder: (order: PortfolioTransactionResponse, source?: "api" | "local") => void;
-  clearOrders: () => void;
-}
+export function useOrderHistory() {
+  const queryClient = useQueryClient();
 
-export const useOrderHistory = create<OrderHistoryStore>((set) => ({
-  orders: [],
-  addOrder: (order, source = "api") => set((state) => {
-    const normalized: OrderHistoryItem = {
-      ...order,
-      symbol: order.symbol.toUpperCase(),
-      type: order.type.toUpperCase() as "BUY" | "SELL",
-      source,
-    };
-    return { orders: [normalized, ...state.orders].slice(0, 150) };
-  }),
-  clearOrders: () => set({ orders: [] }),
-}));
+  const { data: orders = [], isLoading } = useQuery({
+    queryKey: ['orders'],
+    queryFn: async () => {
+      const data = await paperTradingApi.getHistory();
+      return (data as any[]).map(o => ({
+        ...o,
+        source: 'api',
+        type: o.side || o.type,
+      })) as OrderHistoryItem[];
+    },
+  });
+
+  const addOrder = (order: any, source: string = "api") => {
+    // Optimistic update can go here, but for now we just invalidate
+    queryClient.invalidateQueries({ queryKey: ['orders'] });
+    queryClient.invalidateQueries({ queryKey: ['portfolio'] });
+  };
+
+  const clearOrders = () => {
+    // If backend supports clearing history, call it. Otherwise do nothing.
+    queryClient.setQueryData(['orders'], []);
+  };
+
+  return { orders, addOrder, clearOrders, isLoading };
+}

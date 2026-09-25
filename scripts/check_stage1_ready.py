@@ -44,7 +44,7 @@ def database_url() -> str:
 def alembic_heads() -> set[str]:
     backend_dir = Path(__file__).resolve().parents[1] / "backend"
     result = subprocess.run(
-        [sys.executable, "-m", "alembic", "heads"],
+        ["alembic", "heads"],
         cwd=backend_dir,
         capture_output=True,
         text=True,
@@ -100,8 +100,8 @@ async def check() -> int:
         if "ohlcv" in present:
             coverage = await conn.fetchrow(
                 """
-                SELECT count(DISTINCT symbol_id) AS instruments, min(time) AS oldest, max(time) AS newest
-                FROM ohlcv WHERE interval = '1d' AND time >= now() - interval '1 year'
+                SELECT count(DISTINCT instrument_id) AS instruments, min(timestamp) AS oldest, max(timestamp) AS newest
+                FROM ohlcv WHERE interval = '1d' AND timestamp >= now() - interval '1 year'
                 """
             )
             enough = bool(coverage and coverage["instruments"] >= 5)

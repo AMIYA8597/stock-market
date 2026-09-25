@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy import select
 
 from app.database.connection import async_session_factory
-from app.models.sentiment import NewsSentiment
+from app.models.research import Dataset as NewsSentiment
 from app.tasks.sentiment_tasks import _update_news_sentiment_async
 
 

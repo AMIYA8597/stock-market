@@ -55,7 +55,7 @@ async def prove_shap():
         clf = XGBoostDirectionalClassifier.load(model_path)
         from datetime import UTC, datetime, timedelta
 
-        from app.services.data_ingestion.provider_manager import provider_manager
+        from app.services.ingestion.provider_manager import provider_manager
 
         end_date = datetime.now(UTC)
         start_date = end_date - timedelta(days=60)

@@ -596,7 +596,7 @@ class IntelligenceService:
             # To do this safely, we will extract it from the pipeline
             import pandas as pd
 
-            from app.services.data_ingestion.provider_manager import provider_manager
+            from app.services.market_data_service import MarketDataService
             from research.feature_engineering.pipeline import FeaturePipeline
 
             end_date = datetime.now(UTC)
@@ -607,11 +607,11 @@ class IntelligenceService:
 
                 with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(
-                        asyncio.run, provider_manager.get_ohlcv(symbol, "1d", start_date, end_date)
+                        asyncio.run, MarketDataService.get_history(symbol, "1d", "60d")
                     )
                     bars = future.result(timeout=10)
             else:
-                bars = asyncio.run(provider_manager.get_ohlcv(symbol, "1d", start_date, end_date))
+                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "60d"))
 
             if len(bars) < 60:
                 return rows
@@ -619,12 +619,12 @@ class IntelligenceService:
             df = pd.DataFrame(
                 [
                     {
-                        "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
-                        "open": b.open,
-                        "high": b.high,
-                        "low": b.low,
-                        "close": b.close,
-                        "volume": b.volume,
+                        "time": pd.to_datetime(b["time"]),
+                        "open": float(b["open"]),
+                        "high": float(b["high"]),
+                        "low": float(b["low"]),
+                        "close": float(b["close"]),
+                        "volume": float(b["volume"]),
                     }
                     for b in bars
                 ]
