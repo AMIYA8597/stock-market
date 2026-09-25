@@ -88,40 +88,27 @@ class LLMReasoningEngine:
 
     @staticmethod
     async def generate_reasoning(
-        symbol: str,
-        ensemble_signal: str,
-        confidence: float,
-        technicals: dict[str, Any],
-        news_sentiment: str
+        evidence_pack: dict[str, Any]
     ) -> str:
         prompt = f"""
         You are an institutional quantitative trading AI.
-        Generate a strictly concise, 1-sentence reasoning for the following signal.
+        Generate a strictly concise, 1-sentence reasoning for the following signal based ONLY on the evidence pack.
         DO NOT invent, synthesize, or output any numerical performance records, accuracy scores, or price targets that are not explicitly provided below.
         
-        Context:
-        Symbol: {symbol}
-        Signal: {ensemble_signal} (Confidence: {confidence})
-        Sentiment: {news_sentiment}
-        Technicals: {json.dumps(technicals)}
+        Evidence Pack:
+        {json.dumps(evidence_pack, indent=2)}
         """
 
         provider = LLMReasoningEngine.get_provider()
         if not provider:
-            return LLMReasoningEngine._heuristic_fallback(ensemble_signal, technicals, news_sentiment)
+            return LLMReasoningEngine._heuristic_fallback(evidence_pack)
 
         try:
             raw_text = await provider.generate_text(prompt)
-            evidence = {
-                "signal": ensemble_signal,
-                "confidence": confidence,
-                "technicals": technicals,
-                "sentiment": news_sentiment
-            }
-            return LLMReasoningEngine._validate_numeric_claims(raw_text, evidence)
+            return LLMReasoningEngine._validate_numeric_claims(raw_text, evidence_pack)
         except Exception as e:
             logger.error(f"LLM Reasoning failed: {e}")
-            return LLMReasoningEngine._heuristic_fallback(ensemble_signal, technicals, news_sentiment)
+            return LLMReasoningEngine._heuristic_fallback(evidence_pack)
 
 
     @staticmethod
@@ -152,16 +139,19 @@ class LLMReasoningEngine:
                 # Allow common small integers like 14-day RSI
                 if not found and num not in [0.0, 1.0, 14.0]:
                     logger.warning(f"LLM hallucinated number {num}. Stripping numerical claims.")
-                    return LLMReasoningEngine._heuristic_fallback(evidence["signal"], evidence["technicals"], evidence["sentiment"])
+                    return LLMReasoningEngine._heuristic_fallback(evidence)
             except:
                 pass
                 
         return text
 
     @staticmethod
-    def _heuristic_fallback(signal: str, technicals: dict[str, Any], sentiment: str) -> str:
+    def _heuristic_fallback(evidence: dict) -> str:
+        signal = evidence.get("signal", "HOLD")
+        technicals = evidence.get("technicals", {})
+        sentiment = evidence.get("sentiment", "neutral")
         rsi = technicals.get("RSI_14")
         if rsi is None:
             return f"Ensemble indicates {signal}; technical RSI data is unavailable."
-        rsi_msg = "oversold" if rsi < 30 else "overbought" if rsi > 70 else "neutral"
+        rsi_msg = "oversold" if float(rsi) < 30 else "overbought" if float(rsi) > 70 else "neutral"
         return f"Ensemble indicates {signal} with {sentiment} market sentiment and {rsi_msg} RSI momentum."

@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
+from app.models.ledger import PaperOrder, PaperPosition, PaperAccount
 from app.services.paper_trading import PaperTradingService
 
 
@@ -37,7 +37,7 @@ def mock_prediction_engine():
 
 @pytest.fixture
 def test_wallet():
-    return PaperWallet(
+    return PaperAccount(
         id=uuid.uuid4(),
         user_id="test_user",
         balance=Decimal("100000.00"),
@@ -52,15 +52,15 @@ def test_wallet():
 async def test_get_or_create_wallet_existing(mock_db, test_wallet):
     mock_db.execute.return_value = MockScalarResult([test_wallet])
     wallet = await PaperTradingService.get_or_create_wallet(mock_db, "test_user", for_update=True)
-    assert wallet.balance == Decimal("100000.00")
-    assert wallet.user_id == "test_user"
+    assert account.balance == Decimal("100000.00")
+    assert account.user_id == "test_user"
 
 @pytest.mark.asyncio
 async def test_get_or_create_wallet_new(mock_db):
     mock_db.execute.return_value = MockScalarResult([])
     wallet = await PaperTradingService.get_or_create_wallet(mock_db, "new_user")
-    assert wallet.user_id == "new_user"
-    assert wallet.balance == Decimal("100000.00")
+    assert account.user_id == "new_user"
+    assert account.balance == Decimal("100000.00")
 
 @pytest.mark.asyncio
 @patch("app.services.paper_trading.MarketDataService.get_quote", new_callable=AsyncMock)
@@ -104,8 +104,8 @@ async def test_get_positions_exception(mock_get_quote, mock_db):
 @patch("app.services.paper_trading.PaperTradingService.get_positions", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_get_pnl(mock_get_wallet, mock_get_positions, mock_db, test_wallet):
-    test_wallet.last_reset_date = date.today() - timedelta(days=1)
-    mock_get_wallet.return_value = test_wallet
+    test_account.last_reset_date = date.today() - timedelta(days=1)
+    mock_get_account.return_value = test_wallet
     mock_get_positions.return_value = [
         {"current_price": 2100.0, "quantity": 10.0, "unrealized_pnl": 1000.0}
     ]
@@ -122,7 +122,7 @@ async def test_get_pnl(mock_get_wallet, mock_get_positions, mock_db, test_wallet
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_market_buy_new_position(mock_get_wallet, mock_get_pnl, mock_compute, mock_norm, mock_get_quote, mock_db, test_wallet):
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_get_pnl.return_value = {"total_equity": 100000.0}
     mock_norm.return_value = "RELIANCE"
     mock_get_quote.return_value = {"price": 1000.0}
@@ -141,7 +141,7 @@ async def test_place_order_market_buy_new_position(mock_get_wallet, mock_get_pnl
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_market_buy_existing_position(mock_get_wallet, mock_get_pnl, mock_compute, mock_norm, mock_get_quote, mock_db, test_wallet):
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_get_pnl.return_value = {"total_equity": 100000.0}
     mock_norm.return_value = "RELIANCE"
     mock_get_quote.return_value = {"price": 1000.0}
@@ -160,7 +160,7 @@ async def test_place_order_market_buy_existing_position(mock_get_wallet, mock_ge
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_market_sell(mock_get_wallet, mock_get_pnl, mock_compute, mock_norm, mock_get_quote, mock_db, test_wallet):
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_get_pnl.return_value = {"total_equity": 100000.0}
     mock_norm.return_value = "RELIANCE"
     mock_get_quote.return_value = {"price": 1000.0}
@@ -178,7 +178,7 @@ async def test_place_order_market_sell(mock_get_wallet, mock_get_pnl, mock_compu
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_limit_buy(mock_get_wallet, mock_get_pnl, mock_norm, mock_get_quote, mock_db, test_wallet):
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_get_pnl.return_value = {"total_equity": 100000.0}
     mock_norm.return_value = "RELIANCE"
     mock_get_quote.return_value = {"price": 1000.0}
@@ -192,7 +192,7 @@ async def test_place_order_limit_buy(mock_get_wallet, mock_get_pnl, mock_norm, m
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_limit_sell(mock_get_wallet, mock_get_pnl, mock_norm, mock_get_quote, mock_db, test_wallet):
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_get_pnl.return_value = {"total_equity": 100000.0}
     mock_norm.return_value = "RELIANCE"
     mock_get_quote.return_value = {"price": 1000.0}
@@ -218,7 +218,7 @@ async def test_place_order_validations(mock_db):
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_risk_limit(mock_get_wallet, mock_get_pnl, mock_norm, mock_get_quote, mock_db, test_wallet):
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_get_pnl.return_value = {"total_equity": 100000.0}
     mock_norm.return_value = "RELIANCE"
     mock_get_quote.return_value = {"price": 60000.0}
@@ -231,8 +231,8 @@ async def test_place_order_risk_limit(mock_get_wallet, mock_get_pnl, mock_norm, 
 @patch("app.services.paper_trading.PaperTradingService.get_pnl", new_callable=AsyncMock)
 @patch("app.services.paper_trading.PaperTradingService.get_or_create_wallet", new_callable=AsyncMock)
 async def test_place_order_circuit_breaker(mock_get_wallet, mock_get_pnl, mock_get_quote, mock_db, test_wallet):
-    test_wallet.daily_realized_loss = Decimal("6000.00")
-    mock_get_wallet.return_value = test_wallet
+    test_account.daily_realized_loss = Decimal("6000.00")
+    mock_get_account.return_value = test_wallet
 
     with pytest.raises(ValueError, match="Daily loss limit circuit breaker triggered"):
         await PaperTradingService.place_order(mock_db, "test_user", "RELIANCE", "BUY", 1.0, "MARKET")
@@ -256,7 +256,7 @@ async def test_check_and_execute_limit_orders(mock_get_wallet, mock_compute, moc
         MockScalarResult([]),      # For position (returns none)
         MockScalarResult([test_wallet]) # For account
     ]
-    mock_get_wallet.return_value = test_wallet
+    mock_get_account.return_value = test_wallet
     mock_compute.return_value = {"brokerage": 20.0, "stt": 1.0, "slippage": 5.0, "txn_charge": 0.5, "sebi_fee": 0.1, "gst": 3.0, "stamp_duty": 0.1}
 
     count = await PaperTradingService.check_and_execute_limit_orders(mock_db, "RELIANCE", Decimal("800.00"))
@@ -298,4 +298,4 @@ async def test_reset_wallet(mock_get_pnl, mock_db, test_wallet):
     mock_get_pnl.return_value = {"cash_balance": 100000.0}
 
     res = await PaperTradingService.reset_wallet(mock_db, "test_user")
-    assert test_wallet.balance == Decimal("100000.00")
+    assert test_account.balance == Decimal("100000.00")

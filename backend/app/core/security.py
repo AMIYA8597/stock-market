@@ -45,26 +45,43 @@ class RequestContext:
         self.request_id = request_id
 
 
+from jwt import PyJWKClient, decode, InvalidTokenError
+
+# Setup a global PyJWKClient for caching JWK lookups
+_jwks_client = None
+
+def get_jwks_client():
+    global _jwks_client
+    if _jwks_client is None:
+        if not settings.SUPABASE_URL:
+            # Fallback for tests if no url is provided. But tests should mock it or we raise
+            jwks_url = "http://localhost:8000/auth/v1/jwks"
+        else:
+            jwks_url = f"{settings.SUPABASE_URL}/auth/v1/jwks"
+        _jwks_client = PyJWKClient(jwks_url)
+    return _jwks_client
+
 def verify_supabase_token(token: str) -> dict[str, Any]:
-    """Verify Supabase JWT token signature and return payload."""
+    """Verify Supabase JWT token signature using JWKS and return payload."""
     try:
-        # If we have a JWT secret configured, use HS256 to verify (Supabase default)
-        from app.core.test_state import is_test_mode
-        secret = settings.SUPABASE_JWT_SECRET
-        if is_test_mode() and not secret:
-            secret = "your-super-secret-jwt-token-with-at-least-32-characters-long"
-        if not secret:
-            raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
-        
-        payload = jwt.decode(
+        jwks_client = get_jwks_client()
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        payload = decode(
             token,
-            secret,
-            algorithms=["HS256"],
-            options={"verify_aud": False} # Usually aud is 'authenticated'
+            signing_key.key,
+            algorithms=["RS256"],
+            options={"verify_aud": False}
         )
         return payload
-    except JWTError as e:
+    except InvalidTokenError as e:
         logger.error(f"JWT verification failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except Exception as e:
+        logger.error(f"JWKS fetch or decode error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -83,8 +100,12 @@ async def get_current_context(
     
     # 1. API Key Auth
     if api_key:
+        import hashlib
+        # Hash the incoming API key to compare with the stored hash
+        api_key_hashed = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
+        
         result = await db.execute(
-            select(ApiKey).where(ApiKey.key_hash == api_key, ApiKey.status == "active")
+            select(ApiKey).where(ApiKey.key_hash == api_key_hashed, ApiKey.status == "active")
         )
         api_key_record = result.scalars().first()
         if not api_key_record:
@@ -145,11 +166,15 @@ async def get_current_context(
             if membership:
                 org_id = str(membership.organization_id)
 
+        # Resolve platform role from Supabase token claims (app_metadata or user_metadata)
+        platform_role = payload.get("app_metadata", {}).get("role") or payload.get("user_metadata", {}).get("platform_role")
+        
         ctx = RequestContext(
             user_id=str(user.id),
             organization_id=org_id,
             membership_id=str(membership.id) if membership else None,
             organization_role=membership.role if membership else None,
+            platform_role=platform_role,
             auth_method="SUPABASE_JWT",
             request_id=req_id
         )

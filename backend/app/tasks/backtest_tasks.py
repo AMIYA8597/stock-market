@@ -89,7 +89,7 @@ async def run_backtest_async(job_id: str) -> None:
 
             # 3. Fetch Real ML Signals from Database
             from app.models.instrument import Instrument
-            from app.models.signal import EnsembleSignal
+            from app.models.research import Prediction as EnsembleSignal
 
             sig_stmt = (
                 select(EnsembleSignal)

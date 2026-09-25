@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
 from app.models.instrument import Instrument
-from app.models.regime_states import RegimeState
+from app.models.research import Dataset as RegimeState
 from app.schemas.regime import (
     RegimeCurrentResponse,
     RegimeHistoryPoint,

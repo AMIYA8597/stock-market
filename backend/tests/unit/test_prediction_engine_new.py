@@ -83,8 +83,9 @@ def test_get_sentiment_pipeline():
 
 def test_detect_regime_short_df():
     df = pd.DataFrame({"close": [1, 2, 3]})
-    res = detect_regime(df)
-    assert res["regime"] == "unknown"
+    import pytest
+    with pytest.raises(ValueError, match="Insufficient data"):
+        detect_regime(df)
 
 def test_detect_regime_success(sample_df):
     mock_engine_class = MagicMock()
@@ -129,7 +130,6 @@ def test_standardize_df_columns():
 def test_build_ensemble_signal_sync(sample_df):
     sample_df["ATRr_14"] = 0.5
     with patch("app.services.prediction_engine.detect_regime") as mock_regime, \
-         patch("app.services.prediction_engine.TechnicalSignalEngine.generate_signal") as mock_tech, \
          patch("app.services.prediction_engine.compute_kelly_fraction", return_value=0.1):
 
         mock_regime.return_value = {
@@ -137,7 +137,7 @@ def test_build_ensemble_signal_sync(sample_df):
             "regime_confidence": 0.8, "hmm_used": True,
             "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
         }
-        mock_tech.return_value = {"score": 0.5}
+        
 
         with patch.dict('sys.modules', {'research.models.xgboost_model.classifier': MagicMock()}):
             res = build_ensemble_signal_sync("TEST", sample_df)
@@ -148,7 +148,6 @@ def test_build_ensemble_signal_all_models(sample_df):
     sample_df["ATRr_14"] = 0.5
     sample_df["close"] = 100.0
     with patch("app.services.prediction_engine.detect_regime") as mock_regime, \
-         patch("app.services.prediction_engine.TechnicalSignalEngine.generate_signal") as mock_tech, \
          patch("app.services.prediction_engine.compute_kelly_fraction", return_value=0.1), \
          patch("app.services.sentiment_analyzer.FinBERTSentimentAnalyzer") as mock_sentiment, \
          patch("pathlib.Path.exists", return_value=True):
@@ -158,7 +157,7 @@ def test_build_ensemble_signal_all_models(sample_df):
             "regime_confidence": 0.8, "hmm_used": True,
             "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
         }
-        mock_tech.return_value = {"score": 0.5}
+        
 
         mock_sentiment_inst = mock_sentiment.return_value
         mock_sentiment_inst.scrape_google_news.return_value = ["news"]
@@ -243,7 +242,7 @@ async def test_get_full_prediction(sample_df):
 
     with patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"), \
          patch("app.services.prediction_engine._cache_fetch") as mock_fetch, \
-         patch("app.services.prediction_engine.async_session_factory", new_callable=MagicMock) as mock_db_factory, \
+         patch("app.database.connection.async_session_factory", new_callable=MagicMock) as mock_db_factory, \
          patch("research.feature_engineering.pipeline.FeaturePipeline.run", return_value=sample_df), \
          patch("pandas_ta.core.rsi"), patch("pandas_ta.core.macd"), \
          patch("pandas_ta.core.ema"), patch("pandas_ta.core.bbands"), \
@@ -282,7 +281,7 @@ async def test_get_full_prediction_cached():
 @pytest.mark.asyncio
 async def test_get_full_prediction_error():
     with patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"), \
-         patch("app.services.prediction_engine.async_session_factory", new_callable=MagicMock) as mock_db_factory:
+         patch("app.database.connection.async_session_factory", new_callable=MagicMock) as mock_db_factory:
         mock_session = AsyncMock()
         mock_session.execute.side_effect = Exception("Fetch error")
         mock_db_factory.return_value.__aenter__.return_value = mock_session

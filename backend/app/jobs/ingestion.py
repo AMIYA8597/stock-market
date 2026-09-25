@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from app.database.connection import async_session_factory
 from app.models.market import Instrument, QuoteSnapshot, OHLCV
-from app.services.data_ingestion.provider_manager import provider_manager
+from app.services.ingestion.provider_manager import provider_manager
 
 logger = logging.getLogger(__name__)
 
@@ -82,17 +82,6 @@ class IngestionPipeline:
         logger.info("Ingestion pipeline completed.")
 
 def setup_scheduler(app):
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
-    scheduler = AsyncIOScheduler()
-    
-    pipeline = IngestionPipeline()
-    scheduler.add_job(
-        pipeline.run_full_ingestion, 
-        'interval', 
-        minutes=5, 
-        id='full_ingestion',
-        replace_existing=True
-    )
-    
-    scheduler.start()
-    app.state.scheduler = scheduler
+    # APScheduler loop removed as per architecture requirements.
+    # Ingestion should be triggered by external schedulers (e.g. GitHub Actions, Celery).
+    pass

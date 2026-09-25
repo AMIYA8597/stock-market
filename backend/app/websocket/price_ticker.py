@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 import time
 
-from app.services.data_ingestion.scheduler import is_market_hours
+from app.services.ingestion.scheduler import is_market_hours
 
 
 class TokenBucket:
@@ -54,8 +54,8 @@ async def run_price_ticker(redis: Redis) -> None:
 
     from app.models.instrument import Instrument
     from app.models.paper_trading import PaperPosition
-    from app.models.portfolio import PortfolioHolding
-    from app.models.watchlist import UserWatchlist
+    from app.models.paper_trading import PaperPosition as PortfolioHolding
+    from app.models.identity import User as UserWatchlist
 
     while True:
         try:

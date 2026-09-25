@@ -7,9 +7,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 def _require_superadmin(ctx: RequestContext) -> None:
-    # In a real app, this would check if the user is a platform SUPERADMIN
-    # or the token has a specific claim.
-    if ctx.organization_role != "SUPERADMIN":
+    # Ensure platform super-admin is decoupled from organization SUPERADMIN role.
+    if ctx.platform_role != "SUPERADMIN":
         raise HTTPException(status_code=403, detail="Superadmin access is required.")
 
 @router.get("/users")

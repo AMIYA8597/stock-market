@@ -39,9 +39,9 @@ router = APIRouter(prefix="/ws")
 
 
 @router.websocket("/prices")
-async def ws_prices(websocket: WebSocket, token: str = ""):
+async def ws_prices(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
-    user_id = await authenticate_ws(websocket, token)
+    user_id = await authenticate_ws(websocket, ticket)
     if not user_id: return
     """WebSocket route for live prices and signals."""
     manager = get_connection_manager()
@@ -155,9 +155,9 @@ async def ws_prices(websocket: WebSocket, token: str = ""):
 
 
 @router.websocket("/signals")
-async def ws_signals(websocket: WebSocket, token: str = ""):
+async def ws_signals(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
-    user_id = await authenticate_ws(websocket, token)
+    user_id = await authenticate_ws(websocket, ticket)
     if not user_id: return
     """Stream real signal_update messages from the 7-layer prediction engine.
 
@@ -237,9 +237,9 @@ async def ws_signals(websocket: WebSocket, token: str = ""):
 
 
 @router.websocket("/alerts")
-async def ws_alerts(websocket: WebSocket, token: str = ""):
+async def ws_alerts(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
-    user_id = await authenticate_ws(websocket, token)
+    user_id = await authenticate_ws(websocket, ticket)
     if not user_id: return
     manager = get_connection_manager()
     await manager.connect(websocket)
@@ -255,7 +255,7 @@ async def ws_alerts(websocket: WebSocket, token: str = ""):
 
 
 @router.websocket("/backtest-progress")
-async def ws_backtest_progress(websocket: WebSocket, token: str):
+async def ws_backtest_progress(websocket: WebSocket, ticket: str):
     from uuid import UUID
 
     from sqlalchemy import select
@@ -265,7 +265,7 @@ async def ws_backtest_progress(websocket: WebSocket, token: str):
     from app.models.backtest import BacktestJob
 
     from app.websocket.ws_auth import authenticate_ws
-    user_id_str = await authenticate_ws(websocket, token)
+    user_id_str = await authenticate_ws(websocket, ticket)
     if not user_id_str:
         return
 

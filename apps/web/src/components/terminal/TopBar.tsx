@@ -12,7 +12,7 @@ import { useTradingStore } from "@/stores/tradingStore";
 import { useTradingModeQuery, useTriggerKillSwitchMutation } from "@/hooks/queries/useTrading";
 
 import { usePriceFeed } from "@/hooks/usePriceFeed";
-import { getApiBaseUrl } from "@/lib/runtime-config";
+import { fetchApi } from "@/lib/api-client";
 
 interface TopBarProps {
   selectedSignal: SignalResponse | null;
@@ -127,9 +127,7 @@ export default function TopBar({
 
     async function loadGlobalContext() {
       try {
-        const res = await fetch(`${getApiBaseUrl()}/api/v1/market/global-context`);
-        if (!res.ok) throw new Error(`Request failed (${res.status})`);
-        const data = await res.json();
+        const data = await fetchApi<any>("/market/global-context");
         if (active) setMacroBias(data.macro_bias ?? "unavailable");
       } catch (err) {
         console.error("Failed to load global market context", err);

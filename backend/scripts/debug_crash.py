@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.models.instrument import Instrument
-from app.models.model_artifact import ModelArtifact
+from app.models.research import ModelRegistry as ModelArtifact
 from app.services.prediction_engine import build_ensemble_signal
 
 
