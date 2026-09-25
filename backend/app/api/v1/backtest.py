@@ -20,7 +20,7 @@ from app.database.connection import async_session_factory
 from app.models.backtest import BacktestJob
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
-from app.models.signal import EnsembleSignal
+from app.models.research import Prediction as EnsembleSignal
 from app.schemas.backtest import (
     BacktestMetrics,
     BacktestRequest,
@@ -144,66 +144,17 @@ async def get_backtest_results(
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid job ID format.")
 
-    stmt = select(BacktestJob).where(BacktestJob.id == job_uuid)
-    res = await db.execute(stmt)
-    job = res.scalar_one_or_none()
-
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found.")
-
-    if job.status != "DONE" or not job.results:
-        raise HTTPException(status_code=400, detail="Job is not completed yet or has no results.")
-
-    results = job.results
-    
-    # We construct the response based on the schema and what we saved in backtest_tasks
-    # If the metrics are missing, we mock them for now.
-    metrics = results.get("metrics", {})
-    
-    return BacktestResultsResponse(
-        job_id=str(job.id),
-        strategy_name=job.strategy_name,
-        universe=job.universe,
-        date_from=job.date_from,
-        date_to=job.date_to,
-        initial_capital=job.initial_capital,
-        completed_at=datetime.now(UTC),
-        status=job.status,
-        metrics=BacktestMetrics(
-            total_return=safe_round(metrics.get("total_return", 0), 4),
-            cagr=safe_round(metrics.get("cagr", 0), 4),
-            sharpe=safe_round(metrics.get("sharpe", 0), 4),
-            sharpe_ratio=safe_round(metrics.get("sharpe", 0), 4),
-            sortino_ratio=safe_round(metrics.get("sortino_ratio", 0), 4),
-            max_drawdown=safe_round(metrics.get("max_drawdown", 0), 4),
-            max_drawdown_duration_days=metrics.get("max_drawdown_duration_days", 0),
-            win_rate=safe_round(metrics.get("win_rate", 0), 4),
-            profit_factor=safe_round(metrics.get("profit_factor", 0), 4),
-            avg_win=safe_round(metrics.get("avg_win", 0), 4),
-            avg_loss=safe_round(metrics.get("avg_loss", 0), 4),
-            payoff_ratio=safe_round(metrics.get("payoff_ratio", 0), 4),
-            num_trades=metrics.get("num_trades", 0),
-            gross_profit=safe_round(metrics.get("gross_profit", 0), 4),
-            gross_loss=safe_round(metrics.get("gross_loss", 0), 4),
-            expectancy=safe_round(metrics.get("expectancy", 0), 4),
-            omega_ratio=safe_round(metrics.get("omega_ratio", 0), 4),
-            calmar_ratio=safe_round(metrics.get("calmar_ratio", 0), 4),
-            tail_ratio=safe_round(metrics.get("tail_ratio", 0), 4),
-            serenity_ratio=safe_round(metrics.get("serenity_ratio", 0), 4),
-            deflated_sharpe=safe_round(metrics.get("deflated_sharpe", 0), 4),
-        ),
-        equity_curve=[EquityCurvePoint(**pt) for pt in results.get("equity_curve", [])],
-        drawdown_series=[DrawdownPoint(**pt) for pt in results.get("drawdown_series", [])],
-        trade_log=[TradeLogEntry(**tr) for tr in results.get("trade_log", [])],
-        monte_carlo=None,
-        statistical_tests=None,
-        walk_forward=None
-    )
-
+    # Enforce user ownership
+    user_id_str = str(current_user.get("sub")) if isinstance(current_user, dict) else str(getattr(current_user, "user_id", getattr(current_user, "id", None)))
+    try:
+        uid = UUID(user_id_str)
+    except ValueError:
+        raise HTTPException(status_code=401, detail="Invalid user ID format.")
 
     stmt = select(BacktestJob).where(BacktestJob.id == job_uuid, BacktestJob.user_id == uid)
     res = await db.execute(stmt)
     job = res.scalar_one_or_none()
+
     if not job:
         raise HTTPException(status_code=404, detail="Backtest job not found")
 
@@ -226,20 +177,14 @@ async def get_backtest_results(
         universe=job.universe,
         date_from=job.date_from,
         date_to=job.date_to,
-        initial_capital=Decimal(str(job.initial_capital)),
-        metrics=BacktestMetrics(**res_data["metrics"]),
-        equity_curve=[EquityCurvePoint(**pt) for pt in res_data["equity_curve"]],
-        drawdown_series=[DrawdownPoint(**pt) for pt in res_data["drawdown_series"]],
-        trade_log=[TradeLogEntry(**pt) for pt in res_data["trade_log"]],
-        walk_forward=WalkForwardMetrics(**res_data["walk_forward"])
-        if res_data.get("walk_forward")
-        else None,
-        monte_carlo=MonteCarloResults(**res_data["monte_carlo"])
-        if res_data.get("monte_carlo")
-        else None,
-        statistical_tests=StatisticalTests(**res_data["statistical_tests"])
-        if res_data.get("statistical_tests")
-        else None,
+        initial_capital=job.initial_capital,
+        metrics=BacktestMetrics(**res_data.get("metrics", {})),
+        equity_curve=[EquityCurvePoint(**pt) for pt in res_data.get("equity_curve", [])],
+        drawdown_series=[DrawdownPoint(**pt) for pt in res_data.get("drawdown_series", [])],
+        trade_log=[TradeLogEntry(**pt) for pt in res_data.get("trade_log", [])],
+        walk_forward=WalkForwardMetrics(**res_data["walk_forward"]) if res_data.get("walk_forward") else None,
+        monte_carlo=MonteCarloResults(**res_data["monte_carlo"]) if res_data.get("monte_carlo") else None,
+        statistical_tests=StatisticalTests(**res_data["statistical_tests"]) if res_data.get("statistical_tests") else None,
         status="DONE",
         completed_at=completed_dt or datetime.now(UTC),
     )

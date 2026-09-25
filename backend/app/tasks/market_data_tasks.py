@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.database.connection import get_db
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
-from app.services.data_ingestion.provider_manager import provider_manager
+from app.services.ingestion.provider_manager import provider_manager
 
 logger = logging.getLogger(__name__)
 

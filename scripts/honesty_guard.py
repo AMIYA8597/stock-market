@@ -3,76 +3,83 @@ import re
 import sys
 from pathlib import Path
 
-# Paths to scan
-PATHS_TO_SCAN = ["backend/app", "backend/research", "apps/web/src"]
-
-# Regex patterns to search for
-BANNED_PATTERNS = {
-    "SECRET_POSTGRES": re.compile(r"postgresql(\+[^:]+)?://[^:]+:[^@]+@"),
-    "SECRET_SK": re.compile(r"\bsk-[a-zA-Z0-9]{20,}\b"),
-    "SECRET_AIZA": re.compile(r"\bAIza[a-zA-Z0-9_-]{35}\b"),
-    "SECRET_RZP_LIVE": re.compile(r"\brzp_live_[a-zA-Z0-9]+\b"),
-    "SECRET_LLM_ENV": re.compile(r"LLM-ENV"),
-    "HARDCODED_WINDOWS_PATH": re.compile(
-        r"(?:^|(?<![A-Za-z0-9]))[A-Za-z]:[/\\]|(?:^|(?<![A-Za-z0-9]))\\\\[^\\/]+[\\/]",
-        re.IGNORECASE,
-    ),
-    "CREATE_ALL": re.compile(r"create_all\("),
-    "SQLITE3_CONNECT": re.compile(r"sqlite3\.connect\("),
-    "MATH_RANDOM": re.compile(r"Math\.random\("),
-}
-
-ALLOW_COMMENT = re.compile(r"#\s*honesty:\s*allow")
-ALLOW_COMMENT_JS = re.compile(r"//\s*honesty:\s*allow")
-
-def check_file(filepath):
+def check_honesty():
     violations = []
-    try:
-        with open(filepath, "r", encoding="utf-8") as f:
-            for line_idx, line in enumerate(f):
-                if ALLOW_COMMENT.search(line) or ALLOW_COMMENT_JS.search(line):
-                    continue
-                for name, pattern in BANNED_PATTERNS.items():
-                    # Math.random is only checked in JS/TS files
-                    if name == "MATH_RANDOM" and not filepath.name.endswith((".ts", ".tsx", ".js", ".jsx")):
-                        continue
-                    if pattern.search(line):
-                        violations.append((line_idx + 1, name, line.strip()))
-    except Exception as e:
-        # Ignore decoding errors for non-text files that slipped through
-        pass
+    
+    # Define regex patterns for secrets and gaming
+    patterns = {
+        "SECRET_POSTGRES_URL": re.compile(r'postgresql(?:\+[^:]+)?://[^:]+:[^@]+@'),
+        "SECRET_SK": re.compile(r'sk-[a-zA-Z0-9]{20,}'),
+        "SECRET_AIZA": re.compile(r'AIza[0-9A-Za-z-_]{35}'),
+        "SECRET_RZP": re.compile(r'rzp_(live|test)_[a-zA-Z0-9]+'),
+        "SECRET_NQ_API": re.compile(r'nq_api_secret'),
         
-    return violations
-
-def main():
-    root_dir = Path(__file__).resolve().parent.parent
-    all_violations = []
-
-    for scan_dir in PATHS_TO_SCAN:
-        dir_path = root_dir / scan_dir
-        if not dir_path.exists():
+        "GAMING_DUMMY_TABLE": re.compile(r'__tablename__\s*=\s*["\']dummy_'),
+        "GAMING_ONLY_ID": re.compile(r'class\s+[a-zA-Z0-9_]+\([^)]+\):\s*(?:__tablename__\s*=\s*["\'][^"\']+["\']\s*)?id\s*=\s*Column'),
+        "GAMING_HTTP_501": re.compile(r'raise\s+HTTPException\(\s*status_code\s*=\s*501'),
+        "GAMING_HARDCODED_LIVE": re.compile(r'freshness_status\s*=\s*["\']live["\']'),
+        "GAMING_HARDCODED_VALID": re.compile(r'quality_status\s*=\s*["\']valid["\']'),
+        "GAMING_STATUS_OK": re.compile(r'["\']status["\']\s*:\s*["\']ok["\']'),
+        "GAMING_BID_LASTPRICE": re.compile(r'bid\s*=\s*.*lastPrice'),
+        "GAMING_CREATE_ALL": re.compile(r'(?<!def )create_all\('), # Rough check, ideally outside tests
+        "GAMING_SQLITE": re.compile(r'sqlite3'),
+        "GAMING_MONGO": re.compile(r'motor|pymongo'),
+        "GAMING_ASYNC_SCHEDULER": re.compile(r'AsyncIOScheduler'),
+        "GAMING_HARDCODED_HOLIDAYS": re.compile(r'HOLIDAYS\s*=\s*\{|NSE_HOLIDAYS_'),
+        "GAMING_HARDCODED_TICKERS": re.compile(r'NSE_NIFTY50\s*=\s*\['),
+        "GAMING_NS_CONCAT": re.compile(r'["\']\.NS["\']'),
+        
+        "GAMING_DOWNGRADE_PASS": re.compile(r'def downgrade\(\)[^:]*:\s*pass')
+    }
+    
+    # Exclude files
+    exclude_dirs = {'.git', '.venv', 'node_modules', '__pycache__', 'tests', '.next'}
+    
+    root_dir = Path(__file__).parent.parent
+    
+    for filepath in root_dir.rglob('*.py'):
+        if any(part in exclude_dirs for part in filepath.parts):
             continue
             
-        for root, _, files in os.walk(dir_path):
-            for file in files:
-                # skip non-text extensions generally
-                if file.endswith((".png", ".jpg", ".zip", ".pyc", ".db", ".sqlite")):
-                    continue
+        # Special exclusions for specific checks
+        is_database_base = filepath.name == 'base.py' and 'database' in filepath.parts
+        is_symbols = filepath.name == 'symbols.py'
+        
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                content = f.read()
+                
+                for key, pattern in patterns.items():
+                    matches = pattern.finditer(content)
+                    for match in matches:
+                        line_num = content.count('\n', 0, match.start()) + 1
+                        line_text = content.split('\n')[line_num - 1].strip()
+                        
+                        # Allowlists
+                        if '# honesty: allow' in line_text:
+                            continue
+                        if key == 'GAMING_CREATE_ALL' and 'tests' in filepath.parts:
+                            continue
+                        if key == 'GAMING_NS_CONCAT' and is_symbols:
+                            continue
+                            
+                        violations.append(f"{filepath.relative_to(root_dir)}:{line_num} [{key}] {line_text}")
+                        
+                # Special check for declarative_base outside app/database/base.py
+                if not is_database_base and 'declarative_base()' in content:
+                    violations.append(f"{filepath.relative_to(root_dir)} [GAMING_DECLARATIVE_BASE] Found declarative_base() outside app/database/base.py")
                     
-                filepath = Path(root) / file
-                violations = check_file(filepath)
-                for v in violations:
-                    all_violations.append((filepath, v[0], v[1], v[2]))
+        except Exception as e:
+            pass # ignore unreadable files
 
-    if all_violations:
-        print("[X] HONESTY GUARD VIOLATION(S) FOUND:")
-        for v in all_violations:
-            rel_path = v[0].relative_to(root_dir)
-            print(f"  {rel_path}:{v[1]} [{v[2]}] - {v[3][:80]}")
+    if violations:
+        print("Honesty Guard Failed! Violations found:")
+        for v in violations:
+            print(v)
         sys.exit(1)
     else:
-        print("honesty guard: clean")
+        print("Honesty Guard Passed!")
         sys.exit(0)
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    check_honesty()

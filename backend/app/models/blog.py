@@ -1,9 +1,0 @@
-from sqlalchemy import String
-from sqlalchemy import Column, Integer
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import declarative_base
-Base = declarative_base()
-class BlogPost(Base):
-    __tablename__ = 'dummy_blogpost'
-    id = Column(Integer, primary_key=True)
-    slug = Column(String)
