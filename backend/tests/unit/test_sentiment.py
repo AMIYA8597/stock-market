@@ -2,15 +2,20 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
+
 from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
 
 
-def test_sentiment_analyzer_fallback() -> None:
+def test_sentiment_analyzer_unavailable_raises() -> None:
+    """When the model is not initialized and initialize() cannot load it
+    (e.g. no-op mock, or FinBERT missing), analyze_sentiment must fail
+    loudly rather than return a fabricated neutral-leaning score. A missing
+    model means sentiment is genuinely unavailable, not "90% neutral"."""
     analyzer = FinBERTSentimentAnalyzer()
-    with patch.object(analyzer, "initialize") as mock_init:
-        analyzer._initialized = False
-        res = analyzer.analyze_sentiment("TCS shares rise on strong earnings.")
-        assert res == {"positive": 0.05, "negative": 0.05, "neutral": 0.90}
+    analyzer._initialized = False
+    with pytest.raises(RuntimeError):
+        analyzer.analyze_sentiment("TCS shares rise on strong earnings.")
 
 
 def test_get_stock_sentiment_with_mocked_headlines() -> None:
