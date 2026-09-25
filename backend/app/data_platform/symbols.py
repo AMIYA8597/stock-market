@@ -1,4 +1,3 @@
-import re
 from typing import Tuple, Optional
 
 def normalize_symbol(raw_symbol: str, exchange_hint: Optional[str] = None) -> Tuple[str, str]:
