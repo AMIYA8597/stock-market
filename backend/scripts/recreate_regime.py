@@ -5,7 +5,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.database.connection import engine
-from app.models.regime_states import RegimeState
+from app.models.research import Dataset as RegimeState
 
 
 async def create():

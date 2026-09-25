@@ -1,9 +1,6 @@
-import { createClient } from '@/lib/supabase/client';
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 import { useEffect, useState } from "react";
-import { paymentsApi } from "@/lib/api-client";
+import { fetchApi } from "@/lib/api-client";
 import { useToastStore } from "@/stores/toast-store";
-import { getApiBaseUrl } from "@/lib/runtime-config";
 
 export interface SubscriptionContext {
   subscription: {
@@ -30,23 +27,7 @@ export function useEntitlements(): SubscriptionContext {
     let mounted = true;
     const fetchSubscription = async () => {
       try {
-        const supabase = createClient(); const { data: { session } } = await supabase.auth.getSession(); const token = session?.access_token || "";
-        const headers: Record<string, string> = {
-          "Content-Type": "application/json",
-        };
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
-        
-        const res = await fetch(`${getApiBaseUrl()}/api/v1/payments/subscription`, {
-          headers
-        });
-        
-        if (!res.ok) {
-          throw new Error("Failed to fetch subscription");
-        }
-        
-        const data = await res.json();
+        const data = await fetchApi<any>("/payments/subscription");
         if (mounted) {
           setContext({
             subscription: data.subscription,
