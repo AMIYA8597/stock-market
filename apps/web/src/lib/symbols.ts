@@ -16,9 +16,9 @@ export function normalizeSymbol(rawSymbol: string, exchangeHint?: string | null)
   }
   
   if (raw.includes("@")) {
-    const parts = raw.split("@");
-    if (parts.length === 2) {
-      return [parts[0], parts[1]];
+    const [symbolPart, exchangePart] = raw.split("@");
+    if (symbolPart !== undefined && exchangePart !== undefined) {
+      return [symbolPart, exchangePart];
     }
   }
   
