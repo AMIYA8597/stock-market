@@ -8,3 +8,7 @@
 *.db binary
 *.exe binary
 *.zip binary
+
+# Added by P1.0
+* text=auto eol=lf
+*.ps1 eol=crlf

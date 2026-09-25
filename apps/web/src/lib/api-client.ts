@@ -46,7 +46,7 @@ export class ApiError extends Error {
   }
 }
 
-async function fetchApi<T>(
+export async function fetchApi<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
@@ -744,4 +744,13 @@ export const watchlistApi = {
       method: "DELETE",
     });
   },
+};
+
+export const onboardingApi = {
+  completeOnboarding(data: { profile: any; organization: any; marketPrefs: any; workspace: any }): Promise<any> {
+    return fetchApi("/onboarding", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 };

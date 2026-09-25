@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/client';
+import { fetchApi } from "@/lib/api-client";
 import { useState, useEffect } from "react";
 import { Bell, Plus, Trash2 } from "lucide-react";
 
@@ -27,17 +27,8 @@ export default function AlertsManager() {
 
   const fetchAlerts = async () => {
     try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || "";
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${apiUrl}/api/v1/alerts`, {
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAlerts(data.alerts || []);
-      }
+      const data = await fetchApi<any>("/alerts");
+      setAlerts(data.alerts || []);
     } catch (e) {
       console.error(e);
     } finally {
@@ -48,8 +39,6 @@ export default function AlertsManager() {
   const createAlert = async () => {
     if (!newSymbol || !newThreshold) return;
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const supabase = createClient(); const { data: { session } } = await supabase.auth.getSession(); const token = session?.access_token || "";
       const payload = {
         symbol: newSymbol.toUpperCase(),
         alert_type: newType,
@@ -58,39 +47,23 @@ export default function AlertsManager() {
         enabled: true
       };
       
-      const res = await fetch(`${apiUrl}/api/v1/alerts`, {
+      const data = await fetchApi<any>("/alerts", {
         method: "POST",
-        headers: { 
-          "Authorization": `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
         body: JSON.stringify(payload)
       });
-      if (res.ok) {
-        const data = await res.json();
-        setAlerts([...alerts, data]);
-        setNewSymbol("");
-        setNewThreshold("");
-      } else {
-        const err = await res.json();
-        alert(`Failed to create alert: ${err.detail}`);
-      }
+      setAlerts([...alerts, data]);
+      setNewSymbol("");
+      setNewThreshold("");
     } catch (e) {
       console.error(e);
+      alert(`Failed to create alert`);
     }
   };
 
   const deleteAlert = async (id: string) => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const supabase = createClient(); const { data: { session } } = await supabase.auth.getSession(); const token = session?.access_token || "";
-      const res = await fetch(`${apiUrl}/api/v1/alerts/${id}`, {
-        method: "DELETE",
-        headers: { "Authorization": `Bearer ${token}` }
-      });
-      if (res.ok) {
-        setAlerts(alerts.filter(a => a.id !== id));
-      }
+      await fetchApi<any>(`/alerts/${id}`, { method: "DELETE" });
+      setAlerts(alerts.filter(a => a.id !== id));
     } catch (e) {
       console.error(e);
     }
@@ -158,7 +131,7 @@ export default function AlertsManager() {
                 <span className="text-xs font-bold font-mono text-[var(--nq-text-primary)] flex items-center gap-2">
                   {alert.symbol} 
                   <span className={`px-1.5 py-0.5 rounded text-[9px] font-sans font-semibold ${alert.alert_type === 'PRICE_ABOVE' ? 'bg-[rgba(0,230,118,0.15)] text-[var(--accent-green)]' : 'bg-[rgba(255,59,92,0.15)] text-[var(--accent-red)]'}`}>
-                    {alert.alert_type === 'PRICE_ABOVE' ? '↑' : '↓'} {alert.threshold}
+                    {alert.alert_type === 'PRICE_ABOVE' ? '▲' : '▼'} {alert.threshold}
                   </span>
                 </span>
                 {alert.is_triggered ? (
