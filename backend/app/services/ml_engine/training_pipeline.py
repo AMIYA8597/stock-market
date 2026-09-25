@@ -182,14 +182,8 @@ class TrainingPipeline:
             "ARIMA": ARIMADirectionalClassifier(order=(1, 0, 1)),
             "XGBoost": XGBoostDirectionalClassifier(n_estimators=50, max_depth=3),
             "LightGBM": LightGBMDirectionalClassifier(n_estimators=50, max_depth=3),
-            "LSTM": LSTMAttentionClassifier(input_dim=len(features)) if hasattr(LSTMAttentionClassifier, "fit") else NaiveDirectionalClassifier() # fallback if mock
+            "LSTM": LSTMAttentionClassifier(),
         }
-        
-        # Test mock handling for LSTM
-        try:
-            LSTMAttentionClassifier(input_dim=len(features))
-        except TypeError:
-            models_to_evaluate["LSTM"] = LSTMAttentionClassifier()
 
         results = {}
         best_cost_adj_sharpe = -999.0
