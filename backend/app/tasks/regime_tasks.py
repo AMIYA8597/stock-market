@@ -39,8 +39,8 @@ async def _update_regime_states_async() -> dict[str, Any]:
             # Fetch last 3 years of OHLCV to have enough data for HMM/GARCH
             ohlcv_res = await session.execute(
                 select(OHLCV)
-                .where(OHLCV.symbol_id == inst.id)
-                .order_by(OHLCV.time.desc())
+                .where(OHLCV.instrument_id == inst.id)
+                .order_by(OHLCV.timestamp.desc())
                 .limit(750)
             )
             ohlcv_records = ohlcv_res.scalars().all()
@@ -82,19 +82,19 @@ async def _update_regime_states_async() -> dict[str, Any]:
                 for r in reversed(ohlcv_records)
             ])
             df_full.set_index("time", inplace=True)
-            
+
             ohlcv_data = df_full[["open", "high", "low", "close", "volume"]].astype(float).values
-            
+
             engine = InferenceEngine()
             res = engine.predict(ohlcv_data, train=True)
-            
+
             canonical_state_idx = res.current_state
-            
+
             canonical_probs = [0.0, 0.0, 0.0, 0.0]
             for i in range(len(res.state_probs)):
                 if i < 4:
                     canonical_probs[i] = float(res.state_probs[i])
-                    
+
             cond_vol_1d = float(res.conditional_vol)
             cond_vol_5d = float(res.vol_forecast_5d)
             cond_vol_21d = float(res.vol_forecast_21d)

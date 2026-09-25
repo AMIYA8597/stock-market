@@ -33,24 +33,32 @@ def _get_engine_kwargs() -> dict:
         "echo_pool": settings.DEBUG,
     }
 
-    connect_args = {
-        "server_settings": {"application_name": "neuroquant-api"},
-        "command_timeout": 15.0  # roughly equivalent to statement_timeout for asyncpg
-    }
-    if settings.DB_SSL_REQUIRED:
-        connect_args["ssl"] = True
+    # The asyncpg-specific connect_args below (server_settings, ssl,
+    # statement_cache_size, ...) are meaningless — and rejected outright —
+    # for the sqlite+aiosqlite driver used by the documented local-dev
+    # fallback (README.md / LOCAL_SETUP.md). Only apply them for Postgres.
+    is_postgres = settings.DATABASE_URL.startswith("postgresql")
 
-    if settings.DB_POOL_MODE == "transaction":
-        connect_args["statement_cache_size"] = 0
-        connect_args["prepared_statement_cache_size"] = 0
-        kwargs["poolclass"] = NullPool
-    else:
-        kwargs["pool_size"] = settings.DB_POOL_SIZE
-        kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
-        kwargs["pool_pre_ping"] = True
-        kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE
+    if is_postgres:
+        connect_args = {
+            "server_settings": {"application_name": "neuroquant-api"},
+            "command_timeout": 15.0,  # roughly equivalent to statement_timeout for asyncpg
+        }
+        if settings.DB_SSL_REQUIRED:
+            connect_args["ssl"] = True
 
-    kwargs["connect_args"] = connect_args
+        if settings.DB_POOL_MODE == "transaction":
+            connect_args["statement_cache_size"] = 0
+            connect_args["prepared_statement_cache_size"] = 0
+            kwargs["poolclass"] = NullPool
+        else:
+            kwargs["pool_size"] = settings.DB_POOL_SIZE
+            kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+            kwargs["pool_pre_ping"] = True
+            kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE
+
+        kwargs["connect_args"] = connect_args
+
     return kwargs
 
 engine = create_async_engine(
@@ -60,6 +68,7 @@ engine = create_async_engine(
 
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
+
 
 @compiles(JSONB, "sqlite")
 def compile_jsonb_sqlite(type_, compiler, **kw):

@@ -1,9 +1,20 @@
-from datetime import datetime, date
 import uuid
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, Numeric, UniqueConstraint, Date, Integer
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import date, datetime
+
+from sqlalchemy import (
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database.connection import Base
+
 
 class Exchange(Base):
     __tablename__ = "exchanges"

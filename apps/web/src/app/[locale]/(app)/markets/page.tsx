@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type MarketIndex, type MarketMover } from "@/lib/contracts-api";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { safeFormat } from "@/lib/formatters";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 const sections = [
   {
@@ -24,7 +25,15 @@ const sections = [
   },
 ];
 
-export default function MarketsPage(): JSX.Element {
+export default function MarketsRoutePage(): JSX.Element {
+  return (
+    <AuthGuard>
+      <MarketsPage />
+    </AuthGuard>
+  );
+}
+
+function MarketsPage(): JSX.Element {
   const [indices, setIndices] = useState<MarketIndex[]>([]);
   const [movers, setMovers] = useState<MarketMover[]>([]);
   const [error, setError] = useState<string | null>(null);

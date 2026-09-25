@@ -1,9 +1,10 @@
-from typing import Optional
 import uuid
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from app.models.market import Instrument, InstrumentAlias, Exchange
+from app.models.market import Instrument, InstrumentAlias
+
 
 class InstrumentService:
     def __init__(self, session: AsyncSession):
@@ -14,7 +15,7 @@ class InstrumentService:
         stmt = select(Instrument).where(Instrument.canonical_symbol == symbol)
         result = await self.session.execute(stmt)
         instrument = result.scalar_one_or_none()
-        
+
         if instrument:
             return instrument
 
@@ -30,7 +31,7 @@ class InstrumentService:
         await self.session.refresh(instrument)
         return instrument
 
-    async def resolve_symbol(self, provider: str, provider_symbol: str) -> Optional[uuid.UUID]:
+    async def resolve_symbol(self, provider: str, provider_symbol: str) -> uuid.UUID | None:
         """Resolve a provider-specific symbol to a canonical instrument UUID."""
         stmt = select(InstrumentAlias.instrument_id).where(
             InstrumentAlias.provider == provider,

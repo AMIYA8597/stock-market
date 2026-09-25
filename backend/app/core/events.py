@@ -21,7 +21,6 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
-from app.core.watchlist import WATCHLIST_SYMBOLS
 from app.database.redis_client import _redis_pool_singleton
 
 logger = get_logger(__name__)
@@ -132,29 +131,14 @@ async def startup_events() -> dict[str, Any]:
             else:
                 logger.info("startup_price_ticker_skipped_dev_mode")
 
-            # Alert polling loop task
-            try:
-                # WATCHLIST_SYMBOLS imported from central module
-
-                async def alert_polling_loop():
-                    # Sleep slightly on startup to let server initialize
-                    await asyncio.sleep(86400)  # DISABLED FOR LOCAL DEV to prevent blocking
-                    while True:
-                        try:
-                            from app.services.alert_engine import check_and_fire_alerts
-                            from app.websocket.connection_manager import get_connection_manager
-
-                            manager = get_connection_manager()
-                            await check_and_fire_alerts(WATCHLIST_SYMBOLS, manager)
-                        except Exception as loop_err:
-                            logger.warning(f"Alert polling error: {loop_err}")
-                        await asyncio.sleep(300)
-
-                alert_task = asyncio.create_task(alert_polling_loop(), name="alert_polling_loop")
-                background_tasks.append(alert_task)
-                logger.info("startup_alert_polling_loop_created")
-            except Exception as e:
-                logger.error(f"Failed to start alert polling loop background task: {e}")
+            # Note: alert polling is handled entirely by the Alert Evaluator
+            # below (app.workers.alert_evaluator), which queries Alert/
+            # AlertEvent against the real schema. A second, parallel
+            # "alert_engine.py"-based polling loop used to run here too; it
+            # depended on a app.services.signal_engine module that doesn't
+            # exist in this codebase and has been removed as dead/duplicate
+            # code rather than fixed, since alert_evaluator already covers
+            # this responsibility correctly.
 
             # Initialize Background Market Scheduler
             try:

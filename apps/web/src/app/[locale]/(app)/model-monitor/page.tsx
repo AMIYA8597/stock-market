@@ -6,6 +6,7 @@ import { Badge } from "@neuroquant/ui";
 import { Button } from "@neuroquant/ui";
 import { contractsApi, type DriftItem, type EnsembleWeightPoint, type ModelAccuracyItem } from "@/lib/contracts-api";
 import { ChartCard, SimpleBarChart, type SimpleBarPoint, SimpleLineAreaChart, type LineAreaPoint } from "@/components/charts";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 function formatRatio(value: number | null | undefined): string {
   if (typeof value !== "number" || Number.isNaN(value)) {
@@ -14,7 +15,15 @@ function formatRatio(value: number | null | undefined): string {
   return value.toFixed(3);
 }
 
-export default function ModelMonitorPage(): JSX.Element {
+export default function ModelMonitorRoutePage(): JSX.Element {
+  return (
+    <AuthGuard>
+      <ModelMonitorPage />
+    </AuthGuard>
+  );
+}
+
+function ModelMonitorPage(): JSX.Element {
   const [accuracy, setAccuracy] = useState<ModelAccuracyItem[]>([]);
   const [drift, setDrift] = useState<DriftItem[]>([]);
   const [weights, setWeights] = useState<EnsembleWeightPoint[]>([]);

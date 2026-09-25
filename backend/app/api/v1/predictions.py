@@ -35,7 +35,7 @@ async def get_prediction(
         select(ModelArtifact)
         .join(Instrument)
         .where(
-            Instrument.symbol == norm_symbol,
+            Instrument.canonical_symbol == norm_symbol,
             ModelArtifact.is_active,
         )
     )
@@ -107,7 +107,7 @@ async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)
         .join(ModelArtifact, ModelMetric.artifact_id == ModelArtifact.id)
         .join(Instrument, ModelArtifact.symbol_id == Instrument.id)
         .where(
-            Instrument.symbol == norm_symbol,
+            Instrument.canonical_symbol == norm_symbol,
             ModelArtifact.is_active,
         )
         .order_by(ModelMetric.created_at.desc())
