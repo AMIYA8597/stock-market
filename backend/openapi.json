@@ -26,7 +26,7 @@
     "/api/v1/health/live-data": {
       "get": {
         "summary": "Health Live Data",
-        "description": "Pings external data sources to check reachability.",
+        "description": "Returns cached provider status without synchronous network probing.",
         "operationId": "health_live_data_api_v1_health_live_data_get",
         "responses": {
           "200": {
@@ -305,6 +305,53 @@
                   },
                   "type": "array",
                   "title": "Response List User Organizations Api V1 Organizations Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "Create Organization",
+        "operationId": "create_organization_api_v1_organizations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1730,6 +1777,31 @@
         ],
         "summary": "Get Market Universe",
         "operationId": "get_market_universe_api_v1_market_universe_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1737,6 +1809,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UniverseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1796,6 +1878,7 @@
           "market"
         ],
         "summary": "Get Global Context",
+        "description": "Cross-market context (global indices, VIX, FX) for the terminal's macro widget.\n\nNo global-index ingestion pipeline exists in this codebase yet, so this\nreturns an explicit unavailable status rather than fabricating index levels.",
         "operationId": "get_global_context_api_v1_market_global_context_get",
         "responses": {
           "200": {
@@ -6577,6 +6660,24 @@
           "order_type"
         ],
         "title": "OrderRequest"
+      },
+      "OrganizationCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "slug"
+        ],
+        "title": "OrganizationCreate"
       },
       "OrganizationResponse": {
         "properties": {
