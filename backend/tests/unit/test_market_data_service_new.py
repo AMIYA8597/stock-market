@@ -1,7 +1,9 @@
 import asyncio
 import importlib
 import json
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
+from uuid import uuid4
 
 import pandas as pd
 import pytest
@@ -74,7 +76,11 @@ async def test_health_fail():
 def test_normalize_symbol():
     assert MarketDataService._normalize_symbol("NIFTY50") == "^NSEI"
     assert MarketDataService._normalize_symbol("AAPL") == "AAPL"
-    assert MarketDataService._normalize_symbol("RELIANCE") == "RELIANCE.NS"
+    # Canonical form is bare (no provider suffix), matching
+    # Instrument.canonical_symbol in the canonical DB; a provider-suffixed
+    # input is passed through unchanged rather than double-normalized.
+    assert MarketDataService._normalize_symbol("RELIANCE") == "RELIANCE"
+    assert MarketDataService._normalize_symbol("reliance") == "RELIANCE"
     assert MarketDataService._normalize_symbol("RELIANCE.NS") == "RELIANCE.NS"
     assert MarketDataService._normalize_symbol("USDINR=X") == "USDINR=X"
     assert MarketDataService._normalize_symbol("CL=F") == "CL=F"
@@ -86,123 +92,94 @@ async def test_get_batch_quotes():
         assert res["RELIANCE"] == {"price": 100}
         assert res["INVALID"] is None
 
+def _mock_db_ctx(execute_results):
+    """Patch app.database.connection.async_session_factory so that
+    `async with async_session_factory() as db` yields a fake session whose
+    db.execute() calls return execute_results in sequence, matching how
+    get_quote/get_history call async_session_factory directly."""
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(side_effect=execute_results)
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = False
+    return patch(
+        "app.database.connection.async_session_factory", return_value=mock_cm
+    )
+
+
+def _instrument_result(instrument_id):
+    res = MagicMock()
+    inst = MagicMock()
+    inst.id = instrument_id
+    res.scalars.return_value.first.return_value = inst
+    return res
+
+
+def _empty_result():
+    res = MagicMock()
+    res.scalars.return_value.first.return_value = None
+    return res
+
+
 @pytest.mark.asyncio
-async def test_get_quote_upstox_cache():
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote") as m:
-        m.return_value = {"price": 100, "symbol": "RELIANCE.NS"}
+async def test_get_quote_db_success():
+    inst_id = uuid4()
+    quote = MagicMock()
+    quote.price = 105.0
+    quote.change = 5.0
+    quote.change_pct = 5.0
+    quote.volume = 1000
+    quote.observed_at = datetime(2023, 1, 1, tzinfo=UTC)
+    quote_res = MagicMock()
+    quote_res.scalars.return_value.first.return_value = quote
+
+    with _mock_db_ctx([_instrument_result(inst_id), quote_res]):
         res = await MarketDataService.get_quote("RELIANCE")
-        assert res["price"] == 100
-        assert res["source"] == "NSE"
+        assert res["price"] == 105.0
+        assert res["source"] == "canonical_db"
+
 
 @pytest.mark.asyncio
-async def test_get_quote_redis_cache(mock_redis):
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote", return_value=None):
-        with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-            mock_redis.get.return_value = json.dumps({"price": 200, "source": "redis"})
-            res = await MarketDataService.get_quote("RELIANCE")
-            assert res["price"] == 200
-            assert res["source"] == "redis"
+async def test_get_quote_instrument_not_found():
+    with _mock_db_ctx([_empty_result()]):
+        with pytest.raises(ValueError):
+            await MarketDataService.get_quote("NOSUCHSYMBOL")
+
 
 @pytest.mark.asyncio
-async def test_get_quote_redis_cache_error(mock_redis):
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote", return_value=None):
-        with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-            mock_redis.get.return_value = json.dumps({"error": True})
-            with pytest.raises(ValueError):
-                await MarketDataService.get_quote("RELIANCE")
+async def test_get_quote_no_quote_data():
+    inst_id = uuid4()
+    with _mock_db_ctx([_instrument_result(inst_id), _empty_result()]):
+        with pytest.raises(ValueError):
+            await MarketDataService.get_quote("RELIANCE")
+
 
 @pytest.mark.asyncio
-async def test_get_quote_yfinance_success(mock_redis):
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote", return_value=None):
-        with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-            with patch("yfinance.Ticker") as mock_ticker_cls:
-                mock_ticker = MagicMock()
-                mock_info = MagicMock()
-                mock_info.last_price = 105.0
-                mock_info.year_high = 150.0
-                mock_info.year_low = 50.0
-                mock_ticker.fast_info = mock_info
-                mock_ticker.info = {"marketCap": 1000, "fiftyTwoWeekHigh": 120, "fiftyTwoWeekLow": 80}
-                mock_ticker_cls.return_value = mock_ticker
+async def test_get_history_db_success():
+    inst_id = uuid4()
+    bar = MagicMock()
+    bar.timestamp = datetime(2023, 1, 1, tzinfo=UTC)
+    bar.open = 100.0
+    bar.high = 110.0
+    bar.low = 90.0
+    bar.close = 105.0
+    bar.volume = 1000
+    ohlcv_res = MagicMock()
+    ohlcv_res.scalars.return_value.all.return_value = [bar]
 
-                res = await MarketDataService.get_quote("RELIANCE")
-                assert res["price"] == 105.0
-                assert res["market_cap"] == 1000.0
-
-@pytest.mark.asyncio
-async def test_get_quote_yfinance_fallback_history(mock_redis):
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote", return_value=None):
-        with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-            with patch("yfinance.Ticker") as mock_ticker_cls:
-                mock_ticker = MagicMock()
-                type(mock_ticker).fast_info = PropertyMock(side_effect=Exception("no fast info"))
-                mock_ticker_cls.return_value = mock_ticker
-
-                with patch.object(MarketDataService, "get_history", return_value=[
-                    {"close": 100, "open": 90, "high": 110, "low": 80, "volume": 1000},
-                    {"close": 105, "open": 95, "high": 115, "low": 85, "volume": 1100}
-                ]):
-                    res = await MarketDataService.get_quote("RELIANCE")
-                    assert res["price"] == 105.0
-                    assert res["previous_close"] == 100.0
-
-@pytest.mark.asyncio
-async def test_get_quote_indian_api_fallback(mock_redis):
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote", return_value=None):
-        with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-            with patch("yfinance.Ticker", side_effect=Exception("yf error")):
-                with patch("app.services.indian_stock_api.IndianStockAPI.fetch_quote") as mock_api:
-                    mock_api.return_value = {"price": 300}
-                    res = await MarketDataService.get_quote("RELIANCE")
-                    assert res["price"] == 300
-                    assert res["source"] == "IndianStockAPI"
-
-@pytest.mark.asyncio
-async def test_get_quote_all_fail(mock_redis):
-    with patch("app.services.upstox_service.UpstoxService.get_cached_quote", return_value=None):
-        with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-            with patch("yfinance.Ticker", side_effect=Exception("yf error")):
-                with patch("app.services.indian_stock_api.IndianStockAPI.fetch_quote", side_effect=Exception("api error")):
-                    with pytest.raises(ValueError):
-                        await MarketDataService.get_quote("RELIANCE")
-
-@pytest.mark.asyncio
-async def test_get_history_redis_cache(mock_redis):
-    with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-        mock_redis.get.return_value = json.dumps({"bars": [{"time": "2023-01-01", "close": 100}], "source": "redis"})
+    with _mock_db_ctx([_instrument_result(inst_id), ohlcv_res]):
         res = await MarketDataService.get_history("RELIANCE", "1d", "5d")
         assert len(res) == 1
-        assert res[0]["close"] == 100
+        assert res[0]["close"] == 105.0
+        assert res.source == "canonical_db"
+
 
 @pytest.mark.asyncio
-async def test_get_history_redis_cache_error(mock_redis):
-    with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-        mock_redis.get.return_value = json.dumps({"error": True})
-        res = await MarketDataService.get_history("RELIANCE", "1d", "5d")
+async def test_get_history_instrument_not_found():
+    with _mock_db_ctx([_empty_result()]):
+        res = await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
         assert res == []
-
-@pytest.mark.asyncio
-async def test_get_history_yfinance_success(mock_redis):
-    with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-        with patch("yfinance.download") as mock_yf:
-            mock_yf.return_value = pd.DataFrame({
-                "Date": [pd.Timestamp("2023-01-01")],
-                "Open": [100.0],
-                "High": [110.0],
-                "Low": [90.0],
-                "Close": [105.0],
-                "Volume": [1000]
-            })
-            res = await MarketDataService.get_history("RELIANCE", "1d", "5d")
-            assert len(res) == 1
-            assert res[0]["close"] == 105.0
-
-@pytest.mark.asyncio
-async def test_get_history_yfinance_fail(mock_redis):
-    with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
-        with patch("yfinance.download", side_effect=Exception("error")):
-            res = await MarketDataService.get_history("RELIANCE", "1d", "5d")
-            assert res is None
+        assert res.source == "canonical_db"
 
 @pytest.mark.asyncio
 async def test_get_intraday_candles_success():
@@ -218,12 +195,6 @@ async def test_get_intraday_candles_fallback():
             res = await MarketDataService.get_intraday_candles("RELIANCE", "1m")
             assert len(res) == 1
             assert res[0]["close"] == 100
-
-@pytest.mark.asyncio
-async def test_get_movers():
-    with patch.object(MarketDataService, "get_quote", return_value={"symbol": "RELIANCE.NS", "price": 100, "change_pct": 5.0, "volume": 1000}):
-        res = await MarketDataService.get_movers(n=2, mover_type="gainers")
-        assert len(res) == 2
 
 @pytest.mark.asyncio
 async def test_get_indices():
@@ -305,25 +276,6 @@ async def test_get_ohlcv_fallback():
         with patch.object(MarketDataService, "get_history", return_value=[{"time": "2023-01-01T00:00:00", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}]):
             res = await MarketDataService.get_ohlcv("RELIANCE", "1d", "1d")
             assert len(res) == 1
-
-@pytest.mark.asyncio
-async def test_get_nifty50_movers():
-    with patch.object(MarketDataService, "_fetch_movers_sync", return_value={"gainers": [], "losers": []}):
-        res = await MarketDataService.get_nifty50_movers()
-        assert "gainers" in res
-
-def test_fetch_movers_sync():
-    with patch("yfinance.download") as mock_yf:
-        df_data = {
-            ("RELIANCE.NS", "Close"): [100.0, 105.0],
-            ("TCS.NS", "Close"): [200.0, 190.0]
-        }
-        mock_df = pd.DataFrame(df_data)
-        mock_df.columns = pd.MultiIndex.from_tuples([("RELIANCE.NS", "Close"), ("TCS.NS", "Close")])
-        mock_yf.return_value = mock_df
-
-        res = MarketDataService._fetch_movers_sync()
-        assert len(res["gainers"]) > 0 or len(res["losers"]) > 0
 
 def teardown_module(module):
     from app.services import market_data_service
