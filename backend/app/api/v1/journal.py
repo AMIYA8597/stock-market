@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
-from app.models.ledger import PaperOrder as TradeJournal
+from app.models.journal import TradeJournal
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.journal import JournalCreate, JournalResponse
 

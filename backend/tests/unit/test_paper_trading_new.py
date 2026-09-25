@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from app.models.ledger import PaperOrder, PaperPosition, PaperAccount
+from app.models.ledger import PaperAccount
+from app.models.paper_trading import PaperOrder, PaperPosition
 from app.services.paper_trading import PaperTradingService
 
 

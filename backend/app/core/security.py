@@ -45,11 +45,61 @@ class RequestContext:
         self.request_id = request_id
 
 
-def verify_supabase_token(token: str) -> dict[str, Any]:
-    """Verify Supabase JWT token signature and return payload."""
+_jwks_cache: dict[str, Any] = {}
+
+
+def _fetch_jwks() -> dict[str, Any] | None:
+    """Fetch and cache the Supabase project's JWKS document, if configured.
+
+    Supabase projects created with asymmetric (ES256/RS256) signing keys expose a
+    JWKS endpoint at {SUPABASE_URL}/auth/v1/.well-known/jwks.json. Legacy projects
+    still on the shared HS256 secret have no such endpoint; callers must fall back
+    to verify_supabase_token's HS256 path in that case.
+    """
+    if _jwks_cache.get("keys"):
+        return _jwks_cache
+    if not settings.SUPABASE_URL:
+        return None
+    import httpx
+
+    jwks_url = settings.SUPABASE_URL.rstrip("/") + "/auth/v1/.well-known/jwks.json"
     try:
-        # If we have a JWT secret configured, use HS256 to verify (Supabase default)
-        from app.core.test_state import is_test_mode
+        resp = httpx.get(jwks_url, timeout=5.0)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("keys"):
+            _jwks_cache.update(data)
+            return _jwks_cache
+    except Exception as exc:  # noqa: BLE001 - network/JWKS fetch failure, fall back to HS256
+        logger.warning(f"Supabase JWKS fetch failed, falling back to HS256 secret: {exc}")
+    return None
+
+
+def verify_supabase_token(token: str) -> dict[str, Any]:
+    """Verify Supabase JWT token signature and return payload.
+
+    Prefers JWKS/asymmetric verification when the Supabase project exposes a JWKS
+    endpoint (current Supabase default for new projects). Falls back to the legacy
+    shared HS256 secret for projects still on that signing mode. Audience is always
+    verified against Supabase's standard "authenticated" audience.
+    """
+    from app.core.test_state import is_test_mode
+
+    try:
+        header = jwt.get_unverified_header(token)
+        jwks = None if is_test_mode() else _fetch_jwks()
+        if jwks and header.get("kid"):
+            key = next((k for k in jwks["keys"] if k.get("kid") == header["kid"]), None)
+            if key is not None:
+                payload = jwt.decode(
+                    token,
+                    key,
+                    algorithms=[key.get("alg", "ES256")],
+                    audience="authenticated",
+                )
+                return payload
+
+        # Legacy/dev fallback: shared HS256 secret.
         secret = settings.SUPABASE_JWT_SECRET
         if is_test_mode() and not secret:
             secret = "your-super-secret-jwt-token-with-at-least-32-characters-long"
@@ -60,7 +110,7 @@ def verify_supabase_token(token: str) -> dict[str, Any]:
             token,
             secret,
             algorithms=["HS256"],
-            options={"verify_aud": False} # Usually aud is 'authenticated'
+            audience="authenticated",
         )
         return payload
     except JWTError as e:
@@ -83,8 +133,11 @@ async def get_current_context(
 
     # 1. API Key Auth
     if api_key:
+        import hashlib
+
+        presented_hash = hashlib.sha256(api_key.encode()).hexdigest()
         result = await db.execute(
-            select(ApiKey).where(ApiKey.key_hash == api_key, ApiKey.status == "active")
+            select(ApiKey).where(ApiKey.key_hash == presented_hash, ApiKey.status == "active")
         )
         api_key_record = result.scalars().first()
         if not api_key_record:
