@@ -5,7 +5,7 @@ from sqlalchemy.orm import DeclarativeBase
 
 # We will dynamically load all models and routes
 import pytest
-from app.database.base import Base
+from app.database.connection import Base
 
 def test_models_valid():
     """Assert each ORM model has >= 2 mapped columns and uses the shared Base."""

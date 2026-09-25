@@ -13,7 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.dependencies import get_rate_limiter
 from app.database.connection import get_db
 from app.models.instrument import Instrument
-from app.models.research import ModelRegistry as ModelArtifact
+from app.models.model_artifact import ModelArtifact
+from app.models.model_metric import ModelMetric
 from app.schemas.errors import ErrorResponse
 from app.schemas.prediction import ForecastRequest
 from app.services.market_data_service import MarketDataService
@@ -98,8 +99,6 @@ async def get_ensemble_data(
 
 @router.get("/history/{symbol}")
 async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)):
-    from app.models.research import ModelRegistry as ModelMetric
-
     norm_symbol = MarketDataService._normalize_symbol(symbol)
 
     stmt = (
