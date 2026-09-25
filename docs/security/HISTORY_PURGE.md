@@ -1,52 +1,41 @@
-# Repository History Purge Procedure
+# Git History Purge Procedure
 
-**IMPORTANT: This procedure must be executed by a human.**
+**IMPORTANT:** Rotating secrets is required *regardless* of purging history. History purging only protects against future exposure, not past exposure to anyone who has already cloned the repo or scanned it.
 
-The repository's git history contains plaintext secrets (API keys, Supabase Postgres credentials, MongoDB URIs) that were accidentally tracked. Rotating the keys is the primary defense, but we also must purge the leaked files from the entire git history to keep the repository safe and reduce bloat.
+## Prerequisites
+You need the `git-filter-repo` tool.
+```powershell
+uv tool install git-filter-repo
+```
 
-## Requirements
-You must have Python installed. The `git-filter-repo` tool is the modern, safe replacement for `git filter-branch` and BFG.
-
-## Step-by-Step Instructions
-
-1. **Install git-filter-repo** using `uv` or `pip`:
-   ```bash
-   uv tool install git-filter-repo
+## Procedure
+1. Create a fresh mirror clone of the repository (do NOT do this in your active working directory):
+   ```powershell
+   git clone --mirror https://github.com/YOUR_ORG/stock-market.git
+   cd stock-market.git
    ```
 
-2. **Create a fresh, bare mirror clone** of your repository (this prevents issues with your local working tree):
-   ```bash
-   cd ..
-   git clone --mirror <YOUR_REPO_URL> stock-market-mirror
-   cd stock-market-mirror
+2. Run `git-filter-repo` to remove the offending files from the entire history:
+   ```powershell
+   git filter-repo --invert-paths `
+     --path "scripts/test_supabase.py" `
+     --path "LLM-ENVVV-ALL-KEYS-.txt" `
+     --path "apps/web/llm-env.txt" `
+     --path "backend/setup_roles.py" `
+     --path-glob "gitleaks*" `
+     --path-glob "*.patch" `
+     --path "history_resp.json"
    ```
 
-3. **Run the history filter** to completely invert (remove) the paths of the exposed files:
-   ```bash
-   git filter-repo --invert-paths \
-     --path scripts/test_supabase.py \
-     --path LLM-ENVVV-ALL-KEYS-.txt \
-     --path gitleaks.zip \
-     --path gitleaks_bin \
-     --path full_diff.patch \
-     --path diff_utf8.patch \
-     --path history_resp.json
-   ```
-
-4. **Verify the purge** with `gitleaks` (if available):
-   ```bash
+3. Verify the purge was successful using `gitleaks`:
+   ```powershell
    gitleaks detect --no-banner
-   # Ensure no leaks are detected in the repository history
    ```
 
-5. **Force-push the changes** to the remote repository:
-   ```bash
+4. Force-push the rewritten history back to the remote:
+   ```powershell
    git push origin --force --all
    git push origin --force --tags
    ```
 
-6. **Coordinate with your team**
-   Every developer must re-clone the repository from scratch. Old clones will contain the tainted history and if someone pushes from an old clone, the leaked files might be reintroduced.
-
----
-**CRITICAL WARNING:** Purging history does **NOT** revoke access to compromised systems. All keys and passwords found in the repository (e.g. Supabase, MongoDB, APIs) **must still be rotated** following the checklist in `docs/security/ROTATION_CHECKLIST.md`.
+5. Instruct all collaborators to delete their local clones and re-clone the repository from scratch. Attempting to `git pull` on an old clone will merge the corrupted history back in.

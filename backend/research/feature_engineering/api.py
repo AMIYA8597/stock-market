@@ -13,7 +13,6 @@ from research.feature_engineering.ff5_betas import FF5BetasBuilder
 from research.feature_engineering.microstructure import MicrostructureBuilder
 from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.sentiment_factors import SentimentFactorsBuilder
-from research.feature_engineering.target import TargetBuilder
 from research.feature_engineering.technical_factors import TechnicalFactorsBuilder
 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
 from research.feature_engineering.pipeline import FeaturePipeline
@@ -64,7 +63,6 @@ def get_canonical_pipeline() -> FeaturePipeline:
         SentimentFactorsBuilder(),
         # CrossSectionalBuilder(), # Needs multi-asset context
         # FF5BetasBuilder(),       # Needs Fama-French context
-        TargetBuilder(),
     ])
 
 def build_features(
@@ -80,7 +78,6 @@ def build_features(
     
     if as_of is not None:
         as_of_ts = pd.to_datetime(as_of)
-        # Assuming index is datetime or there is a 'time'/'date' column
         if isinstance(df.index, pd.DatetimeIndex):
             df = df[df.index <= as_of_ts].copy()
         elif 'time' in df.columns:
@@ -95,15 +92,8 @@ def build_features(
         
     pipeline = get_canonical_pipeline()
     
-    # In research mode, we might do causality checks
     if mode == "research" and len(df) >= 20:
         pipeline.validate_causality(df)
         
     features = pipeline.run(df)
-    
-    # Target column handling: Drop target in serving mode
-    if mode == "serving":
-        target_cols = [c for c in features.columns if c.startswith("target_")]
-        features = features.drop(columns=target_cols)
-        
     return features

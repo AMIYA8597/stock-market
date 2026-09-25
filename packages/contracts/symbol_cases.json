@@ -1,0 +1,13 @@
+[
+  { "raw": "RELIANCE", "exchange_hint": "XNSE", "expected_canonical": "RELIANCE", "expected_exchange": "XNSE" },
+  { "raw": "RELIANCE.NS", "exchange_hint": null, "expected_canonical": "RELIANCE", "expected_exchange": "XNSE" },
+  { "raw": "RELIANCE.BO", "exchange_hint": null, "expected_canonical": "500325", "expected_exchange": "XBOM" },
+  { "raw": "M&M", "exchange_hint": "XNSE", "expected_canonical": "M&M", "expected_exchange": "XNSE" },
+  { "raw": "BAJAJ-AUTO", "exchange_hint": "XNSE", "expected_canonical": "BAJAJ-AUTO", "expected_exchange": "XNSE" },
+  { "raw": "NIFTY 50", "exchange_hint": "XNSE", "expected_canonical": "NIFTY 50", "expected_exchange": "XNSE" },
+  { "raw": "^NSEI", "exchange_hint": null, "expected_canonical": "NIFTY 50", "expected_exchange": "XNSE" },
+  { "raw": "AAPL", "exchange_hint": "XNAS", "expected_canonical": "AAPL", "expected_exchange": "XNAS" },
+  { "raw": "AAPL@XNAS", "exchange_hint": null, "expected_canonical": "AAPL", "expected_exchange": "XNAS" },
+  { "raw": "USDINR=X", "exchange_hint": null, "expected_canonical": "USDINR", "expected_exchange": "FX" },
+  { "raw": "UNKNOWN_GARBAGE", "exchange_hint": null, "expected_canonical": "UNKNOWN_SYMBOL", "expected_exchange": "UNKNOWN" }
+]

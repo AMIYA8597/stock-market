@@ -62,7 +62,7 @@ def _get_engine_kwargs() -> dict:
     return kwargs
 
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.DATABASE_URL or "postgresql+asyncpg://postgres:postgres@localhost:5432/neuroquant_stage1",
     **_get_engine_kwargs(),
 )
 

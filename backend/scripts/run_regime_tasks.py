@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
-from app.models.regime_states import RegimeState
+from app.models.research import Dataset as RegimeState
 from tasks.regime_tasks import _refresh_regimes_async
 
 

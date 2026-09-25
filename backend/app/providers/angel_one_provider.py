@@ -77,9 +77,9 @@ class AngelOneProvider:
         """
         token = await AngelOneProvider._obtain_access_token()
         # Determine exchange from suffix – simple heuristic for NSE/BSE.
-        exchange = "NSE" if symbol.endswith(".NS") else "BSE" if symbol.endswith(".BO") else "NSE"
+        exchange = "NSE" if symbol.endswith("") else "BSE" if symbol.endswith(".BO") else "NSE"
         # Strip the suffix for the API call.
-        clean_symbol = symbol.replace(".NS", "").replace(".BO", "")
+        clean_symbol = symbol.replace("", "").replace(".BO", "")
         # Compute date range.
         to_date = datetime.utcnow()
         if period.lower().endswith("mo"):
