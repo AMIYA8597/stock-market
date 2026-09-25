@@ -100,7 +100,7 @@ def get_rate_limiter(requests: int, window: int):
     return _rate_limiter
 
 async def get_redis():
-    from app.services.cache import get_redis_client
+    from app.database.redis_client import get_redis_client
     return await get_redis_client()
 
 

@@ -27,7 +27,13 @@ class MarketStatusService:
 
     @classmethod
     def is_holiday(cls, dt: date) -> bool:
-        return dt.weekday() >= 5 or dt in cls.HOLIDAYS
+        # TODO: HOLIDAYS_DEPRECATED is a static, single-year hardcoded set and
+        # will silently under-report holidays outside 2026. The correct source
+        # is the DB-backed market_calendar table (see app.models.market.
+        # MarketCalendar), but that requires threading a DB session through
+        # this classmethod-based service. Kept as an explicit, named-deprecated
+        # fallback until that migration happens, rather than crashing.
+        return dt.weekday() >= 5 or dt in cls.HOLIDAYS_DEPRECATED
 
     @classmethod
     def get_status(cls) -> dict[str, Any]:
