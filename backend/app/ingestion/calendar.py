@@ -1,17 +1,19 @@
 import asyncio
-import pandas_market_calendars as mcal
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from datetime import date, timedelta
+
+import pandas_market_calendars as mcal
+from sqlalchemy.future import select
+
 from app.database.connection import async_session_factory
 from app.models.market import Exchange, MarketCalendar
+
 
 async def ingest_calendar():
     async with async_session_factory() as session:
         stmt = select(Exchange).where(Exchange.code == "XNAS")
         result = await session.execute(stmt)
         exchange = result.scalar_one_or_none()
-        
+
         if not exchange:
             print("Exchange XNAS not found.")
             return
@@ -19,9 +21,9 @@ async def ingest_calendar():
         nyse = mcal.get_calendar('NYSE')
         start_date = date.today() - timedelta(days=30)
         end_date = date.today() + timedelta(days=30)
-        
+
         schedule = nyse.schedule(start_date=start_date, end_date=end_date)
-        
+
         count = 0
         for index, row in schedule.iterrows():
             session_date = index.date()
@@ -41,7 +43,7 @@ async def ingest_calendar():
                 )
                 session.add(mc)
                 count += 1
-        
+
         await session.commit()
         print(f"Ingested {count} calendar days for {exchange.code}")
 

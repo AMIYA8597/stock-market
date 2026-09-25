@@ -1,6 +1,8 @@
 from fastapi import WebSocket
-from app.core.security import verify_supabase_token
 from loguru import logger
+
+from app.core.security import verify_supabase_token
+
 
 async def authenticate_ws(websocket: WebSocket, token: str) -> str | None:
     if not token:

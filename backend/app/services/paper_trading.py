@@ -13,8 +13,8 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
 from app.models.ledger import PaperAccount, PaperLedgerEntry
+from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
 from app.services.market_data_service import MarketDataService
 from research.backtesting.cost_model import compute_indian_costs
 
@@ -363,7 +363,7 @@ class PaperTradingService:
         account_stmt = select(PaperAccount).where(PaperAccount.user_id == user_id)
         account_res = await db.execute(account_stmt)
         account = account_res.scalar_one_or_none()
-        
+
         if account:
             # Add double entry
             entry_amount = -float(net_amount) if side == "BUY" else float(net_amount)

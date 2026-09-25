@@ -11,8 +11,7 @@ from sqlalchemy import select
 
 from app.database.connection import async_session_factory
 from app.models.backtest import BacktestJob
-from sqlalchemy import select
-from app.models.market import Instrument, OHLCV
+from app.models.market import OHLCV, Instrument
 from app.websocket.connection_manager import get_connection_manager
 
 ws_manager = get_connection_manager()
@@ -52,7 +51,7 @@ async def run_backtest_async(job_id: str) -> None:
             # 2. Fetch history from DB
             symbol = job.universe[0]
             import pandas as pd
-            
+
             inst_res = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
             inst = inst_res.scalars().first()
             if not inst:
@@ -88,14 +87,13 @@ async def run_backtest_async(job_id: str) -> None:
             dates = df.index.astype(str).values
 
             # 3. Fetch Real ML Signals from Database
-            from app.models.instrument import Instrument
             from app.models.signal import EnsembleSignal
 
             sig_stmt = (
                 select(EnsembleSignal)
                 .where(
                     EnsembleSignal.symbol_id
-                    == (select(Instrument.id).where(Instrument.symbol == symbol).scalar_subquery())
+                    == (select(Instrument.id).where(Instrument.canonical_symbol == symbol).scalar_subquery())
                 )
                 .order_by(EnsembleSignal.time.asc())
             )

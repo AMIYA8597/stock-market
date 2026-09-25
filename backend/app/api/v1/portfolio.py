@@ -40,7 +40,7 @@ async def list_portfolios(
 
     import uuid
 
-    from sqlalchemy import and_, func, select
+    from sqlalchemy import select
 
     from app.models.paper_trading import PaperWallet
 
@@ -81,12 +81,9 @@ async def get_holdings(
     try:
         import uuid
 
-        from sqlalchemy import and_, func, select
+        from sqlalchemy import select
 
-        from app.models.instrument import Instrument
-        from app.models.paper_trading import PaperWallet
-        from app.models.portfolio import PortfolioHolding
-        from app.models.transactions import Transaction
+        from app.models.paper_trading import PaperPosition, PaperWallet
         from app.services.market_data_service import MarketDataService
 
         if not current_user:
@@ -110,34 +107,17 @@ async def get_holdings(
         except ValueError:
             return _empty_holdings()
 
-        deposits_res = await db.execute(
-            select(PaperWallet.balance).where(PaperWallet.user_id == uid)
-        )
-        total_deposits = Decimal(str(deposits_res.scalar_one()))
+        # Cash balance and holdings are read from the single, real paper-trading
+        # ledger (PaperWallet/PaperPosition) that PaperTradingService already
+        # maintains on every order fill, rather than a separate, never-written
+        # deposit/transaction ledger.
+        wallet_res = await db.execute(select(PaperWallet).where(PaperWallet.user_id == uid))
+        wallet = wallet_res.scalar_one_or_none()
+        cash_balance = Decimal(str(wallet.balance)) if wallet else Decimal("0.00")
+        cash_balance = cash_balance.quantize(Decimal("0.01"))
 
-        buys_res = await db.execute(
-            select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
-                and_(Transaction.user_id == uid, Transaction.type == "BUY")
-            )
-        )
-        total_buys = Decimal(str(buys_res.scalar_one()))
-
-        sells_res = await db.execute(
-            select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
-                and_(Transaction.user_id == uid, Transaction.type == "SELL")
-            )
-        )
-        total_sells = Decimal(str(sells_res.scalar_one()))
-
-        cash_balance = (total_deposits - total_buys + total_sells).quantize(Decimal("0.01"))
-
-        stmt = (
-            select(PortfolioHolding, Instrument.symbol)
-            .join(Instrument, PortfolioHolding.symbol_id == Instrument.id)
-            .where(PortfolioHolding.user_id == uid)
-        )
-        res = await db.execute(stmt)
-        rows = res.all()
+        pos_res = await db.execute(select(PaperPosition).where(PaperPosition.user_id == uid))
+        rows = pos_res.scalars().all()
 
         if not rows:
             return _empty_holdings(cash_balance)
@@ -146,9 +126,10 @@ async def get_holdings(
         total_invested = Decimal("0.0")
         total_current_value = Decimal("0.0")
 
-        for holding_row, ticker in rows:
-            qty = holding_row.quantity
-            avg_p = holding_row.avg_buy_price
+        for position in rows:
+            ticker = position.symbol
+            qty = Decimal(str(position.quantity))
+            avg_p = Decimal(str(position.avg_buy_price))
 
             try:
                 quote = await MarketDataService.get_quote(ticker)
@@ -161,7 +142,7 @@ async def get_holdings(
             unrealized_pnl_pct = (curr_p - avg_p) / avg_p if avg_p > 0 else Decimal("0.0")
 
             days_held = max(
-                1, (datetime.now(UTC) - holding_row.updated_at.replace(tzinfo=UTC)).days
+                1, (datetime.now(UTC) - position.updated_at.replace(tzinfo=UTC)).days
             )
 
             holdings.append(
@@ -374,16 +355,15 @@ async def post_transaction(
     current_user: dict | None = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> TransactionResponse:
-    """Record a transaction and update cash/holdings inside SQLAlchemy."""
+    """Execute a BUY/SELL paper transaction via the real paper-trading ledger.
+
+    Delegates to PaperTradingService.place_order so this endpoint shares the
+    same wallet/position bookkeeping and risk guardrails (daily loss circuit
+    breaker, 50%-of-equity order cap, margin check) as the rest of the paper
+    trading surface, instead of maintaining a second, parallel ledger.
+    """
     try:
-        import uuid
-
-        from sqlalchemy import and_, func, select
-
-        from app.models.instrument import Instrument
-        from app.models.paper_trading import PaperWallet
-        from app.models.portfolio import PortfolioHolding
-        from app.models.transactions import Transaction
+        from app.services.paper_trading import PaperTradingService
 
         if not current_user:
             raise HTTPException(status_code=401, detail="Unauthorized")
@@ -399,141 +379,34 @@ async def post_transaction(
                 ).dict(),
             )
 
-        try:
-            uid = uuid.UUID(user_id_str)
-        except ValueError:
-            raise HTTPException(
-                status_code=401,
-                detail=ErrorResponse.create(
-                    code=ErrorCode.UNAUTHORIZED,
-                    message="Invalid user ID format.",
-                ).dict(),
-            )
-
         symbol_ticker = request.symbol.upper().strip()
-        qty = Decimal(str(request.quantity))
-        price = Decimal(str(request.price))
 
-        gross = qty * price
-        brokerage = request.brokerage or Decimal("0")
-        stt = request.stt or Decimal("0")
-
-        if tx_type == "BUY":
-            net_amount = gross + brokerage + stt
-        else:
-            net_amount = gross - brokerage - stt
-
-        # Resolve symbol_id
-        symbol_res = await db.execute(select(Instrument).where(Instrument.symbol == symbol_ticker))
-        symbol_row = symbol_res.scalar_one_or_none()
-        if symbol_row is None:
+        try:
+            order = await PaperTradingService.place_order(
+                db=db,
+                user_id=user_id_str,
+                symbol=symbol_ticker,
+                side=tx_type,
+                quantity=float(request.quantity),
+                order_type="MARKET",
+            )
+        except ValueError as ve:
             raise HTTPException(
                 status_code=400,
                 detail=ErrorResponse.create(
                     code=ErrorCode.VALIDATION_ERROR,
-                    message=f"Instrument {symbol_ticker} not found in database.",
+                    message=str(ve),
                 ).dict(),
-            )
-        symbol_id = symbol_row.id
-
-        # Lock holding record
-        holding_res = await db.execute(
-            select(PortfolioHolding)
-            .where(and_(PortfolioHolding.user_id == uid, PortfolioHolding.symbol_id == symbol_id))
-            .with_for_update()
-        )
-        holding = holding_res.scalar_one_or_none()
-
-        if tx_type == "BUY":
-            deposits_res = await db.execute(
-                select(func.coalesce(func.sum(PaymentTransaction.amount), 0)).where(
-                    and_(
-                        PaymentTransaction.user_id == uid, PaymentTransaction.status == "succeeded"
-                    )
-                )
-            )
-            total_deposits = Decimal(str(deposits_res.scalar_one()))
-            buys_res = await db.execute(
-                select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
-                    and_(Transaction.user_id == uid, Transaction.type == "BUY")
-                )
-            )
-            total_buys = Decimal(str(buys_res.scalar_one()))
-            sells_res = await db.execute(
-                select(func.coalesce(func.sum(Transaction.net_amount), 0)).where(
-                    and_(Transaction.user_id == uid, Transaction.type == "SELL")
-                )
-            )
-            total_sells = Decimal(str(sells_res.scalar_one()))
-
-            cash_balance = total_deposits - total_buys + total_sells
-
-            if cash_balance < net_amount:
-                raise HTTPException(
-                    status_code=400,
-                    detail=ErrorResponse.create(
-                        code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Insufficient cash balance. Required: {net_amount}, Available: {cash_balance}",
-                    ).dict(),
-                )
-
-            if holding is None:
-                holding = PortfolioHolding(
-                    user_id=uid,
-                    symbol_id=symbol_id,
-                    quantity=qty,
-                    avg_buy_price=price,
-                    realized_pnl=Decimal("0.00"),
-                )
-                db.add(holding)
-            else:
-                old_qty = holding.quantity
-                old_avg = holding.avg_buy_price
-                new_qty = old_qty + qty
-                new_avg = ((old_qty * old_avg) + (qty * price)) / new_qty
-                holding.quantity = new_qty
-                holding.avg_buy_price = new_avg
-
-        else:  # SELL
-            if holding is None or holding.quantity < qty:
-                raise HTTPException(
-                    status_code=400,
-                    detail=ErrorResponse.create(
-                        code=ErrorCode.VALIDATION_ERROR,
-                        message=f"Insufficient holdings of {symbol_ticker} to sell.",
-                    ).dict(),
-                )
-
-            realized_profit = (price - holding.avg_buy_price) * qty
-            holding.quantity -= qty
-            holding.realized_pnl += realized_profit
-
-            if holding.quantity <= 0:
-                await db.delete(holding)
-
-        # Record transaction
-        tx = Transaction(
-            user_id=uid,
-            symbol_id=symbol_id,
-            type=tx_type,
-            quantity=qty,
-            price=price,
-            brokerage=brokerage,
-            stt=stt,
-            net_amount=net_amount,
-        )
-        db.add(tx)
-
-        await db.commit()
+            ) from ve
 
         return TransactionResponse(
-            transaction_id=str(tx.id),
+            transaction_id=str(order.id),
             symbol=symbol_ticker,
             type=tx_type,
-            quantity=qty,
-            price=price,
-            net_amount=net_amount.quantize(Decimal("0.01")),
-            timestamp=datetime.now(UTC),
+            quantity=Decimal(str(order.quantity)),
+            price=Decimal(str(order.price)) if order.price is not None else request.price,
+            net_amount=Decimal(str(abs(order.net_amount))).quantize(Decimal("0.01")),
+            timestamp=order.timestamp,
             portfolio_updated=True,
         )
     except HTTPException:
@@ -702,7 +575,7 @@ async def post_optimize(
             return round(float(val), places)
 
         # 1. Resolve tickers to symbol IDs
-        stmt = select(Instrument).where(Instrument.symbol.in_(universe))
+        stmt = select(Instrument).where(Instrument.canonical_symbol.in_(universe))
         res = await db.execute(stmt)
         symbols = res.scalars().all()
         ticker_to_symbol_id = {s.symbol: s.id for s in symbols}
@@ -712,10 +585,10 @@ async def post_optimize(
         dates_list = []
         if ticker_to_symbol_id:
             date_stmt = (
-                select(OHLCV.time)
-                .where(OHLCV.symbol_id.in_(ticker_to_symbol_id.values()), OHLCV.interval == "1d")
+                select(OHLCV.timestamp)
+                .where(OHLCV.instrument_id.in_(ticker_to_symbol_id.values()), OHLCV.interval == "1d")
                 .distinct()
-                .order_by(OHLCV.time.desc())
+                .order_by(OHLCV.timestamp.desc())
                 .limit(252)
             )
             date_res = await db.execute(date_stmt)
@@ -733,9 +606,9 @@ async def post_optimize(
         if not use_synthetic and ticker_to_symbol_id:
             # Fetch OHLCV records
             ohlcv_stmt = select(OHLCV).where(
-                OHLCV.symbol_id.in_(ticker_to_symbol_id.values()),
+                OHLCV.instrument_id.in_(ticker_to_symbol_id.values()),
                 OHLCV.interval == "1d",
-                OHLCV.time.in_(dates_list),
+                OHLCV.timestamp.in_(dates_list),
             )
             ohlcv_res = await db.execute(ohlcv_stmt)
             ohlcv_records = ohlcv_res.scalars().all()
@@ -749,9 +622,9 @@ async def post_optimize(
             signal_records = sig_res.scalars().all()
 
             for r in ohlcv_records:
-                ticker = symbol_id_to_ticker.get(r.symbol_id)
+                ticker = symbol_id_to_ticker.get(r.instrument_id)
                 if ticker:
-                    prices_dict[(r.time, ticker)] = float(r.close)
+                    prices_dict[(r.timestamp, ticker)] = float(r.close)
 
             for r in signal_records:
                 ticker = symbol_id_to_ticker.get(r.symbol_id)
@@ -993,7 +866,7 @@ async def get_portfolio(
 
     import uuid
 
-    from sqlalchemy import and_, func, select
+    from sqlalchemy import select
 
     from app.models.paper_trading import PaperWallet
 

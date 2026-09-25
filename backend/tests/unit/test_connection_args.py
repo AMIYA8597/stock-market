@@ -8,6 +8,7 @@ def test_transaction_mode_cache_sizes(monkeypatch):
         DB_SSL_REQUIRED = True
         DB_POOL_MODE = "transaction"
         is_production = True
+        DATABASE_URL = "postgresql+asyncpg://user:pass@host:5432/db"
 
     monkeypatch.setattr(conn_module, "settings", MockSettings())
 
@@ -28,6 +29,7 @@ def test_session_mode_pool_args(monkeypatch):
         DB_POOL_SIZE = 5
         DB_MAX_OVERFLOW = 2
         DB_POOL_RECYCLE = 1800
+        DATABASE_URL = "postgresql+asyncpg://user:pass@host:5432/db"
 
     monkeypatch.setattr(conn_module, "settings", MockSettings())
 

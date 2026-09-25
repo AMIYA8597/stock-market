@@ -1,35 +1,28 @@
 # backend/app/api/v1/market.py
 from __future__ import annotations
+
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_rate_limiter
 from app.database.connection import get_db
-from app.schemas.errors import ErrorCode, ErrorResponse
+from app.models.market import OHLCV, Instrument, QuoteSnapshot
 from app.schemas.market import (
     EconomicCalendarResponse,
-    EconomicEvent,
     HeatmapResponse,
     HistoryResponse,
-    IndexData,
     IndicesResponse,
-    InstrumentInfo,
-    MoverData,
     MoversResponse,
     OHLCVBar,
     QuoteResponse,
-    RegimeData,
     SearchResponse,
-    SearchResult,
-    SectorNode,
-    SignalData,
     UniverseResponse,
 )
-from app.models.market import Instrument, QuoteSnapshot, OHLCV
 from app.services.market_status import MarketStatusService
 
 logger = logging.getLogger(__name__)
@@ -58,7 +51,7 @@ async def get_quote(
         .limit(1)
     )
     quote = result.scalars().first()
-    
+
     if not quote:
         raise HTTPException(status_code=404, detail=f"No quotes available for {symbol}")
 

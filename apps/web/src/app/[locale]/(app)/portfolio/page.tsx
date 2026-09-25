@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { paperTradingApi, portfolioApi } from "@/lib/api-client";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid, Line, PieChart, Pie, Cell } from "recharts";
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat("en-IN", {
@@ -65,6 +66,7 @@ export default function PortfolioPage(): JSX.Element {
   const allocationSeries = positionsData.map((h: any) => ({ name: h.symbol, value: h.quantity * h.current_price }));
 
   return (
+    <AuthGuard>
     <main className="min-h-screen bg-[var(--nq-bg-base)] p-6 text-[var(--nq-text-primary)]">
       <h1 className="mb-2 text-2xl font-semibold">Portfolio Workspace</h1>
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
@@ -228,5 +230,6 @@ export default function PortfolioPage(): JSX.Element {
         )}
       </div>
     </main>
+    </AuthGuard>
   );
 }

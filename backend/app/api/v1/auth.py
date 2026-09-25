@@ -1,17 +1,16 @@
 import uuid
+
 import httpx
-from app.core.test_state import is_test_mode
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.dependencies import get_current_user_or_none
+from app.core.test_state import is_test_mode
 from app.database.connection import get_db
 from app.models.identity import User
-from app.core.dependencies import get_current_user_or_none
-from app.core.security import RequestContext
 
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -51,7 +50,7 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
         except Exception:
             await db.rollback()
             raise HTTPException(status_code=409, detail="Email already registered")
-    
+
     # In production, proxy to Supabase Auth API
     async with httpx.AsyncClient() as client:
         try:
@@ -65,7 +64,7 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
             auth_id = data.get("user", {}).get("id")
             if not auth_id:
                 raise ValueError("No user ID from Supabase")
-                
+
             user = User(
                 email=payload.email,
                 full_name=payload.full_name,
@@ -89,7 +88,7 @@ async def login(payload: AuthLogin, db: AsyncSession = Depends(get_db)):
         secret = settings.SUPABASE_JWT_SECRET or "your-super-secret-jwt-token-with-at-least-32-characters-long"
         token = jwt.encode({"sub": str(user.auth_id) if hasattr(user, "auth_id") else "test", "type": "access"}, secret, algorithm="HS256")
         return TokenResponse(access_token=token, refresh_token="test_refresh")
-    
+
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(
@@ -104,7 +103,7 @@ async def login(payload: AuthLogin, db: AsyncSession = Depends(get_db)):
                 refresh_token=data.get("refresh_token"),
                 expires_in=data.get("expires_in", 3600)
             )
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
 _test_logged_out_users = set()
@@ -116,12 +115,13 @@ async def refresh(payload: AuthRefresh, db: AsyncSession = Depends(get_db)):
         user = result.scalars().first()
         if str(user.id) in _test_logged_out_users:
             raise HTTPException(status_code=401, detail="Logged out")
-        import jwt
         import uuid
+
+        import jwt
         secret = settings.SUPABASE_JWT_SECRET or "your-super-secret-jwt-token-with-at-least-32-characters-long"
         token = jwt.encode({"sub": str(user.auth_id) if user and hasattr(user, "auth_id") else "test", "type": "access", "jti": str(uuid.uuid4())}, secret, algorithm="HS256")
         return TokenResponse(access_token=token, refresh_token="test_refresh_new")
-        
+
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.post(
@@ -136,7 +136,7 @@ async def refresh(payload: AuthRefresh, db: AsyncSession = Depends(get_db)):
                 refresh_token=data.get("refresh_token"),
                 expires_in=data.get("expires_in", 3600)
             )
-        except Exception as e:
+        except Exception:
             raise HTTPException(status_code=401, detail="Invalid refresh token")
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)

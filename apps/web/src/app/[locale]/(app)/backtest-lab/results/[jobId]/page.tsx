@@ -10,6 +10,7 @@ import {
 import { Badge } from "@neuroquant/ui";
 import { ChartCard } from "@/components/charts";
 import { safeFormat } from "@/lib/formatters";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 function pct(value: unknown): string {
   if (value === null || value === undefined) return "--";
@@ -18,7 +19,15 @@ function pct(value: unknown): string {
   return `${(num * 100).toFixed(2)}%`;
 }
 
-export default function BacktestResultPage(): JSX.Element {
+export default function BacktestResultRoutePage(): JSX.Element {
+  return (
+    <AuthGuard>
+      <BacktestResultPage />
+    </AuthGuard>
+  );
+}
+
+function BacktestResultPage(): JSX.Element {
   const params = useParams<{ jobId: string }>();
   const jobId = params?.jobId ?? "unknown";
   const [result, setResult] = useState<BacktestResultsResponse | null>(null);
