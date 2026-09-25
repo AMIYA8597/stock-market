@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run Honesty Guard
+        run: python scripts/honesty_guard.py
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install uv
+        uses: astral-sh/setup-uv@v2
+        with:
+          enable-cache: true
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          
+      - name: Install dependencies
+        run: cd backend && uv sync --frozen
+        
+      - name: Run Ruff
+        run: cd backend && uv run ruff check .
+        
+      - name: Run Mypy
+        run: cd backend && uv run mypy app/
+        
+      - name: Run Pytest Unit
+        run: cd backend && uv run pytest tests/unit/
+        
+      - name: Migrations & DB tests
+        env:
+          MIGRATIONS_DATABASE_URL: "postgresql+psycopg://postgres:password@localhost:5432/testdb"
+          ENVIRONMENT: test
+        run: |
+          cd backend
+          # In real execution, roles would be created here if needed by migrations
+          uv run alembic upgrade head
+          uv run alembic check
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run pytest tests/integration/db/
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install
+      - name: Typecheck
+        run: pnpm tsc --noEmit
+      - name: Test Symbols
+        run: pnpm --filter web exec vitest run src/lib/symbols.test.ts
+      - name: Build
+        run: pnpm build

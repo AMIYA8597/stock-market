@@ -24,72 +24,19 @@ async def health_check():
 
 @router.get("/health/live-data")
 async def health_live_data():
-    """Pings external data sources to check reachability."""
-    import httpx
-
-    from app.core.config import get_settings
-
-    settings = get_settings()
-
-    status = {"yfinance": "down", "nse": "down", "coingecko": "down", "fred": "down"}
-
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-
-    async with httpx.AsyncClient(timeout=5) as client:
-        # 1. Ping yfinance
-        try:
-            resp = await client.get(
-                "https://query1.finance.yahoo.com/v8/finance/chart/AAPL?interval=1d&range=1d",
-                headers=headers,
-            )
-            if resp.status_code == 200:
-                status["yfinance"] = "up"
-        except Exception:
-            pass
-
-        # 2. Ping NSE
-        try:
-            # First load home page to get session/cookies
-            resp1 = await client.get("https://www.nseindia.com", headers=headers)
-            if resp1.status_code == 200:
-                resp2 = await client.get(
-                    "https://www.nseindia.com/api/historical/cm/equity?symbol=RELIANCE&series=[%22EQ%22]",
-                    headers=headers,
-                    cookies=resp1.cookies,
-                )
-                if resp2.status_code == 200:
-                    status["nse"] = "up"
-                else:
-                    status["nse"] = "up"
-        except Exception:
-            pass
-
-        # 3. Ping CoinGecko
-        try:
-            cg_url = "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-            cg_headers = {"accept": "application/json"}
-            if settings.COINGECKO_API_KEY:
-                cg_headers["x-cg-pro-api-key"] = settings.COINGECKO_API_KEY
-            resp = await client.get(cg_url, headers=cg_headers)
-            if resp.status_code == 200:
-                status["coingecko"] = "up"
-        except Exception:
-            pass
-
-        # 4. Ping FRED
-        try:
-            if settings.FRED_API_KEY:
-                fred_url = f"https://api.stlouisfed.org/fred/series?series_id=GDPC1&api_key={settings.FRED_API_KEY}&file_type=json"
-                resp = await client.get(fred_url)
-                if resp.status_code == 200:
-                    status["fred"] = "up"
-            else:
-                resp = await client.get("https://api.stlouisfed.org")
-                if resp.status_code == 200 or resp.status_code == 403:
-                    status["fred"] = "up"
-        except Exception:
-            pass
-
+    """Returns cached provider status without synchronous network probing."""
+    from app.core.dependencies import get_redis_client
+    import json
+    
+    status = {"yfinance": "unknown", "nse": "unknown", "coingecko": "unknown", "fred": "unknown"}
+    try:
+        redis = await get_redis_client()
+        cached = await redis.get("system:provider_health")
+        if cached:
+            status.update(json.loads(cached))
+    except Exception as e:
+        logger.warning(f"Could not read provider health from cache: {e}")
+        
     return status
 
 

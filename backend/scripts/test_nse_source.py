@@ -1,6 +1,6 @@
 import asyncio
 
-from app.services.data_ingestion.nse_source import NSESource
+from app.services.ingestion.nse_source import NSESource
 
 
 async def test():

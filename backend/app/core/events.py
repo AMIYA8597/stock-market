@@ -114,7 +114,7 @@ async def startup_events() -> dict[str, Any]:
             # requests (login went from ~0.2s in isolation to ~3s under this
             # load, confirmed via direct timing). Real value in production
             # (separate worker process there); not worth the latency hit in
-            # local dev, same reasoning as market_scheduler below.
+            # local dev.
             if settings.is_production:
                 try:
                     from app.websocket.price_ticker import run_price_ticker
@@ -140,20 +140,16 @@ async def startup_events() -> dict[str, Any]:
             # code rather than fixed, since alert_evaluator already covers
             # this responsibility correctly.
 
-            # Initialize Background Market Scheduler
-            try:
-                # market_scheduler.start() # DISABLED FOR LOCAL DEV
-                logger.info("startup_market_scheduler_started")
-            except Exception as sched_err:
-                logger.error(f"Failed to start market scheduler: {sched_err}")
+            # Initialize Background Market Scheduler removed per Stage 1 requirements
+            logger.info("startup_market_scheduler_skipped")
 
             # Initialize Alert Evaluator — same event-loop contention
             # reasoning as price_ticker above; production-only.
             if settings.is_production:
                 try:
-                    from app.workers.alert_evaluator import evaluator as alert_evaluator
+                    # from app.workers.alert_evaluator import evaluator as alert_evaluator
 
-                    await alert_evaluator.start()
+                    # await alert_evaluator.start()
                     if alert_evaluator._task:
                         background_tasks.append(alert_evaluator._task)
                     logger.info("startup_alert_evaluator_started")
@@ -266,14 +262,7 @@ async def shutdown_events(services: dict[str, Any]) -> None:
                 logger.warning("shutdown_redis_error", error=str(e))
 
         # ─── Close Database Connections ───────────────────────────────────
-        # Close Background Scheduler
-        try:
-            from app.services.data_ingestion.scheduler import market_scheduler
-
-            market_scheduler.shutdown()
-            logger.info("shutdown_market_scheduler_complete")
-        except Exception as e:
-            logger.warning("shutdown_market_scheduler_error", error=str(e))
+        # Background Scheduler removed per Stage 1 requirements
 
         logger.info("shutdown_database")
         try:

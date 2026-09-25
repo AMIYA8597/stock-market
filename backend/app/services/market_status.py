@@ -9,7 +9,7 @@ class MarketStatusService:
     IST = ZoneInfo("Asia/Kolkata")
 
     # Static known NSE holidays for 2026 to ensure reliability
-    HOLIDAYS = {
+    HOLIDAYS_DEPRECATED = {
         date(2026, 1, 26),  # Republic Day
         date(2026, 3, 3),  # Mahashivratri
         date(2026, 3, 20),  # Holi
