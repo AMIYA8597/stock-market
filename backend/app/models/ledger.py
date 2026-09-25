@@ -1,9 +1,12 @@
-from datetime import datetime
 import uuid
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, Numeric
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Numeric, String
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database.connection import Base
+
 
 class PaperAccount(Base):
     __tablename__ = "paper_accounts"

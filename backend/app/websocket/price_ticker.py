@@ -52,9 +52,7 @@ async def run_price_ticker(redis: Redis) -> None:
 
     from sqlalchemy import select
 
-    from app.models.instrument import Instrument
     from app.models.paper_trading import PaperPosition
-    from app.models.portfolio import PortfolioHolding
     from app.models.watchlist import UserWatchlist
 
     while True:
@@ -66,18 +64,12 @@ async def run_price_ticker(redis: Redis) -> None:
                 MarketDataService.NSE_NIFTY50[:5]
             )  # poll top 5 always just to keep it alive
 
-            # Fetch from DB: Watchlists, Portfolios, Paper Positions
+            # Fetch from DB: Watchlists, Paper Positions (the real, live portfolio
+            # holdings ledger — see app.services.paper_trading.PaperTradingService)
             try:
                 async with async_session_factory() as session:
                     wl_res = await session.execute(select(UserWatchlist.symbol))
                     symbols_to_poll.update([s for s in wl_res.scalars().all()])
-
-                    pf_res = await session.execute(
-                        select(Instrument.symbol).join(
-                            PortfolioHolding, PortfolioHolding.symbol_id == Instrument.id
-                        )
-                    )
-                    symbols_to_poll.update([s for s in pf_res.scalars().all()])
 
                     pp_res = await session.execute(select(PaperPosition.symbol))
                     symbols_to_poll.update([s for s in pp_res.scalars().all()])

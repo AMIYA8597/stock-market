@@ -1,9 +1,12 @@
-from datetime import datetime, date
 import uuid
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, Numeric, UniqueConstraint, Date, Enum
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from datetime import date, datetime
+
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.database.connection import Base
+
 
 class PaperWallet(Base):
     __tablename__ = "paper_wallets"

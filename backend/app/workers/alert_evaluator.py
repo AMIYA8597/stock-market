@@ -2,12 +2,11 @@ import asyncio
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 
 from app.database.connection import async_session_factory
-from app.models.alert import Alert
-from app.models.instrument import Instrument
-from app.models.market import QuoteSnapshot
+from app.models.alerts import Alert
+from app.models.market import Instrument, QuoteSnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +48,16 @@ class AlertEvaluator:
         async with async_session_factory() as session:
             stmt = (
                 select(Alert, Instrument)
-                .outerjoin(Instrument, Alert.instrument_id == Instrument.id)
-                .where(Alert.enabled.is_(True), Alert.is_triggered.is_(False))
+                .outerjoin(Instrument, Instrument.canonical_symbol == Alert.symbol)
+                .where(Alert.is_active.is_(True))
             )
             result = await session.execute(stmt)
             rows = result.all()
 
             for alert, instrument in rows:
                 if not instrument:
-                    continue  # Portfolio level alerts not supported here yet
-                
+                    continue  # No matching instrument for this alert's symbol yet.
+
                 symbol = instrument.canonical_symbol
 
                 try:
@@ -71,7 +70,7 @@ class AlertEvaluator:
                     )
                     quote_result = await session.execute(quote_stmt)
                     quote = quote_result.scalar_one_or_none()
-                    
+
                     if not quote or quote.price is None:
                         continue
 
@@ -87,9 +86,8 @@ class AlertEvaluator:
                             triggered = True
 
                     if triggered:
-                        alert.is_triggered = True
-                        alert.triggered_at = datetime.now(UTC)
-                        alert.enabled = False
+                        alert.last_triggered_at = datetime.now(UTC)
+                        alert.is_active = False
                         await session.commit()
                         logger.info(f"Alert {alert.id} TRIGGERED for {symbol} at {price}")
                         # Next phase: send WebSocket/Push Notification here

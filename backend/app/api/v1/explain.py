@@ -51,7 +51,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
             select(ModelArtifact)
             .join(Instrument)
             .where(
-                Instrument.symbol == norm_symbol,
+                Instrument.canonical_symbol == norm_symbol,
                 ModelArtifact.is_active,
             )
         )

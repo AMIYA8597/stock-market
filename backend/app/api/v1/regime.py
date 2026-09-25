@@ -31,7 +31,7 @@ async def get_regime_current(
     # 1. Fetch instrument
     clean_symbol = symbol.split(".")[0].upper()
     inst_res = await db.execute(
-        select(Instrument).where(Instrument.symbol.startswith(clean_symbol))
+        select(Instrument).where(Instrument.canonical_symbol.startswith(clean_symbol))
     )
     instrument = inst_res.scalars().first()
     if not instrument:
@@ -95,7 +95,7 @@ async def get_regime_history(
 ) -> RegimeHistoryResponse:
     clean_symbol = symbol.split(".")[0].upper()
     inst_res = await db.execute(
-        select(Instrument).where(Instrument.symbol.startswith(clean_symbol))
+        select(Instrument).where(Instrument.canonical_symbol.startswith(clean_symbol))
     )
     instrument = inst_res.scalars().first()
     if not instrument:

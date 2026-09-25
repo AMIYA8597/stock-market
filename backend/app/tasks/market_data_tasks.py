@@ -30,7 +30,7 @@ async def _seed_universe_async():
     async for session in get_db():
         count = 0
         for item in universe:
-            stmt = select(Instrument).where(Instrument.symbol == item["symbol"])
+            stmt = select(Instrument).where(Instrument.canonical_symbol == item["symbol"])
             result = await session.execute(stmt)
             instrument = result.scalar_one_or_none()
             if not instrument:
@@ -78,7 +78,7 @@ async def _backfill_historical_data_async():
                         # Check if exists
                         exist_stmt = select(OHLCV).where(
                             OHLCV.instrument_id == inst.id,
-                            OHLCV.time == bar.time,
+                            OHLCV.timestamp == bar.time,
                             OHLCV.interval == "1d",
                         )
                         exist_res = await session.execute(exist_stmt)

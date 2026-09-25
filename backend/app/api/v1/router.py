@@ -5,7 +5,6 @@ import logging
 from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
-    organizations,
     admin,
     alerts,
     auth,
@@ -19,6 +18,7 @@ from app.api.v1 import (
     models,
     news,
     notifications,
+    organizations,
     paper_trading,
     payments,
     portfolio,

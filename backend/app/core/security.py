@@ -3,15 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
-from jose import jwt, JWTError
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
+from jose import JWTError, jwt
 from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.database.connection import get_db
-from app.models.identity import User, OrgMember, Organization, ApiKey
+from app.models.identity import ApiKey, OrgMember, User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -55,7 +55,7 @@ def verify_supabase_token(token: str) -> dict[str, Any]:
             secret = "your-super-secret-jwt-token-with-at-least-32-characters-long"
         if not secret:
             raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
-        
+
         payload = jwt.decode(
             token,
             secret,
@@ -80,7 +80,7 @@ async def get_current_context(
 ) -> RequestContext:
     """Resolve current context from token or API key."""
     req_id = getattr(request.state, "request_id", None)
-    
+
     # 1. API Key Auth
     if api_key:
         result = await db.execute(
@@ -89,21 +89,21 @@ async def get_current_context(
         api_key_record = result.scalars().first()
         if not api_key_record:
             raise HTTPException(status_code=401, detail="Invalid API Key")
-        
+
         ctx = RequestContext(
             user_id=str(api_key_record.created_by_id) if api_key_record.created_by_id else None,
             organization_id=str(api_key_record.organization_id),
             auth_method="API_KEY",
             request_id=req_id
         )
-        
+
         # Set RLS context for the transaction
         if ctx.user_id:
             await db.execute(
                 text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
                 {"uid": ctx.user_id}
             )
-            
+
         return ctx
 
     # 2. Supabase JWT Auth
@@ -118,17 +118,17 @@ async def get_current_context(
         user = result.scalars().first()
         if not user:
             raise HTTPException(status_code=401, detail="User profile not found")
-        
+
         if user.status != "active":
             raise HTTPException(status_code=403, detail="User account suspended")
 
         # Resolve organization
         org_id = request.headers.get("X-Organization-ID")
-        
+
         membership = None
         if org_id:
             res = await db.execute(select(OrgMember).where(
-                OrgMember.user_id == user.id, 
+                OrgMember.user_id == user.id,
                 OrgMember.organization_id == org_id,
                 OrgMember.status == "active"
             ))
@@ -153,14 +153,14 @@ async def get_current_context(
             auth_method="SUPABASE_JWT",
             request_id=req_id
         )
-        
+
         # Set RLS context for the transaction
         if ctx.user_id:
             await db.execute(
                 text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
                 {"uid": ctx.user_id}
             )
-            
+
         return ctx
 
     raise HTTPException(
