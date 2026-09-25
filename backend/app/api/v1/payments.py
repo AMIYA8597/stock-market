@@ -83,15 +83,11 @@ async def razorpay_webhook(
     signature = request.headers.get("x-razorpay-signature", "")
 
     secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "REPLACE_ME")
-    is_test_mode = getattr(settings, "ENVIRONMENT", "production") != "production" or _is_placeholder(secret)
-    
-    is_verified = False
-    if not _is_placeholder(secret):
-        expected_sig = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
-        is_verified = hmac.compare_digest(expected_sig, signature)
-    elif is_test_mode:
-        # In test mode with placeholder secret, bypass verification
-        is_verified = True
+    if _is_placeholder(secret):
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
+        
+    expected_sig = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    is_verified = hmac.compare_digest(expected_sig, signature)
 
     try:
         payload = json.loads(raw_body.decode("utf-8"))
@@ -101,22 +97,29 @@ async def razorpay_webhook(
 
     event_type = payload.get("event", "unknown")
     provider_event_id = payload.get("id", str(uuid.uuid4()))
+    
+    if not is_verified:
+        logger.warning(f"Invalid webhook signature for event={event_type}")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+    
+    # Idempotency check
+    existing = await db.execute(select(PaymentEvent).where(PaymentEvent.provider_event_id == provider_event_id))
+    if existing.scalar_one_or_none():
+        logger.info(f"Billing webhook idempotency hit: event={event_type}, id={provider_event_id}")
+        return {"status": "ok", "message": "Already processed"}
+        
     logger.info(f"Billing webhook received: event={event_type}, verified={is_verified}")
     
-    # 2. Log to Audit Table (regardless of verification)
+    # 2. Log to Audit Table
     audit = PaymentEvent(
         provider="razorpay",
         provider_event_id=provider_event_id,
         event_type=event_type,
         payload=payload,
-        processing_status="pending" if is_verified else "failed",
-        error_message=None if is_verified else "Invalid webhook signature"
+        processing_status="pending",
+        error_message=None
     )
     db.add(audit)
-
-    if not is_verified:
-        await db.commit()
-        raise HTTPException(status_code=400, detail="Invalid webhook signature")
 
     # 3. Process events
     sub_id = payload.get("payload", {}).get("subscription", {}).get("entity", {}).get("id")
@@ -145,6 +148,14 @@ async def razorpay_webhook(
     await db.commit()
     return {"status": "ok"}
 
+
+import razorpay
+
+def get_razorpay_client():
+    if _is_placeholder(settings.RAZORPAY_KEY_ID) or _is_placeholder(settings.RAZORPAY_KEY_SECRET):
+        raise HTTPException(status_code=500, detail="Razorpay not configured")
+    return razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
 class IntentPayload(BaseModel):
     amount: float
     method: str
@@ -153,18 +164,57 @@ class IntentPayload(BaseModel):
 
 @router.post("/intents")
 async def create_intent(payload: IntentPayload):
-    return {
-        "intent_id": f"pi_{uuid.uuid4().hex[:10]}",
-        "provider_ref": "mock_provider_ref",
-        "amount": str(payload.amount),
-        "status": "created"
+    client = get_razorpay_client()
+    # Amount in paise
+    amount_in_paise = int(payload.amount * 100)
+    data = {
+        "amount": amount_in_paise,
+        "currency": payload.currency,
+        "receipt": f"receipt_{uuid.uuid4().hex[:10]}",
+        "notes": {
+            "description": payload.description or ""
+        }
     }
+    
+    try:
+        order = client.order.create(data=data)
+        return {
+            "intent_id": order["id"],
+            "provider_ref": order["receipt"],
+            "amount": str(payload.amount),
+            "status": "created"
+        }
+    except Exception as e:
+        logger.error(f"Razorpay order creation failed: {e}")
+        raise HTTPException(status_code=500, detail="Payment provider error")
+
+class ConfirmPayload(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 @router.post("/confirm")
-async def confirm_intent(intent_id: str = "", razorpay_payment_id: str = ""):
-    return {
-        "intent_id": intent_id,
-        "status": "success",
-        "credited_amount": "0",
-        "completed_at": datetime.now(timezone.utc).isoformat()
-    }
+async def confirm_intent(payload: ConfirmPayload):
+    client = get_razorpay_client()
+    try:
+        client.utility.verify_payment_signature({
+            'razorpay_order_id': payload.razorpay_order_id,
+            'razorpay_payment_id': payload.razorpay_payment_id,
+            'razorpay_signature': payload.razorpay_signature
+        })
+        
+        # We should ideally fetch the payment and ensure it's captured
+        payment = client.payment.fetch(payload.razorpay_payment_id)
+        credited_amount = payment.get('amount', 0) / 100.0
+        
+        return {
+            "intent_id": payload.razorpay_order_id,
+            "status": "success",
+            "credited_amount": str(credited_amount),
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }
+    except razorpay.errors.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid payment signature")
+    except Exception as e:
+        logger.error(f"Razorpay confirm failed: {e}")
+        raise HTTPException(status_code=500, detail="Payment provider error")

@@ -11,7 +11,7 @@ import pandas as pd
 from sqlalchemy import and_, select
 
 from app.database.connection import async_session_factory
-from app.models.alert import Alert
+from app.models.alerts import Alert
 from app.models.instrument import Instrument
 
 from app.services.signal_engine import TechnicalSignalEngine

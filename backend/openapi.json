@@ -26,7 +26,7 @@
     "/api/v1/health/live-data": {
       "get": {
         "summary": "Health Live Data",
-        "description": "Pings external data sources to check reachability.",
+        "description": "Returns cached provider status without synchronous network probing.",
         "operationId": "health_live_data_api_v1_health_live_data_get",
         "responses": {
           "200": {
@@ -305,6 +305,53 @@
                   },
                   "type": "array",
                   "title": "Response List User Organizations Api V1 Organizations Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "organizations"
+        ],
+        "summary": "Create Organization",
+        "operationId": "create_organization_api_v1_organizations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrganizationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1078,6 +1125,84 @@
         }
       }
     },
+    "/api/v1/payments/intents": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Create Intent",
+        "operationId": "create_intent_api_v1_payments_intents_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntentPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/confirm": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Confirm Intent",
+        "operationId": "confirm_intent_api_v1_payments_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmPayload"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/watchlist": {
       "get": {
         "tags": [
@@ -1717,14 +1842,14 @@
         }
       }
     },
-    "/api/v1/ws_url": {
+    "/api/v1/websocket_url/ws_url": {
       "get": {
         "tags": [
           "debug"
         ],
         "summary": "Get Ws Url",
         "description": "Return the WebSocket URL for clients.\n\nAllows front\u2011end to query the backend for the correct WS endpoint,\nwhich can be overridden via the `WEBSOCKET_URL` environment variable.",
-        "operationId": "get_ws_url_api_v1_ws_url_get",
+        "operationId": "get_ws_url_api_v1_websocket_url_ws_url_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1735,12 +1860,46 @@
                     "type": "string"
                   },
                   "type": "object",
-                  "title": "Response Get Ws Url Api V1 Ws Url Get"
+                  "title": "Response Get Ws Url Api V1 Websocket Url Ws Url Get"
                 }
               }
             }
           }
         }
+      }
+    },
+    "/api/v1/websocket_url/ticket": {
+      "post": {
+        "tags": [
+          "websocket"
+        ],
+        "summary": "Create Ws Ticket",
+        "description": "Generate a short-lived ticket for WebSocket authentication.",
+        "operationId": "create_ws_ticket_api_v1_websocket_url_ticket_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Create Ws Ticket Api V1 Websocket Url Ticket Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/regime/{symbol}/current": {
@@ -4516,6 +4675,29 @@
         "type": "object",
         "title": "BlogPostUpdate"
       },
+      "ConfirmPayload": {
+        "properties": {
+          "razorpay_order_id": {
+            "type": "string",
+            "title": "Razorpay Order Id"
+          },
+          "razorpay_payment_id": {
+            "type": "string",
+            "title": "Razorpay Payment Id"
+          },
+          "razorpay_signature": {
+            "type": "string",
+            "title": "Razorpay Signature"
+          }
+        },
+        "type": "object",
+        "required": [
+          "razorpay_order_id",
+          "razorpay_payment_id",
+          "razorpay_signature"
+        ],
+        "title": "ConfirmPayload"
+      },
       "CorrelationEdge": {
         "properties": {
           "source": {
@@ -5526,6 +5708,40 @@
         ],
         "title": "InstrumentInfo",
         "description": "Core instrument details."
+      },
+      "IntentPayload": {
+        "properties": {
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "INR"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount",
+          "method"
+        ],
+        "title": "IntentPayload"
       },
       "InviteRequest": {
         "properties": {
@@ -6555,6 +6771,24 @@
           "order_type"
         ],
         "title": "OrderRequest"
+      },
+      "OrganizationCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "slug"
+        ],
+        "title": "OrganizationCreate"
       },
       "OrganizationResponse": {
         "properties": {

@@ -105,13 +105,7 @@ def get_sentiment_pipeline():
 
 def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) < 60:
-        return {
-            "regime": "unknown",
-            "regime_confidence": 0.5,
-            "bull_prob": 0.5,
-            "bear_prob": 0.5,
-            "hmm_used": False,
-        }
+        raise ValueError("Insufficient data for HMM-GARCH regime detection.")
 
     try:
         from research.models.hmm_garch.inference import InferenceEngine
@@ -160,36 +154,8 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
             "transition_matrix": transition_matrix,
         }
     except Exception as e:
-        logger.warning(f"Real HMM-GARCH solver failed, falling back to threshold: {e}")
-        # Fall back to simple threshold regime
-        ret_63d = (
-            float((df["close"].iloc[-1] / df["close"].iloc[-64]) - 1) if len(df) >= 64 else 0.0
-        )
-        realized_vol = (
-            float(np.log(df["close"] / df["close"].shift(1)).rolling(21).std().iloc[-1])
-            if len(df) >= 22
-            else 0.02
-        )
-        ann_vol = realized_vol * np.sqrt(252)
-        sharpe_proxy = ret_63d / (ann_vol + 1e-6)
-        if sharpe_proxy > 0.5:
-            regime, bull_prob, bear_prob = "BULL", 0.75, 0.25
-        elif sharpe_proxy < -0.5:
-            regime, bull_prob, bear_prob = "BEAR", 0.25, 0.75
-        else:
-            regime, bull_prob, bear_prob = "SIDEWAYS", 0.5, 0.5
-        regime_confidence = max(bull_prob, bear_prob)
-        return {
-            "regime": regime,
-            "bull_prob": bull_prob,
-            "bear_prob": bear_prob,
-            "regime_confidence": regime_confidence,
-            "hmm_used": False,
-            "conditional_vol": realized_vol,
-            "vol_forecast_5d": realized_vol * np.sqrt(5),
-            "vol_forecast_21d": realized_vol * np.sqrt(21),
-        }
-
+        logger.error(f"Real HMM-GARCH solver failed: {e}")
+        raise ValueError(f"Regime detection failed: {e}")
 
 # ---------------------------------------------------------------------------
 # Layer 6 – Ensemble Combiner
@@ -211,8 +177,8 @@ def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> flo
 
     if stats_path.exists():
         try:
-            with open(stats_path) as f:
-                stats = json.load(f)
+            # with open(stats_path) as f:
+            stats = {}  # json.load(f)
             p = stats.get("win_rate", p)
             b = stats.get("payoff_ratio", b)
         except Exception as e:
@@ -595,9 +561,9 @@ def build_ensemble_signal_sync(
         pos = sum(1 for s in active_signals if s > 0.1)
         neg = sum(1 for s in active_signals if s < -0.1)
         total_votes = pos + neg
-        agreement = max(pos, neg) / total_votes if total_votes > 0 else 0.5
+        agreement = max(pos, neg) / total_votes if total_votes > 0 else 0.0
     else:
-        agreement = 0.5
+        raise ValueError("No active signals to form an ensemble. Model generation failed.")
 
     masked_weights = [1.0 if m == "xgboost" else 0.0 for m in model_names]
 
@@ -1088,13 +1054,14 @@ async def get_full_prediction(
         }
 
         # Run the LLM reasoning asynchronously
-        llm_reason = await LLMReasoningEngine.generate_reasoning(
-            symbol=symbol,
-            ensemble_signal=ensemble.get("action", "HOLD"),
-            confidence=float(ensemble.get("confidence", 50.0)),
-            technicals=technicals_dict,
-            news_sentiment="Neutral",  # In a real pass, fetch from sentiment_analyzer
-        )
+        evidence_pack = {
+            "symbol": symbol,
+            "signal": ensemble.get("action", "HOLD"),
+            "confidence": float(ensemble.get("confidence", 50.0)),
+            "technicals": technicals_dict,
+            "sentiment": "Neutral"
+        }
+        llm_reason = await LLMReasoningEngine.generate_reasoning(evidence_pack=evidence_pack)
         if llm_reason:
             reasons = [llm_reason]
     except Exception as re_err:
@@ -1115,7 +1082,46 @@ async def get_full_prediction(
         "model_version": model_version or "latest",
     }
 
+
+    try:
+        from app.database.connection import async_session_factory
+        from sqlalchemy import select
+        from app.models.market import Instrument
+        from app.models.research import Prediction, ModelExplanation, ModelRegistry
+        
+        async with async_session_factory() as session:
+            inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
+            if inst:
+                # Find active model registry for XGBoost or whatever is used
+                # We'll just pick the active XGBoost model for now
+                active_model = (await session.execute(
+                    select(ModelRegistry)
+                    .where((ModelRegistry.status == "active") & (ModelRegistry.model_family == "XGBoost"))
+                    .order_by(ModelRegistry.created_at.desc())
+                )).scalars().first()
+                
+                if active_model:
+                    import json
+                    pred = Prediction(
+                        model_id=active_model.id,
+                        instrument_id=inst.id,
+                        prediction_timestamp=datetime.now(UTC),
+                        predicted_value=json.dumps(result)
+                    )
+                    session.add(pred)
+                    await session.flush()
+                    
+                    expl = ModelExplanation(
+                        prediction_id=pred.id,
+                        explanation_data={"reasoning": reasoning_msg, "features": ensemble.get("top_features", [])}
+                    )
+                    session.add(expl)
+                    await session.commit()
+    except Exception as e:
+        logger.error(f"Failed to persist prediction to database: {e}")
+
     await _cache_store(symbol, result)
     return result
+
 
 

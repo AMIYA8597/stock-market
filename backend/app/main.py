@@ -42,7 +42,7 @@ except ImportError:  # pragma: no cover
 import logging as _logging
 
 # Suppress noisy third-party library logs
-for _noisy_lib in ("pymongo", "motor", "yfinance", "urllib3", "urllib3.connectionpool", "peewee"):
+for _noisy_lib in ("yfinance", "urllib3", "urllib3.connectionpool", "peewee"):
     _logging.getLogger(_noisy_lib).setLevel(_logging.WARNING)
 
 
@@ -135,7 +135,7 @@ def create_app() -> FastAPI:
 
     @_app.get("/liveness", tags=["health"])
     async def liveness() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "running"}
 
     @_app.get("/readiness", tags=["health"])
     async def readiness() -> dict[str, str]:

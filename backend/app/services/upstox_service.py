@@ -43,18 +43,10 @@ class UpstoxService:
 
     @classmethod
     def log_audit(cls, message: str):
-        """Logs trading actions to backend/logs/trading_audit.log with UTC timestamps."""
+        """Logs trading actions to logger with UTC timestamps."""
         try:
-            backend_root = Path(__file__).resolve().parent.parent.parent
-            logs_dir = backend_root / "logs"
-            logs_dir.mkdir(exist_ok=True)
-            audit_file = logs_dir / "trading_audit.log"
-
             timestamp = datetime.now(UTC).isoformat()
-            log_line = f"[{timestamp}] {message}\n"
-
-            with open(audit_file, "a", encoding="utf-8") as f:
-                f.write(log_line)
+            logger.info(f"AUDIT [{timestamp}]: {message}")
         except Exception as e:
             logger.error(f"Failed to write to audit log: {e}")
 

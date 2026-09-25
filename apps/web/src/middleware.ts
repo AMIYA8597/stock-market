@@ -62,14 +62,14 @@ export async function middleware(request: NextRequest) {
   
   const isPublicPath = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/pricing', '/blog'].includes(pathWithoutLocale) || pathWithoutLocale.startsWith('/blog/');
 
-  if (false && !isPublicPath && !pathname.startsWith('/api') && !pathname.startsWith('/_next') && !pathname.match(/\.(.*)$/)) {
+  if (!session && !isPublicPath && !pathname.startsWith('/api') && !pathname.startsWith('/_next') && !pathname.match(/\.(.*)$/)) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/login`;
     url.searchParams.set('next', pathname);
     return NextResponse.redirect(url);
   }
 
-  if (false && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
+  if (session && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/dashboard`;
     return NextResponse.redirect(url);
