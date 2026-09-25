@@ -80,3 +80,4 @@ vaderSentiment>=3.3.2
 hmmlearn>=0.3.2
 arch>=7.0.0
 lightgbm
+optuna>=3.6.0
