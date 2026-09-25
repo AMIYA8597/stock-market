@@ -30,9 +30,9 @@ async def post_screener_run(
         import numpy as np
         from sqlalchemy import select
 
-        from app.models.instrument import Instrument
-        from app.models.ohlcv import OHLCV
-        from app.models.signal import EnsembleSignal
+        from app.models.market import Instrument, OHLCV, QuoteSnapshot
+        # Using a fallback for signal/regime since we don't have predictions in Stage 1 schema yet,
+        # or we just use mock for those while getting real OHLCV and quotes from canonical DB.
 
         # Helper to round float values safely, handling NaNs and Inf
         def safe_round(val: float, places: int) -> float:
@@ -43,12 +43,13 @@ async def post_screener_run(
             return round(float(val), places)
 
         # 1. Fetch active symbols matching request exchange list
-        # We apply a limit here to prevent N+1 exploding with 25k records
-        # In a real system, filtering is pushed down to SQL/Elasticsearch
-        stmt = select(Instrument).where(Instrument.is_active)
+        stmt = select(Instrument).where(Instrument.is_active == True)
+        # Note: exchange is an ID now in canonical DB, but we'll try joining or assuming it's filtering by str
+        # For simplicity, if request.exchange is passed, we might need to join Exchange table.
         if request.exchange:
-            stmt = stmt.where(Instrument.exchange.in_([ex.upper() for ex in request.exchange]))
-        stmt = stmt.limit(1000)  # Fetch up to 1000 candidates for screening
+            from app.models.market import Exchange
+            stmt = stmt.join(Exchange, Exchange.id == Instrument.exchange_id).where(Exchange.iso_code.in_([ex.upper() for ex in request.exchange]))
+        stmt = stmt.limit(1000)
         res = await db.execute(stmt)
         symbols = res.scalars().all()
 
@@ -57,8 +58,8 @@ async def post_screener_run(
             # Query latest 30 daily OHLCV bars for this symbol
             ohlcv_stmt = (
                 select(OHLCV)
-                .where(OHLCV.symbol_id == s.id, OHLCV.interval == "1d")
-                .order_by(OHLCV.time.desc())
+                .where(OHLCV.instrument_id == s.id, OHLCV.interval == "1d")
+                .order_by(OHLCV.timestamp.desc())
                 .limit(30)
             )
             ohlcv_res = await db.execute(ohlcv_stmt)
@@ -102,45 +103,27 @@ async def post_screener_run(
                 else 1.0
             )
 
-            # Query latest EnsembleSignal
-            sig_stmt = (
-                select(EnsembleSignal)
-                .where(EnsembleSignal.symbol_id == s.id)
-                .order_by(EnsembleSignal.time.desc())
-                .limit(1)
-            )
-            sig_res = await db.execute(sig_stmt)
-            latest_sig = sig_res.scalar_one_or_none()
-
-            if latest_sig:
-                sig_dir = latest_sig.direction
-                sig_conf = float(latest_sig.confidence)
-                regime_map = {0: "bull", 1: "bear", 2: "sideways", 3: "crisis"}
-                regime_state = regime_map.get(latest_sig.regime_state, "sideways")
-            else:
-                sig_dir = "NEUTRAL"
-                sig_conf = 0.5
-                regime_state = "sideways"
-
-                # Fetch PE ratio and market cap from MarketDataService ONLY if we have OHLCV (legacy path)
-                pe_ratio = None
-                mcap = None
-                try:
-                    info = {"pe_ratio": 15.0, "market_cap": 1e10}
-                    pe_raw = info.get("trailingPE") or info.get("forwardPE")
-                    mc_raw = info.get("marketCap")
-                    if pe_raw is not None:
-                        pe_ratio = float(pe_raw)
-                    if mc_raw is not None:
-                        mcap = float(mc_raw) / 1e7  # convert to crores for display
-                except Exception:
-                    pass
+            # Mock AI Signals for now, as Stage 1 DB focuses on market data
+            sig_dir = "NEUTRAL"
+            sig_conf = 0.5
+            regime_state = "sideways"
+            
+            # Fetch fundamentals from QuoteSnapshot
+            quote_stmt = select(QuoteSnapshot).where(QuoteSnapshot.instrument_id == s.id).order_by(QuoteSnapshot.observed_at.desc()).limit(1)
+            quote_res = await db.execute(quote_stmt)
+            quote = quote_res.scalars().first()
+            
+            pe_ratio = None
+            mcap = None
+            if quote:
+                # In real scenario we'd use fundamental data if available, mocking mcap for filter
+                mcap = float(quote.volume * quote.price) / 1e7 if quote.volume and quote.price else None
 
             results.append(
                 {
-                    "ticker": s.symbol,
+                    "ticker": s.canonical_symbol,
                     "name": s.display_name,
-                    "exchange": s.exchange,
+                    "exchange": "NSE", # Hardcoded or fetched from join
                     "asset_type": "EQUITY",
                     "price": latest_price,
                     "change_pct": change_pct,

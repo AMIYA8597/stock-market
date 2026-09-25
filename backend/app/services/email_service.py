@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models.email_job import EmailJob
+from app.models.operational import AuditLog as EmailJob
 
 # Optional email background task – use a local logger if Celery/RQ is not installed
 try:

@@ -1,6 +1,6 @@
 from datetime import datetime
 import uuid
-from sqlalchemy import Boolean, DateTime, String, ForeignKey, UniqueConstraint, Integer
+from sqlalchemy import JSON, Boolean, DateTime, String, ForeignKey, UniqueConstraint, Integer
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID
 from app.database.connection import Base
@@ -15,6 +15,7 @@ class User(Base):
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class Organization(Base):
@@ -24,6 +25,7 @@ class Organization(Base):
     slug: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class OrgMember(Base):
@@ -46,6 +48,7 @@ class UsageCounter(Base):
     period_end: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     current_count: Mapped[int] = mapped_column(Integer, default=0)
     limit_count: Mapped[int | None] = mapped_column(Integer)
+    preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
 class ApiKey(Base):
     __tablename__ = "api_keys"

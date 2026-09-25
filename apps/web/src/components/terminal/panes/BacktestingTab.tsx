@@ -49,41 +49,22 @@ export default function BacktestingTab({ symbol }: BacktestingTabProps): JSX.Ele
           setBacktestLoading(false);
         } else if (statusRes.status === "FAILED") {
           setBacktestLoading(false);
-          setBacktestStats({
-            win_rate: 0.584,
-            total_trades: 42,
-            profit_factor: 1.84,
-            max_drawdown: -12.4,
-            sharpe_ratio: 1.65,
-          });
+          setBacktestStats(null);
+          console.error("Backtest failed on backend");
         } else if (attempts < 5) {
           attempts++;
           setTimeout(checkStatus, 1500);
         } else {
           setBacktestLoading(false);
-          setBacktestStats({
-            win_rate: 0.584,
-            total_trades: 42,
-            profit_factor: 1.84,
-            max_drawdown: -12.4,
-            sharpe_ratio: 1.65,
-          });
+          setBacktestStats(null);
+          console.error("Backtest timed out");
         }
       };
       setTimeout(checkStatus, 1000);
     } catch (e) {
       console.error(e);
-      setTimeout(() => {
-        setBacktestStats({
-          win_rate: 0.584,
-          total_trades: 42,
-          profit_factor: 1.84,
-          max_drawdown: -12.4,
-          sharpe_ratio: 1.65,
-          // Fallback static metrics
-        });
-        setBacktestLoading(false);
-      }, 1000);
+      setBacktestLoading(false);
+      setBacktestStats(null);
     }
   };
 

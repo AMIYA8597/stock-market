@@ -1,14 +1,36 @@
 import re
 
-with open("tests/unit/test_prediction_engine_new.py", "r") as f:
-    code = f.read()
+with open('d:/work/stock-market/backend/tests/unit/test_prediction_engine_new.py', 'r', encoding='utf-8') as f:
+    text = f.read()
 
-code = re.sub(r"@patch\('app\.services\.prediction_engine\.TechnicalSignalEngine\.generate_signal'\)\n", '', code)
-code = re.sub(r', mock_generate_signal', '', code)
-code = re.sub(r'mock_generate_signal\.return_value = \{[^\}]+\}\n', '', code)
-code = re.sub(r'mock_generate_signal\.assert_called_once\(\)\n', '', code)
-code = re.sub(r'mock_generate_signal,\s*', '', code)
-code = re.sub(r'mock_generate_signal\.return_value = \{.*?\}', '', code, flags=re.DOTALL)
+# Fix detect_regime tests to expect ValueError
+text = text.replace('''def test_detect_regime_short_df():
+    df = pd.DataFrame({"close": range(10)})
+    res = detect_regime(df)
+    assert res["regime"] == "unknown"''', '''def test_detect_regime_short_df():
+    df = pd.DataFrame({"close": range(10)})
+    import pytest
+    with pytest.raises(ValueError, match="Insufficient data"):
+        detect_regime(df)''')
 
-with open("tests/unit/test_prediction_engine_new.py", "w") as f:
-    f.write(code)
+text = text.replace('''def test_detect_regime_fallback():
+    df = pd.DataFrame({"close": np.random.rand(100)})
+    with patch("research.models.hmm_garch.inference.InferenceEngine") as mock_engine:
+        mock_engine.return_value.predict.side_effect = Exception("fail")
+        res = detect_regime(df)
+        assert res["hmm_used"] is False''', '''def test_detect_regime_fallback():
+    df = pd.DataFrame({"close": np.random.rand(100)})
+    import pytest
+    with patch("research.models.hmm_garch.inference.InferenceEngine") as mock_engine:
+        mock_engine.return_value.predict.side_effect = Exception("fail")
+        with pytest.raises(ValueError, match="Regime detection failed"):
+            detect_regime(df)''')
+
+# Fix async_session_factory patch
+text = text.replace('patch("app.services.prediction_engine.async_session_factory"', 'patch("app.database.connection.async_session_factory"')
+
+# Fix TechnicalSignalEngine patch
+text = text.replace('patch("app.services.prediction_engine.TechnicalSignalEngine"', 'patch("app.services.prediction_engine.TechnicalSignalEngine", create=True')
+
+with open('d:/work/stock-market/backend/tests/unit/test_prediction_engine_new.py', 'w', encoding='utf-8') as f:
+    f.write(text)

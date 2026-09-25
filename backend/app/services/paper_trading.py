@@ -13,7 +13,7 @@ from decimal import Decimal
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.paper_trading import PaperOrder, PaperPosition, PaperWallet
+from app.models.ledger import PaperAccount, PaperLedgerEntry, PaperOrder, PaperPosition
 from app.models.ledger import PaperAccount, PaperLedgerEntry
 from app.services.market_data_service import MarketDataService
 from research.backtesting.cost_model import compute_indian_costs
@@ -23,28 +23,37 @@ logger = logging.getLogger(__name__)
 
 class PaperTradingService:
     @staticmethod
-    async def get_or_create_wallet(
+    async def get_balance(db: AsyncSession, account_id) -> Decimal:
+        from sqlalchemy import func
+        from app.models.ledger import PaperLedgerEntry, PaperAccount
+        stmt = select(PaperAccount.starting_balance).where(PaperAccount.id == account_id)
+        start = (await db.execute(stmt)).scalar_one_or_none() or Decimal('0.00')
+        stmt = select(func.coalesce(func.sum(PaperLedgerEntry.amount), 0)).where(PaperLedgerEntry.account_id == account_id)
+        ledger_sum = (await db.execute(stmt)).scalar_one_or_none() or Decimal('0.00')
+        return Decimal(str(start)) + Decimal(str(ledger_sum))
+
+    @staticmethod
+    async def get_or_create_account(
         db: AsyncSession, user_id: str, for_update: bool = False
-    ) -> PaperWallet:
+    ) -> PaperAccount:
         """Fetch the paper trading wallet for the user, or create one if missing."""
-        stmt = select(PaperWallet).where(PaperWallet.user_id == user_id)
+        stmt = select(PaperAccount).where(PaperAccount.user_id == user_id)
         if for_update:
             stmt = stmt.with_for_update()
         res = await db.execute(stmt)
-        wallet = res.scalar_one_or_none()
+        account = res.scalar_one_or_none()
 
         if not wallet:
-            wallet = PaperWallet(
+            account = PaperAccount(
                 user_id=user_id,
-                balance=Decimal("100000.00"),
                 realized_pnl=Decimal("0.00"),
                 daily_loss_limit=Decimal("5000.00"),
                 last_reset_date=date.today(),
                 daily_realized_loss=Decimal("0.00"),
             )
-            db.add(wallet)
+            db.add(account)
             await db.commit()
-            await db.refresh(wallet)
+            await db.refresh(account)
             logger.info(f"Created new paper trading wallet for user_id={user_id}")
 
         return wallet
@@ -90,13 +99,13 @@ class PaperTradingService:
 
     @staticmethod
     async def get_pnl(db: AsyncSession, user_id: str) -> dict:
-        """Compute summary of paper trading wallet, holdings, equity, and P&L."""
-        wallet = await PaperTradingService.get_or_create_wallet(db, user_id)
+        """Compute summary of paper trading account, holdings, equity, and P&L."""
+        account = await PaperTradingService.get_or_create_account(db, user_id)
 
         # Reset daily realized loss if date has changed
-        if wallet.last_reset_date != date.today():
-            wallet.daily_realized_loss = Decimal("0.00")
-            wallet.last_reset_date = date.today()
+        if account.last_reset_date != date.today():
+            account.daily_realized_loss = Decimal("0.00")
+            account.last_reset_date = date.today()
             await db.commit()
 
         positions = await PaperTradingService.get_positions(db, user_id)
@@ -110,17 +119,18 @@ class PaperTradingService:
             )
             total_unrealized_pnl += Decimal(str(pos["unrealized_pnl"]))
 
-        total_equity = wallet.balance + total_holdings_value
-        circuit_breaker_triggered = wallet.daily_realized_loss >= wallet.daily_loss_limit
+        current_balance = await PaperTradingService.get_balance(db, account.id)
+        total_equity = current_balance + total_holdings_value
+        circuit_breaker_triggered = account.daily_realized_loss >= account.daily_loss_limit
 
         return {
-            "cash_balance": float(round(wallet.balance, 2)),
+            "cash_balance": float(round(current_balance, 2)),
             "total_holdings_value": float(round(total_holdings_value, 2)),
             "total_equity": float(round(total_equity, 2)),
-            "realized_pnl": float(round(wallet.realized_pnl, 2)),
+            "realized_pnl": float(round(account.realized_pnl, 2)),
             "unrealized_pnl": float(round(total_unrealized_pnl, 2)),
-            "daily_realized_loss": float(round(wallet.daily_realized_loss, 2)),
-            "daily_loss_limit": float(round(wallet.daily_loss_limit, 2)),
+            "daily_realized_loss": float(round(account.daily_realized_loss, 2)),
+            "daily_loss_limit": float(round(account.daily_loss_limit, 2)),
             "circuit_breaker_triggered": circuit_breaker_triggered,
         }
 
@@ -147,15 +157,15 @@ class PaperTradingService:
         if quantity <= 0:
             raise ValueError("Quantity must be greater than zero")
 
-        wallet = await PaperTradingService.get_or_create_wallet(db, user_id, for_update=True)
+        account = await PaperTradingService.get_or_create_account(db, user_id, for_update=True)
 
         # Reset daily realized loss if date has changed
-        if wallet.last_reset_date != date.today():
-            wallet.daily_realized_loss = Decimal("0.00")
-            wallet.last_reset_date = date.today()
+        if account.last_reset_date != date.today():
+            account.daily_realized_loss = Decimal("0.00")
+            account.last_reset_date = date.today()
 
         # Check daily loss limit circuit breaker
-        if side == "BUY" and wallet.daily_realized_loss >= wallet.daily_loss_limit:
+        if side == "BUY" and account.daily_realized_loss >= account.daily_loss_limit:
             raise ValueError("Daily loss limit circuit breaker triggered. Buy orders are blocked.")
 
         # Get latest quote
@@ -190,7 +200,7 @@ class PaperTradingService:
         )
 
         if side == "BUY":
-            available_balance = wallet.balance - wallet.locked_margin
+            available_balance = current_balance - account.locked_margin
             if margin_req > available_balance:
                 raise ValueError(
                     f"Margin requirement (₹{margin_req:,.2f}) exceeds available balance (₹{available_balance:,.2f})"
@@ -227,9 +237,10 @@ class PaperTradingService:
             gross_amount = qty_dec * lim_price_dec
 
             # Simple pre-flight checks for LIMIT orders
-            if side == "BUY" and wallet.balance < gross_amount:
+            current_balance = await PaperTradingService.get_balance(db, account.id)
+            if side == "BUY" and current_balance < gross_amount:
                 raise ValueError(
-                    f"Insufficient cash balance for limit order. Required: ₹{gross_amount:,.2f}, Available: ₹{wallet.balance:,.2f}"
+                    f"Insufficient cash balance for limit order. Required: ₹{gross_amount:,.2f}, Available: ₹{current_balance:,.2f}"
                 )
             elif side == "SELL":
                 pos_stmt = select(PaperPosition).where(
@@ -253,7 +264,7 @@ class PaperTradingService:
                 signal_relation=signal_relation,
             )
             if side == "BUY":
-                wallet.locked_margin += gross_amount  # Lock full amount for limit buy
+                account.locked_margin += gross_amount  # Lock full amount for limit buy
             db.add(new_order)
             await db.commit()
             await db.refresh(new_order)
@@ -282,12 +293,13 @@ class PaperTradingService:
             execute_price = quote_price + (slippage / qty_dec)
             net_amount = gross_amount + brokerage + stt + slippage + txn_charges
 
-            if wallet.balance < net_amount:
+            current_balance = await PaperTradingService.get_balance(db, account.id)
+            if current_balance < net_amount:
                 raise ValueError(
-                    f"Insufficient cash balance. Required: ₹{net_amount:,.2f}, Available: ₹{wallet.balance:,.2f}"
+                    f"Insufficient cash balance. Required: ₹{net_amount:,.2f}, Available: ₹{current_balance:,.2f}"
                 )
 
-            wallet.balance -= net_amount
+            
 
             # Update position
             pos_stmt = select(PaperPosition).where(
@@ -326,17 +338,17 @@ class PaperTradingService:
                     f"Insufficient holdings of {sym} to sell. Owned: {pos.quantity if pos else 0}"
                 )
 
-            wallet.balance += net_amount
+            
 
             # Calculate realized P&L
             realized = qty_dec * (execute_price - pos.avg_buy_price) - (
                 brokerage + stt + slippage + txn_charges
             )
-            wallet.realized_pnl += realized
+            account.realized_pnl += realized
             pos.realized_pnl += realized
 
             if realized < 0:
-                wallet.daily_realized_loss += abs(realized)
+                account.daily_realized_loss += abs(realized)
 
             pos.quantity -= qty_dec
             if pos.quantity <= 0:
@@ -409,7 +421,7 @@ class PaperTradingService:
                 continue
 
             # Execute the order
-            wallet = await PaperTradingService.get_or_create_wallet(
+            account = await PaperTradingService.get_or_create_account(
                 db, order.user_id, for_update=True
             )
             qty_dec = order.quantity
@@ -436,16 +448,17 @@ class PaperTradingService:
                 execute_price = limit_price_dec + (slippage / qty_dec)
                 net_amount = gross_amount + brokerage + stt + slippage + txn_charges
 
-                if wallet.balance < net_amount:
+                current_balance = await PaperTradingService.get_balance(db, account.id)
+                if current_balance < net_amount:
                     order.status = "CANCELLED"
-                    wallet.locked_margin -= gross_amount
+                    account.locked_margin -= gross_amount
                     logger.warning(
                         f"Cancelled limit BUY order {order.id} due to insufficient funds."
                     )
                     continue
 
-                wallet.balance -= net_amount
-                wallet.locked_margin -= gross_amount
+                
+                account.locked_margin -= gross_amount
 
                 # Update position
                 pos_stmt = select(PaperPosition).where(
@@ -485,17 +498,17 @@ class PaperTradingService:
                     )
                     continue
 
-                wallet.balance += net_amount
+                
 
                 # Calculate realized P&L
                 realized = qty_dec * (execute_price - pos.avg_buy_price) - (
                     brokerage + stt + slippage + txn_charges
                 )
-                wallet.realized_pnl += realized
+                account.realized_pnl += realized
                 pos.realized_pnl += realized
 
                 if realized < 0:
-                    wallet.daily_realized_loss += abs(realized)
+                    account.daily_realized_loss += abs(realized)
 
                 pos.quantity -= qty_dec
                 if pos.quantity <= 0:
@@ -579,27 +592,26 @@ class PaperTradingService:
         await db.execute(del_ord_stmt)
 
         # Update wallet
-        stmt = select(PaperWallet).where(PaperWallet.user_id == user_id)
+        stmt = select(PaperAccount).where(PaperAccount.user_id == user_id)
         res = await db.execute(stmt)
-        wallet = res.scalar_one_or_none()
+        account = res.scalar_one_or_none()
 
         if wallet:
-            wallet.balance = Decimal("100000.00")
-            wallet.realized_pnl = Decimal("0.00")
-            wallet.daily_realized_loss = Decimal("0.00")
-            wallet.last_reset_date = date.today()
+            account.balance = Decimal("100000.00")
+            account.realized_pnl = Decimal("0.00")
+            account.daily_realized_loss = Decimal("0.00")
+            account.last_reset_date = date.today()
         else:
-            wallet = PaperWallet(
+            account = PaperAccount(
                 user_id=user_id,
-                balance=Decimal("100000.00"),
                 realized_pnl=Decimal("0.00"),
                 daily_loss_limit=Decimal("5000.00"),
                 last_reset_date=date.today(),
                 daily_realized_loss=Decimal("0.00"),
             )
-            db.add(wallet)
+            db.add(account)
 
         await db.commit()
-        await db.refresh(wallet)
+        await db.refresh(account)
         logger.info(f"Reset paper trading wallet for user_id={user_id}")
         return await PaperTradingService.get_pnl(db, user_id)

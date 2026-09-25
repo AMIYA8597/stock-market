@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { fetchApi } from "@/lib/api-client";
 import { Search, Plus, Trash2 } from "lucide-react";
 import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
@@ -202,13 +203,10 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
     const fetchSearch = async () => {
       try {
         // Fallback to relative URL if no env var
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        const res = await fetch(`${apiUrl}/api/v1/market/search?q=${encodeURIComponent(query)}`);
-        if (res.ok) {
-          const data = await res.json();
+        const data = await fetchApi<any>(`/market/search?q=${encodeURIComponent(query)}`);
           const filtered = data.results.filter((r: { ticker: string }) => !activeSymbols.includes(r.ticker));
           setSearchResults(filtered.slice(0, 8));
-        }
+        
       } catch (err) {
         console.error("Search failed", err);
       }

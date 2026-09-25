@@ -42,11 +42,11 @@ async def list_portfolios(
 
     from sqlalchemy import and_, func, select
 
-    from app.models.paper_trading import PaperWallet
+    from app.models.ledger import PaperAccount
 
     uid = uuid.UUID(str(current_user.id))
     deposits_res = await db.execute(
-        select(PaperWallet.balance).where(PaperWallet.user_id == uid)
+        select(PaperAccount.starting_balance).where(PaperAccount.user_id == uid)
     )
     initial_cap = float(deposits_res.scalar_one()) or 0.0
 
@@ -84,9 +84,9 @@ async def get_holdings(
         from sqlalchemy import and_, func, select
 
         from app.models.instrument import Instrument
-        from app.models.paper_trading import PaperWallet
-        from app.models.portfolio import PortfolioHolding
-        from app.models.transactions import Transaction
+        from app.models.ledger import PaperAccount
+        from app.models.ledger import PaperPosition as PortfolioHolding
+        from app.models.ledger import PaperLedgerEntry as Transaction
         from app.services.market_data_service import MarketDataService
 
         if not current_user:
@@ -111,7 +111,7 @@ async def get_holdings(
             return _empty_holdings()
 
         deposits_res = await db.execute(
-            select(PaperWallet.balance).where(PaperWallet.user_id == uid)
+            select(PaperAccount.starting_balance).where(PaperAccount.user_id == uid)
         )
         total_deposits = Decimal(str(deposits_res.scalar_one()))
 
@@ -381,9 +381,9 @@ async def post_transaction(
         from sqlalchemy import and_, func, select
 
         from app.models.instrument import Instrument
-        from app.models.paper_trading import PaperWallet
-        from app.models.portfolio import PortfolioHolding
-        from app.models.transactions import Transaction
+        from app.models.ledger import PaperAccount
+        from app.models.ledger import PaperPosition as PortfolioHolding
+        from app.models.ledger import PaperLedgerEntry as Transaction
 
         if not current_user:
             raise HTTPException(status_code=401, detail="Unauthorized")
@@ -676,7 +676,7 @@ async def post_optimize(
 
         from app.models.instrument import Instrument
         from app.models.ohlcv import OHLCV
-        from app.models.signal import EnsembleSignal
+        from app.models.research import Prediction as EnsembleSignal
         from app.schemas.portfolio import EfficientFrontierPoint, HRPDendrogramNode
         from research.portfolio.black_litterman import optimize_black_litterman
         from research.portfolio.cvar_optimization import optimize_cvar
@@ -995,11 +995,11 @@ async def get_portfolio(
 
     from sqlalchemy import and_, func, select
 
-    from app.models.paper_trading import PaperWallet
+    from app.models.ledger import PaperAccount
 
     uid = uuid.UUID(str(current_user.id))
     deposits_res = await db.execute(
-        select(PaperWallet.balance).where(PaperWallet.user_id == uid)
+        select(PaperAccount.starting_balance).where(PaperAccount.user_id == uid)
     )
     initial_cap = float(deposits_res.scalar_one()) or 0.0
 

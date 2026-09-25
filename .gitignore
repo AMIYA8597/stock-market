@@ -143,3 +143,22 @@ backend/ruff_unused.json
 backend/vulture_report.txt
 tree_output.txt
 tree_utf8.txt
+
+# Added by P1.0
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.pem
+**/llm-env*
+**/*KEYS*
+*.patch
+backend/logs/
+backend/datasets/
+*.parquet
+!tests/fixtures/**/*.parquet
+artifacts/
+node_modules/
+.next/
+__pycache__/

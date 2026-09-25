@@ -11,7 +11,7 @@ The implementation uses existing models (`EnsembleSignal`) and the `SignalEngine
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.signal import EnsembleSignal
+from app.models.research import Prediction as EnsembleSignal
 from app.services.signal_engine import SignalEngine
 
 
