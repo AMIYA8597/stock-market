@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { onboardingApi } from '@/lib/api-client';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -77,8 +78,7 @@ export default function OnboardingPage() {
 
   const handleFinish = async () => {
     console.log('Saving onboarding data to backend...', formData);
-    // Mock save delay
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await onboardingApi.completeOnboarding(formData);
     
     // Clear session storage upon successful completion
     sessionStorage.removeItem('onboardingState');

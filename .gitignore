@@ -146,3 +146,11 @@ tree_utf8.txt
 
 # Claude Code agent worktrees / scratch (not application source)
 .claude/
+
+# Added by P1.0
+**/llm-env*
+**/*KEYS*
+backend/datasets/
+*.parquet
+!tests/fixtures/**/*.parquet
+artifacts/

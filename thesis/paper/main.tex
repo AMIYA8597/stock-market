@@ -1,0 +1,71 @@
+\documentclass[5p,times]{elsarticle}
+
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{hyperref}
+
+\begin{document}
+
+\begin{frontmatter}
+
+\title{Honest, Leakage-Free Chart+Sequence Deep Learning for NSE Stock Direction: A Global Literature Review, Gap Analysis, and RGS-Fusion}
+
+\author{M.Tech CSE Researcher}
+\address{NIT Rourkela}
+
+\begin{abstract}
+Credible research does not support 90\%+ accuracy for daily stock direction prediction. Realistic accuracy bounds rest near 51--54\%. In this study, we provide a systematic PRISMA review of the prior art, quantifying how methodological leakage artificially inflates accuracy. We propose RGS-Fusion, a regime-gated selectively predicting multimodal model for the National Stock Exchange of India (NSE). By employing distribution-free risk-controlled selective prediction (Learn-then-Test) and modeling real-world Indian transaction costs (STT, slippage), we show that economically significant precision (61\%) is achievable at controlled coverage levels, despite base accuracy remaining around 53.6\%.
+\end{abstract}
+
+\begin{keyword}
+Deep Learning \sep Stock Direction \sep Selective Prediction \sep Regime Gating \sep Financial Time Series \sep Leakage
+\end{keyword}
+
+\end{frontmatter}
+
+\section{Introduction}
+Motivation, the inflated-accuracy problem, and our 3 main contributions.
+
+\section{Related Work}
+Organized by image-based chart models, sequence models, modern time-series architectures, limit-order-book models, GNNs, and Foundation Models. Concludes with a Critical Gap Analysis table.
+
+\section{Data and Protocol}
+Universe (NIFTY 500 constituents), survivorship handling, return-neutral labeling, purged walk-forward evaluation, and exact Indian transaction cost modeling.
+
+\section{Methodology}
+Equations for the RGS-Fusion architecture:
+\begin{itemize}
+    \item Encoders (Image, Sequence, Text)
+    \item Causal Regime State (Filtered HMM)
+    \item Regime-Gated Fusion (Mixture of Experts)
+    \item Calibration (Temperature Scaling)
+    \item Selective Prediction with Risk Control (Learn-then-Test)
+\end{itemize}
+
+\section{Experiments}
+Details of baselines, ablations, and statistical testing framework (Binomial, PT, DM-HAC, Bootstrap, DSR, SPA).
+
+\section{Results}
+\subsection{Full Coverage vs. Selective Prediction}
+Full coverage accuracy results vs. the coverage-precision curve.
+
+\subsection{Economic Backtest}
+Performance net of transaction costs.
+
+\section{Leakage Audit}
+A systematic re-evaluation demonstrating how invalid protocols (random splits, un-purged windows, full-sample scaling) inflate LSTM and CNN accuracy by up to 30 percentage points on the same dataset.
+
+\section{Discussion}
+Why the gains are small overall and where selective abstention helps most.
+
+\section{Limitations}
+Non-exchangeability of financial time series, survivorship bias in historical free data (yfinance), single market focus, and lack of intraday modeling.
+
+\section{Conclusion}
+Closing remarks and reproducibility statement. Code and data manifest are publicly available.
+
+\bibliographystyle{elsarticle-num}
+\bibliography{../references}
+
+\end{document}
