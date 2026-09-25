@@ -143,3 +143,6 @@ backend/ruff_unused.json
 backend/vulture_report.txt
 tree_output.txt
 tree_utf8.txt
+
+# Claude Code agent worktrees / scratch (not application source)
+.claude/
