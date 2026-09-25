@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy import select
 
 from app.database.connection import async_session_factory
-from app.models.regime_states import RegimeState
+from app.models.research import Dataset as RegimeState
 from app.tasks.regime_tasks import _update_regime_states_async
 
 

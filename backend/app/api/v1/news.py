@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
 from app.models.instrument import Instrument
-from app.models.sentiment import NewsSentiment
+from app.models.research import Dataset as NewsSentiment
 
 router = APIRouter(prefix="/news", tags=["news"])
 
