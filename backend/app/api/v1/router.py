@@ -8,6 +8,7 @@ from app.api.v1 import (
     admin,
     alerts,
     auth,
+    autotrade,
     backtest,
     blog,
     explain,
@@ -57,6 +58,7 @@ router.include_router(explain.router, dependencies=[Depends(get_current_user)])
 router.include_router(backtest.router)
 router.include_router(portfolio.router, prefix="/portfolio")
 router.include_router(paper_trading.router)
+router.include_router(autotrade.router, dependencies=[Depends(get_current_user)])
 router.include_router(screener.router, dependencies=[Depends(get_current_user)])
 
 router.include_router(models.router, dependencies=[Depends(get_current_user)])
