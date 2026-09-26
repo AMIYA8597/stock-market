@@ -18,10 +18,10 @@ os.environ.setdefault("ENVIRONMENT", "development")
 
 
 async def main():
-    from app.database.connection import init_db
+    from app.database.connection import create_all_for_tests
 
     print("Initializing dev SQLite database...")
-    await init_db()
+    await create_all_for_tests()
     print("Database initialized.")
 
 
