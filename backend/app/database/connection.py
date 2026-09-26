@@ -62,7 +62,15 @@ def _get_engine_kwargs() -> dict:
     return kwargs
 
 engine = create_async_engine(
-    settings.DATABASE_URL or "postgresql+asyncpg://postgres:postgres@localhost:5432/neuroquant_stage1",
+    # `create_async_engine` only builds the Engine object here; it does not
+    # connect. If DATABASE_URL is unset (misconfigured deployment), fail
+    # loudly the moment anything actually tries to use this engine, instead
+    # of silently connecting to "postgres:postgres@localhost:5432" - the
+    # single most common real local Postgres default, which risks silently
+    # reading from/writing to an unrelated real database rather than
+    # surfacing the missing configuration.
+    settings.DATABASE_URL
+    or "postgresql+asyncpg://DATABASE_URL_NOT_CONFIGURED:@localhost/DATABASE_URL_NOT_CONFIGURED",
     **_get_engine_kwargs(),
 )
 
