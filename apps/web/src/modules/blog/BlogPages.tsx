@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { Calendar, Tag } from 'lucide-react';
 import { Card, CardContent } from "@neuroquant/ui";
 import { Badge } from "@neuroquant/ui";

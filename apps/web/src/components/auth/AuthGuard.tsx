@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, ReactNode } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname } from "@/i18n/navigation";
 import { useAuth } from "@/hooks/useAuth";
 
 interface AuthGuardProps {
@@ -15,7 +15,7 @@ export function AuthGuard({ children }: AuthGuardProps): JSX.Element {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, isAuthenticated, router, pathname, error, user]);
 

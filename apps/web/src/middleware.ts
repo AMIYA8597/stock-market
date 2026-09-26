@@ -1,11 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import createMiddleware from 'next-intl/middleware';
+import { routing } from './i18n/routing';
 
-const intlMiddleware = createMiddleware({
-  locales: ['en', 'hi', 'bn'],
-  defaultLocale: 'en'
-});
+const intlMiddleware = createMiddleware(routing);
 
 export async function middleware(request: NextRequest) {
   // First, run next-intl middleware to handle locales
