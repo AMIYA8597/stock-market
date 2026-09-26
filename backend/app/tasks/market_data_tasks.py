@@ -85,13 +85,13 @@ def seed_universe():
     return {"status": "success"}
 
 
-async def _backfill_historical_data_async():
+async def _backfill_historical_data_async(years: int = 5):
     async for session in get_db():
         stmt = select(Instrument).where(Instrument.is_active)
         result = await session.execute(stmt)
         instruments = result.scalars().all()
 
-        start = datetime.now(UTC) - timedelta(days=5 * 365)
+        start = datetime.now(UTC) - timedelta(days=years * 365)
         end = datetime.now(UTC)
 
         for inst in instruments:
@@ -130,12 +130,12 @@ async def _backfill_historical_data_async():
 
 
 @shared_task(name="market_data.backfill_historical_data")
-def backfill_historical_data():
+def backfill_historical_data(years: int = 5):
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-    loop.run_until_complete(_backfill_historical_data_async())
+    loop.run_until_complete(_backfill_historical_data_async(years=years))
     return {"status": "success"}
