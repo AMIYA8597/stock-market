@@ -3,15 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer, APIKeyHeader
-from jose import jwt, JWTError
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends, HTTPException, Request, status
+from fastapi.security import APIKeyHeader, OAuth2PasswordBearer
+from jose import JWTError, jwt
 from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.database.connection import get_db
-from app.models.identity import User, OrgMember, Organization, ApiKey
+from app.models.identity import ApiKey, OrgMember, User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -45,43 +45,76 @@ class RequestContext:
         self.request_id = request_id
 
 
-from jwt import PyJWKClient, decode, InvalidTokenError
+_jwks_cache: dict[str, Any] = {}
 
-# Setup a global PyJWKClient for caching JWK lookups
-_jwks_client = None
 
-def get_jwks_client():
-    global _jwks_client
-    if _jwks_client is None:
-        if not settings.SUPABASE_URL:
-            # Fallback for tests if no url is provided. But tests should mock it or we raise
-            jwks_url = "http://localhost:8000/auth/v1/jwks"
-        else:
-            jwks_url = f"{settings.SUPABASE_URL}/auth/v1/jwks"
-        _jwks_client = PyJWKClient(jwks_url)
-    return _jwks_client
+def _fetch_jwks() -> dict[str, Any] | None:
+    """Fetch and cache the Supabase project's JWKS document, if configured.
+
+    Supabase projects created with asymmetric (ES256/RS256) signing keys expose a
+    JWKS endpoint at {SUPABASE_URL}/auth/v1/.well-known/jwks.json. Legacy projects
+    still on the shared HS256 secret have no such endpoint; callers must fall back
+    to verify_supabase_token's HS256 path in that case.
+    """
+    if _jwks_cache.get("keys"):
+        return _jwks_cache
+    if not settings.SUPABASE_URL:
+        return None
+    import httpx
+
+    jwks_url = settings.SUPABASE_URL.rstrip("/") + "/auth/v1/.well-known/jwks.json"
+    try:
+        resp = httpx.get(jwks_url, timeout=5.0)
+        resp.raise_for_status()
+        data = resp.json()
+        if data.get("keys"):
+            _jwks_cache.update(data)
+            return _jwks_cache
+    except Exception as exc:  # noqa: BLE001 - network/JWKS fetch failure, fall back to HS256
+        logger.warning(f"Supabase JWKS fetch failed, falling back to HS256 secret: {exc}")
+    return None
+
 
 def verify_supabase_token(token: str) -> dict[str, Any]:
-    """Verify Supabase JWT token signature using JWKS and return payload."""
+    """Verify Supabase JWT token signature and return payload.
+
+    Prefers JWKS/asymmetric verification when the Supabase project exposes a JWKS
+    endpoint (current Supabase default for new projects). Falls back to the legacy
+    shared HS256 secret for projects still on that signing mode. Audience is always
+    verified against Supabase's standard "authenticated" audience.
+    """
+    from app.core.test_state import is_test_mode
+
     try:
-        jwks_client = get_jwks_client()
-        signing_key = jwks_client.get_signing_key_from_jwt(token)
-        payload = decode(
+        header = jwt.get_unverified_header(token)
+        jwks = None if is_test_mode() else _fetch_jwks()
+        if jwks and header.get("kid"):
+            key = next((k for k in jwks["keys"] if k.get("kid") == header["kid"]), None)
+            if key is not None:
+                payload = jwt.decode(
+                    token,
+                    key,
+                    algorithms=[key.get("alg", "ES256")],
+                    audience="authenticated",
+                )
+                return payload
+
+        # Legacy/dev fallback: shared HS256 secret.
+        secret = settings.SUPABASE_JWT_SECRET
+        if is_test_mode() and not secret:
+            secret = "your-super-secret-jwt-token-with-at-least-32-characters-long"
+        if not secret:
+            raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
+
+        payload = jwt.decode(
             token,
-            signing_key.key,
-            algorithms=["RS256"],
-            options={"verify_aud": False}
+            secret,
+            algorithms=["HS256"],
+            audience="authenticated",
         )
         return payload
-    except InvalidTokenError as e:
+    except JWTError as e:
         logger.error(f"JWT verification failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    except Exception as e:
-        logger.error(f"JWKS fetch or decode error: {e}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -97,34 +130,33 @@ async def get_current_context(
 ) -> RequestContext:
     """Resolve current context from token or API key."""
     req_id = getattr(request.state, "request_id", None)
-    
+
     # 1. API Key Auth
     if api_key:
         import hashlib
-        # Hash the incoming API key to compare with the stored hash
-        api_key_hashed = hashlib.sha256(api_key.encode("utf-8")).hexdigest()
-        
+
+        presented_hash = hashlib.sha256(api_key.encode()).hexdigest()
         result = await db.execute(
-            select(ApiKey).where(ApiKey.key_hash == api_key_hashed, ApiKey.status == "active")
+            select(ApiKey).where(ApiKey.key_hash == presented_hash, ApiKey.status == "active")
         )
         api_key_record = result.scalars().first()
         if not api_key_record:
             raise HTTPException(status_code=401, detail="Invalid API Key")
-        
+
         ctx = RequestContext(
             user_id=str(api_key_record.created_by_id) if api_key_record.created_by_id else None,
             organization_id=str(api_key_record.organization_id),
             auth_method="API_KEY",
             request_id=req_id
         )
-        
+
         # Set RLS context for the transaction
         if ctx.user_id:
             await db.execute(
                 text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
                 {"uid": ctx.user_id}
             )
-            
+
         return ctx
 
     # 2. Supabase JWT Auth
@@ -139,17 +171,17 @@ async def get_current_context(
         user = result.scalars().first()
         if not user:
             raise HTTPException(status_code=401, detail="User profile not found")
-        
+
         if user.status != "active":
             raise HTTPException(status_code=403, detail="User account suspended")
 
         # Resolve organization
         org_id = request.headers.get("X-Organization-ID")
-        
+
         membership = None
         if org_id:
             res = await db.execute(select(OrgMember).where(
-                OrgMember.user_id == user.id, 
+                OrgMember.user_id == user.id,
                 OrgMember.organization_id == org_id,
                 OrgMember.status == "active"
             ))
@@ -166,26 +198,22 @@ async def get_current_context(
             if membership:
                 org_id = str(membership.organization_id)
 
-        # Resolve platform role from Supabase token claims (app_metadata or user_metadata)
-        platform_role = payload.get("app_metadata", {}).get("role") or payload.get("user_metadata", {}).get("platform_role")
-        
         ctx = RequestContext(
             user_id=str(user.id),
             organization_id=org_id,
             membership_id=str(membership.id) if membership else None,
             organization_role=membership.role if membership else None,
-            platform_role=platform_role,
             auth_method="SUPABASE_JWT",
             request_id=req_id
         )
-        
+
         # Set RLS context for the transaction
         if ctx.user_id:
             await db.execute(
                 text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
                 {"uid": ctx.user_id}
             )
-            
+
         return ctx
 
     raise HTTPException(

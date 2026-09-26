@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { marketApi } from "@/lib/api-client";
 import { InstrumentInfo } from "@neuroquant/types";
 import { MarketTable } from "@/components/market/MarketTable";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 export default function StocksUniversePage(): JSX.Element {
   const [symbols, setSymbols] = useState<InstrumentInfo[]>([]);
@@ -43,6 +44,7 @@ export default function StocksUniversePage(): JSX.Element {
   }, []);
 
   return (
+    <AuthGuard>
     <main className="min-h-screen bg-nq-bg-base px-4 py-6 text-nq-text-primary sm:px-6 sm:py-8">
       <h1 className="text-2xl font-semibold">Stocks Universe</h1>
       <p className="mt-2 text-sm text-nq-text-secondary">Core watch universe for institutional signal workflows.</p>
@@ -52,5 +54,6 @@ export default function StocksUniversePage(): JSX.Element {
         <MarketTable instruments={symbols} isLoading={loading} />
       </div>
     </main>
+    </AuthGuard>
   );
 }

@@ -1,10 +1,12 @@
 import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
+
 import yfinance as yf
-from app.database.connection import async_session_factory
-from app.services.instrument_service import InstrumentService
-from app.models.market import Exchange
 from sqlalchemy.future import select
+
+from app.database.connection import async_session_factory
+from app.models.market import Exchange
+from app.services.instrument_service import InstrumentService
+
 
 async def ingest_universe():
     async with async_session_factory() as session:
@@ -24,7 +26,7 @@ async def ingest_universe():
             await session.refresh(exchange)
 
         instrument_service = InstrumentService(session)
-        
+
         # Fetch AAPL
         ticker = yf.Ticker("AAPL")
         info = ticker.info

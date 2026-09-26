@@ -14,6 +14,18 @@ celery_app = Celery(
     "quantedge",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    # Without this, a worker process started via
+    # `celery -A app.core.celery_app worker` never imports any task module,
+    # so none of the @shared_task-decorated functions below are registered
+    # and the beat schedule's task names below can never resolve.
+    include=[
+        "app.tasks.backtest_tasks",
+        "app.tasks.feature_tasks",
+        "app.tasks.market_data_tasks",
+        "app.tasks.regime_tasks",
+        "app.tasks.retraining_trigger",
+        "app.tasks.sentiment_tasks",
+    ],
 )
 
 celery_app.conf.update(

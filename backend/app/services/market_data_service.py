@@ -11,7 +11,6 @@ from datetime import UTC, datetime
 import yfinance as yf
 
 from app.core.logging import get_logger
-from app.services.indian_stock_api import IndianStockAPI
 
 logger = get_logger(__name__)
 
@@ -195,9 +194,12 @@ class MarketDataService:
 
     @staticmethod
     def _normalize_symbol(symbol: str) -> str:
-        """Automatically appends  if the symbol has no dot, caret, or dash.
+        """Normalize a user-supplied symbol to its canonical (bare, no
+        provider suffix) form used as Instrument.canonical_symbol in the
+        canonical DB — e.g. "reliance" -> "RELIANCE", not "RELIANCE.NS".
 
-        Also maps index symbols like NIFTY50, BANKNIFTY, SENSEX to their Yahoo Finance tickers.
+        Also maps well-known index aliases (NIFTY50, BANKNIFTY, SENSEX) to
+        their canonical index tickers.
         """
         s = symbol.upper().strip()
 
@@ -246,10 +248,6 @@ class MarketDataService:
         if s in us_tickers:
             return s
 
-        # "=" covers yfinance forex/futures suffixes (USDINR=X, CL=F, GC=F, etc.) —
-        # without this they'd get a bogus "" appended and fail to resolve.
-        if "." not in s and "^" not in s and "-" not in s and "=" not in s:
-            return f"{s}"
         return s
 
     @staticmethod
@@ -274,13 +272,13 @@ class MarketDataService:
     @staticmethod
     async def get_quote(symbol: str) -> dict:
         """Fetch live quote from canonical PostgreSQL database instead of yfinance."""
-        from app.database.connection import async_session_maker
+        from app.database.connection import async_session_factory
         from app.models.market import Instrument, QuoteSnapshot
         from sqlalchemy import select
         
         sym = MarketDataService._normalize_symbol(symbol)
         
-        async with async_session_maker() as db:
+        async with async_session_factory() as db:
             result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
             instrument = result.scalars().first()
             if not instrument:
@@ -316,7 +314,7 @@ class MarketDataService:
     @staticmethod
     async def get_history(symbol: str, interval: str, period: str) -> list[dict]:
         """Fetch historical bars from the canonical PostgreSQL database."""
-        from app.database.connection import async_session_maker
+        from app.database.connection import async_session_factory
         from app.models.market import Instrument, OHLCV
         from sqlalchemy import select
         from datetime import datetime, timedelta, UTC
@@ -334,7 +332,7 @@ class MarketDataService:
             
         start_time = datetime.now(UTC) - timedelta(days=days)
         
-        async with async_session_maker() as db:
+        async with async_session_factory() as db:
             result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
             instrument = result.scalars().first()
             if not instrument:
@@ -403,51 +401,12 @@ class MarketDataService:
 
         return []
 
-    @staticmethod
-    async def get_movers(n: int = 10, mover_type: str = "gainers") -> list[dict]:
-        """Fetch quotes concurrently for NIFTY 50 symbol roots.
-
-        Sorts by change_pct and returns top n.
-        """
-        symbols = MarketDataServiceE_NIFTY50
-
-        tasks = [MarketDataService.get_quote(sym) for sym in symbols]
-        quotes_res = await asyncio.gather(*tasks, return_exceptions=True)
-
-        quotes = []
-        for sym, q in zip(symbols, quotes_res, strict=False):
-            if isinstance(q, Exception):
-                logger.debug(f"Mover quote failed for symbol={sym}: {q}")
-                continue
-            if not q or q.get("price") is None:
-                continue
-            quotes.append(q)
-
-        if not quotes:
-            return []
-
-        if mover_type == "gainers":
-            quotes.sort(key=lambda x: x["change_pct"], reverse=True)
-        elif mover_type == "losers":
-            quotes.sort(key=lambda x: x["change_pct"])
-        elif mover_type == "volume":
-            quotes.sort(key=lambda x: x["volume"], reverse=True)
-        else:  # momentum
-            quotes.sort(key=lambda x: abs(x["change_pct"]), reverse=True)
-
-        movers = []
-        for i, q in enumerate(quotes[:n]):
-            movers.append(
-                {
-                    "ticker": q["symbol"],
-                    "name": q["symbol"].split(".")[0],
-                    "price": q["price"],
-                    "change_pct": q["change_pct"],
-                    "volume": q["volume"],
-                    "rank": i + 1,
-                }
-            )
-        return movers
+    # get_movers/get_nifty50_movers/_fetch_movers_sync were removed: they were
+    # dead code (zero production callers), referenced the deprecated hardcoded
+    # NSE_NIFTY50_DEPRECATED universe, and _fetch_movers_sync called
+    # yf.download directly from a business-service method rather than through
+    # ingestion, violating the DB-first architecture. GET /api/v1/market/movers
+    # (app/api/v1/market.py) is the canonical, DB-first replacement.
 
     @staticmethod
     async def get_indices() -> list[dict]:
@@ -664,40 +623,3 @@ class MarketDataService:
             )
         return bars
 
-    @staticmethod
-    async def get_nifty50_movers() -> dict:
-        """Get top gainers and losers from Nifty 50 — free via yfinance batch."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, MarketDataService._fetch_movers_sync)
-
-    @staticmethod
-    def _fetch_movers_sync() -> dict:
-        # Batch download is faster than individual calls
-        data = yf.download(
-            MarketDataServiceE_NIFTY50,
-            period="2d",
-            interval="1d",
-            group_by="ticker",
-            progress=False,
-        )
-
-        movers = []
-        for sym in MarketDataServiceE_NIFTY50:
-            try:
-                sym_data = data[sym] if sym in data.columns.get_level_values(0) else None
-                if sym_data is not None and len(sym_data) >= 2:
-                    today = float(sym_data["Close"].iloc[-1])
-                    yesterday = float(sym_data["Close"].iloc[-2])
-                    chg_pct = ((today - yesterday) / yesterday) * 100
-                    movers.append(
-                        {
-                            "symbol": sym.replace("", ""),
-                            "price": today,
-                            "change_pct": round(chg_pct, 2),
-                        }
-                    )
-            except Exception:
-                continue
-
-        movers_sorted = sorted(movers, key=lambda x: x["change_pct"], reverse=True)
-        return {"gainers": movers_sorted[:5], "losers": movers_sorted[-5:][::-1]}
