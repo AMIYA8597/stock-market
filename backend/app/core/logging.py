@@ -305,7 +305,13 @@ def setup_logging() -> None:
             log_renderer,
         ],
         context_class=dict,
-        logger_factory=SafePrintLoggerFactory(),
+        # stderr, not stdout: logs must never share a stream with real
+        # program output. `alembic upgrade head --sql > migration.sql`
+        # (or any other stdout-capturing invocation) would otherwise
+        # interleave log lines into the captured output and corrupt it --
+        # exactly what happened generating a migration.sql that failed to
+        # apply with a SQL syntax error on a log line.
+        logger_factory=SafePrintLoggerFactory(sys.stderr),
         cache_logger_on_first_use=True,
     )
 
