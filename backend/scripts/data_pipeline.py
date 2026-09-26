@@ -12,9 +12,14 @@ if str(ROOT) not in sys.path:
 import argparse
 import asyncio
 
-from pipelines.data_pipeline import run_full_history
-
+from app.tasks.market_data_tasks import _backfill_historical_data_async, _seed_universe_async
 from scripts.compute_features import compute_features
+
+
+async def run_full_history(years: int) -> None:
+    """Seed the NSE universe (if not already seeded) then backfill OHLCV history."""
+    await _seed_universe_async()
+    await _backfill_historical_data_async(years=years)
 
 
 def parse_args() -> argparse.Namespace:
