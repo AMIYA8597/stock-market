@@ -63,34 +63,34 @@ NeuroQuant operates as a decoupled microservices stack:
 
 Before running anything, you must configure the environment variables.
 
+Auth and the primary database are Supabase-based (Postgres, or SQLite
+locally for the SQLAlchemy layer) — there is no separate JWT secret/algorithm
+to configure and no MongoDB anywhere in this stack.
+
 ### Backend (`backend/.env`)
-Create a file at `backend/.env` and populate it:
-```env
-# Database Configuration
-# Local SQLite for testing: sqlite+aiosqlite:///./dev.db
-# Production Postgres: postgresql+asyncpg://user:pass@host:5432/neuroquant
-DATABASE_URL=sqlite+aiosqlite:///./dev.db
-
-# Redis Cache & Celery Broker
-REDIS_URL=redis://localhost:6379/0
-CELERY_BROKER_URL=redis://localhost:6379/0
-
-# Security & Auth
-SECRET_KEY=generate_a_secure_random_string_here
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=1440
-
-# Trading Execution Modes
-PAPER_TRADING_MODE=true
 ```
+cd backend
+cp .env.example .env
+```
+Then fill in `SUPABASE_URL`, `SUPABASE_JWT_SECRET` and `SUPABASE_SECRET_KEY`
+from your Supabase project's Project Settings → API page. `DATABASE_URL`
+already defaults to local SQLite (`sqlite+aiosqlite:///./dev.db`) so the API
+boots with zero external accounts; swap it for your Supabase Postgres
+connection string when you're ready for real persistence. See
+`backend/.env.example` for the full, commented list of every variable the
+backend reads (data-provider keys, broker keys, Razorpay, email — all
+optional and clearly marked).
 
 ### Frontend (`apps/web/.env.local`)
-Create a file at `apps/web/.env.local`:
-```env
-# Points to the FastAPI backend
-NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
-NEXT_PUBLIC_WS_URL=ws://localhost:8000/api/v1/ws
 ```
+cd apps/web
+cp .env.example .env.local
+```
+`NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` (same
+Supabase project, same API settings page) are required — the app cannot
+sign in without them. `NEXT_PUBLIC_API_URL` should be the bare backend
+origin (e.g. `http://localhost:8000`, no `/api/v1` suffix — the client adds
+that itself). See `apps/web/.env.example` for the rest.
 
 ---
 
