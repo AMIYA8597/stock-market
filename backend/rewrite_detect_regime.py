@@ -1,7 +1,6 @@
 import re
-import sys
 
-with open('d:/work/stock-market/backend/app/services/prediction_engine.py', 'r', encoding='utf-8') as f:
+with open('d:/work/stock-market/backend/app/services/prediction_engine.py', encoding='utf-8') as f:
     text = f.read()
 
 # Fix detect_regime

@@ -1,22 +1,24 @@
 import os
+
 """stage_1_init
 
 Revision ID: 53aef4df1952
-Revises: 
+Revises:
 Create Date: 2026-09-25 12:48:01.056680
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = '53aef4df1952'
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -507,7 +509,7 @@ def upgrade() -> None:
 
 
     # RLS Policies
-    with open(os.path.join(os.path.dirname(__file__), '..', 'rls.sql'), 'r') as f:
+    with open(os.path.join(os.path.dirname(__file__), '..', 'rls.sql')) as f:
         op.execute(f.read())
 
 

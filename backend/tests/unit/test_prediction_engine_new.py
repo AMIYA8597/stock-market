@@ -128,6 +128,22 @@ def test_compute_kelly_fraction():
         res2 = compute_kelly_fraction("TEST2", 0.5, 0.8)
         assert isinstance(res2, float)
 
+
+def test_compute_kelly_fraction_uses_measured_backtest_stats_when_available():
+    """Regression test: compute_kelly_fraction must actually read the
+    per-symbol backtest stats file when it exists, not silently ignore it
+    and always fall back to the hardcoded p=0.54/b=1.05 defaults."""
+    default_result = compute_kelly_fraction("NOFILE_SYMBOL", 0.5, 0.8)
+
+    with patch("app.services.prediction_engine.Path.exists", return_value=True), \
+         patch("builtins.open", mock_open(read_data='{"win_rate": 0.95, "payoff_ratio": 5.0}')):
+        measured_result = compute_kelly_fraction("HASFILE_SYMBOL", 0.5, 0.8)
+
+    # A much higher measured win rate and payoff ratio must produce a
+    # materially larger Kelly fraction than the conservative defaults -
+    # if the file read is disabled/broken, these would be identical.
+    assert measured_result > default_result
+
 def test_standardize_df_columns():
     df = pd.DataFrame({"rsi_14_col": [1, 2], "macdh_12": [3, 4], "bbp_20_2": [1,2], "atr_14": [1,2], "adx_14": [1,2]})
     exp = ["RSI_14", "MACDh_12_26_9", "BBP_20_2.0", "ATRr_14", "ADX_14", "missing"]

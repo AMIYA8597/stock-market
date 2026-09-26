@@ -36,8 +36,8 @@ function AdminDashboard() {
     try {
       const data = await adminApi.listUsers();
       setUsers(data);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch users");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch users");
     } finally {
       setLoading(false);
     }
@@ -51,8 +51,8 @@ function AdminDashboard() {
       setUsers((prev) =>
         prev.map((user) => (user.id === userId ? updatedUser : user))
       );
-    } catch (err: any) {
-      setError(err.message || "Failed to update user role");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update user role");
     } finally {
       setUpdating(null);
     }

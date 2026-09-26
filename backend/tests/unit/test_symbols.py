@@ -1,11 +1,14 @@
 import json
-import pytest
 from pathlib import Path
+
+import pytest
+
 from app.data_platform.symbols import normalize_symbol
+
 
 def load_cases():
     cases_path = Path(__file__).parent.parent.parent.parent / "packages" / "contracts" / "symbol_cases.json"
-    with open(cases_path, "r", encoding="utf-8") as f:
+    with open(cases_path, encoding="utf-8") as f:
         return json.load(f)
 
 @pytest.mark.parametrize("case", load_cases())

@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { paperTradingApi } from "@/lib/api-client";
 import type { PortfolioTransactionResponse } from "@/lib/contracts-api";
 
@@ -15,7 +15,7 @@ export function useOrderHistory() {
     queryKey: ['orders'],
     queryFn: async () => {
       const data = await paperTradingApi.getHistory();
-      return (data as any[]).map(o => ({
+      return (data as Array<Record<string, unknown> & { side?: string; type?: string }>).map(o => ({
         ...o,
         source: 'api',
         type: o.side || o.type,
@@ -23,7 +23,10 @@ export function useOrderHistory() {
     },
   });
 
-  const addOrder = (order: any, source: string = "api") => {
+  // Backend order history is fetched via the `orders` query above; this hook
+  // has no local order state to append to, so it only invalidates the cache
+  // that already reflects the just-placed order once the backend confirms it.
+  const addOrder = () => {
     // Optimistic update can go here, but for now we just invalidate
     queryClient.invalidateQueries({ queryKey: ['orders'] });
     queryClient.invalidateQueries({ queryKey: ['portfolio'] });

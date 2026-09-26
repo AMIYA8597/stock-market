@@ -6,7 +6,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 from unittest.mock import patch
 
 import numpy as np
-
 from tasks.training_tasks import train_single_xgboost
 
 

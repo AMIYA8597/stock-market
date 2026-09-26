@@ -42,7 +42,8 @@ router = APIRouter(prefix="/ws")
 async def ws_prices(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
     user_id = await authenticate_ws(websocket, ticket)
-    if not user_id: return
+    if not user_id:
+        return
     """WebSocket route for live prices and signals."""
     manager = get_connection_manager()
     await manager.connect(websocket)
@@ -158,7 +159,8 @@ async def ws_prices(websocket: WebSocket, ticket: str = ""):
 async def ws_signals(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
     user_id = await authenticate_ws(websocket, ticket)
-    if not user_id: return
+    if not user_id:
+        return
     """Stream real signal_update messages from the 7-layer prediction engine.
 
     Each subscribed symbol is computed via get_full_prediction (with a 60s in-process
@@ -185,8 +187,6 @@ async def ws_signals(websocket: WebSocket, ticket: str = ""):
                 pass
             except Exception:
                 pass
-
-            now_ts = asyncio.get_event_loop().time()
 
             for symbol in sorted(subscribed_symbols):
                 from app.database.redis_client import cache_get, cache_set, get_redis
@@ -240,7 +240,8 @@ async def ws_signals(websocket: WebSocket, ticket: str = ""):
 async def ws_alerts(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
     user_id = await authenticate_ws(websocket, ticket)
-    if not user_id: return
+    if not user_id:
+        return
     manager = get_connection_manager()
     await manager.connect(websocket)
     await manager.subscribe(websocket, f"alerts:{user_id}")

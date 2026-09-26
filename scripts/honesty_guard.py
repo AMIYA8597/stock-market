@@ -40,7 +40,15 @@ def check_honesty():
     for filepath in root_dir.rglob('*.py'):
         if any(part in exclude_dirs for part in filepath.parts):
             continue
-            
+
+        # This script's own pattern definitions necessarily contain the exact
+        # strings/substrings it searches for (e.g. its GAMING_SQLITE pattern
+        # literally spells "sqlite3"). That is not a violation in this file,
+        # so it is excluded from scanning itself entirely - same category as
+        # the exclude_dirs infrastructure paths above, not application code.
+        if filepath.name == 'honesty_guard.py' and filepath.parent.name == 'scripts':
+            continue
+
         # Special exclusions for specific checks
         is_database_base = filepath.name == 'base.py' and 'database' in filepath.parts
         is_symbols = filepath.name == 'symbols.py'

@@ -1,7 +1,9 @@
 import uuid
 from unittest.mock import patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 
 def _mock_require_feature(feature_key: str):
     async def _dependency():
@@ -19,7 +21,8 @@ class InMemorySession:
     async def __aenter__(self): return self
     async def __aexit__(self, exc_type, exc_val, exc_tb): pass
     def add(self, obj):
-        if not getattr(obj, "id", None): obj.id = uuid.uuid4()
+        if not getattr(obj, "id", None):
+            obj.id = uuid.uuid4()
         self.store[obj.id] = obj
     async def flush(self): pass
     async def commit(self): pass
@@ -47,9 +50,12 @@ class InMemorySession:
                         objs = [x for x in objs if getattr(x, "user_id", None) == uuid.UUID(str(v))]
                     elif "id" in k or k == "id_1" or k == "id":
                         if isinstance(v, (str, uuid.UUID)):
-                            try: objs = [x for x in objs if getattr(x, "id", None) == uuid.UUID(str(v))]
-                            except Exception: pass
-            except Exception: pass
+                            try:
+                                objs = [x for x in objs if getattr(x, "id", None) == uuid.UUID(str(v))]
+                            except Exception:
+                                pass
+            except Exception:
+                pass
             class MockResult:
                 def __init__(self, items): self.items = items
                 def scalar_one_or_none(self): return self.items[0] if self.items else None
@@ -67,6 +73,7 @@ app.include_router(backtest_router, prefix="/api/v1")
 
 shared_store = {}
 from app.models.identity import User
+
 u = User(id=uuid.UUID('3b79b787-f2a8-4a48-abf1-0268d6131a5b'), email='test@test.com')
 shared_store[u.id] = u
 
@@ -76,9 +83,10 @@ async def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+from app.core.security import RequestContext, get_current_context
 from app.models.identity import User
 
-from app.core.security import get_current_context, RequestContext
+
 async def override_get_current_context():
     return RequestContext(
         user_id=uuid.UUID("3b79b787-f2a8-4a48-abf1-0268d6131a5b"),
@@ -104,8 +112,10 @@ for route in backtest_router.routes:
 
 
 # Dynamically find the require_feature dependency and override it
-from app.api.v1.backtest import post_backtest_run
 import inspect
+
+from app.api.v1.backtest import post_backtest_run
+
 sig = inspect.signature(post_backtest_run)
 for param in sig.parameters.values():
     if hasattr(param.default, 'dependency') and param.default.dependency:
@@ -138,8 +148,8 @@ def test_run_status_and_results_flow() -> None:
     job.progress = 100
     job.results = {
         "metrics": {
-            "total_return": 10.5, 
-            "cagr": 5.2, 
+            "total_return": 10.5,
+            "cagr": 5.2,
             "sharpe": 1.1,
             "max_drawdown": 0.1,
             "max_drawdown_duration_days": 5,

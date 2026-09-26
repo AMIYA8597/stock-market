@@ -5,7 +5,27 @@ import { getWsBaseUrl } from "@/lib/runtime-config";
 
 export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 
-type MessageHandler = (message: any) => void;
+// The shape every backend WS route (app/websocket/router.py) actually sends:
+// {"type": ..., "symbol": ..., "payload": {...}, "ts": ISO-8601, "source": ...}.
+// Note the observation time field is `ts`, not `timestamp`.
+export interface WsEnvelope {
+  type: string;
+  channel?: string;
+  symbol?: string;
+  payload?: Record<string, unknown>;
+  ts?: string;
+  source?: string;
+}
+
+export function isWsEnvelope(message: unknown): message is WsEnvelope {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    typeof (message as { type?: unknown }).type === "string"
+  );
+}
+
+type MessageHandler = (message: unknown) => void;
 
 class RealtimeManager {
   private ws: WebSocket | null = null;
