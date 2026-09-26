@@ -120,7 +120,6 @@ def test_train_and_evaluate_bilstm():
          patch('app.services.sr_service.optim') as mock_optim, \
          patch('app.services.sr_service.SRSequenceLabeler') as mock_labeler, \
          patch('app.services.sr_service.MODEL_DIR') as mock_model_dir, \
-         patch('app.services.sr_service.pickle.dump') as mock_pickle, \
          patch('app.services.sr_service.DBSCAN') as mock_dbscan, \
          patch('app.services.sr_service.SupportResistanceEngine._prepare_sequence_data') as mock_prepare:
 
@@ -180,7 +179,6 @@ def test_train_and_evaluate_bilstm_no_exception():
          patch('app.services.sr_service.optim') as mock_optim, \
          patch('app.services.sr_service.SRSequenceLabeler') as mock_labeler, \
          patch('app.services.sr_service.MODEL_DIR') as mock_model_dir, \
-         patch('app.services.sr_service.pickle.dump') as mock_pickle, \
          patch('app.services.sr_service.DBSCAN') as mock_dbscan, \
          patch('builtins.open', new_callable=MagicMock) as mock_open, \
          patch('app.services.sr_service.SupportResistanceEngine._prepare_sequence_data') as mock_prepare:

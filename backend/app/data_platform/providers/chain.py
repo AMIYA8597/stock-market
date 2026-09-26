@@ -1,5 +1,5 @@
 import logging
-from typing import List, Optional
+from typing import List
 import pandas as pd
 from app.data_platform.providers.base import BaseProvider, ProviderError
 

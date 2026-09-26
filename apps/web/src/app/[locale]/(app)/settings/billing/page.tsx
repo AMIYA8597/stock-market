@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Script from "next/script";
 import { paymentsApi } from "@/lib/api-client";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 interface Plan {
   id: string;
@@ -22,7 +23,15 @@ interface Subscription {
   };
 }
 
-export default function BillingPage() {
+export default function BillingRoutePage() {
+  return (
+    <AuthGuard>
+      <BillingPage />
+    </AuthGuard>
+  );
+}
+
+function BillingPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(false);

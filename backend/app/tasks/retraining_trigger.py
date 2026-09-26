@@ -59,7 +59,7 @@ async def _check_model_drift_async(symbol: str) -> dict:
     logger.info(f"Checking model drift for {symbol}...")
 
     async with async_session_factory() as session:
-        inst_res = await session.execute(select(Instrument).where(Instrument.symbol == symbol))
+        inst_res = await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
         inst = inst_res.scalars().first()
         if not inst:
             logger.error(f"Instrument not found: {symbol}")

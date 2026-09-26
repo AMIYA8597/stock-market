@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from datetime import UTC, datetime
-from typing import Any
 import yfinance as yf
 
 from app.models.instrument import Instrument
@@ -11,7 +10,6 @@ from app.services.ingestion.base import (
     MarketDataProvider,
     OHLCVBar,
     Quote,
-    RateLimitExceededError,
 )
 
 logger = logging.getLogger(__name__)

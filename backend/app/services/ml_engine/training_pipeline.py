@@ -6,13 +6,16 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
+from sqlalchemy import update
 from sqlalchemy.future import select
 from sklearn.linear_model import LogisticRegression
 
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
 from app.models.market import OHLCV
-from app.models.research import ModelRegistry, ModelMetric, ModelRun, Experiment, Dataset, PredictionOutcome
+from app.models.model_artifact import ModelArtifact
+from app.models.model_metric import ModelMetric
+from app.models.research import ModelRegistry, Experiment
 from research.feature_engineering.pipeline import FeaturePipeline
 from research.feature_engineering.target import TargetBuilder
 from research.models.baselines.arima import ARIMADirectionalClassifier
@@ -179,14 +182,8 @@ class TrainingPipeline:
             "ARIMA": ARIMADirectionalClassifier(order=(1, 0, 1)),
             "XGBoost": XGBoostDirectionalClassifier(n_estimators=50, max_depth=3),
             "LightGBM": LightGBMDirectionalClassifier(n_estimators=50, max_depth=3),
-            "LSTM": LSTMAttentionClassifier(input_dim=len(features)) if hasattr(LSTMAttentionClassifier, "fit") else NaiveDirectionalClassifier() # fallback if mock
+            "LSTM": LSTMAttentionClassifier(),
         }
-        
-        # Test mock handling for LSTM
-        try:
-            LSTMAttentionClassifier(input_dim=len(features))
-        except TypeError:
-            models_to_evaluate["LSTM"] = LSTMAttentionClassifier()
 
         results = {}
         best_cost_adj_sharpe = -999.0
@@ -321,18 +318,24 @@ class TrainingPipeline:
 
         # Update DB models for Part 3
         async with async_session_factory() as session:
-            # We don't update ModelArtifact, we use ModelRegistry
             experiment = Experiment(name=f"Training_{self.symbol}_{datetime.utcnow().isoformat()}", status="completed")
             session.add(experiment)
             await session.flush()
-            
+
             timestamp_str = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-            
+
+            if best_model_name and self.instrument:
+                # Deactivate any previously active artifact for this instrument so
+                # predictions.py's is_active filter never returns more than one row.
+                await session.execute(
+                    update(ModelArtifact)
+                    .where(ModelArtifact.symbol_id == self.instrument.id, ModelArtifact.is_active.is_(True))
+                    .values(is_active=False)
+                )
+
             for m_name, metrics in results.items():
                 is_active = m_name == best_model_name
-                
-                model_inst = models_to_evaluate[m_name]
-                
+
                 registry = ModelRegistry(
                     model_family=m_name,
                     version=f"{m_name.lower()}_{self.symbol}_{timestamp_str}",
@@ -341,27 +344,35 @@ class TrainingPipeline:
                     artifact_object_path=artifact_path if is_active else "",
                 )
                 session.add(registry)
-                await session.flush()
-                
-                # Add ModelRun and ModelMetric
-                run = ModelRun(
-                    experiment_id=experiment.id,
-                    model_id=registry.id,
-                    status="completed",
-                    run_config={"features": len(features)}
-                )
-                session.add(run)
-                await session.flush()
-                
-                for k, v in metrics.items():
-                    if isinstance(v, float) or isinstance(v, int):
-                        met = ModelMetric(
-                            run_id=run.id,
-                            metric_name=k,
-                            metric_value=float(v)
+
+                if self.instrument:
+                    artifact = ModelArtifact(
+                        symbol_id=self.instrument.id,
+                        model_type=m_name,
+                        version_tag=f"{m_name.lower()}_{self.symbol}_{timestamp_str}",
+                        artifact_path=artifact_path if is_active else "",
+                        hyperparameters={
+                            "features": len(features),
+                            "governance_status": metrics.get("governance_status"),
+                        },
+                        is_active=is_active,
+                    )
+                    session.add(artifact)
+                    await session.flush()
+
+                    session.add(
+                        ModelMetric(
+                            artifact_id=artifact.id,
+                            accuracy=metrics.get("accuracy"),
+                            precision=metrics.get("precision"),
+                            recall=metrics.get("recall"),
+                            auc=metrics.get("auc"),
+                            sharpe=metrics.get("sharpe"),
+                            cost_adjusted_sharpe=metrics.get("cost_adjusted_sharpe"),
+                            regime_breakdown=metrics.get("regime_breakdown"),
                         )
-                        session.add(met)
-            
+                    )
+
             await session.commit()
 
         return results

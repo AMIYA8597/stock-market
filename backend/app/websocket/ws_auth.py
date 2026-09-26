@@ -1,16 +1,18 @@
 from fastapi import WebSocket
-from app.api.v1.websocket_url import _WS_TICKETS
 from loguru import logger
 
-async def authenticate_ws(websocket: WebSocket, ticket: str) -> str | None:
-    if not ticket:
-        await websocket.close(code=1008, reason="Missing ticket")
+from app.core.security import verify_supabase_token
+
+
+async def authenticate_ws(websocket: WebSocket, token: str) -> str | None:
+    if not token:
+        await websocket.close(code=1008, reason="Missing token")
         return None
     try:
-        # Require single-use WebSocket tickets (no JWTs in URLs).
-        user_id = _WS_TICKETS.pop(ticket, None)
+        payload = verify_supabase_token(token)
+        user_id = payload.get("sub")
         if not user_id:
-            await websocket.close(code=1008, reason="Invalid or expired ticket")
+            await websocket.close(code=1008, reason="Invalid token payload")
             return None
         return user_id
     except Exception as e:

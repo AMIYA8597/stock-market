@@ -189,7 +189,7 @@ async def ws_signals(websocket: WebSocket, ticket: str = ""):
             now_ts = asyncio.get_event_loop().time()
 
             for symbol in sorted(subscribed_symbols):
-                from app.database.redis_client import get_redis, cache_get, cache_set
+                from app.database.redis_client import cache_get, cache_set, get_redis
                 redis = await get_redis()
                 result = await cache_get(redis, f"ws:signal:{symbol}")
                 if not result:
@@ -263,7 +263,6 @@ async def ws_backtest_progress(websocket: WebSocket, ticket: str):
     from app.api.v1.backtest import BACKTEST_PROGRESS
     from app.database.connection import async_session_factory
     from app.models.backtest import BacktestJob
-
     from app.websocket.ws_auth import authenticate_ws
     user_id_str = await authenticate_ws(websocket, ticket)
     if not user_id_str:
@@ -357,17 +356,17 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
     if not user_id:
         await websocket.close(code=1008)
         return
-        
+
     manager = get_connection_manager()
     await manager.connect(websocket)
-    
+
     # Subscribe to personal alerts by default
     await manager.subscribe(websocket, f"alerts:{user_id}")
     await manager.subscribe(websocket, "signals:alerts")
-    
+
     # Track subscriptions for this unified connection
     subscribed_symbols: set[str] = set()
-    
+
     try:
         while True:
             try:
@@ -375,7 +374,7 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
                 action = str(payload.get("action", "")).lower()
                 channel = str(payload.get("channel", "")).lower()
                 symbols = [str(s).upper() for s in payload.get("symbols", [])]
-                
+
                 if action == "subscribe":
                     if channel == "prices":
                         for symbol in symbols:
@@ -388,7 +387,7 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
                             await manager.unsubscribe(websocket, f"prices:{symbol}")
                     elif channel == "signals":
                         subscribed_symbols.difference_update(symbols)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
             except Exception:
                 pass
@@ -396,7 +395,7 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
             # Stream signals for subscribed symbols
             if subscribed_symbols:
                 for symbol in sorted(subscribed_symbols):
-                    from app.database.redis_client import get_redis, cache_get, cache_set
+                    from app.database.redis_client import cache_get, cache_set, get_redis
                     redis = await get_redis()
                     result = await cache_get(redis, f"ws:signal:{symbol}")
                     if not result:
@@ -435,7 +434,7 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
                         )
                     except Exception:
                         pass
-                
+
     except WebSocketDisconnect:
         pass
     finally:

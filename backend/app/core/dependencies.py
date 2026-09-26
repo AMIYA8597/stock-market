@@ -1,14 +1,12 @@
 ﻿import logging
-from typing import Annotated, Any
 
-from fastapi import Depends, HTTPException, status, Request
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import RequestContext, get_current_context
 from app.database.connection import get_db
-from app.core.security import get_current_context, RequestContext
 from app.models.identity import User
-from app.models.billing import OrganizationSubscription
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +32,7 @@ async def get_current_user_or_none(
     db: AsyncSession = Depends(get_db),
 ) -> User | None:
     try:
-        from app.core.security import oauth2_scheme, api_key_header
+        from app.core.security import api_key_header, oauth2_scheme
         token = await oauth2_scheme(request)
         api_key = await api_key_header(request)
         if not token and not api_key:
@@ -102,7 +100,7 @@ def get_rate_limiter(requests: int, window: int):
     return _rate_limiter
 
 async def get_redis():
-    from app.services.cache import get_redis_client
+    from app.database.redis_client import get_redis_client
     return await get_redis_client()
 
 

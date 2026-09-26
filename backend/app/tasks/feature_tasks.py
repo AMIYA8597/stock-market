@@ -32,7 +32,7 @@ async def _build_feature_vectors_async(symbol: str) -> dict[str, Any]:
     logger.info(f"Building feature vectors for {symbol}")
 
     async with async_session_factory() as session:
-        result = await session.execute(select(Instrument).where(Instrument.symbol == symbol))
+        result = await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
         instrument = result.scalars().first()
 
         if not instrument:
@@ -41,7 +41,7 @@ async def _build_feature_vectors_async(symbol: str) -> dict[str, Any]:
 
         # 1. Fetch OHLCV data
         result = await session.execute(
-            select(OHLCV).where(OHLCV.symbol_id == instrument.id).order_by(OHLCV.time.asc())
+            select(OHLCV).where(OHLCV.instrument_id == instrument.id).order_by(OHLCV.timestamp.asc())
         )
         ohlcv_records = result.scalars().all()
 

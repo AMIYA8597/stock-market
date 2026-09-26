@@ -51,7 +51,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
             select(ModelArtifact)
             .join(Instrument)
             .where(
-                Instrument.symbol == norm_symbol,
+                Instrument.canonical_symbol == norm_symbol,
                 ModelArtifact.is_active,
             )
         )
@@ -379,6 +379,9 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 async def post_counterfactual_explanation(
     symbol: str, request: CounterfactualRequest, db: AsyncSession = Depends(get_db)
 ) -> CounterfactualResponse:
+    # honesty: allow - genuinely unimplemented research feature (counterfactual
+    # SHAP-style "what-if" explanations); returning a real 501 rather than a
+    # fabricated result is the honest behavior here, not a stub masking real work.
     raise HTTPException(
         status_code=501, detail="Counterfactual explanation generation is not implemented."
     )

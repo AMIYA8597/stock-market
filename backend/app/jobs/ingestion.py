@@ -1,11 +1,12 @@
 import logging
-import asyncio
-from datetime import datetime, UTC, timedelta
+from datetime import UTC, datetime, timedelta
+
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+
 from app.database.connection import async_session_factory
-from app.models.market import Instrument, QuoteSnapshot, OHLCV
-from app.services.ingestion.provider_manager import provider_manager
+from app.models.market import OHLCV, Instrument, QuoteSnapshot
+from app.services.data_ingestion.provider_manager import provider_manager
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class IngestionPipeline:
         async with async_session_factory() as session:
             result = await session.execute(select(Instrument).where(Instrument.is_active == True))
             instruments = result.scalars().all()
-            
+
             for inst in instruments:
                 sym = inst.yfinance_ticker or inst.canonical_symbol
                 try:
@@ -34,12 +35,12 @@ class IngestionPipeline:
                             freshness_status="live"
                         )
                         session.add(qs)
-                    
+
                     # 2. Fetch OHLCV
                     end = datetime.now(UTC)
                     start = end - timedelta(days=7)
                     bars = await provider_manager.get_ohlcv(sym, "1d", start, end)
-                    
+
                     if bars:
                         for b in bars:
                             time_val = b.time
@@ -72,16 +73,27 @@ class IngestionPipeline:
 
                 except Exception as e:
                     logger.warning(f"Failed ingestion for {sym}: {e}")
-            
+
             try:
                 await session.commit()
             except Exception as e:
                 logger.error(f"Failed to commit ingestion: {e}")
                 await session.rollback()
-        
+
         logger.info("Ingestion pipeline completed.")
 
 def setup_scheduler(app):
-    # APScheduler loop removed as per architecture requirements.
-    # Ingestion should be triggered by external schedulers (e.g. GitHub Actions, Celery).
-    pass
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    scheduler = AsyncIOScheduler()
+
+    pipeline = IngestionPipeline()
+    scheduler.add_job(
+        pipeline.run_full_ingestion,
+        'interval',
+        minutes=5,
+        id='full_ingestion',
+        replace_existing=True
+    )
+
+    scheduler.start()
+    app.state.scheduler = scheduler

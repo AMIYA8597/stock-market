@@ -14,9 +14,7 @@ export function AuthGuard({ children }: AuthGuardProps): JSX.Element {
   const pathname = usePathname();
 
   useEffect(() => {
-    
     if (!isLoading && !isAuthenticated) {
-      
       router.replace(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
     }
   }, [isLoading, isAuthenticated, router, pathname, error, user]);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { adminApi } from "@/lib/api-client";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 type User = {
   id: string;
@@ -11,7 +12,15 @@ type User = {
   is_active: boolean;
 };
 
-export default function AdminDashboard() {
+export default function AdminRoutePage() {
+  return (
+    <AuthGuard>
+      <AdminDashboard />
+    </AuthGuard>
+  );
+}
+
+function AdminDashboard() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

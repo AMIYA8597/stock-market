@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -47,20 +46,6 @@ class FinBERTSentimentAnalyzer:
         if self._initialized:
             return
 
-        try:
-            from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-            logger.info("Initializing FinBERT model...")
-            self.tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
-            self.model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
-            self.model.eval()
-            self._initialized = True
-            logger.info("FinBERT model initialized successfully.")
-        except Exception as e:
-            logger.error(f"Failed to load FinBERT model: {e}")
-            raise RuntimeError(f"Canonical sentiment analyzer FinBERT failed to load: {e}")
-            return
-
         self.fast_mode = False
         try:
             from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -72,11 +57,11 @@ class FinBERTSentimentAnalyzer:
             self._initialized = True
             logger.info("FinBERT model initialized successfully.")
         except Exception as e:
-            logger.error(
-                f"Failed to load FinBERT model: {e}. Sentiment analyzer will fall back to lexicon."
-            )
-            self._initialized = True
-            self.fast_mode = True
+            logger.error(f"Failed to load FinBERT model: {e}")
+            # No lexicon/heuristic fallback: a missing model means sentiment is
+            # genuinely unavailable, not neutral. Callers must handle this
+            # explicit failure rather than receive a fabricated score.
+            raise RuntimeError(f"Canonical sentiment analyzer FinBERT failed to load: {e}") from e
 
 
 
