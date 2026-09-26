@@ -1,0 +1,99 @@
+import asyncio
+import logging
+from datetime import UTC, datetime
+
+from sqlalchemy import desc, select
+
+from app.database.connection import async_session_factory
+from app.models.alerts import Alert
+from app.models.market import Instrument, QuoteSnapshot
+
+logger = logging.getLogger(__name__)
+
+
+class AlertEvaluator:
+    def __init__(self, interval_seconds: int = 60):
+        self.interval_seconds = interval_seconds
+        self._running = False
+        self._task = None
+
+    async def start(self):
+        if self._running:
+            return
+        self._running = True
+        self._task = asyncio.create_task(self._run_loop())
+        logger.info("AlertEvaluator started.")
+
+    async def stop(self):
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info("AlertEvaluator stopped.")
+
+    async def _run_loop(self):
+        while self._running:
+            try:
+                await self.evaluate_alerts()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error evaluating alerts: {e}")
+            await asyncio.sleep(self.interval_seconds)
+
+    async def evaluate_alerts(self):
+        async with async_session_factory() as session:
+            stmt = (
+                select(Alert, Instrument)
+                .outerjoin(Instrument, Instrument.canonical_symbol == Alert.symbol)
+                .where(Alert.is_active.is_(True))
+            )
+            result = await session.execute(stmt)
+            rows = result.all()
+
+            for alert, instrument in rows:
+                if not instrument:
+                    continue  # No matching instrument for this alert's symbol yet.
+
+                symbol = instrument.canonical_symbol
+
+                try:
+                    # Fetch latest quote snapshot from DB
+                    quote_stmt = (
+                        select(QuoteSnapshot)
+                        .where(QuoteSnapshot.instrument_id == instrument.id)
+                        .order_by(desc(QuoteSnapshot.observed_at))
+                        .limit(1)
+                    )
+                    quote_result = await session.execute(quote_stmt)
+                    quote = quote_result.scalar_one_or_none()
+
+                    if not quote or quote.price is None:
+                        continue
+
+                    price = float(quote.price)
+                    threshold = float(alert.threshold) if alert.threshold else None
+
+                    triggered = False
+                    if alert.alert_type == "PRICE_ABOVE" and threshold is not None:
+                        if price >= threshold:
+                            triggered = True
+                    elif alert.alert_type == "PRICE_BELOW" and threshold is not None:
+                        if price <= threshold:
+                            triggered = True
+
+                    if triggered:
+                        alert.last_triggered_at = datetime.now(UTC)
+                        alert.is_active = False
+                        await session.commit()
+                        logger.info(f"Alert {alert.id} TRIGGERED for {symbol} at {price}")
+                        # Next phase: send WebSocket/Push Notification here
+
+                except Exception as e:
+                    logger.warning(f"Failed to evaluate alert {alert.id} for {symbol}: {e}")
+
+
+evaluator = AlertEvaluator()

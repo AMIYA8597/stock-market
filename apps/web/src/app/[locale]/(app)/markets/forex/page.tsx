@@ -2,9 +2,11 @@
 
 import { DollarSign } from "lucide-react";
 import Link from "next/link";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 export default function ForexPage(): JSX.Element {
   return (
+    <AuthGuard>
     <main className="min-h-screen bg-nq-bg-base flex flex-col items-center justify-center p-8 text-center">
       <div className="rounded-full bg-nq-bg-elevated p-6 mb-6">
         <DollarSign className="w-12 h-12 text-nq-accent" />
@@ -20,5 +22,6 @@ export default function ForexPage(): JSX.Element {
         View Stocks Universe
       </Link>
     </main>
+    </AuthGuard>
   );
 }

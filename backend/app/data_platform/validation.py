@@ -1,5 +1,5 @@
 import pandas as pd
-from typing import Dict, Any, Tuple
+from typing import Tuple
 
 def validate_ohlcv_row(row: pd.Series) -> Tuple[str, list]:
     """

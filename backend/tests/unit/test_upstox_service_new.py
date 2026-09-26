@@ -1,5 +1,4 @@
 from decimal import Decimal
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -24,24 +23,15 @@ def reset_service_state():
     KEY_TO_SYMBOL.clear()
     yield
 
-def test_get_token_cache_path():
-    path = UpstoxService.get_token_cache_path()
-    assert isinstance(path, Path)
-    assert path.name == "upstox_token.txt"
+def test_log_audit(caplog):
+    """log_audit no longer writes to a local file directly (local-disk
+    persistence was removed - see the module's ephemeral, in-memory-only
+    ACCESS_TOKEN design); it now goes through the structured logger only."""
+    import logging
 
-def test_log_audit(tmp_path):
-    with patch("app.services.upstox_service.Path.resolve") as mock_resolve:
-        mock_backend_root = tmp_path / "backend"
-        mock_backend_root.mkdir()
-        mock_resolve.return_value.parent.parent.parent = mock_backend_root
-
+    with caplog.at_level(logging.INFO, logger="app.services.upstox_service"):
         UpstoxService.log_audit("Test message")
-
-        logs_dir = mock_backend_root / "logs"
-        audit_file = logs_dir / "trading_audit.log"
-        assert audit_file.exists()
-        content = audit_file.read_text(encoding="utf-8")
-        assert "Test message" in content
+    assert any("Test message" in record.message for record in caplog.records)
 
 def test_get_cached_quote():
     UPSTOX_TICK_CACHE["RELIANCE"] = {"price": 100}
@@ -80,14 +70,14 @@ async def test_exchange_code_for_token(mock_start_ws, mock_fetch_profile, mock_s
 
     mock_fetch_profile.return_value = {"user_name": "Test User"}
 
-    with patch("app.services.upstox_service.UpstoxService.get_token_cache_path", return_value=tmp_path / "token.txt"):
-        res = await UpstoxService.exchange_code_for_token("test_code")
+    # The token is held only in the in-memory ACCESS_TOKEN class attribute
+    # (no local-disk cache file - that persistence was intentionally removed).
+    res = await UpstoxService.exchange_code_for_token("test_code")
 
-        assert res == {"access_token": "test_token"}
-        assert UpstoxService.ACCESS_TOKEN == "test_token"
-        assert UpstoxService.USER_PROFILE == {"user_name": "Test User"}
-        mock_start_ws.assert_called_once()
-        assert (tmp_path / "token.txt").read_text() == "test_token"
+    assert res == {"access_token": "test_token"}
+    assert UpstoxService.ACCESS_TOKEN == "test_token"
+    assert UpstoxService.USER_PROFILE == {"user_name": "Test User"}
+    mock_start_ws.assert_called_once()
 
 @pytest.mark.asyncio
 @patch("app.services.upstox_service.httpx.AsyncClient.post")
@@ -136,31 +126,6 @@ async def test_fetch_profile_failure(mock_get):
 
     profile = await UpstoxService.fetch_profile()
     assert profile == {}
-
-@pytest.mark.asyncio
-@patch("app.services.upstox_service.UpstoxService.fetch_profile")
-@patch("app.services.upstox_service.UpstoxService.start_websocket_feed")
-async def test_init_service_with_valid_token(mock_start_ws, mock_fetch_profile, tmp_path):
-    token_file = tmp_path / "upstox_token.txt"
-    token_file.write_text("valid_token")
-    mock_fetch_profile.return_value = {"user_name": "Test"}
-
-    with patch("app.services.upstox_service.UpstoxService.get_token_cache_path", return_value=token_file):
-        await UpstoxService.init_service()
-        assert UpstoxService.ACCESS_TOKEN == "valid_token"
-        assert UpstoxService.USER_PROFILE == {"user_name": "Test"}
-        mock_start_ws.assert_called_once()
-
-@pytest.mark.asyncio
-@patch("app.services.upstox_service.UpstoxService.fetch_profile")
-async def test_init_service_with_invalid_token(mock_fetch_profile, tmp_path):
-    token_file = tmp_path / "upstox_token.txt"
-    token_file.write_text("invalid_token")
-    mock_fetch_profile.return_value = {}
-
-    with patch("app.services.upstox_service.UpstoxService.get_token_cache_path", return_value=token_file):
-        await UpstoxService.init_service()
-        assert UpstoxService.ACCESS_TOKEN is None
 
 @pytest.mark.asyncio
 async def test_resolve_symbol_cache_and_overrides():
@@ -362,24 +327,10 @@ async def test_enrich_tick_with_indicators_no_history(mock_get_history):
 
 
 def test_log_audit_exception():
-    with patch('app.services.upstox_service.Path.resolve', side_effect=Exception('Test Error')):
+    """log_audit's except branch (logger.error fallback) must not raise even
+    if the primary logger.info call itself fails."""
+    with patch('app.services.upstox_service.logger.info', side_effect=Exception('Test Error')):
         UpstoxService.log_audit('msg')
-
-@pytest.mark.asyncio
-async def test_exchange_code_for_token_cache_error(tmp_path):
-    with patch('app.core.config.get_settings'),          patch('app.services.upstox_service.httpx.AsyncClient.post') as mock_post,          patch('app.services.upstox_service.UpstoxService.fetch_profile', return_value={}),          patch('app.services.upstox_service.UpstoxService.start_websocket_feed'),          patch('app.services.upstox_service.UpstoxService.get_token_cache_path', side_effect=Exception('Cache Error')):
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {'access_token': 'test'}
-        mock_post.return_value = mock_response
-        await UpstoxService.exchange_code_for_token('code')
-
-@pytest.mark.asyncio
-async def test_init_service_exception(tmp_path):
-    with patch('app.services.upstox_service.UpstoxService.get_token_cache_path') as mock_path:
-        mock_path.return_value.exists.return_value = True
-        mock_path.return_value.read_text.side_effect = Exception('Read Error')
-        await UpstoxService.init_service()
 
 @pytest.mark.asyncio
 async def test_resolve_symbol_banknifty():

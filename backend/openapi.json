@@ -636,6 +636,16 @@
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRoleRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1131,6 +1141,7 @@
           "payments"
         ],
         "summary": "Create Intent",
+        "description": "Create a payment intent for a subscription plan.\n\nUnlike the previous implementation, this never fabricates a fake\n\"created\" response: it either creates a real Razorpay order (when real\nprovider credentials are configured) or, in test/dev mode, records an\nhonestly-labeled test intent that /confirm can only complete against.",
         "operationId": "create_intent_api_v1_payments_intents_post",
         "requestBody": {
           "content": {
@@ -1161,7 +1172,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/payments/confirm": {
@@ -1170,6 +1189,7 @@
           "payments"
         ],
         "summary": "Confirm Intent",
+        "description": "Confirm a previously-created intent.\n\nNever reports success for an intent that was never created, and never\nskips signature verification outside the same explicit test-mode used\nby the webhook handler above.",
         "operationId": "confirm_intent_api_v1_payments_confirm_post",
         "requestBody": {
           "content": {
@@ -1200,7 +1220,15 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/api/v1/watchlist": {
@@ -1723,8 +1751,10 @@
     },
     "/api/v1/market/economic-calendar": {
       "get": {
+        "tags": [
+          "market"
+        ],
         "summary": "Get Economic Calendar",
-        "description": "Return upcoming high-impact macro and market events.",
         "operationId": "get_economic_calendar_api_v1_market_economic_calendar_get",
         "responses": {
           "200": {
@@ -1732,24 +1762,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/EconomicCalendarEvent"
-                  },
-                  "type": "array",
-                  "title": "Response Get Economic Calendar Api V1 Market Economic Calendar Get"
+                  "$ref": "#/components/schemas/EconomicCalendarResponse"
                 }
               }
             }
           }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          },
-          {
-            "APIKeyHeader": []
-          }
-        ]
+        }
       }
     },
     "/api/v1/market/universe": {
@@ -1759,6 +1777,31 @@
         ],
         "summary": "Get Market Universe",
         "operationId": "get_market_universe_api_v1_market_universe_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1766,6 +1809,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UniverseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1825,6 +1878,7 @@
           "market"
         ],
         "summary": "Get Global Context",
+        "description": "Cross-market context (global indices, VIX, FX) for the terminal's macro widget.\n\nNo global-index ingestion pipeline exists in this codebase yet, so this\nreturns an explicit unavailable status rather than fabricating index levels.",
         "operationId": "get_global_context_api_v1_market_global_context_get",
         "responses": {
           "200": {
@@ -2016,8 +2070,10 @@
     },
     "/api/v1/regime/statistics": {
       "get": {
+        "tags": [
+          "regime"
+        ],
         "summary": "Get Regime Statistics",
-        "description": "Return aggregate per-regime summary statistics.",
         "operationId": "get_regime_statistics_api_v1_regime_statistics_get",
         "responses": {
           "200": {
@@ -2025,11 +2081,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/RegimeStatisticsItem"
-                  },
-                  "type": "array",
-                  "title": "Response Get Regime Statistics Api V1 Regime Statistics Get"
+                  "$ref": "#/components/schemas/RegimeStatisticsResponse"
                 }
               }
             }
@@ -2088,9 +2140,11 @@
     },
     "/api/v1/explain/shap/{symbol}": {
       "get": {
-        "summary": "Get Shap Explainability",
-        "description": "Return SHAP feature attribution values for the latest inference.",
-        "operationId": "get_shap_explainability_api_v1_explain_shap__symbol__get",
+        "tags": [
+          "explainability"
+        ],
+        "summary": "Get Shap Explanation",
+        "operationId": "get_shap_explanation_api_v1_explain_shap__symbol__get",
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -2116,7 +2170,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExplainShapResponse"
+                  "$ref": "#/components/schemas/SHAPResponse"
                 }
               }
             }
@@ -2136,9 +2190,11 @@
     },
     "/api/v1/explain/attention/{symbol}": {
       "get": {
-        "summary": "Get Attention Explainability",
-        "description": "Return temporal attention weights from the requested sequence model.",
-        "operationId": "get_attention_explainability_api_v1_explain_attention__symbol__get",
+        "tags": [
+          "explainability"
+        ],
+        "summary": "Get Attention Explanation",
+        "operationId": "get_attention_explanation_api_v1_explain_attention__symbol__get",
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -2163,8 +2219,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "pattern": "^(tft|lstm_attn)$",
-              "default": "tft",
+              "default": "lstm_attn",
               "title": "Model"
             }
           }
@@ -2175,7 +2230,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ExplainAttentionResponse"
+                  "$ref": "#/components/schemas/AttentionResponse"
                 }
               }
             }
@@ -2195,9 +2250,11 @@
     },
     "/api/v1/explain/counterfactual/{symbol}": {
       "post": {
-        "summary": "Get Counterfactual",
-        "description": "Return counterfactual feature changes that can flip signal direction.",
-        "operationId": "get_counterfactual_api_v1_explain_counterfactual__symbol__post",
+        "tags": [
+          "explainability"
+        ],
+        "summary": "Post Counterfactual Explanation",
+        "operationId": "post_counterfactual_explanation_api_v1_explain_counterfactual__symbol__post",
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -2222,7 +2279,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/app__schemas__intelligence__CounterfactualRequest"
+                "$ref": "#/components/schemas/CounterfactualRequest"
               }
             }
           }
@@ -2233,11 +2290,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/app__schemas__intelligence__CounterfactualResponse"
-                  },
-                  "title": "Response Get Counterfactual Api V1 Explain Counterfactual  Symbol  Post"
+                  "$ref": "#/components/schemas/CounterfactualResponse"
                 }
               }
             }
@@ -2497,7 +2550,7 @@
           "portfolio"
         ],
         "summary": "Record BUY/SELL transaction",
-        "description": "Record a transaction and update cash/holdings inside SQLAlchemy.",
+        "description": "Execute a BUY/SELL paper transaction via the real paper-trading ledger.\n\nDelegates to PaperTradingService.place_order so this endpoint shares the\nsame wallet/position bookkeeping and risk guardrails (daily loss circuit\nbreaker, 50%-of-equity order cap, margin check) as the rest of the paper\ntrading surface, instead of maintaining a second, parallel ledger.",
         "operationId": "post_transaction_api_v1_portfolio_transaction_post",
         "requestBody": {
           "content": {
@@ -2963,8 +3016,10 @@
     },
     "/api/v1/monitor/model-accuracy": {
       "get": {
+        "tags": [
+          "monitoring"
+        ],
         "summary": "Get Model Accuracy",
-        "description": "Return rolling model quality metrics for each model family.",
         "operationId": "get_model_accuracy_api_v1_monitor_model_accuracy_get",
         "responses": {
           "200": {
@@ -2972,11 +3027,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ModelAccuracyItem"
-                  },
-                  "type": "array",
-                  "title": "Response Get Model Accuracy Api V1 Monitor Model Accuracy Get"
+                  "$ref": "#/components/schemas/ModelAccuracyResponse"
                 }
               }
             }
@@ -2994,20 +3045,18 @@
     },
     "/api/v1/monitor/drift": {
       "get": {
-        "summary": "Get Drift",
-        "description": "Return concept drift diagnostics for production model monitoring.",
-        "operationId": "get_drift_api_v1_monitor_drift_get",
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Get Drift Detection",
+        "operationId": "get_drift_detection_api_v1_monitor_drift_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/DriftItem"
-                  },
-                  "type": "array",
-                  "title": "Response Get Drift Api V1 Monitor Drift Get"
+                  "$ref": "#/components/schemas/DriftResponse"
                 }
               }
             }
@@ -3025,9 +3074,24 @@
     },
     "/api/v1/monitor/ensemble-weights-history": {
       "get": {
-        "summary": "Get Ensemble Weights History",
-        "description": "Return historical dynamic ensemble weights for model governance analysis.",
-        "operationId": "get_ensemble_weights_history_api_v1_monitor_ensemble_weights_history_get",
+        "tags": [
+          "monitoring"
+        ],
+        "summary": "Get Weights History",
+        "description": "Return ensemble weight history from DB or current snapshot.\n\nIf historical weight snapshots are not yet stored in the DB, returns only\ntoday's weights as a single-point series. Never fabricates historical data.",
+        "operationId": "get_weights_history_api_v1_monitor_ensemble_weights_history_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeightsHistoryResponse"
+                }
+              }
+            }
+          }
+        },
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -3035,47 +3099,7 @@
           {
             "APIKeyHeader": []
           }
-        ],
-        "parameters": [
-          {
-            "name": "days",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 504,
-              "minimum": 30,
-              "default": 252,
-              "title": "Days"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/app__schemas__intelligence__EnsembleWeightPoint"
-                  },
-                  "title": "Response Get Ensemble Weights History Api V1 Monitor Ensemble Weights History Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
+        ]
       }
     },
     "/api/v1/research/correlation-graph": {
@@ -4033,25 +4057,6 @@
         "title": "AttentionTimestep",
         "description": "Single important timestep."
       },
-      "AttentionTopTimestep": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "format": "date",
-            "title": "Date"
-          },
-          "weight": {
-            "type": "number",
-            "title": "Weight"
-          }
-        },
-        "type": "object",
-        "required": [
-          "date",
-          "weight"
-        ],
-        "title": "AttentionTopTimestep"
-      },
       "AuthLogin": {
         "properties": {
           "email": {
@@ -4677,24 +4682,30 @@
       },
       "ConfirmPayload": {
         "properties": {
-          "razorpay_order_id": {
+          "intent_id": {
             "type": "string",
-            "title": "Razorpay Order Id"
+            "title": "Intent Id"
           },
           "razorpay_payment_id": {
             "type": "string",
             "title": "Razorpay Payment Id"
           },
           "razorpay_signature": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Razorpay Signature"
           }
         },
         "type": "object",
         "required": [
-          "razorpay_order_id",
-          "razorpay_payment_id",
-          "razorpay_signature"
+          "intent_id",
+          "razorpay_payment_id"
         ],
         "title": "ConfirmPayload"
       },
@@ -4806,29 +4817,6 @@
         ],
         "title": "CorrelationNode"
       },
-      "CounterfactualFeatureChange": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "original": {
-            "type": "number",
-            "title": "Original"
-          },
-          "counterfactual": {
-            "type": "number",
-            "title": "Counterfactual"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "original",
-          "counterfactual"
-        ],
-        "title": "CounterfactualFeatureChange"
-      },
       "CounterfactualInstance": {
         "properties": {
           "cf_id": {
@@ -4869,6 +4857,73 @@
         ],
         "title": "CounterfactualInstance",
         "description": "Single counterfactual explanation."
+      },
+      "CounterfactualRequest": {
+        "properties": {
+          "target_direction": {
+            "type": "string",
+            "title": "Target Direction",
+            "description": "BUY|SELL"
+          },
+          "num_cfs": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Num Cfs",
+            "default": 5
+          }
+        },
+        "type": "object",
+        "required": [
+          "target_direction"
+        ],
+        "title": "CounterfactualRequest",
+        "description": "POST /explain/counterfactual/{symbol} request body."
+      },
+      "CounterfactualResponse": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "title": "Symbol"
+          },
+          "target_direction": {
+            "type": "string",
+            "title": "Target Direction"
+          },
+          "counterfactuals": {
+            "items": {
+              "$ref": "#/components/schemas/CounterfactualInstance"
+            },
+            "type": "array",
+            "title": "Counterfactuals"
+          },
+          "original_signal": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Original Signal"
+          },
+          "original_confidence": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Original Confidence"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol",
+          "target_direction",
+          "counterfactuals",
+          "original_signal",
+          "original_confidence",
+          "timestamp"
+        ],
+        "title": "CounterfactualResponse",
+        "description": "POST /explain/counterfactual/{symbol} response."
       },
       "DrawdownPoint": {
         "properties": {
@@ -4942,50 +4997,6 @@
         "title": "DriftDistribution",
         "description": "Residual distribution statistics."
       },
-      "DriftItem": {
-        "properties": {
-          "model": {
-            "type": "string",
-            "enum": [
-              "tft",
-              "hmm_garch",
-              "gnn",
-              "lstm_attn",
-              "xgboost",
-              "ensemble"
-            ],
-            "title": "Model"
-          },
-          "adwin_p_value": {
-            "type": "number",
-            "title": "Adwin P Value"
-          },
-          "drift_detected": {
-            "type": "boolean",
-            "title": "Drift Detected"
-          },
-          "residual_distribution": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array",
-            "title": "Residual Distribution"
-          },
-          "ks_stat": {
-            "type": "number",
-            "title": "Ks Stat"
-          }
-        },
-        "type": "object",
-        "required": [
-          "model",
-          "adwin_p_value",
-          "drift_detected",
-          "residual_distribution",
-          "ks_stat"
-        ],
-        "title": "DriftItem"
-      },
       "DriftResponse": {
         "properties": {
           "models": {
@@ -5013,46 +5024,6 @@
         ],
         "title": "DriftResponse",
         "description": "GET /monitor/drift response."
-      },
-      "EconomicCalendarEvent": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "format": "date",
-            "title": "Date"
-          },
-          "category": {
-            "type": "string",
-            "enum": [
-              "FOMC",
-              "EARNINGS",
-              "EXPIRY",
-              "MACRO"
-            ],
-            "title": "Category"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "impact": {
-            "type": "string",
-            "enum": [
-              "LOW",
-              "MEDIUM",
-              "HIGH"
-            ],
-            "title": "Impact"
-          }
-        },
-        "type": "object",
-        "required": [
-          "date",
-          "category",
-          "title",
-          "impact"
-        ],
-        "title": "EconomicCalendarEvent"
       },
       "EconomicCalendarResponse": {
         "properties": {
@@ -5172,6 +5143,51 @@
         "title": "EfficientFrontierPoint",
         "description": "Single point on efficient frontier."
       },
+      "EnsembleWeightPoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Date"
+          },
+          "tft": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Tft"
+          },
+          "hmm_garch": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Hmm Garch"
+          },
+          "gnn": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Gnn"
+          },
+          "lstm_attn": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Lstm Attn"
+          },
+          "xgboost": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Xgboost"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "tft",
+          "hmm_garch",
+          "gnn",
+          "lstm_attn",
+          "xgboost"
+        ],
+        "title": "EnsembleWeightPoint",
+        "description": "Single point in ensemble weights history."
+      },
       "EquityCurvePoint": {
         "properties": {
           "date": {
@@ -5204,87 +5220,6 @@
         ],
         "title": "EquityCurvePoint",
         "description": "Single point in equity curve."
-      },
-      "ExplainAttentionResponse": {
-        "properties": {
-          "model": {
-            "type": "string",
-            "enum": [
-              "tft",
-              "lstm_attn"
-            ],
-            "title": "Model"
-          },
-          "weights": {
-            "items": {
-              "items": {
-                "type": "number"
-              },
-              "type": "array"
-            },
-            "type": "array",
-            "title": "Weights"
-          },
-          "mean_weights": {
-            "items": {
-              "type": "number"
-            },
-            "type": "array",
-            "title": "Mean Weights"
-          },
-          "top_timesteps": {
-            "items": {
-              "$ref": "#/components/schemas/AttentionTopTimestep"
-            },
-            "type": "array",
-            "title": "Top Timesteps"
-          }
-        },
-        "type": "object",
-        "required": [
-          "model",
-          "weights",
-          "mean_weights",
-          "top_timesteps"
-        ],
-        "title": "ExplainAttentionResponse"
-      },
-      "ExplainShapResponse": {
-        "properties": {
-          "model": {
-            "type": "string",
-            "const": "xgboost",
-            "title": "Model"
-          },
-          "feature_contributions": {
-            "items": {
-              "$ref": "#/components/schemas/app__schemas__intelligence__SHAPContribution"
-            },
-            "type": "array",
-            "title": "Feature Contributions"
-          },
-          "base_value": {
-            "type": "number",
-            "title": "Base Value"
-          },
-          "output_value": {
-            "type": "number",
-            "title": "Output Value"
-          },
-          "waterfall_ready": {
-            "type": "boolean",
-            "title": "Waterfall Ready"
-          }
-        },
-        "type": "object",
-        "required": [
-          "model",
-          "feature_contributions",
-          "base_value",
-          "output_value",
-          "waterfall_ready"
-        ],
-        "title": "ExplainShapResponse"
       },
       "FactorExposureItem": {
         "properties": {
@@ -5711,9 +5646,9 @@
       },
       "IntentPayload": {
         "properties": {
-          "amount": {
-            "type": "number",
-            "title": "Amount"
+          "plan_id": {
+            "type": "string",
+            "title": "Plan Id"
           },
           "method": {
             "type": "string",
@@ -5738,7 +5673,7 @@
         },
         "type": "object",
         "required": [
-          "amount",
+          "plan_id",
           "method"
         ],
         "title": "IntentPayload"
@@ -6024,52 +5959,6 @@
           "status"
         ],
         "title": "MemberResponse"
-      },
-      "ModelAccuracyItem": {
-        "properties": {
-          "model": {
-            "type": "string",
-            "enum": [
-              "tft",
-              "hmm_garch",
-              "gnn",
-              "lstm_attn",
-              "xgboost",
-              "ensemble"
-            ],
-            "title": "Model"
-          },
-          "precision": {
-            "type": "number",
-            "title": "Precision"
-          },
-          "recall": {
-            "type": "number",
-            "title": "Recall"
-          },
-          "directional_accuracy": {
-            "type": "number",
-            "title": "Directional Accuracy"
-          },
-          "p50_rmse": {
-            "type": "number",
-            "title": "P50 Rmse"
-          },
-          "winkler_coverage_score": {
-            "type": "number",
-            "title": "Winkler Coverage Score"
-          }
-        },
-        "type": "object",
-        "required": [
-          "model",
-          "precision",
-          "recall",
-          "directional_accuracy",
-          "p50_rmse",
-          "winkler_coverage_score"
-        ],
-        "title": "ModelAccuracyItem"
       },
       "ModelAccuracyMetrics": {
         "properties": {
@@ -7168,45 +7057,6 @@
         "title": "RegimeStatistics",
         "description": "Per-state statistics."
       },
-      "RegimeStatisticsItem": {
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "BULL",
-              "BEAR",
-              "SIDEWAYS",
-              "CRISIS"
-            ],
-            "title": "State"
-          },
-          "avg_duration": {
-            "type": "number",
-            "title": "Avg Duration"
-          },
-          "avg_return": {
-            "type": "number",
-            "title": "Avg Return"
-          },
-          "avg_vol": {
-            "type": "number",
-            "title": "Avg Vol"
-          },
-          "freq": {
-            "type": "number",
-            "title": "Freq"
-          }
-        },
-        "type": "object",
-        "required": [
-          "state",
-          "avg_duration",
-          "avg_return",
-          "avg_vol",
-          "freq"
-        ],
-        "title": "RegimeStatisticsItem"
-      },
       "RegimeStatisticsResponse": {
         "properties": {
           "period_days": {
@@ -7325,6 +7175,39 @@
         "title": "RiskMetricsResponse",
         "description": "GET /portfolio/risk-metrics response."
       },
+      "SHAPContribution": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "feature name"
+          },
+          "shap_value": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Shap Value"
+          },
+          "feature_value": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Feature Value"
+          },
+          "percentile_rank": {
+            "type": "string",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Percentile Rank"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "shap_value",
+          "feature_value",
+          "percentile_rank"
+        ],
+        "title": "SHAPContribution",
+        "description": "Single feature's SHAP contribution."
+      },
       "SHAPResponse": {
         "properties": {
           "symbol": {
@@ -7338,7 +7221,7 @@
           },
           "feature_contributions": {
             "items": {
-              "$ref": "#/components/schemas/app__schemas__explain__SHAPContribution"
+              "$ref": "#/components/schemas/SHAPContribution"
             },
             "type": "array",
             "title": "Feature Contributions"
@@ -8399,6 +8282,20 @@
         ],
         "title": "UpdateProfileRequest"
       },
+      "UpdateRoleRequest": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "title": "Role",
+            "description": "New organization role for this member"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "UpdateRoleRequest"
+      },
       "UserProfileResponse": {
         "properties": {
           "id": {
@@ -8596,7 +8493,7 @@
           },
           "data": {
             "items": {
-              "$ref": "#/components/schemas/app__schemas__monitor__EnsembleWeightPoint"
+              "$ref": "#/components/schemas/EnsembleWeightPoint"
             },
             "type": "array",
             "title": "Data"
@@ -8620,207 +8517,6 @@
         ],
         "title": "WeightsHistoryResponse",
         "description": "GET /monitor/ensemble-weights-history response."
-      },
-      "app__schemas__explain__CounterfactualRequest": {
-        "properties": {
-          "target_direction": {
-            "type": "string",
-            "title": "Target Direction",
-            "description": "BUY|SELL"
-          },
-          "num_cfs": {
-            "type": "integer",
-            "maximum": 20.0,
-            "minimum": 1.0,
-            "title": "Num Cfs",
-            "default": 5
-          }
-        },
-        "type": "object",
-        "required": [
-          "target_direction"
-        ],
-        "title": "CounterfactualRequest",
-        "description": "POST /explain/counterfactual/{symbol} request body."
-      },
-      "app__schemas__explain__CounterfactualResponse": {
-        "properties": {
-          "symbol": {
-            "type": "string",
-            "title": "Symbol"
-          },
-          "target_direction": {
-            "type": "string",
-            "title": "Target Direction"
-          },
-          "counterfactuals": {
-            "items": {
-              "$ref": "#/components/schemas/CounterfactualInstance"
-            },
-            "type": "array",
-            "title": "Counterfactuals"
-          },
-          "original_signal": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Original Signal"
-          },
-          "original_confidence": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Original Confidence"
-          },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Timestamp"
-          }
-        },
-        "type": "object",
-        "required": [
-          "symbol",
-          "target_direction",
-          "counterfactuals",
-          "original_signal",
-          "original_confidence",
-          "timestamp"
-        ],
-        "title": "CounterfactualResponse",
-        "description": "POST /explain/counterfactual/{symbol} response."
-      },
-      "app__schemas__explain__SHAPContribution": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name",
-            "description": "feature name"
-          },
-          "shap_value": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Shap Value"
-          },
-          "feature_value": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Feature Value"
-          },
-          "percentile_rank": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Percentile Rank"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "shap_value",
-          "feature_value",
-          "percentile_rank"
-        ],
-        "title": "SHAPContribution",
-        "description": "Single feature's SHAP contribution."
-      },
-      "app__schemas__intelligence__CounterfactualRequest": {
-        "properties": {
-          "target_direction": {
-            "type": "string",
-            "enum": [
-              "BUY",
-              "SELL"
-            ],
-            "title": "Target Direction"
-          },
-          "num_cfs": {
-            "type": "integer",
-            "maximum": 10.0,
-            "minimum": 1.0,
-            "title": "Num Cfs",
-            "default": 5
-          }
-        },
-        "type": "object",
-        "required": [
-          "target_direction"
-        ],
-        "title": "CounterfactualRequest"
-      },
-      "app__schemas__intelligence__CounterfactualResponse": {
-        "properties": {
-          "cf_id": {
-            "type": "string",
-            "title": "Cf Id"
-          },
-          "changed_features": {
-            "items": {
-              "$ref": "#/components/schemas/CounterfactualFeatureChange"
-            },
-            "type": "array",
-            "title": "Changed Features"
-          },
-          "resulting_signal": {
-            "type": "string",
-            "enum": [
-              "STRONG_BUY",
-              "BUY",
-              "NEUTRAL",
-              "SELL",
-              "STRONG_SELL"
-            ],
-            "title": "Resulting Signal"
-          },
-          "proximity_score": {
-            "type": "number",
-            "title": "Proximity Score"
-          }
-        },
-        "type": "object",
-        "required": [
-          "cf_id",
-          "changed_features",
-          "resulting_signal",
-          "proximity_score"
-        ],
-        "title": "CounterfactualResponse"
-      },
-      "app__schemas__intelligence__EnsembleWeightPoint": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "format": "date",
-            "title": "Date"
-          },
-          "tft": {
-            "type": "number",
-            "title": "Tft"
-          },
-          "hmm_garch": {
-            "type": "number",
-            "title": "Hmm Garch"
-          },
-          "gnn": {
-            "type": "number",
-            "title": "Gnn"
-          },
-          "lstm_attn": {
-            "type": "number",
-            "title": "Lstm Attn"
-          },
-          "xgboost": {
-            "type": "number",
-            "title": "Xgboost"
-          }
-        },
-        "type": "object",
-        "required": [
-          "date",
-          "tft",
-          "hmm_garch",
-          "gnn",
-          "lstm_attn",
-          "xgboost"
-        ],
-        "title": "EnsembleWeightPoint"
       },
       "app__schemas__intelligence__RegimeCurrentResponse": {
         "properties": {
@@ -8923,79 +8619,6 @@
           "cond_vol"
         ],
         "title": "RegimeHistoryPoint"
-      },
-      "app__schemas__intelligence__SHAPContribution": {
-        "properties": {
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "shap_val": {
-            "type": "number",
-            "title": "Shap Val"
-          },
-          "feature_val": {
-            "type": "number",
-            "title": "Feature Val"
-          },
-          "pct_rank": {
-            "type": "number",
-            "title": "Pct Rank"
-          }
-        },
-        "type": "object",
-        "required": [
-          "name",
-          "shap_val",
-          "feature_val",
-          "pct_rank"
-        ],
-        "title": "SHAPContribution"
-      },
-      "app__schemas__monitor__EnsembleWeightPoint": {
-        "properties": {
-          "date": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Date"
-          },
-          "tft": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Tft"
-          },
-          "hmm_garch": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Hmm Garch"
-          },
-          "gnn": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Gnn"
-          },
-          "lstm_attn": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Lstm Attn"
-          },
-          "xgboost": {
-            "type": "string",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Xgboost"
-          }
-        },
-        "type": "object",
-        "required": [
-          "date",
-          "tft",
-          "hmm_garch",
-          "gnn",
-          "lstm_attn",
-          "xgboost"
-        ],
-        "title": "EnsembleWeightPoint",
-        "description": "Single point in ensemble weights history."
       },
       "app__schemas__regime__RegimeCurrentResponse": {
         "properties": {

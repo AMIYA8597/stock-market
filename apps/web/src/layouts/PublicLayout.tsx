@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, BarChart3, BrainCircuit, Menu, Sparkles, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@neuroquant/ui";
 import { cn } from "@/lib/utils";
+import { marketApi } from "@/lib/api-client";
 
 const navItems = [
   { href: "/blog", label: "Blog" },
@@ -17,6 +18,14 @@ const navItems = [
 export function PublicLayout({ children }: { children: React.ReactNode }): JSX.Element {
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    marketApi
+      .getStatus()
+      .then((status) => setMarketOpen(status.market_open))
+      .catch(() => setMarketOpen(null));
+  }, []);
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[var(--nq-bg-primary)] text-[var(--nq-text-primary)]">
@@ -61,8 +70,17 @@ export function PublicLayout({ children }: { children: React.ReactNode }): JSX.E
 
           <div className="ml-auto hidden items-center gap-2 md:flex">
             <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-[var(--nq-text-secondary)]">
-              <span className="inline-flex h-2 w-2 rounded-full bg-[var(--nq-bull)] mr-2" />
-              Live market state
+              <span
+                className={cn(
+                  "inline-flex h-2 w-2 rounded-full mr-2",
+                  marketOpen === true
+                    ? "bg-[var(--nq-bull)]"
+                    : marketOpen === false
+                      ? "bg-[var(--nq-text-secondary)]"
+                      : "bg-white/20"
+                )}
+              />
+              {marketOpen === true ? "Market open" : marketOpen === false ? "Market closed" : "Market status unavailable"}
             </div>
             <Link href="/login">
               <Button variant="ghost" size="sm">Sign in</Button>
@@ -161,8 +179,10 @@ export function PublicLayout({ children }: { children: React.ReactNode }): JSX.E
             <div className="rounded-[1.25rem] border border-white/10 bg-white/5 p-4">
               <p className="text-xs uppercase tracking-[0.14em] text-[var(--nq-text-secondary)]">Status</p>
               <div className="mt-3 space-y-2 text-sm text-[var(--nq-text-secondary)]">
-                <p className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-[var(--nq-accent)]" /> 99.98% platform uptime</p>
-                <p className="inline-flex items-center gap-2"><Sparkles className="h-4 w-4 text-[var(--nq-bull)]" /> Live model feed active</p>
+                <p className="inline-flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-[var(--nq-accent)]" />
+                  {marketOpen === true ? "Market open" : marketOpen === false ? "Market closed" : "Market status unavailable"}
+                </p>
               </div>
             </div>
           </div>

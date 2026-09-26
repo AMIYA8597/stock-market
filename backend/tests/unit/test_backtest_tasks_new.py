@@ -31,13 +31,44 @@ def mock_ws_manager():
     with patch("app.tasks.backtest_tasks.ws_manager.broadcast", new_callable=AsyncMock) as mock_broadcast:
         yield mock_broadcast
 
+def make_bar(ts, price=100.0):
+    bar = MagicMock()
+    bar.timestamp = ts
+    bar.open = price
+    bar.high = price + 1
+    bar.low = price - 1
+    bar.close = price
+    bar.volume = 1000
+    return bar
+
+
 @pytest.fixture
-def mock_market_data():
-    with patch("app.tasks.backtest_tasks.MarketDataService.get_history", new_callable=AsyncMock) as mock_get_history:
-        dates = pd.date_range(start="2022-01-01", periods=5).strftime("%Y-%m-%dT%H:%M:%SZ").tolist()
-        df_data = {"time": dates, "close": np.random.rand(5) * 100}
-        mock_get_history.return_value = df_data
-        yield mock_get_history
+def mock_instrument_result():
+    """MagicMock standing in for the `select(Instrument)...` query result."""
+    res = MagicMock()
+    inst = MagicMock()
+    inst.id = uuid4()
+    res.scalars.return_value.first.return_value = inst
+    return res
+
+
+@pytest.fixture
+def mock_ohlcv_result_5_bars():
+    """MagicMock standing in for the `select(OHLCV)...` query result, with
+    enough bars (>= 5) to pass run_backtest_async's minimum-history check."""
+    res = MagicMock()
+    dates = pd.date_range(start="2022-01-01", periods=5, tz="UTC")
+    res.scalars.return_value.all.return_value = [make_bar(d) for d in dates]
+    return res
+
+
+@pytest.fixture
+def mock_ohlcv_result_empty():
+    """MagicMock for a `select(OHLCV)...` query result with no bars, to
+    exercise the 'not enough historical data' failure path."""
+    res = MagicMock()
+    res.scalars.return_value.all.return_value = []
+    return res
 
 @pytest.mark.asyncio
 @patch("app.tasks.backtest_tasks.async_session_factory")
@@ -57,15 +88,23 @@ async def test_run_backtest_async_job_not_found(mock_session_factory, mock_db_se
 
 @pytest.mark.asyncio
 @patch("app.tasks.backtest_tasks.async_session_factory")
-async def test_run_backtest_async_not_enough_data(mock_session_factory, mock_db_session, mock_ws_manager, mock_job, mock_market_data):
+async def test_run_backtest_async_not_enough_data(
+    mock_session_factory, mock_db_session, mock_ws_manager, mock_job,
+    mock_instrument_result, mock_ohlcv_result_empty,
+):
     mock_db, mock_session = mock_db_session
     mock_session_factory.return_value = mock_db
 
-    mock_res = MagicMock()
-    mock_res.scalar_one_or_none.return_value = mock_job
-    mock_session.execute.return_value = mock_res
+    mock_res_job = MagicMock()
+    mock_res_job.scalar_one_or_none.return_value = mock_job
 
-    mock_market_data.return_value = []
+    # run_backtest_async issues, in order: select(BacktestJob), then
+    # select(Instrument), then select(OHLCV) - which here returns no bars,
+    # triggering the "Not enough historical data" failure before any signal
+    # query is reached.
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_res_job, mock_instrument_result, mock_ohlcv_result_empty]
+    )
 
     job_id = str(mock_job.id)
     await run_backtest_async(job_id)
@@ -78,7 +117,10 @@ async def test_run_backtest_async_not_enough_data(mock_session_factory, mock_db_
 
 @pytest.mark.asyncio
 @patch("app.tasks.backtest_tasks.async_session_factory")
-async def test_run_backtest_async_success(mock_session_factory, mock_db_session, mock_ws_manager, mock_job, mock_market_data):
+async def test_run_backtest_async_success(
+    mock_session_factory, mock_db_session, mock_ws_manager, mock_job,
+    mock_instrument_result, mock_ohlcv_result_5_bars,
+):
     mock_db, mock_session = mock_db_session
     mock_session_factory.return_value = mock_db
 
@@ -97,14 +139,11 @@ async def test_run_backtest_async_success(mock_session_factory, mock_db_session,
     mock_signal2.kelly_fraction = None
     mock_res_sig.scalars.return_value.all.return_value = [mock_signal, mock_signal2]
 
-    execute_calls = []
-    async def mock_execute(stmt):
-        execute_calls.append(stmt)
-        if len(execute_calls) == 1:
-            return mock_res_job
-        return mock_res_sig
-
-    mock_session.execute = AsyncMock(side_effect=mock_execute)
+    # run_backtest_async issues 4 queries in order: BacktestJob, Instrument,
+    # OHLCV (5 bars, passes the minimum-history check), then EnsembleSignal.
+    mock_session.execute = AsyncMock(
+        side_effect=[mock_res_job, mock_instrument_result, mock_ohlcv_result_5_bars, mock_res_sig]
+    )
 
     with patch("app.tasks.backtest_tasks.EventDrivenBacktester") as MockBacktester:
         mock_backtester_inst = MockBacktester.return_value

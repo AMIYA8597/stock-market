@@ -1,3 +1,0 @@
-"""Signal generator module."""
-
-# This module contains the signal generation services.

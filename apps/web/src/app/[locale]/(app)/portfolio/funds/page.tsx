@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { paymentsApi } from "@/lib/api-client";
 import { CheckoutPage, TransactionsPage } from "@/modules/payments/PaymentPages";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 const moneyFormatter = new Intl.NumberFormat("en-IN", {
   minimumFractionDigits: 2,
@@ -23,6 +24,7 @@ export default function PortfolioFundsPage(): JSX.Element {
   });
 
   return (
+    <AuthGuard>
     <main className="min-h-screen bg-[var(--nq-bg-base)] p-6 text-[var(--nq-text-primary)]">
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
@@ -57,5 +59,6 @@ export default function PortfolioFundsPage(): JSX.Element {
         <TransactionsPage />
       </section>
     </main>
+    </AuthGuard>
   );
 }
