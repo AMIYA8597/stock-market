@@ -20,11 +20,9 @@ if str(ROOT) not in sys.path:
 
 os.environ.setdefault("ENVIRONMENT", "development")
 
-from app.models.asset import Symbol
-
 from app.database.connection import async_session_factory
-from app.models.ohlcv import OHLCV
-from app.models.research import Prediction as EnsembleSignal
+from app.models.market import OHLCV, Instrument
+from app.models.signal import EnsembleSignal
 from app.services.prediction_engine import build_ensemble_signal, standardize_df_columns
 from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
@@ -86,8 +84,8 @@ async def backfill_symbol(session: AsyncSession, symbol_id: str, ticker: str) ->
     # Fetch all OHLCV for the symbol
     stmt = (
         select(OHLCV)
-        .where(OHLCV.symbol_id == symbol_id, OHLCV.interval == "1d")
-        .order_by(OHLCV.time.asc())
+        .where(OHLCV.instrument_id == symbol_id, OHLCV.interval == "1d")
+        .order_by(OHLCV.timestamp.asc())
     )
     res = await session.execute(stmt)
     records = res.scalars().all()
@@ -101,7 +99,7 @@ async def backfill_symbol(session: AsyncSession, symbol_id: str, ticker: str) ->
     for r in records:
         data.append(
             {
-                "time": r.time,
+                "time": r.timestamp,
                 "open": float(r.open),
                 "high": float(r.high),
                 "low": float(r.low),
@@ -159,7 +157,7 @@ async def backfill_symbol(session: AsyncSession, symbol_id: str, ticker: str) ->
                 time=sig_dt,
                 signal=raw_ensemble,
                 kelly_fraction=kelly,
-                metadata_json=ens.get("model_signals", {}),
+                inputs_used=ens.get("model_signals", {}),
             )
         )
 
@@ -189,9 +187,9 @@ async def main():
     args = parser.parse_args()
 
     async with async_session_factory() as session:
-        stmt = select(Symbol)
+        stmt = select(Instrument)
         if args.symbols:
-            stmt = stmt.where(Symbol.ticker.in_(args.symbols))
+            stmt = stmt.where(Instrument.canonical_symbol.in_(args.symbols))
 
         res = await session.execute(stmt)
         symbols = res.scalars().all()
@@ -203,7 +201,7 @@ async def main():
         logger.info(f"Found {len(symbols)} symbols to backfill.")
 
         for sym in symbols:
-            await backfill_symbol(session, sym.id, sym.ticker)
+            await backfill_symbol(session, sym.id, sym.canonical_symbol)
 
     logger.info("Signal backfill complete.")
 

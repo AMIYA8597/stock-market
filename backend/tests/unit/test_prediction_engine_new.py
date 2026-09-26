@@ -1,4 +1,5 @@
 import json
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
 
@@ -109,12 +110,14 @@ def test_detect_regime_success(sample_df):
         assert res["regime"] == "BULL"
         assert res["hmm_used"] is True
 
-def test_detect_regime_fallback(sample_df):
+def test_detect_regime_hmm_failure_raises(sample_df):
+    """detect_regime has no fake-regime fallback: a real HMM failure must
+    surface as an error, never a silently degraded/fabricated regime."""
     with patch.dict('sys.modules', {'research.models.hmm_garch.inference': MagicMock()}):
         import sys
         sys.modules['research.models.hmm_garch.inference'].InferenceEngine.side_effect = Exception("fail")
-        res = detect_regime(sample_df)
-        assert res["hmm_used"] is False
+        with pytest.raises(ValueError, match="Regime detection failed"):
+            detect_regime(sample_df)
 
 def test_compute_kelly_fraction():
     res = compute_kelly_fraction("TEST", 0.5, 0.8)
@@ -245,21 +248,31 @@ async def test_get_full_prediction(sample_df):
     mock_bar.close = 100
     mock_bar.volume = 1000
 
-    with patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"), \
-         patch("app.services.prediction_engine._cache_fetch") as mock_fetch, \
-         patch("app.database.connection.async_session_factory", new_callable=MagicMock) as mock_db_factory, \
-         patch("research.feature_engineering.pipeline.FeaturePipeline.run", return_value=sample_df), \
-         patch("pandas_ta.core.rsi"), patch("pandas_ta.core.macd"), \
-         patch("pandas_ta.core.ema"), patch("pandas_ta.core.bbands"), \
-         patch("pandas_ta.core.atr"), patch("pandas_ta.core.vwap"), \
-         patch("pandas_ta.core.adx"), patch("pandas_ta.core.stoch"), \
-         patch("pandas_ta.core.obv"), patch("pandas_ta.core.supertrend"), \
-         patch("pandas_ta.core.cdl_pattern"), \
-         patch("app.services.prediction_engine.build_ensemble_signal", new_callable=AsyncMock) as mock_build, \
-         patch("app.services.prediction_engine.forecast_prices", return_value=[]), \
-         patch("app.services.prediction_engine._cache_store", new_callable=AsyncMock), \
-         patch("app.services.sr_service.SupportResistanceEngine.detect_classical_zones", return_value=[{"avg": 99, "type": "support"}]), \
-         patch.dict('sys.modules', {'research.models.online_learner': MagicMock()}):
+    # A single `with` statement chaining this many parenthesized context
+    # managers makes pytest's assertion-rewrite AST deep enough to segfault
+    # the CPython 3.12 compiler on import/collection. contextlib.ExitStack
+    # produces the same effective nesting at runtime without the crash.
+    with ExitStack() as stack:
+        stack.enter_context(patch("app.services.market_data_service.MarketDataService._normalize_symbol", return_value="TEST"))
+        mock_fetch = stack.enter_context(patch("app.services.prediction_engine._cache_fetch"))
+        mock_db_factory = stack.enter_context(patch("app.database.connection.async_session_factory", new_callable=MagicMock))
+        stack.enter_context(patch("research.feature_engineering.pipeline.FeaturePipeline.run", return_value=sample_df))
+        stack.enter_context(patch("pandas_ta.core.rsi"))
+        stack.enter_context(patch("pandas_ta.core.macd"))
+        stack.enter_context(patch("pandas_ta.core.ema"))
+        stack.enter_context(patch("pandas_ta.core.bbands"))
+        stack.enter_context(patch("pandas_ta.core.atr"))
+        stack.enter_context(patch("pandas_ta.core.vwap"))
+        stack.enter_context(patch("pandas_ta.core.adx"))
+        stack.enter_context(patch("pandas_ta.core.stoch"))
+        stack.enter_context(patch("pandas_ta.core.obv"))
+        stack.enter_context(patch("pandas_ta.core.supertrend"))
+        stack.enter_context(patch("pandas_ta.core.cdl_pattern"))
+        mock_build = stack.enter_context(patch("app.services.prediction_engine.build_ensemble_signal", new_callable=AsyncMock))
+        stack.enter_context(patch("app.services.prediction_engine.forecast_prices", return_value=[]))
+        stack.enter_context(patch("app.services.prediction_engine._cache_store", new_callable=AsyncMock))
+        stack.enter_context(patch("app.services.sr_service.SupportResistanceEngine.detect_classical_zones", return_value=[{"avg": 99, "type": "support"}]))
+        stack.enter_context(patch.dict('sys.modules', {'research.models.online_learner': MagicMock()}))
 
         mock_fetch.return_value = None
         mock_build.return_value = {"model_status": "trained", "regime": {"regime": "BULL"}}

@@ -19,6 +19,7 @@ celery_app = Celery(
     # so none of the @shared_task-decorated functions below are registered
     # and the beat schedule's task names below can never resolve.
     include=[
+        "app.tasks.autotrade_tasks",
         "app.tasks.backtest_tasks",
         "app.tasks.feature_tasks",
         "app.tasks.market_data_tasks",
@@ -48,7 +49,9 @@ celery_app.conf.update(
             "task": "update_regime_states",
             "schedule": 86400.0,  # Every day
         },
-        "evaluate-market-alerts-minutely": { "task": "evaluate_market_alerts", "schedule": 60.0 }, "check-model-drift-daily": {
+        "evaluate-market-alerts-minutely": { "task": "evaluate_market_alerts", "schedule": 60.0 },
+        "autotrade-scan-every-5-minutes": { "task": "run_autotrade_scan", "schedule": 300.0 },
+        "check-model-drift-daily": {
             "task": "check_drift_for_watchlist",
             "schedule": 86400.0,  # Every day — walk-forward PSI/KS drift check, retrains only if drift exceeds threshold
         },
