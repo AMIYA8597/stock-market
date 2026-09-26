@@ -343,8 +343,15 @@ class Settings(BaseSettings):
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
         default=30, description="Password reset token validity window in minutes"
     )
-    RAZORPAY_KEY_ID: str = Field(default="rzp_test_replace_me", description="Razorpay API Key ID")
-    RAZORPAY_KEY_SECRET: str = Field(default="replace_me", description="Razorpay API Key Secret")
+    # Must NOT match the shape of a real Razorpay key id (rzp_live_.../rzp_test_...)
+    # so it can never be mistaken for one, but must still contain "replace_me"
+    # so app/api/v1/payments.py::_is_placeholder() keeps detecting it as unset.
+    RAZORPAY_KEY_ID: str = Field(
+        default="replace_me_razorpay_key_id", description="Razorpay API Key ID"
+    )
+    RAZORPAY_KEY_SECRET: str = Field(
+        default="replace_me_razorpay_key_secret", description="Razorpay API Key Secret"
+    )
 
     # ─── WebSocket ────────────────────────────────────────────────────────
     WEBSOCKET_HEARTBEAT_INTERVAL: int = Field(

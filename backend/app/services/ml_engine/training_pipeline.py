@@ -3,19 +3,21 @@ import logging
 import os
 import uuid
 from datetime import datetime
+
 import numpy as np
 import pandas as pd
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_auc_score
 from sqlalchemy import update
 from sqlalchemy.future import select
-from sklearn.linear_model import LogisticRegression
 
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
 from app.models.market import OHLCV
 from app.models.model_artifact import ModelArtifact
 from app.models.model_metric import ModelMetric
-from app.models.research import ModelRegistry, Experiment
+from app.models.research import Experiment, ModelRegistry
+from app.services.ml_engine.cv import PurgedWalkForwardCV
 from research.feature_engineering.pipeline import FeaturePipeline
 from research.feature_engineering.target import TargetBuilder
 from research.models.baselines.arima import ARIMADirectionalClassifier
@@ -23,7 +25,6 @@ from research.models.baselines.naive import NaiveDirectionalClassifier
 from research.models.lightgbm_model.classifier import LightGBMDirectionalClassifier
 from research.models.lstm_attention.classifier import LSTMAttentionClassifier
 from research.models.xgboost_model.classifier import XGBoostDirectionalClassifier
-from app.services.ml_engine.cv import PurgedWalkForwardCV
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class TrainingPipeline:
                 OHLCV.interval == "1d"
             ).order_by(OHLCV.timestamp)
             records = await session.execute(stmt)
-            
+
             data = []
             for row in records.scalars():
                 data.append({
@@ -81,7 +82,7 @@ class TrainingPipeline:
                     "close": float(row.close) if row.close else np.nan,
                     "volume": float(row.volume) if row.volume else np.nan,
                 })
-                
+
         df = pd.DataFrame(data)
         if not df.empty:
             df.set_index("time", inplace=True, drop=False)
@@ -100,7 +101,7 @@ class TrainingPipeline:
                 self.instrument = res.scalars().first()
                 if not self.instrument:
                     raise ValueError(f"Instrument {self.symbol} not found in DB.")
-            
+
         if df.empty:
             return {}
 
@@ -133,17 +134,17 @@ class TrainingPipeline:
 
         # Build Features
         df = self.feature_pipeline.run(df)
-        
+
         # Build Target
         df = self.target_builder.transform(df)
-        
+
         # We need target_return for metrics, TargetBuilder gives target_direction_1d
         if "target_direction" not in df.columns and "target_direction_1d" in df.columns:
             df["target_direction"] = (df["target_direction_1d"] > 0).astype(int)
-            
+
         if "target_return" not in df.columns:
             df["target_return"] = df["close"].pct_change().shift(-1)
-            
+
         # Add ret_1d for Naive model
         df["ret_1d"] = df["close"].pct_change()
 
@@ -171,7 +172,7 @@ class TrainingPipeline:
                 "open", "high", "low", "volume"
             ]
         ]
-        
+
         X = df[features]
         y = df["target_direction"]
 
@@ -228,7 +229,7 @@ class TrainingPipeline:
                         elif len(probs.shape) > 1:
                             probs = probs.squeeze()
                         probs = pd.Series(probs, index=X_test.index)
-                        
+
                     preds = (probs > 0.5).astype(int)
 
                     all_preds = pd.concat([all_preds, pd.Series(preds, index=X_test.index)])
@@ -302,12 +303,12 @@ class TrainingPipeline:
         final_model = models_to_evaluate.get(best_model_name)
         if final_model:
             final_model.fit(X, y)
-            
+
             artifact_dir = "data/artifacts"
             os.makedirs(artifact_dir, exist_ok=True)
             version_tag = f"{best_model_name.lower()}_{self.symbol}_{uuid.uuid4().hex[:8]}"
             artifact_path = os.path.join(artifact_dir, f"{version_tag}.pkl")
-            
+
             if hasattr(final_model, "save"):
                 final_model.save(artifact_path)
             else:

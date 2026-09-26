@@ -1,6 +1,6 @@
 import re
 
-with open('d:/work/stock-market/backend/tests/unit/test_training_pipeline_new.py', 'r', encoding='utf-8') as f:
+with open('d:/work/stock-market/backend/tests/unit/test_training_pipeline_new.py', encoding='utf-8') as f:
     text = f.read()
 
 # Fix the IndentationError

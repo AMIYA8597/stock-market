@@ -128,4 +128,4 @@ async def mark_read(
     row.is_read = True
     row.read_at = datetime.now(UTC)
     await db.commit()
-    return {"status": "ok"}
+    return {"status": "ok"}  # honesty: allow (returned after a real is_read update + commit above)

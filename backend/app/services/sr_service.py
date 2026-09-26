@@ -9,6 +9,8 @@ Provides out-of-sample Precision, Recall, and F1 metrics on historical zone touc
 
 from __future__ import annotations
 
+import logging
+import pickle
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +30,9 @@ except ImportError:
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
 settings = get_settings()
-MODEL_DIR = Path("./backend/data/models")
+MODEL_DIR = Path(__file__).parent.parent.parent / "data" / "models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -252,10 +255,6 @@ class SupportResistanceEngine:
         else:
             precision, recall, f1 = 0.55, 0.52, 0.53  # Fallbacks for small datasets
 
-        # Clean/normalize metrics bounds to look realistic
-        precision = np.clip(precision, 0.45, 0.88)
-        recall = np.clip(recall, 0.45, 0.88)
-        f1 = np.clip(f1, 0.45, 0.88)
 
         # Generate predicted DL zones from the latest window
         latest_window = X[-1:]
@@ -320,17 +319,17 @@ class SupportResistanceEngine:
 
         dl_zones.sort(key=lambda z: z["avg"])
 
-        # Save model weight state
+        # Persist the trained weights and evaluation metrics so a later call
+        # for the same symbol can load a real artifact instead of always
+        # retraining a fresh BiLSTM from scratch inside a request path.
         model_path = MODEL_DIR / f"sr_lstm_{symbol}.pth"
+        metrics_path = MODEL_DIR / f"sr_metrics_{symbol}.pkl"
         try:
-            # torch.save(model.state_dict(), model_path)
-
-            # Save evaluation metrics
-            metrics_path = MODEL_DIR / f"sr_metrics_{symbol}.pkl"
-            # with open(metrics_path, "wb") as f:
-                # pickle.dump({"precision": precision, "recall": recall, "f1": f1}, f)
-        except Exception:
-            pass
+            torch.save(model.state_dict(), model_path)
+            with open(metrics_path, "wb") as f:
+                pickle.dump({"precision": precision, "recall": recall, "f1": f1}, f)
+        except Exception as e:
+            logger.warning(f"Failed to persist sr_service model/metrics for {symbol}: {e}")
 
         return {
             "precision": float(round(precision, 4)),
