@@ -27,7 +27,7 @@ export default function AlertsManager() {
 
   const fetchAlerts = async () => {
     try {
-      const data = await fetchApi<any>("/alerts");
+      const data = await fetchApi<{ alerts: AlertData[] }>("/alerts");
       setAlerts(data.alerts || []);
     } catch (e) {
       console.error(e);
@@ -47,7 +47,7 @@ export default function AlertsManager() {
         enabled: true
       };
       
-      const data = await fetchApi<any>("/alerts", {
+      const data = await fetchApi<AlertData>("/alerts", {
         method: "POST",
         body: JSON.stringify(payload)
       });
@@ -62,7 +62,7 @@ export default function AlertsManager() {
 
   const deleteAlert = async (id: string) => {
     try {
-      await fetchApi<any>(`/alerts/${id}`, { method: "DELETE" });
+      await fetchApi<unknown>(`/alerts/${id}`, { method: "DELETE" });
       setAlerts(alerts.filter(a => a.id !== id));
     } catch (e) {
       console.error(e);
