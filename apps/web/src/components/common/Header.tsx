@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { Link } from '@/i18n/navigation';
 import { useEffect, useState } from 'react';
 import { Bell, Menu, Search, X } from 'lucide-react';
 import type { AlertEvent } from '@neuroquant/types';
