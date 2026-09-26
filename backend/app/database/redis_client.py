@@ -56,6 +56,18 @@ class InMemoryPubSub:
     async def close(self) -> None:
         self.cache.active_pubsubs.discard(self)
 
+    async def get_message(
+        self, ignore_subscribe_messages: bool = False, timeout: float | None = None
+    ) -> dict[str, Any] | None:
+        """Poll for the next queued message, matching redis-py's pubsub API."""
+        _ = ignore_subscribe_messages
+        try:
+            if timeout is not None:
+                return await asyncio.wait_for(self.queue.get(), timeout=timeout)
+            return await self.queue.get()
+        except TimeoutError:
+            return None
+
     async def listen(self):
         while True:
             try:

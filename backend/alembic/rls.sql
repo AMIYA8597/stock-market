@@ -50,7 +50,21 @@ ALTER TABLE plan_entitlements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE organization_subscriptions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_events ENABLE ROW LEVEL SECURITY;
 
--- Base grants for nq_api
+-- Base grants for nq_api. The role is created here (if missing) rather than
+-- assumed to pre-exist: nothing else in this repo ever creates it, so
+-- running this against any fresh database (including a brand new Supabase
+-- project) failed with `role "nq_api" does not exist` before this existed.
+-- No LOGIN/password is set here -- add those with ALTER ROLE when you
+-- actually want a connection to run as this least-privilege role instead
+-- of the default postgres/pooler user.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'nq_api') THEN
+        CREATE ROLE nq_api;
+    END IF;
+END
+$$;
+
 GRANT USAGE ON SCHEMA public TO nq_api;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nq_api;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nq_api;
