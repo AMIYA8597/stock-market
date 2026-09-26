@@ -1,8 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
 import { AmbientLucideBackground } from "@/components/common/ambient-lucide-background";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 

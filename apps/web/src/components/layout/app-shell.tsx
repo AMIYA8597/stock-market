@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/navigation";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
 import { usePriceFeed } from "@/hooks/usePriceFeed";

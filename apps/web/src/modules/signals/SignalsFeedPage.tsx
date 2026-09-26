@@ -6,7 +6,7 @@ import { Brain, TrendingUp, AlertTriangle } from "lucide-react";
 import { Card, CardHeader, CardTitle, Badge, Button } from "@neuroquant/ui";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
 import { marketApi } from "@/lib/api-client";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { cn } from "@neuroquant/ui";
 
 export function SignalsFeedPage() {

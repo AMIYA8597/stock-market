@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Search, Download, Star, BookmarkPlus } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import {
   Card, CardHeader, CardTitle, Button, Badge, Input, Sparkline,
   cn, formatPrice, formatPercent, formatCompact, getPriceColor, getDirectionArrow,
