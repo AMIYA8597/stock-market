@@ -9,6 +9,16 @@ from logging.config import fileConfig
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 
+# Configure logging (stderr, not stdout) before importing anything that
+# logs at import time -- app.database.connection logs
+# "database_engine_created" the moment it's imported (via app.models
+# below), and without this, structlog falls back to its own un-configured
+# default logger, which writes to stdout. That corrupts any invocation
+# that captures stdout, e.g. `alembic upgrade head --sql > migration.sql`.
+from app.core.logging import setup_logging
+
+setup_logging()
+
 # Import all models so Alembic detects them
 import app.models  # noqa: F401
 from alembic import context
