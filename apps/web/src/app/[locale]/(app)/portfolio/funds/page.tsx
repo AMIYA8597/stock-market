@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { paymentsApi } from "@/lib/api-client";
+import { paperTradingApi } from "@/lib/api-client";
 import { CheckoutPage, TransactionsPage } from "@/modules/payments/PaymentPages";
 import { AuthGuard } from "@/components/auth/AuthGuard";
 
@@ -18,9 +18,9 @@ function formatMoney(value: number | string): string {
 }
 
 export default function PortfolioFundsPage(): JSX.Element {
-  const { data: balance } = useQuery({
-    queryKey: ["payments", "balance"],
-    queryFn: () => paymentsApi.balance(),
+  const { data: pnl } = useQuery({
+    queryKey: ["paper-trade", "pnl"],
+    queryFn: () => paperTradingApi.getPnl() as Promise<{ cash_balance: number }>,
   });
 
   return (
@@ -29,7 +29,7 @@ export default function PortfolioFundsPage(): JSX.Element {
       <div className="mb-6 flex items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Funds & Wallet</h1>
-          <p className="text-xs text-[var(--nq-text-secondary)]">Add funds securely before placing trades via Razorpay.</p>
+          <p className="text-xs text-[var(--nq-text-secondary)]">Your virtual paper-trading wallet. No real money is involved.</p>
         </div>
         <Link
           href="/portfolio"
@@ -43,9 +43,9 @@ export default function PortfolioFundsPage(): JSX.Element {
         <article className="rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4 flex flex-col justify-center text-center">
           <h2 className="mb-3 text-sm font-medium text-[var(--nq-text-secondary)]">Available Margin / Cash Balance</h2>
           <p className="text-4xl font-semibold text-[var(--nq-text-primary)] tracking-tight">
-            {balance?.wallet_balance ? formatMoney(balance.wallet_balance) : "INR 0.00"}
+            {pnl?.cash_balance != null ? formatMoney(pnl.cash_balance) : "Unavailable"}
           </p>
-          <p className="mt-2 text-xs text-[var(--nq-text-secondary)]">Cash available for placing new orders.</p>
+          <p className="mt-2 text-xs text-[var(--nq-text-secondary)]">Cash available for placing new paper orders.</p>
         </article>
 
         <div className="flex items-center justify-center">
