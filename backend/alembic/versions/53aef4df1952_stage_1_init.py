@@ -124,6 +124,8 @@ def upgrade() -> None:
     sa.Column('id', sa.UUID(), nullable=False),
     sa.Column('name', sa.String(length=255), nullable=False),
     sa.Column('description', sa.String(length=1024), nullable=True),
+    sa.Column('price_inr', sa.Numeric(12, 2), nullable=False),
+    sa.Column('billing_period', sa.String(length=20), nullable=False),
     sa.Column('is_active', sa.Boolean(), nullable=False),
     sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
@@ -546,6 +548,13 @@ def downgrade() -> None:
     op.drop_table('paper_orders')
     op.drop_table('paper_accounts')
     op.drop_table('organization_subscriptions')
+    # rls.sql's `org_member` policy lives on organizations but references
+    # org_members in its USING clause, which Postgres tracks as a
+    # dependency of that policy on this table -- dropping org_members
+    # first fails with "cannot drop table org_members because other
+    # objects depend on it" until that policy is gone. organizations
+    # itself isn't dropped until later, so drop just the policy here.
+    op.execute("DROP POLICY IF EXISTS org_member ON organizations;")
     op.drop_index(op.f('ix_org_members_user_id'), table_name='org_members')
     op.drop_index(op.f('ix_org_members_organization_id'), table_name='org_members')
     op.drop_table('org_members')
