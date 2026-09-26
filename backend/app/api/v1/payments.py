@@ -119,14 +119,25 @@ async def razorpay_webhook(
     signature = request.headers.get("x-razorpay-signature", "")
 
     secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "REPLACE_ME")
-    is_test_mode = getattr(settings, "ENVIRONMENT", "production") != "production" or _is_placeholder(secret)
+    is_production = getattr(settings, "ENVIRONMENT", "production") == "production"
+
+    if is_production and _is_placeholder(secret):
+        # A missing webhook secret in production must never be treated as
+        # "test mode": that would let anyone POST a fake
+        # subscription.activated event and get free access. Refuse instead
+        # of silently bypassing signature verification.
+        logger.critical(
+            "Razorpay webhook received in production with no RAZORPAY_WEBHOOK_SECRET configured; rejecting."
+        )
+        raise HTTPException(status_code=503, detail="Payment webhook is not configured")
 
     is_verified = False
     if not _is_placeholder(secret):
         expected_sig = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
         is_verified = hmac.compare_digest(expected_sig, signature)
-    elif is_test_mode:
-        # In test mode with placeholder secret, bypass verification
+    elif not is_production:
+        # Only a non-production environment with no secret configured may
+        # bypass verification, and only there.
         is_verified = True
 
     try:

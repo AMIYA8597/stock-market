@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
 from app.core.entitlements import require_feature
+from app.core.numeric import safe_round
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
     HoldingData,
@@ -565,14 +566,6 @@ async def post_optimize(
                     message="universe must contain at least 2 symbols.",
                 ).dict(),
             )
-
-        # Helper to round float values safely, handling NaNs and Inf
-        def safe_round(val: float, places: int) -> float:
-            import math
-
-            if val is None or math.isnan(val) or math.isinf(val):
-                return 0.0
-            return round(float(val), places)
 
         # 1. Resolve tickers to symbol IDs
         stmt = select(Instrument).where(Instrument.canonical_symbol.in_(universe))
