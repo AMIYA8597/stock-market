@@ -12,10 +12,9 @@ import {
   CardTitle,
   CardDescription,
 } from "@neuroquant/ui";
-import { Input } from "@neuroquant/ui";
 import { DataTable, type Column } from "@neuroquant/ui";
 import { useToastStore } from "@/stores/toast-store";
-import { paymentsApi } from "@/lib/api-client";
+import { paymentsApi, paperTradingApi } from "@/lib/api-client";
 
 // Pricing is now fully dynamic and fetched from the backend. 
 interface PlanItem {
@@ -26,12 +25,16 @@ interface PlanItem {
   features: string[];
 }
 
-interface TxItem {
+interface OrderHistoryItem {
   id: string;
-  date: string;
-  amount: string;
-  method: string;
-  status: "Success" | "Pending" | "Failed";
+  symbol: string;
+  side: string;
+  quantity: number;
+  price: number;
+  order_type: string;
+  status: string;
+  net_amount: number;
+  timestamp: string;
 }
 
 export function PricingPage(): JSX.Element {
@@ -51,31 +54,58 @@ export function PricingPage(): JSX.Element {
     try {
       setLoadingPlan(plan.id);
       await loadRazorpayScript();
-      
-      const res = await paymentsApi.subscribe(plan.id);
-      
-      
-      
+
+      const intent = await paymentsApi.createIntent({ plan_id: plan.id });
+
+      if (intent.is_test_mode) {
+        // Test-mode intents have no real Razorpay order to check out against;
+        // the backend only requires a matching signature when running against
+        // real Razorpay credentials, so there is nothing safe to simulate
+        // here without a real checkout. Surface this honestly instead of
+        // faking a successful payment.
+        await paymentsApi.confirmIntent(intent.intent_id, `test_${intent.intent_id}`);
+        pushToast({
+          tone: "success",
+          title: "Subscription Active (Test Mode)",
+          message: `Subscribed to ${plan.name} in test mode. No real payment was processed.`,
+        });
+        setLoadingPlan(null);
+        return;
+      }
+
       const options = {
-        key: res.razorpay_key_id,
-        subscription_id: res.subscription_id,
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        order_id: intent.provider_order_id,
         name: "NeuroQuant",
         description: `Subscription to ${plan.name}`,
-        handler: function (response: any) {
-           pushToast({
-             tone: "success",
-             title: "Subscription Active",
-             message: "Your subscription has been activated!"
-           });
+        handler: async function (response: any) {
+          try {
+            await paymentsApi.confirmIntent(
+              intent.intent_id,
+              response.razorpay_payment_id,
+              response.razorpay_signature
+            );
+            pushToast({
+              tone: "success",
+              title: "Subscription Active",
+              message: "Your payment was verified and your subscription has been activated!",
+            });
+          } catch (err: any) {
+            pushToast({
+              tone: "error",
+              title: "Payment verification failed",
+              message: err?.message || "We could not verify your payment. Please contact support before retrying.",
+            });
+          }
         },
         theme: {
           color: "#3b82f6" // matches primary-500
         }
       };
-      
+
       const rzp = new (window as any).Razorpay(options);
       rzp.open();
-      
+
     } catch (err: any) {
       pushToast({
         tone: "error",
@@ -152,7 +182,7 @@ export function SubscriptionDashboard(): JSX.Element {
 
   useEffect(() => {
     paymentsApi.getSubscription().then((res) => {
-      setSub(res.subscription);
+      setSub(res);
     }).finally(() => {
       setLoading(false);
     });
@@ -168,7 +198,7 @@ export function SubscriptionDashboard(): JSX.Element {
       pushToast({ tone: "success", title: "Subscription Cancelled", message: "Your subscription will not renew." });
       // reload
       const res = await paymentsApi.getSubscription();
-      setSub(res.subscription);
+      setSub(res);
     } catch (err: any) {
       pushToast({ tone: "error", title: "Error", message: err?.message || "Failed to cancel." });
     } finally {
@@ -204,29 +234,26 @@ export function SubscriptionDashboard(): JSX.Element {
       <CardContent className="space-y-4">
         <div>
            <p className="text-sm text-[var(--ds-text-secondary)]">Current Plan</p>
-           <p className="font-medium text-lg">{sub.plan.name}</p>
+           <p className="font-medium text-lg">{sub.plan_name}</p>
         </div>
         <div>
            <p className="text-sm text-[var(--ds-text-secondary)]">Status</p>
-           <Badge variant={sub.status === "active" ? "buy" : "neutral"}>{sub.status}</Badge>
+           <Badge variant={sub.status === "active" && !sub.cancel_at_period_end ? "buy" : "neutral"}>
+             {sub.cancel_at_period_end ? "Ending" : sub.status}
+           </Badge>
         </div>
-        {sub.status === "active" && (
+        {sub.status === "active" && !sub.cancel_at_period_end && sub.current_period_end && (
            <div className="bg-[var(--ds-color-primary-500)]/10 p-3 rounded-md text-sm border border-[var(--ds-color-primary-500)]/20">
              <span className="font-medium text-[var(--ds-color-primary-500)]">Active until:</span> {new Date(sub.current_period_end).toLocaleDateString()}
            </div>
         )}
-        {sub.status === "trialing" && (
-           <div className="bg-[var(--nq-accent-cyan)]/10 p-3 rounded-md text-sm border border-[var(--nq-accent-cyan)]/20">
-             <span className="font-medium text-[var(--nq-accent-cyan)]">Trial Active:</span> Your trial ends on {new Date(sub.current_period_end).toLocaleDateString()}.
-           </div>
-        )}
-        {sub.status === "pending_cancellation" && (
+        {sub.cancel_at_period_end && sub.current_period_end && (
            <div className="bg-[var(--ds-color-warning-500)]/10 p-3 rounded-md text-sm border border-[var(--ds-color-warning-500)]/20">
              <span className="font-medium text-[var(--ds-color-warning-500)]">Cancellation Pending:</span> Your subscription will end on {new Date(sub.current_period_end).toLocaleDateString()}.
            </div>
         )}
-        
-        {(sub.status === "active" || sub.status === "trialing") && (
+
+        {sub.status === "active" && !sub.cancel_at_period_end && (
           <div className="pt-4 border-t border-[var(--ds-border-subtle)]">
             <Button variant="outline" className="w-full text-[var(--ds-color-danger-500)] hover:bg-[var(--ds-color-danger-500)]/10 hover:text-[var(--ds-color-danger-500)]" isLoading={cancelling} onClick={handleCancel}>
               Cancel Subscription
@@ -244,40 +271,23 @@ export function SubscriptionDashboard(): JSX.Element {
 export function CheckoutPage(): JSX.Element {
   const pushToast = useToastStore((state) => state.pushToast);
   const [loading, setLoading] = useState(false);
-  const [amount, setAmount] = useState<string>("499");
-  const [step, setStep] = useState<"input" | "processing" | "success">("input");
+  const [confirming, setConfirming] = useState(false);
 
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleReset = async () => {
     try {
       setLoading(true);
-      setStep("processing");
-
-      // 1. Create intent
-      const intent = await paymentsApi.createIntent({
-        amount: parseFloat(amount),
-        method: "RAZORPAY",
-        currency: "INR",
-        description: "Wallet Top-up",
-      });
-
-      
-      // 3. Confirm intent
-      await paymentsApi.confirmIntent(intent.intent_id, `paper_txn_${Date.now().toString(36)}`);
-      
-      setStep("success");
+      await paperTradingApi.resetWallet();
+      setConfirming(false);
       pushToast({
         tone: "success",
-        title: "Payment Successful",
-        message: `Added ₹${amount} to your wallet.`,
+        title: "Wallet reset",
+        message: "Your paper-trading wallet has been restored to ₹1,00,000.",
       });
-      
     } catch (err: any) {
-      setStep("input");
       pushToast({
         tone: "error",
-        title: "Payment failed",
-        message: err?.message || "Please retry the checkout.",
+        title: "Reset failed",
+        message: err?.message || "Please try again.",
       });
     } finally {
       setLoading(false);
@@ -287,52 +297,38 @@ export function CheckoutPage(): JSX.Element {
   return (
     <Card className="mx-auto max-w-xl bg-[var(--ds-surface-1)]/90">
       <CardHeader>
-        <CardTitle>Top Up Wallet</CardTitle>
+        <CardTitle>Reset Paper Wallet</CardTitle>
         <CardDescription>
-          Add funds to your paper-trading wallet.
+          This is a virtual paper-trading wallet. No real money is ever involved.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {step === "input" && (
-          <form className="space-y-3" onSubmit={handleCheckout}>
-            <div>
-              <label className="mb-1 block text-xs text-[var(--ds-text-secondary)]">
-                Amount (INR)
-              </label>
-              <Input required type="number" min="100" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </div>
-            
-            <Button className="w-full" isLoading={loading} type="submit">
-              <CreditCard className="mr-1 h-4 w-4" /> Add Paper Funds
+        {!confirming ? (
+          <>
+            <p className="text-sm text-[var(--ds-text-secondary)]">
+              Resetting restores your cash balance to ₹1,00,000 and permanently clears all
+              open positions and order history.
+            </p>
+            <Button className="mt-3 w-full" variant="outline" onClick={() => setConfirming(true)}>
+              <CreditCard className="mr-1 h-4 w-4" /> Reset Wallet
             </Button>
             <p className="flex items-center justify-center gap-1 mt-3 text-xs text-[var(--ds-text-muted)]">
-              <ShieldCheck className="h-3.5 w-3.5" /> PAPER TRADING: No real money will be charged
+              <ShieldCheck className="h-3.5 w-3.5" /> PAPER TRADING: No real money is charged or credited
             </p>
-          </form>
-        )}
-        
-        {step === "processing" && (
-          <div className="flex flex-col items-center justify-center py-8 space-y-4">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-[var(--ds-border-subtle)] border-t-[var(--ds-color-primary-500)]"></div>
-            <p className="text-sm font-medium text-[var(--ds-text-secondary)]">Processing Payment...</p>
-          </div>
-        )}
-
-        {step === "success" && (
-          <div className="flex flex-col items-center justify-center py-6 space-y-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--ds-color-success-500)]/20 text-[var(--ds-color-success-500)]">
-              <Check className="h-6 w-6" />
+          </>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-[var(--ds-color-warning-500)]">
+              This will delete all open positions and order history and cannot be undone. Continue?
+            </p>
+            <div className="flex gap-2">
+              <Button className="flex-1" variant="destructive" isLoading={loading} onClick={handleReset}>
+                Confirm Reset
+              </Button>
+              <Button className="flex-1" variant="outline" onClick={() => setConfirming(false)} disabled={loading}>
+                Cancel
+              </Button>
             </div>
-            <div className="text-center">
-              <h3 className="text-lg font-medium">Payment Successful</h3>
-              <p className="text-sm text-[var(--ds-text-secondary)]">₹{amount} has been added to your wallet.</p>
-            </div>
-            <Button className="w-full mt-4" variant="outline" onClick={() => {
-              setStep("input");
-              setAmount("499");
-            }}>
-              Make Another Payment
-            </Button>
           </div>
         )}
       </CardContent>
@@ -341,22 +337,14 @@ export function CheckoutPage(): JSX.Element {
 }
 
 export function TransactionsPage(): JSX.Element {
-  const [rows, setRows] = useState<TxItem[]>([]);
+  const [rows, setRows] = useState<OrderHistoryItem[]>([]);
 
   useEffect(() => {
     let mounted = true;
-    paymentsApi.history(20)
-      .then((response: any) => {
+    paperTradingApi.getHistory()
+      .then((items: any) => {
         if (!mounted) return;
-        setRows(
-          (response.items || []).map((item: any) => ({
-            id: item.id.toString().slice(0, 8),
-            date: item.created_at.slice(0, 10),
-            amount: item.amount.toString(),
-            method: item.type === "credit" ? "Credit" : "Debit",
-            status: "Success",
-          }))
-        );
+        setRows(Array.isArray(items) ? items : []);
       })
       .catch(() => {
         if (!mounted) return;
@@ -366,24 +354,18 @@ export function TransactionsPage(): JSX.Element {
     };
   }, []);
 
-  const columns: Column<TxItem>[] = [
-    { key: "id", label: "Ref" },
-    { key: "date", label: "Date" },
-    { key: "amount", label: "Amount", align: "right" },
-    { key: "method", label: "Type" },
+  const columns: Column<OrderHistoryItem>[] = [
+    { key: "id", label: "Order ID", render: (_, row) => row.id.slice(0, 8) },
+    { key: "timestamp", label: "Date", render: (_, row) => row.timestamp.slice(0, 10) },
+    { key: "symbol", label: "Symbol" },
+    { key: "side", label: "Side" },
+    { key: "quantity", label: "Qty", align: "right" },
+    { key: "net_amount", label: "Net Amount (₹)", align: "right", render: (_, row) => row.net_amount.toFixed(2) },
     {
       key: "status",
       label: "Status",
       render: (_, row) => (
-        <Badge
-          variant={
-            row.status === "Success"
-              ? "buy"
-              : row.status === "Pending"
-                ? "neutral"
-                : "sell"
-          }
-        >
+        <Badge variant={row.status === "FILLED" ? "buy" : row.status === "PENDING" ? "neutral" : "sell"}>
           {row.status}
         </Badge>
       ),
@@ -393,9 +375,9 @@ export function TransactionsPage(): JSX.Element {
   return (
     <Card className="bg-[var(--ds-surface-1)]/90">
       <CardHeader>
-        <CardTitle>Wallet Ledger</CardTitle>
+        <CardTitle>Order History</CardTitle>
         <CardDescription>
-          Track payment credits and subscription debits.
+          Your paper-trading order log.
         </CardDescription>
       </CardHeader>
       <CardContent>

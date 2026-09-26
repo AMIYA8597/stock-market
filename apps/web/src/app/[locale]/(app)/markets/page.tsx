@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type MarketIndex, type MarketMover } from "@/lib/contracts-api";
 import { usePriceFeed } from "@/hooks/usePriceFeed";

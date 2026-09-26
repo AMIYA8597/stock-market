@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { ArrowRight, BarChart3, BrainCircuit, Menu, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";

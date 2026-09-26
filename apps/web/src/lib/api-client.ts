@@ -136,13 +136,7 @@ export const paymentsApi = {
   getPlans(): Promise<{ items: Array<{ id: string; name: string; description: string; price_inr: string; features: string[] }> }> {
     return fetchApi("/payments/plans");
   },
-  methods(): Promise<{ methods: Array<{ code: string; min_amount: string; max_amount: string; enabled: boolean }> }> {
-    return fetchApi("/payments/methods");
-  },
-  balance(): Promise<{ currency: string; wallet_balance: string }> {
-    return fetchApi("/payments/balance");
-  },
-  async createIntent(data: { amount: number; method: "UPI" | "CARD" | "NETBANKING" | "RAZORPAY"; currency?: string; description?: string }): Promise<{ intent_id: string; provider_ref: string; amount: string; status: string }> {
+  async createIntent(data: { plan_id: string }): Promise<{ intent_id: string; provider_order_id: string; status: string; is_test_mode: boolean }> {
     const idem = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `idem-${Date.now()}`;
     return fetchApi("/payments/intents", {
       method: "POST",
@@ -150,25 +144,16 @@ export const paymentsApi = {
       body: JSON.stringify(data),
     });
   },
-  confirmIntent(intent_id: string, razorpay_payment_id: string): Promise<{ intent_id: string; status: string; credited_amount: string; completed_at: string | null }> {
+  confirmIntent(intent_id: string, razorpay_payment_id: string, razorpay_signature?: string): Promise<{ intent_id: string; status: string; completed_at: string | null }> {
     return fetchApi("/payments/confirm", {
       method: "POST",
-      body: JSON.stringify({ intent_id, razorpay_payment_id }),
+      body: JSON.stringify({ intent_id, razorpay_payment_id, razorpay_signature }),
     });
   },
-  history(limit = 20): Promise<{ items: Array<{ id: string; amount: string; type: string; description: string; created_at: string }>; total: number }> {
-    return fetchApi(`/payments/history?limit=${limit}`);
-  },
-  getSubscription(): Promise<{ subscription: { id: string; status: string; current_period_end: string; plan: { name: string; features: string[] } } | null }> {
+  getSubscription(): Promise<{ id: string; status: string; plan_name: string; current_period_end: string | null; cancel_at_period_end: boolean } | null> {
     return fetchApi("/payments/subscription");
   },
-  subscribe(plan_id: string): Promise<{ status: string; subscription_id: string; razorpay_key_id: string }> {
-    return fetchApi("/payments/subscribe", {
-      method: "POST",
-      body: JSON.stringify({ plan_id }),
-    });
-  },
-  cancelSubscription(): Promise<{ status: string }> {
+  cancelSubscription(): Promise<{ status: string; current_period_end: string | null }> {
     return fetchApi("/payments/cancel-subscription", {
       method: "POST"
     });
