@@ -58,7 +58,7 @@ export async function middleware(request: NextRequest) {
   if (!session && !isPublicPath && !pathname.startsWith('/api') && !pathname.startsWith('/_next') && !pathname.match(/\.(.*)$/)) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/login`;
-    url.searchParams.set('next', pathname);
+    url.searchParams.set('next', pathWithoutLocale);
     return NextResponse.redirect(url);
   }
 
