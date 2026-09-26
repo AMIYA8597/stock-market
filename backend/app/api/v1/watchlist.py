@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
 from app.models.identity import User
-from app.models.identity import User as UserWatchlist
+from app.models.watchlist import UserWatchlist
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
