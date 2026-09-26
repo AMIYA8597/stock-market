@@ -1,5 +1,4 @@
 import asyncio
-import importlib
 import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, PropertyMock, patch
@@ -8,12 +7,20 @@ from uuid import uuid4
 import pandas as pd
 import pytest
 
-# Reload the module to bypass conftest.py global mocks
 import app.services.market_data_service as mds_module
-
-importlib.reload(mds_module)
-
 from app.services.market_data_service import MarketDataService, TokenBucket, safe_float
+
+# conftest.py overrides these 4 methods globally at collection time and
+# saves the real implementations as _original_*. Restore them here directly
+# rather than importlib.reload()-ing this module: re-executing its
+# top-level code a second time (after the rest of the suite's
+# native-extension state is already initialized) segfaults the interpreter.
+MarketDataService.get_quote = mds_module.MarketDataService._original_get_quote
+MarketDataService.get_history = mds_module.MarketDataService._original_get_history
+MarketDataService.get_ticker_history_df = (
+    mds_module.MarketDataService._original_get_ticker_history_df
+)
+MarketDataService.get_ticker_info = mds_module.MarketDataService._original_get_ticker_info
 
 
 @pytest.fixture

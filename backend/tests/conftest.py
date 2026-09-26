@@ -148,6 +148,13 @@ async def mock_get_full_prediction(symbol: str) -> dict:
 
 import app.services.prediction_engine as prediction_engine_module
 
+# Save the real implementation before overriding it, so test modules that
+# need the unmocked version can restore it directly. Re-importing/reloading
+# this module a second time to "undo" the override is not safe: its
+# statsmodels-backed top-level code segfaults the interpreter when
+# re-executed after the rest of the suite's native-extension state
+# (scipy/sklearn/statsmodels) is already initialized.
+prediction_engine_module._original_get_full_prediction = prediction_engine_module.get_full_prediction
 prediction_engine_module.get_full_prediction = mock_get_full_prediction
 
 
@@ -240,6 +247,22 @@ def mock_get_mongo_db() -> any:
 
 
 import app.services.market_data_service as market_data_service_module
+
+# Save the real methods before overriding them (see the note above
+# prediction_engine_module's override for why test modules must restore
+# these directly rather than reload()-ing this module).
+market_data_service_module.MarketDataService._original_get_quote = (
+    market_data_service_module.MarketDataService.get_quote
+)
+market_data_service_module.MarketDataService._original_get_history = (
+    market_data_service_module.MarketDataService.get_history
+)
+market_data_service_module.MarketDataService._original_get_ticker_history_df = (
+    market_data_service_module.MarketDataService.get_ticker_history_df
+)
+market_data_service_module.MarketDataService._original_get_ticker_info = (
+    market_data_service_module.MarketDataService.get_ticker_info
+)
 
 market_data_service_module.MarketDataService.get_quote = mock_get_quote
 market_data_service_module.MarketDataService.get_history = mock_get_history
