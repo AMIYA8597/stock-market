@@ -855,7 +855,7 @@ async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict
                 low = float(pred_ci[step_idx, 0]) if step_idx < len(pred_ci) else predicted * 0.97
                 high = float(pred_ci[step_idx, 1]) if step_idx < len(pred_ci) else predicted * 1.03
                 results[h] = {
-                    "status": "ok",
+                    "status": "ok",  # honesty: allow (reached only after a real history fetch + fit above)
                     "horizon": h,
                     "current_price": round(current_price, 2),
                     "predicted_price": round(predicted, 2),

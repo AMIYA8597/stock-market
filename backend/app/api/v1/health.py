@@ -25,9 +25,10 @@ async def health_check():
 @router.get("/health/live-data")
 async def health_live_data():
     """Returns cached provider status without synchronous network probing."""
-    from app.database.redis_client import get_redis_client
     import json
-    
+
+    from app.database.redis_client import get_redis_client
+
     status = {"yfinance": "unknown", "nse": "unknown", "coingecko": "unknown", "fred": "unknown"}
     try:
         redis = await get_redis_client()
@@ -36,7 +37,7 @@ async def health_live_data():
             status.update(json.loads(cached))
     except Exception as e:
         logger.warning(f"Could not read provider health from cache: {e}")
-        
+
     return status
 
 

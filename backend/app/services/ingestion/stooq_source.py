@@ -144,6 +144,6 @@ class StooqProvider(MarketDataProvider):
     async def health(self) -> dict:
         try:
             await self.get_quote("^NSEI")
-            return {"status": "ok", "provider": self.name}
+            return {"status": "ok", "provider": self.name}  # honesty: allow (only reached after a real successful probe above)
         except Exception as e:
             return {"status": "down", "provider": self.name, "error": str(e)}

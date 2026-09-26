@@ -1,4 +1,3 @@
-from sqlalchemy import Float
 
 content = """
 
@@ -129,8 +128,7 @@ class LLMEvaluation(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 """
 
-import re
-with open('d:/work/stock-market/backend/app/models/research.py', 'r', encoding='utf-8') as f:
+with open('d:/work/stock-market/backend/app/models/research.py', encoding='utf-8') as f:
     text = f.read()
 
 # Add Float to imports

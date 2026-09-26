@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class PurgedWalkForwardCV:
     def __init__(self, n_splits=5, train_size=252, test_size=63, purge=1, embargo=2):
         self.n_splits = n_splits
@@ -19,5 +20,5 @@ class PurgedWalkForwardCV:
 
             if train_start < 0:
                 break
-                
+
             yield indices[train_start:train_end], indices[test_start:test_end]

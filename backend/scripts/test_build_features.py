@@ -3,8 +3,8 @@ import asyncio
 from sqlalchemy import func, select
 
 from app.database.connection import async_session_factory
-from app.models.research import Dataset as FeatureVector
 from app.models.instrument import Instrument
+from app.models.research import Dataset as FeatureVector
 from app.tasks.feature_tasks import _build_feature_vectors_async
 
 

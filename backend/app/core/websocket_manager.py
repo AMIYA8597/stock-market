@@ -81,7 +81,7 @@ class ConnectionManager:
                 try:
                     await pubsub.unsubscribe("ws_broadcasts")
                     await pubsub.close()
-                except:
+                except Exception:
                     pass
         except Exception as e:
             logger.debug(f"Redis listener outer error: {e}")

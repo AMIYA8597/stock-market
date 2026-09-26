@@ -187,7 +187,7 @@ class MarketDataService:
         except Exception:
             ok = False
 
-        result = {"status": "ok" if ok else "unhealthy"}
+        result = {"status": "ok" if ok else "unhealthy"}  # honesty: allow (conditional on a real probe above)
         cls._health_cache = result
         cls._health_cache_at = now
         return result
@@ -208,24 +208,16 @@ class MarketDataService:
             "NIFTY50": "^NSEI",
             "NIFTY 50": "^NSEI",
             "NIFTY_50": "^NSEI",
-            "NIFTY50": "^NSEI",
-            "NIFTY_50": "^NSEI",
-            "NIFTY 50": "^NSEI",
             "BANKNIFTY": "^NSEBANK",
             "BANK NIFTY": "^NSEBANK",
             "BANK_NIFTY": "^NSEBANK",
-            "BANKNIFTY": "^NSEBANK",
-            "BANK_NIFTY": "^NSEBANK",
-            "BANK NIFTY": "^NSEBANK",
             "NSEBANK": "^NSEBANK",
-            "NSEBANK": "^NSEBANK",
-            "SENSEX": "^BSESN",
             "SENSEX": "^BSESN",
         }
         if s in mappings:
             return mappings[s]
 
-        # Bypass common US stock tickers to prevent appending 
+        # Bypass common US stock tickers to prevent appending
         us_tickers = {
             "AAPL",
             "MSFT",
@@ -272,18 +264,19 @@ class MarketDataService:
     @staticmethod
     async def get_quote(symbol: str) -> dict:
         """Fetch live quote from canonical PostgreSQL database instead of yfinance."""
+        from sqlalchemy import select
+
         from app.database.connection import async_session_factory
         from app.models.market import Instrument, QuoteSnapshot
-        from sqlalchemy import select
-        
+
         sym = MarketDataService._normalize_symbol(symbol)
-        
+
         async with async_session_factory() as db:
             result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
             instrument = result.scalars().first()
             if not instrument:
                 raise ValueError(sym)
-                
+
             result = await db.execute(
                 select(QuoteSnapshot)
                 .where(QuoteSnapshot.instrument_id == instrument.id)
@@ -293,7 +286,7 @@ class MarketDataService:
             quote = result.scalars().first()
             if not quote:
                 raise ValueError(sym)
-                
+
             return {
                 "symbol": sym,
                 "price": float(quote.price or 0.0),
@@ -314,30 +307,32 @@ class MarketDataService:
     @staticmethod
     async def get_history(symbol: str, interval: str, period: str) -> list[dict]:
         """Fetch historical bars from the canonical PostgreSQL database."""
-        from app.database.connection import async_session_factory
-        from app.models.market import Instrument, OHLCV
+        from datetime import UTC, datetime, timedelta
+
         from sqlalchemy import select
-        from datetime import datetime, timedelta, UTC
-        
+
+        from app.database.connection import async_session_factory
+        from app.models.market import OHLCV, Instrument
+
         sym = MarketDataService._normalize_symbol(symbol)
-        
+
         period_days = {"1m": 1, "5m": 5, "15m": 5, "1h": 30, "1d": 30, "5d": 150, "1wk": 180, "1w": 180, "1mo": 730, "3mo": 1825, "6mo": 3650, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
-        
+
         # Approximate mappings of period string to timedelta days if it ends with d, mo, y
         days = period_days.get(period, 30)
         if period.endswith('d') and period[:-1].isdigit():
             days = int(period[:-1])
         elif period.endswith('y') and period[:-1].isdigit():
             days = int(period[:-1]) * 365
-            
+
         start_time = datetime.now(UTC) - timedelta(days=days)
-        
+
         async with async_session_factory() as db:
             result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
             instrument = result.scalars().first()
             if not instrument:
                 return HistoryList([], source="canonical_db")
-                
+
             result = await db.execute(
                 select(OHLCV)
                 .where(
@@ -348,7 +343,7 @@ class MarketDataService:
                 .order_by(OHLCV.timestamp.asc())
             )
             bars_data = result.scalars().all()
-            
+
             bars = []
             for b in bars_data:
                 bars.append({
@@ -359,7 +354,7 @@ class MarketDataService:
                     "close": float(b.close),
                     "volume": float(b.volume)
                 })
-                
+
             res_list = HistoryList(bars, source="canonical_db")
             return res_list
 

@@ -5,11 +5,13 @@ import pandas as pd
 def calculate_ez_algo(df: pd.DataFrame,
                       ema1_len: int = 9,
                       ema2_len: int = 55,
-                      custom_emas: list = [5, 8, 34, 55, 89, 144, 200]) -> pd.DataFrame:
+                      custom_emas: list | None = None) -> pd.DataFrame:
     """
     Calculates the EZ Algo EMA Suite indicators based on the provided Pine Script.
     Expects a DataFrame with a 'close' column.
     """
+    if custom_emas is None:
+        custom_emas = [5, 8, 34, 55, 89, 144, 200]
     df = df.copy()
 
     # Calculate main EMAs
@@ -124,11 +126,13 @@ def apply_trend_filters(df):
 
     return df
 
-def generate_filtered_signals(df, active_filters=[]):
+def generate_filtered_signals(df, active_filters=None):
     """
     Evaluates original EZ Algo signals (breakout/breakdown) against the selected trend filters.
     active_filters can contain: 'adx', 'atr', 'bollinger', 'volume', 'supertrend'
     """
+    if active_filters is None:
+        active_filters = []
     if 'breakout' not in df.columns:
         df = calculate_ez_algo(df)
 
@@ -166,11 +170,13 @@ def generate_filtered_signals(df, active_filters=[]):
 
     return df
 
-def extract_trading_signals(df, active_filters=[], atr_mult=1.5, rr_ratio=5.0):
+def extract_trading_signals(df, active_filters=None, atr_mult=1.5, rr_ratio=5.0):
     """
     Extracts explicit trading position setups (like TradingView Long/Short Position tools)
     from the filtered signals. Returns explicit Entry, SL, and TP for the signals.
     """
+    if active_filters is None:
+        active_filters = []
     if 'filtered_breakout' not in df.columns:
         # Assuming generate_filtered_signals is defined in the same module
         df = generate_filtered_signals(df, active_filters)
@@ -178,7 +184,7 @@ def extract_trading_signals(df, active_filters=[], atr_mult=1.5, rr_ratio=5.0):
     signals = []
 
     # We only care about rows where a signal triggered
-    signal_rows = df[(df['filtered_breakout'] == True) | (df['filtered_breakdown'] == True)]
+    signal_rows = df[df['filtered_breakout'] | df['filtered_breakdown']]
 
     for idx, row in signal_rows.iterrows():
         entry_price = row['close']
