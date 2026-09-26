@@ -9,7 +9,7 @@ regime_states,model_artifact,model_metric,prediction}.py for the real
 model definitions this migration creates tables for.
 
 Revision ID: f3b91af9217c
-Revises: a5328e632291
+Revises: 53aef4df1952
 Create Date: 2026-09-25 00:00:00.000000
 
 """
@@ -21,7 +21,12 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'f3b91af9217c'
-down_revision: Union[str, None] = 'a5328e632291'
+# Was 'a5328e632291' -- that revision's migration file no longer exists in
+# the repo (deleted without updating this reference), which broke the
+# chain with `KeyError: 'a5328e632291'` on any `alembic upgrade`/`history`.
+# '53aef4df1952' (stage_1_init) is the only other migration that exists, so
+# it's the real parent.
+down_revision: Union[str, None] = '53aef4df1952'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
