@@ -11,8 +11,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
-from app.models.identity import User as Notification
 from app.models.identity import User
+from app.models.notification import Notification
 from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])

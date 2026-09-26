@@ -1,18 +1,21 @@
 # backend/app/api/v1/market.py
 from __future__ import annotations
+
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_rate_limiter
 from app.database.connection import get_db
-from app.schemas.errors import ErrorCode, ErrorResponse
+from app.models.market import OHLCV, Exchange, Instrument, InstrumentAlias, QuoteSnapshot
+from app.models.regime_states import RegimeState
+from app.models.signal import EnsembleSignal
 from app.schemas.market import (
     EconomicCalendarResponse,
-    EconomicEvent,
     HeatmapResponse,
     HistoryResponse,
     IndexData,
@@ -22,15 +25,53 @@ from app.schemas.market import (
     MoversResponse,
     OHLCVBar,
     QuoteResponse,
-    RegimeData,
     SearchResponse,
     SearchResult,
     SectorNode,
-    SignalData,
     UniverseResponse,
 )
-from app.models.market import Instrument, QuoteSnapshot, OHLCV
 from app.services.market_status import MarketStatusService
+
+_REGIME_LABELS = {0: "sideways", 1: "bull", 2: "bear", 3: "crisis"}
+
+
+async def _latest_regime_label(db: AsyncSession, instrument_id) -> str:
+    """Best-effort regime label from the last computed RegimeState row.
+
+    RegimeState.viterbi_state is a raw HMM state index with no inherent
+    semantic meaning; _REGIME_LABELS is a display-only convention for this
+    codebase's 4-state model, not a scientifically validated mapping. When no
+    regime has been computed for this instrument yet, return "unknown" rather
+    than fabricating a state.
+    """
+    res = await db.execute(
+        select(RegimeState.viterbi_state)
+        .where(RegimeState.symbol_id == instrument_id)
+        .order_by(RegimeState.time.desc())
+        .limit(1)
+    )
+    state = res.scalars().first()
+    if state is None:
+        return "unknown"
+    return _REGIME_LABELS.get(int(state), "unknown")
+
+
+async def _latest_signal_direction(db: AsyncSession, instrument_id) -> str:
+    res = await db.execute(
+        select(EnsembleSignal.signal)
+        .where(EnsembleSignal.symbol_id == instrument_id)
+        .order_by(EnsembleSignal.time.desc())
+        .limit(1)
+    )
+    signal = res.scalars().first()
+    if signal is None:
+        return "unknown"
+    signal = float(signal)
+    if signal > 0.1:
+        return "bullish"
+    if signal < -0.1:
+        return "bearish"
+    return "neutral"
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +99,7 @@ async def get_quote(
         .limit(1)
     )
     quote = result.scalars().first()
-    
+
     if not quote:
         raise HTTPException(status_code=404, detail=f"No quotes available for {symbol}")
 
@@ -146,41 +187,213 @@ async def get_history(
 
 
 @router.get("/indices", response_model=IndicesResponse)
-async def get_indices() -> IndicesResponse:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
+    result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
+    instruments = result.scalars().all()
+
+    indices: list[IndexData] = []
+    for inst in instruments:
+        q_res = await db.execute(
+            select(QuoteSnapshot)
+            .where(QuoteSnapshot.instrument_id == inst.id)
+            .order_by(QuoteSnapshot.observed_at.desc())
+            .limit(1)
+        )
+        quote = q_res.scalars().first()
+        if not quote:
+            continue
+        indices.append(
+            IndexData(
+                name=inst.display_name or inst.canonical_symbol,
+                ticker=inst.canonical_symbol,
+                value=Decimal(str(quote.price or 0)),
+                change=Decimal(str(quote.change or 0)),
+                change_pct=Decimal(str(quote.change_pct or 0)),
+                regime_state=await _latest_regime_label(db, inst.id),
+                timestamp=quote.observed_at,
+            )
+        )
+    return IndicesResponse(indices=indices)
 
 
 @router.get("/movers", response_model=MoversResponse)
 async def get_movers(
     exchange: str = Query("NSE"),
     type: str = Query("gainers", pattern="^(gainers|losers|volume|momentum)$"),
+    db: AsyncSession = Depends(get_db),
 ) -> MoversResponse:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+    exch_res = await db.execute(select(Exchange).where(Exchange.code == exchange))
+    exch = exch_res.scalars().first()
+    if not exch:
+        return MoversResponse(assets=[], exchange=exchange, type=type, generated_at=datetime.now(UTC))
+
+    latest_quote_per_instrument = (
+        select(
+            QuoteSnapshot.instrument_id,
+            QuoteSnapshot.price,
+            QuoteSnapshot.change,
+            QuoteSnapshot.change_pct,
+            QuoteSnapshot.volume,
+        )
+        .distinct(QuoteSnapshot.instrument_id)
+        .order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.observed_at.desc())
+        .subquery()
+    )
+
+    order_col = {
+        "gainers": latest_quote_per_instrument.c.change_pct.desc(),
+        "losers": latest_quote_per_instrument.c.change_pct.asc(),
+        "volume": latest_quote_per_instrument.c.volume.desc(),
+        "momentum": latest_quote_per_instrument.c.change_pct.desc(),
+    }[type]
+
+    stmt = (
+        select(Instrument, latest_quote_per_instrument)
+        .join(latest_quote_per_instrument, latest_quote_per_instrument.c.instrument_id == Instrument.id)
+        .where(Instrument.exchange_id == exch.id, Instrument.is_active)
+        .order_by(order_col)
+        .limit(25)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    assets = []
+    for r in rows:
+        inst = r.Instrument
+        assets.append(
+            MoverData(
+                ticker=inst.canonical_symbol,
+                name=inst.display_name or inst.canonical_symbol,
+                exchange=exchange,
+                price=Decimal(str(r.price or 0)),
+                change_pct=Decimal(str(r.change_pct or 0)),
+                volume=Decimal(str(r.volume or 0)),
+                signal_direction=await _latest_signal_direction(db, inst.id),
+            )
+        )
+
+    return MoversResponse(assets=assets, exchange=exchange, type=type, generated_at=datetime.now(UTC))
 
 
 @router.get("/heatmap", response_model=HeatmapResponse)
 async def get_heatmap(
     exchange: str = Query("NSE"),
     metric: str = Query("return_1d", pattern="^(return_1d|return_5d|volume_surge)$"),
+    db: AsyncSession = Depends(get_db),
 ) -> HeatmapResponse:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+    exch_res = await db.execute(select(Exchange).where(Exchange.code == exchange))
+    exch = exch_res.scalars().first()
+    if not exch:
+        return HeatmapResponse(exchange=exchange, metric=metric, sectors={}, generated_at=datetime.now(UTC))
+
+    result = await db.execute(
+        select(Instrument).where(Instrument.exchange_id == exch.id, Instrument.is_active)
+    )
+    instruments = result.scalars().all()
+
+    sectors: dict[str, list[SectorNode]] = {}
+    for inst in instruments:
+        q_res = await db.execute(
+            select(QuoteSnapshot)
+            .where(QuoteSnapshot.instrument_id == inst.id)
+            .order_by(QuoteSnapshot.observed_at.desc())
+            .limit(1)
+        )
+        quote = q_res.scalars().first()
+        if not quote:
+            continue
+        # No GICS-style sector classification is stored on Instrument yet; group
+        # by market_segment (a real, non-fabricated field) rather than inventing
+        # sector names.
+        segment = inst.market_segment or "UNCLASSIFIED"
+        metric_value = quote.change_pct if metric != "volume_surge" else quote.volume
+        sectors.setdefault(segment, []).append(
+            SectorNode(
+                ticker=inst.canonical_symbol,
+                name=inst.display_name or inst.canonical_symbol,
+                value=Decimal(str(quote.price or 0)),
+                metric_value=Decimal(str(metric_value or 0)),
+            )
+        )
+
+    return HeatmapResponse(exchange=exchange, metric=metric, sectors=sectors, generated_at=datetime.now(UTC))
 
 
 @router.get("/search", response_model=SearchResponse)
 async def search_symbols(
     q: str = Query(..., min_length=2, max_length=50),
+    db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+    pattern = f"%{q.strip()}%"
+    result = await db.execute(
+        select(Instrument)
+        .where(
+            Instrument.is_active,
+            (Instrument.canonical_symbol.ilike(pattern)) | (Instrument.display_name.ilike(pattern)),
+        )
+        .limit(20)
+    )
+    instruments = result.scalars().all()
+
+    results = []
+    for inst in instruments:
+        exch_res = await db.execute(select(Exchange).where(Exchange.id == inst.exchange_id))
+        exch = exch_res.scalars().first()
+        results.append(
+            SearchResult(
+                ticker=inst.canonical_symbol,
+                name=inst.display_name or inst.canonical_symbol,
+                exchange=exch.code if exch else "UNKNOWN",
+                asset_type=inst.asset_class or "EQUITY",
+            )
+        )
+
+    return SearchResponse(query=q, results=results, total_matched=len(results))
 
 
 @router.get("/economic-calendar", response_model=EconomicCalendarResponse)
 async def get_economic_calendar() -> EconomicCalendarResponse:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+    # No economic-calendar ingestion pipeline exists in this codebase yet
+    # (macro/economic event data is not part of the canonical data platform).
+    # Returning an honest empty result rather than fabricating events.
+    now = datetime.now(UTC)
+    return EconomicCalendarResponse(events=[], period_start=now, period_end=now + timedelta(days=7))
 
 
 @router.get("/universe", response_model=UniverseResponse)
-async def get_market_universe() -> UniverseResponse:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+async def get_market_universe(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_db),
+) -> UniverseResponse:
+    result = await db.execute(
+        select(Instrument)
+        .where(Instrument.is_active, Instrument.is_tradable)
+        .order_by(Instrument.canonical_symbol.asc())
+        .offset(offset)
+        .limit(limit)
+    )
+    instruments = result.scalars().all()
+
+    infos = []
+    for inst in instruments:
+        exch_res = await db.execute(select(Exchange).where(Exchange.id == inst.exchange_id))
+        exch = exch_res.scalars().first()
+        alias_res = await db.execute(
+            select(InstrumentAlias).where(
+                InstrumentAlias.instrument_id == inst.id, InstrumentAlias.provider == "yfinance"
+            )
+        )
+        alias = alias_res.scalars().first()
+        infos.append(
+            InstrumentInfo(
+                symbol=inst.canonical_symbol,
+                displayName=inst.display_name or inst.canonical_symbol,
+                exchange=exch.code if exch else "UNKNOWN",
+                yfinanceTicker=alias.provider_symbol if alias else inst.canonical_symbol,
+            )
+        )
+
+    return UniverseResponse(instruments=infos, limit=limit, offset=offset)
 
 
 @router.get("/status")
@@ -190,9 +403,44 @@ async def get_market_status() -> dict:
 
 @router.get("/providers/health")
 async def get_providers_health() -> dict:
-    return {"status": "running", "message": "Migrated to Canonical DB"}
+    from app.services.ingestion.provider_manager import provider_manager
+
+    return await provider_manager.get_providers_health()
 
 
 @router.get("/global-context")
-async def get_global_context() -> dict:
-    return {"data": [], "meta": {"source": "db", "as_of": "2026-01-01T00:00:00Z", "quality_status": "NO_DATA"}}
+async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
+    """Cross-market context (global indices, VIX, FX) for the terminal's macro widget.
+
+    No global-index ingestion pipeline exists in this codebase yet, so this
+    returns an explicit unavailable status rather than fabricating index levels.
+    """
+    result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
+    instruments = result.scalars().all()
+    if not instruments:
+        return {
+            "status": "unavailable",
+            "message": "No global index instruments are configured in the canonical data platform yet.",
+            "indices": [],
+        }
+
+    context = []
+    for inst in instruments:
+        q_res = await db.execute(
+            select(QuoteSnapshot)
+            .where(QuoteSnapshot.instrument_id == inst.id)
+            .order_by(QuoteSnapshot.observed_at.desc())
+            .limit(1)
+        )
+        quote = q_res.scalars().first()
+        if quote:
+            context.append(
+                {
+                    "ticker": inst.canonical_symbol,
+                    "name": inst.display_name or inst.canonical_symbol,
+                    "value": float(quote.price or 0),
+                    "change_pct": float(quote.change_pct or 0),
+                    "as_of": quote.observed_at.isoformat(),
+                }
+            )
+    return {"status": "ok" if context else "unavailable", "indices": context}

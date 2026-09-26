@@ -1,8 +1,10 @@
 import json
 import os
+from typing import Any, Protocol
+
 import httpx
-from typing import Any, Protocol, Optional
 from loguru import logger
+
 
 class LLMProvider(Protocol):
     async def generate_text(self, prompt: str) -> str:
@@ -70,20 +72,20 @@ class OllamaProvider:
 
 class LLMReasoningEngine:
     @staticmethod
-    def get_provider() -> Optional[LLMProvider]:
+    def get_provider() -> LLMProvider | None:
         # Prefer Groq, then Gemini, then fallback
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
             return GroqProvider(groq_key, os.getenv("GROQ_MODEL", "llama3-8b-8192"))
-            
+
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
             return GeminiProvider(gemini_key, os.getenv("GEMINI_MODEL", "gemini-1.5-flash"))
-            
+
         ollama_host = os.getenv("OLLAMA_HOST")
         if ollama_host:
             return OllamaProvider(ollama_host, os.getenv("OLLAMA_MODEL", "llama3"))
-            
+
         return None
 
     @staticmethod
@@ -115,14 +117,14 @@ class LLMReasoningEngine:
     def _validate_numeric_claims(text: str, evidence: dict) -> str:
         '''Enforces V2-25: LLM NEVER OWNS THE NUMBERS.'''
         import re
-        
+
         # Extract all numbers from the text
         numbers = re.findall(r'-?\d+\.?\d*', text)
-        
+
         # Extract all numbers from the evidence
         evidence_str = str(evidence)
         evidence_numbers = re.findall(r'-?\d+\.?\d*', evidence_str)
-        
+
         # Check if any number in the text is NOT in the evidence
         for num_str in numbers:
             try:
@@ -135,14 +137,14 @@ class LLMReasoningEngine:
                             break
                     except:
                         pass
-                
+
                 # Allow common small integers like 14-day RSI
                 if not found and num not in [0.0, 1.0, 14.0]:
                     logger.warning(f"LLM hallucinated number {num}. Stripping numerical claims.")
                     return LLMReasoningEngine._heuristic_fallback(evidence)
             except:
                 pass
-                
+
         return text
 
     @staticmethod

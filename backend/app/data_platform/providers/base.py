@@ -1,5 +1,5 @@
 import abc
-from typing import Dict, List, Optional
+from typing import Dict, List
 import pandas as pd
 
 class BaseProvider(abc.ABC):

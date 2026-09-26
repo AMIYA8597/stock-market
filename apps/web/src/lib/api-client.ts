@@ -326,8 +326,8 @@ export const marketApi = {
     return fetchApi<UniverseResponse>("/market/universe");
   },
 
-  getStatus(): Promise<{ is_open: boolean; current_time: string; market_timezone: string; regular_market_hours: string }> {
-    return fetchApi<{ is_open: boolean; current_time: string; market_timezone: string; regular_market_hours: string }>("/market/status");
+  getStatus(): Promise<{ market_open: boolean; next_open: string; next_close: string | null }> {
+    return fetchApi<{ market_open: boolean; next_open: string; next_close: string | null }>("/market/status");
   },
 
   search(query: string): Promise<SearchResponse> {

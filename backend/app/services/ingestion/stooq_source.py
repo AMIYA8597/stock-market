@@ -14,7 +14,6 @@ from tenacity import (
     wait_exponential,
 )
 
-from app.models.instrument import Instrument
 from app.services.ingestion.base import (
     DataUnavailableError,
     Interval,

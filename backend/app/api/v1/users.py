@@ -1,13 +1,13 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
 
-from app.core.security import get_current_context, RequestContext
+from app.core.security import RequestContext, get_current_context
 from app.database.connection import get_db
 from app.models.identity import User
-from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 

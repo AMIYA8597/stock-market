@@ -34,14 +34,14 @@ class ConnectionManager:
         self._ip_counts: dict[str, int] = defaultdict(int)
         self.MAX_CONNECTIONS_PER_IP = 30
         self._lock = asyncio.Lock()
-        
+
         self._redis_task: asyncio.Task | None = None
 
     async def startup(self):
         """Start the Redis subscriber loop."""
         if self._redis_task is None:
             self._redis_task = asyncio.create_task(self._redis_listener())
-            
+
     async def shutdown(self):
         """Stop the Redis subscriber loop."""
         if self._redis_task:
@@ -50,10 +50,11 @@ class ConnectionManager:
                 await self._redis_task
             except asyncio.CancelledError:
                 pass
-            
+
     async def _redis_listener(self):
-        from app.database.redis_client import get_redis_client
         import json
+
+        from app.database.redis_client import get_redis_client
         try:
             redis_client = await get_redis_client()
             pubsub = redis_client.pubsub()
@@ -172,8 +173,9 @@ class ConnectionManager:
 
     async def broadcast(self, channel: str, data: Any) -> None:
         """Publish a broadcast message to Redis so all workers get it."""
-        from app.database.redis_client import get_redis_client
         import json
+
+        from app.database.redis_client import get_redis_client
         try:
             redis_client = await get_redis_client()
             payload = json.dumps({"channel": channel, "data": data})

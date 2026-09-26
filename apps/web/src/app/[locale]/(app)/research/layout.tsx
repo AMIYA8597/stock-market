@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AmbientLucideBackground } from "@/components/common/ambient-lucide-background";
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 const tabs = [
   { href: "/research/regime-analysis", label: "Regime" },
@@ -17,6 +18,7 @@ export default function ResearchLayout({ children }: { children: ReactNode }): J
   const pathname = usePathname();
 
   return (
+    <AuthGuard>
     <main className="relative min-h-screen bg-[var(--nq-bg-base)] text-[var(--nq-text-primary)]">
       <AmbientLucideBackground className="opacity-90" />
       <header className="relative z-10 border-b border-[var(--nq-border)] bg-[var(--nq-bg-card)]/60 px-4 py-4 backdrop-blur sm:px-6">
@@ -39,5 +41,6 @@ export default function ResearchLayout({ children }: { children: ReactNode }): J
       </header>
       <section className="relative z-10 p-4 sm:p-6">{children}</section>
     </main>
+    </AuthGuard>
   );
 }
