@@ -3,12 +3,17 @@ from typing import Any
 
 import pytz
 
+#: Honest provenance label for this service's output: a static, hardcoded
+#: holiday list plus weekday logic, not a query against the real
+#: `MarketCalendar` table (app/models/market.py). No production code path
+#: currently calls this service; wiring it up to real callers should also
+#: replace this static list with a query against that canonical table.
+_SOURCE = "static_calendar"
+
 
 class MarketCalendarService:
     def __init__(self):
         self.ist = pytz.timezone('Asia/Kolkata')
-        # We will mock the database read for now, returning dummy but structurally correct data.
-        # In a real environment, this queries the market_calendar table.
         self._hardcoded_holidays = {
             "2026-01-26": "Republic Day",
             "2026-08-15": "Independence Day",
@@ -62,21 +67,21 @@ class MarketCalendarService:
                 "state": state,
                 "next_open": next_open.isoformat(),
                 "next_close": None,
-                "source": "db_mock"
+                "source": _SOURCE
             }
 
         bounds = self.session_bounds(exchange, today)
         if not bounds:
-            return {"state": "unknown", "next_open": None, "next_close": None, "source": "db_mock"}
+            return {"state": "unknown", "next_open": None, "next_close": None, "source": _SOURCE}
 
         pre_open, market_open, market_close = bounds
 
         if now_ist < pre_open:
-            return {"state": "closed", "next_open": market_open.isoformat(), "next_close": market_close.isoformat(), "source": "db_mock"}
+            return {"state": "closed", "next_open": market_open.isoformat(), "next_close": market_close.isoformat(), "source": _SOURCE}
         elif pre_open <= now_ist < market_open:
-            return {"state": "pre_open", "next_open": market_open.isoformat(), "next_close": market_close.isoformat(), "source": "db_mock"}
+            return {"state": "pre_open", "next_open": market_open.isoformat(), "next_close": market_close.isoformat(), "source": _SOURCE}
         elif market_open <= now_ist < market_close:
-            return {"state": "open", "next_open": None, "next_close": market_close.isoformat(), "source": "db_mock"}
+            return {"state": "open", "next_open": None, "next_close": market_close.isoformat(), "source": _SOURCE}
         else:
             # Post-close, find next day
             next_day = today + timedelta(days=1)
@@ -84,4 +89,4 @@ class MarketCalendarService:
                 next_day += timedelta(days=1)
             next_open = self.ist.localize(datetime.combine(next_day, datetime.strptime("09:15", "%H:%M").time()))
 
-            return {"state": "closed", "next_open": next_open.isoformat(), "next_close": None, "source": "db_mock"}
+            return {"state": "closed", "next_open": next_open.isoformat(), "next_close": None, "source": _SOURCE}

@@ -633,6 +633,13 @@ def build_ensemble_signal_sync(
 
     return {
         "model_status": ensemble_status,
+        # model_status reflects whether any *component* model (xgboost,
+        # lstm, tft, ...) is trained. It says nothing about how those
+        # component scores were combined. ensemble_method makes that
+        # explicit: a trained EnsembleMetaLearner artifact vs. the fixed
+        # 0.7/0.3/0.1 fallback formula above, so a caller can't mistake
+        # the fallback fusion for a validated ensemble combiner.
+        "ensemble_method": "meta_learner" if used_meta_learner else "fixed_weight_fallback",
         "raw_ensemble": raw_ensemble,
         "confidence": ensemble_confidence,
         "direction": direction,

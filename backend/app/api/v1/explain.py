@@ -14,6 +14,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.numeric import safe_round
 from app.database.connection import get_db
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.explain import (
@@ -28,13 +29,6 @@ from app.services.market_data_service import MarketDataService
 from app.services.prediction_engine import get_full_prediction
 
 router = APIRouter(prefix="/explain", tags=["explainability"])
-
-
-def safe_round(val: float, places: int) -> float:
-    """Safely round a float to a number of decimal places, handling NaNs and Infs."""
-    if val is None or math.isnan(val) or math.isinf(val):
-        return 0.0
-    return round(float(val), places)
 
 
 @router.get("/shap/{symbol}", response_model=SHAPResponse)
