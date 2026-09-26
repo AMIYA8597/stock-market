@@ -29,6 +29,7 @@ class SubscriptionResponse(BaseModel):
     status: str
     plan_name: str
     current_period_end: str | None
+    cancel_at_period_end: bool = False
 
 @router.get("/plans")
 async def get_plans(db: AsyncSession = Depends(get_db)):
@@ -72,8 +73,42 @@ async def get_subscription(
         id=str(sub.id),
         status=sub.status,
         plan_name=plan.name,
-        current_period_end=sub.current_period_end.isoformat() if sub.current_period_end else None
+        current_period_end=sub.current_period_end.isoformat() if sub.current_period_end else None,
+        cancel_at_period_end=sub.cancel_at_period_end,
     )
+
+
+@router.post("/cancel-subscription")
+async def cancel_subscription(
+    ctx: RequestContext = Depends(get_current_context),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark the organization's active subscription to not renew.
+
+    This never fabricates success: it only flips a real flag on the real
+    subscription row, and the row must actually exist and be active.
+    Access remains until the already-paid period ends (current_period_end);
+    there is no prorated refund path in this Test Mode integration.
+    """
+    if not ctx.organization_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
+    org_id = uuid.UUID(ctx.organization_id)
+    result = await db.execute(
+        select(OrganizationSubscription).where(
+            OrganizationSubscription.organization_id == org_id,
+            OrganizationSubscription.status == "active",
+        )
+    )
+    sub = result.scalar_one_or_none()
+    if sub is None:
+        raise HTTPException(status_code=404, detail="No active subscription to cancel")
+
+    sub.cancel_at_period_end = True
+    await db.commit()
+
+    return {"status": "pending_cancellation", "current_period_end": sub.current_period_end.isoformat() if sub.current_period_end else None}
+
 
 @router.post("/webhook")
 async def razorpay_webhook(
