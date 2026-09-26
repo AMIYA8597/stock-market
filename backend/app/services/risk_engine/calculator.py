@@ -472,7 +472,7 @@ class RiskCalculator:
                 "degenerate (zero or non-finite total variance, e.g. all-constant "
                 "return series)."
             )
-        delta = np.sum((cov_matrix - target) ** 2) / denom
+        delta = np.sum((cov_matrix.to_numpy() - target) ** 2) / denom
         alpha = min(1.0, max(0.0, delta))
 
         shrunk_cov = alpha * target + (1 - alpha) * cov_matrix
