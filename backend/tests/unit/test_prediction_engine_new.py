@@ -1,4 +1,3 @@
-import importlib
 import json
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, mock_open, patch
@@ -9,9 +8,15 @@ import pytest
 
 from app.services import prediction_engine as prediction_engine_module
 
-# conftest.py maliciously overrides get_full_prediction globally.
-# We must reload the module to restore the original function for our tests.
-importlib.reload(prediction_engine_module)
+# conftest.py overrides get_full_prediction globally at collection time and
+# saves the real implementation as _original_get_full_prediction. Restore it
+# here directly rather than importlib.reload()-ing this module: re-executing
+# its statsmodels-backed top-level code a second time (after the rest of the
+# suite's native-extension state is already initialized) segfaults the
+# interpreter.
+prediction_engine_module.get_full_prediction = (
+    prediction_engine_module._original_get_full_prediction
+)
 
 from app.services.prediction_engine import (
     _cache_fetch,
@@ -137,7 +142,7 @@ def test_build_ensemble_signal_sync(sample_df):
             "regime_confidence": 0.8, "hmm_used": True,
             "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
         }
-        
+
 
         with patch.dict('sys.modules', {'research.models.xgboost_model.classifier': MagicMock()}):
             res = build_ensemble_signal_sync("TEST", sample_df)
@@ -157,7 +162,7 @@ def test_build_ensemble_signal_all_models(sample_df):
             "regime_confidence": 0.8, "hmm_used": True,
             "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
         }
-        
+
 
         mock_sentiment_inst = mock_sentiment.return_value
         mock_sentiment_inst.scrape_google_news.return_value = ["news"]
@@ -258,7 +263,7 @@ async def test_get_full_prediction(sample_df):
 
         mock_fetch.return_value = None
         mock_build.return_value = {"model_status": "trained", "regime": {"regime": "BULL"}}
-        
+
         mock_session = AsyncMock()
         mock_inst_result = MagicMock()
         mock_inst_result.scalars().first.return_value = MagicMock(id=1)
