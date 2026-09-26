@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { PublicLayout } from "./PublicLayout";
 import { Badge } from "@neuroquant/ui";
 import { Card } from "@neuroquant/ui";

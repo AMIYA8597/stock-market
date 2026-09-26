@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { intelligenceApi } from "@/lib/intelligence-api";
 import { marketApi, predictionsApi } from "@/lib/api-client";
 import {

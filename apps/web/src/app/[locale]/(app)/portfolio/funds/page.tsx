@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { paperTradingApi } from "@/lib/api-client";
 import { CheckoutPage, TransactionsPage } from "@/modules/payments/PaymentPages";

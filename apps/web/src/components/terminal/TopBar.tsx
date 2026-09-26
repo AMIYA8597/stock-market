@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, Search, Settings2, Sun, CreditCard } from "lucide-react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 
 import { contractsApi, type PortfolioHoldingsResponse, type MarketIndex } from "@/lib/contracts-api";
 import { systemApi } from "@/lib/api-client";

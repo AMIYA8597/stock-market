@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import Link from "next/link";
+import { Link } from "@/i18n/navigation";
 import { InstrumentInfo } from "@neuroquant/types";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { safeFormat } from "@/lib/formatters";
