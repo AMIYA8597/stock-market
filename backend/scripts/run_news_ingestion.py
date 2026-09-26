@@ -5,11 +5,11 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from sqlalchemy import select
+from tasks.news_tasks import _refresh_news_sentiment_async
 
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
 from app.models.research import Dataset as NewsSentiment
-from tasks.news_tasks import _refresh_news_sentiment_async
 
 
 async def run_news():

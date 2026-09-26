@@ -599,9 +599,6 @@ class IntelligenceService:
             from app.services.market_data_service import MarketDataService
             from research.feature_engineering.pipeline import FeaturePipeline
 
-            end_date = datetime.now(UTC)
-            start_date = end_date - timedelta(days=60)
-
             if loop and loop.is_running():
                 import concurrent.futures
 

@@ -302,17 +302,8 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         product: "I",
       };
 
-      const response = (await tradingApi.placeOrder(payload)) as { order_id?: string };
-      addOrder({
-        transaction_id: response.order_id || `txn-${Date.now()}`,
-        symbol: payload.symbol,
-        type: payload.side as "BUY" | "SELL",
-        quantity: payload.quantity,
-        price: payload.limit_price,
-        net_amount: payload.quantity * payload.limit_price,
-        timestamp: new Date().toISOString(),
-        portfolio_updated: true,
-      }, "api");
+      await tradingApi.placeOrder(payload);
+      addOrder();
       setTradeSuccess(`${payload.side} ${payload.symbol} placed successfully.`);
       void fetchAuditLogs();
     } catch (error) {

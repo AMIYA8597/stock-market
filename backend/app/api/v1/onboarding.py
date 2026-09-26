@@ -1,18 +1,25 @@
-from fastapi import APIRouter, Depends
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 import uuid
-from app.core.security import get_current_context, RequestContext
+
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.security import RequestContext, get_current_context
 from app.database.connection import get_db
 from app.models.identity import User
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
 class OnboardingRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     profile: dict
     organization: dict
-    marketPrefs: dict
+    # The frontend sends this key as camelCase JSON (matches its own JS/TS
+    # naming convention); alias it on the wire while keeping the Python
+    # attribute name snake_case.
+    market_prefs: dict = Field(alias="marketPrefs")
     workspace: dict
 
 @router.post("")
@@ -27,7 +34,7 @@ async def complete_onboarding(
     if user:
         user.preferences = {
             "profile": payload.profile,
-            "marketPrefs": payload.marketPrefs,
+            "marketPrefs": payload.market_prefs,
             "workspace": payload.workspace
         }
         await db.commit()

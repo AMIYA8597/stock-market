@@ -443,4 +443,4 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
                     "as_of": quote.observed_at.isoformat(),
                 }
             )
-    return {"status": "ok" if context else "unavailable", "indices": context}
+    return {"status": "ok" if context else "unavailable", "indices": context}  # honesty: allow (conditional on real fetched quotes above)

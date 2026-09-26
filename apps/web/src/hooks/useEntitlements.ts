@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { fetchApi } from "@/lib/api-client";
-import { useToastStore } from "@/stores/toast-store";
 
 export interface SubscriptionContext {
   subscription: {
@@ -27,7 +26,9 @@ export function useEntitlements(): SubscriptionContext {
     let mounted = true;
     const fetchSubscription = async () => {
       try {
-        const data = await fetchApi<any>("/payments/subscription");
+        const data = await fetchApi<{ subscription: SubscriptionContext["subscription"] }>(
+          "/payments/subscription"
+        );
         if (mounted) {
           setContext({
             subscription: data.subscription,
@@ -35,12 +36,12 @@ export function useEntitlements(): SubscriptionContext {
             error: null,
           });
         }
-      } catch (err: any) {
+      } catch (err) {
         if (mounted) {
           setContext({
             subscription: null,
             loading: false,
-            error: err,
+            error: err instanceof Error ? err : new Error(String(err)),
           });
         }
       }

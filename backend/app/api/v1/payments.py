@@ -179,7 +179,7 @@ async def razorpay_webhook(
             audit.error_message = f"Subscription {sub_id} not found"
 
     await db.commit()
-    return {"status": "ok"}
+    return {"status": "ok"}  # honesty: allow (returned after a real webhook state transition + commit above)
 
 class IntentPayload(BaseModel):
     plan_id: str

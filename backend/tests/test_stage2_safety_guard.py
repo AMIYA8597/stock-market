@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 FORBIDDEN_MARKERS = (
     "api.upstox.com/v2/order",
     "TRADING_MODE",

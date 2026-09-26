@@ -1,16 +1,16 @@
-import os
 import inspect
 from pathlib import Path
-from sqlalchemy.orm import DeclarativeBase
 
 # We will dynamically load all models and routes
 import pytest
+
 from app.database.connection import Base
+
 
 def test_models_valid():
     """Assert each ORM model has >= 2 mapped columns and uses the shared Base."""
     import app.models as models
-    
+
     for name, obj in inspect.getmembers(models):
         if inspect.isclass(obj) and issubclass(obj, Base) and obj is not Base:
             if hasattr(obj, '__table__'):
