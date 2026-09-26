@@ -176,8 +176,8 @@ def compute_kelly_fraction(symbol: str, signal: float, confidence: float) -> flo
 
     if stats_path.exists():
         try:
-            # with open(stats_path) as f:
-            stats = {}  # json.load(f)
+            with open(stats_path) as f:
+                stats = json.load(f)
             p = stats.get("win_rate", p)
             b = stats.get("payoff_ratio", b)
         except Exception as e:
@@ -291,17 +291,6 @@ def build_ensemble_signal_sync(
 
     # Define model lists
     model_names = ["tft", "hmm_garch", "gnn", "lstm_attention", "xgboost"]
-
-    # Prior weights matrix matching regimes (bull, bear, sideways, crisis)
-    np.array(
-        [
-            [0.30, 0.10, 0.20, 0.15, 0.25],  # Bull state
-            [0.15, 0.35, 0.10, 0.10, 0.30],  # Bear state
-            [0.20, 0.15, 0.15, 0.35, 0.15],  # Sideways state
-            [0.10, 0.40, 0.15, 0.10, 0.25],  # Crisis state
-        ],
-        dtype=np.float32,
-    )
 
     # 2. Compute individual model signals
     model_signals = {}
@@ -561,7 +550,15 @@ def build_ensemble_signal_sync(
     prob_up = (raw_ensemble / 2.0) + 0.5
     ensemble_confidence = float(abs(prob_up - 0.5) * 2.0)
 
-    active_signals = [xgb_score] if xgb_status == "trained" else [tech_score]
+    # Cross-model agreement must reflect every model that actually produced a
+    # signal this call, not just XGBoost - falling back to a single
+    # hardcoded 0.0 placeholder whenever XGBoost specifically was untrained
+    # silently reported "no agreement" even when HMM/GNN/LSTM/TFT all agreed.
+    active_signals = [
+        score
+        for name, score in model_signals.items()
+        if model_statuses.get(name) == "trained" and score is not None
+    ]
     if len(active_signals) > 0:
         pos = sum(1 for s in active_signals if s > 0.1)
         neg = sum(1 for s in active_signals if s < -0.1)
