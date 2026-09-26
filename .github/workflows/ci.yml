@@ -15,7 +15,13 @@ jobs:
       contents: read
       pull-requests: read
     steps:
+      # gitleaks-action needs the full commit history to diff the range it
+      # scans; the default shallow clone (fetch-depth: 1) makes its `git log`
+      # fail with "unknown revision" the moment that range spans more than
+      # the single fetched commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
