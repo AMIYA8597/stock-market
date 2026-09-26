@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,3 +49,16 @@ class Prediction(Base):
     prediction_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     predicted_value: Mapped[str | None] = mapped_column(String)
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, index=True)
+
+class ModelExplanation(Base):
+    """Per-prediction explainability payload (feature attributions, plain-
+    language reasoning) saved by app.services.prediction_engine.get_full_prediction.
+    """
+
+    __tablename__ = "model_explanations"
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    prediction_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("predictions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    explanation_data: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

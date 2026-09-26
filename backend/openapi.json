@@ -2964,6 +2964,82 @@
         }
       }
     },
+    "/api/v1/autotrade/settings": {
+      "get": {
+        "tags": [
+          "autotrade"
+        ],
+        "summary": "Get Autotrade Settings",
+        "operationId": "get_autotrade_settings_api_v1_autotrade_settings_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoTradeSettingResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "autotrade"
+        ],
+        "summary": "Update Autotrade Settings",
+        "operationId": "update_autotrade_settings_api_v1_autotrade_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AutoTradeSettingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AutoTradeSettingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/screener/run": {
       "post": {
         "tags": [
@@ -4146,6 +4222,99 @@
           "password"
         ],
         "title": "AuthRegister"
+      },
+      "AutoTradeSettingRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "watchlist_id": {
+            "type": "integer",
+            "title": "Watchlist Id",
+            "default": 0
+          },
+          "max_open_positions": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Max Open Positions",
+            "default": 5
+          },
+          "risk_per_trade_pct": {
+            "type": "number",
+            "maximum": 0.5,
+            "exclusiveMinimum": 0.0,
+            "title": "Risk Per Trade Pct",
+            "default": 0.02
+          },
+          "min_confidence": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Confidence",
+            "default": 65.0
+          }
+        },
+        "type": "object",
+        "title": "AutoTradeSettingRequest"
+      },
+      "AutoTradeSettingResponse": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "watchlist_id": {
+            "type": "integer",
+            "title": "Watchlist Id"
+          },
+          "max_open_positions": {
+            "type": "integer",
+            "title": "Max Open Positions"
+          },
+          "risk_per_trade_pct": {
+            "type": "number",
+            "title": "Risk Per Trade Pct"
+          },
+          "min_confidence": {
+            "type": "number",
+            "title": "Min Confidence"
+          },
+          "last_scan_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan At"
+          },
+          "last_scan_result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Scan Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "watchlist_id",
+          "max_open_positions",
+          "risk_per_trade_pct",
+          "min_confidence"
+        ],
+        "title": "AutoTradeSettingResponse"
       },
       "BacktestMetrics": {
         "properties": {
