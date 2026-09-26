@@ -5,11 +5,11 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from sqlalchemy import select
+from tasks.data_tasks import _refresh_features_async
 
 from app.database.connection import async_session_factory
-from app.models.research import Dataset as FeatureVector
 from app.models.instrument import Instrument
-from tasks.data_tasks import _refresh_features_async
+from app.models.research import Dataset as FeatureVector
 
 
 async def run_features():

@@ -48,7 +48,7 @@ async def get_current_user_or_none(
 
 def require_role(required_role: str):
     """Dependency factory for organization role-based access control.
-    
+
     Roles: OWNER (5) > ADMIN (4) > RESEARCHER (3) > ANALYST (2) > TRADER (2) > VIEWER (1)
     """
     async def role_checker(ctx: RequestContext = Depends(get_current_context)) -> RequestContext:

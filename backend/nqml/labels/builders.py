@@ -4,6 +4,7 @@ Label functions for NQML.
 
 import numpy as np
 import pandas as pd
+
 from nqml.labels.registry import label
 
 
@@ -42,7 +43,7 @@ def triple_barrier(bars: pd.DataFrame) -> pd.Series:
     close = bars["adj_close"].values
     n = len(close)
     out = np.zeros(n, dtype=np.int8)
-    
+
     # We do a fast rolling lookahead
     for i in range(n):
         c0 = close[i]

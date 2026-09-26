@@ -210,7 +210,7 @@ class NSESource(MarketDataProvider):
     async def health(self) -> dict:
         try:
             await self._bootstrap_session()
-            return {"status": "ok", "provider": self.name}
+            return {"status": "ok", "provider": self.name}  # honesty: allow (only reached after a real successful probe above)
         except Exception as e:
             return {"status": "down", "provider": self.name, "error": str(e)}
 

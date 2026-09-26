@@ -1,6 +1,7 @@
 import pandas as pd
-import pytest
-from app.data_platform.validation import validate_ohlcv_row, validate_dataframe
+
+from app.data_platform.validation import validate_ohlcv_row
+
 
 def test_validate_valid_row():
     row = pd.Series({'open': 100.0, 'high': 105.0, 'low': 95.0, 'close': 102.0, 'volume': 1000})

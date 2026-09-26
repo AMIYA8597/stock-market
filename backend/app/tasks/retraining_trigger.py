@@ -10,8 +10,8 @@ from scipy.stats import ks_2samp
 from sqlalchemy import select
 
 from app.database.connection import async_session_factory
-from app.models.research import Dataset as FeatureVector
 from app.models.instrument import Instrument
+from app.models.research import Dataset as FeatureVector
 from app.models.research import ModelRegistry as ModelArtifact
 from app.services.ml_engine.training_pipeline import TrainingPipeline
 

@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import sys
 
 logger = logging.getLogger("run_walk_forward")
 

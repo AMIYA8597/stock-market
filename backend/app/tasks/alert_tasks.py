@@ -1,13 +1,15 @@
 import asyncio
 import logging
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from celery import shared_task
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
+
+from app.core.websocket_manager import ws_manager
 from app.database.connection import async_session_factory
 from app.models.alerts import Alert
 from app.models.instrument import Instrument
 from app.models.market import QuoteSnapshot
-from app.core.websocket_manager import ws_manager
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ async def _evaluate_alerts():
         for alert, instrument in rows:
             if not instrument:
                 continue
-            
+
             symbol = instrument.canonical_symbol
 
             try:
@@ -37,7 +39,7 @@ async def _evaluate_alerts():
                 )
                 quote_result = await session.execute(quote_stmt)
                 quote = quote_result.scalar_one_or_none()
-                
+
                 if not quote or quote.price is None:
                     continue
 
@@ -65,9 +67,9 @@ async def _evaluate_alerts():
                     alert.triggered_at = datetime.now(UTC)
                     alert.enabled = False
                     await session.commit()
-                    
+
                     logger.info(f"Alert {alert.id} TRIGGERED for {symbol} at {price}")
-                    
+
                     # Deduplication / Notification state is saved as is_triggered=True
                     # Notification Delivery
                     user_id = str(alert.user_id)
