@@ -233,6 +233,7 @@ export interface BacktestStatusResponse {
   job_id: string;
   status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "SUCCESS" | "DONE";
   progress_pct?: number;
+  error_message?: string | null;
   result_preview?: {
     sharpe?: number;
     max_drawdown?: number;

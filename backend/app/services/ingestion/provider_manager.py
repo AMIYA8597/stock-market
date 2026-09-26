@@ -13,6 +13,7 @@ from app.services.ingestion.base import (
     ProviderError,
     Quote,
 )
+from app.services.ingestion.binance_source import BinanceSource
 from app.services.ingestion.nse_source import NSESource
 from app.services.ingestion.stooq_source import StooqProvider
 from app.services.ingestion.yfinance_source import YFinanceProvider
@@ -21,11 +22,16 @@ logger = logging.getLogger(__name__)
 
 
 class ProviderManager:
-    """Orchestrates market data providers with failover and cache-aside logic."""
+    """Orchestrates market data providers with failover and cache-aside logic.
 
-    def __init__(self):
-        # Order: yfinance -> nse -> stooq
-        self.providers = [YFinanceProvider(), NSESource(), StooqProvider()]
+    Pass `providers` to build a manager for a different asset class (see
+    `crypto_provider_manager` below) -- everything else (caching, failover,
+    health checks) is asset-class-agnostic.
+    """
+
+    def __init__(self, providers: list | None = None):
+        # Default order: yfinance -> nse -> stooq
+        self.providers = providers if providers is not None else [YFinanceProvider(), NSESource(), StooqProvider()]
         # TTL definitions (seconds)
         self.ttls = {"quote": 10, "intraday": 60, "daily": 24 * 60 * 60, "index": 30}
 
@@ -178,3 +184,4 @@ class ProviderManager:
 
 
 provider_manager = ProviderManager()
+crypto_provider_manager = ProviderManager(providers=[BinanceSource()])
