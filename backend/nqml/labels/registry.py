@@ -42,10 +42,10 @@ def build_label(bars: pd.DataFrame, label_name: str) -> pd.Series:
         bars = bars.assign(adj_close=bars["close"])
     elif "adj_close" not in bars.columns:
         raise ValueError("Bars missing 'adj_close' or 'close' column")
-    
+
     meta = _LABEL_REGISTRY[label_name]
     result = meta.func(bars)
-    
+
     if not result.index.equals(bars.index):
         raise ValueError(f"Label {label_name} returned a misaligned index")
     result.name = label_name

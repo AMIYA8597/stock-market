@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { BellRing, BrainCircuit, ShieldCheck, TrendingUp, Wallet } from "lucide-react";
 import { createChart, ColorType, AreaSeries, LineSeries } from "lightweight-charts";
-import { useRef, useEffect } from "react";
+import type { IChartApi, Time } from "lightweight-charts";
 
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input, Modal, Table, TableCell, TableHead, TableRow } from "@neuroquant/ui";
 import { alertsApi, paperTradingApi, portfolioApi } from "@/lib/api-client";
@@ -156,6 +156,7 @@ export function DashboardOverview(): JSX.Element {
   const alerts = alertsHistory ?? [];
   const performanceSeries = Array.isArray(performance?.series)
     ? performance.series.map((point) => ({
+        date: point.date,
         day: new Date(point.date).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
         value: Number(point.portfolio_value ?? 0),
         benchmark: Number(point.benchmark_value ?? 0),
@@ -263,14 +264,15 @@ export function DashboardOverview(): JSX.Element {
               <div className="h-[320px]" ref={(node) => {
                 if (node) {
                   // Only run once when the node mounts or data changes
-                  if ((node as any)._chart) return;
+                  const nodeWithChart = node as HTMLDivElement & { _chart?: IChartApi };
+                  if (nodeWithChart._chart) return;
                   const chart = createChart(node, {
                     layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: 'rgba(255,255,255,0.45)' },
                     grid: { vertLines: { color: 'rgba(255,255,255,0.08)' }, horzLines: { color: 'rgba(255,255,255,0.08)' } },
                     rightPriceScale: { borderVisible: false },
                     timeScale: { borderVisible: false, timeVisible: true }
                   });
-                  (node as any)._chart = chart;
+                  nodeWithChart._chart = chart;
 
                   const benchmarkSeries = chart.addSeries(LineSeries, {
                     color: '#8B9BB4', lineWidth: 2
@@ -278,13 +280,17 @@ export function DashboardOverview(): JSX.Element {
                   const portfolioSeries = chart.addSeries(AreaSeries, {
                     lineColor: '#00D4F5', topColor: 'rgba(0, 212, 245, 0.35)', bottomColor: 'rgba(0, 212, 245, 0.02)', lineWidth: 2
                   });
-                  
-                  const benchData = performanceSeries.map((d, i) => ({ time: i, value: d.benchmark }));
-                  const portData = performanceSeries.map((d, i) => ({ time: i, value: d.value }));
-                  benchmarkSeries.setData(benchData as any);
-                  portfolioSeries.setData(portData as any);
+
+                  // Use the real observation date as the chart's time axis, not
+                  // the array index — an index has no relationship to actual
+                  // elapsed time and would misrepresent uneven-interval data.
+                  const toTime = (isoDate: string): Time => isoDate.slice(0, 10) as Time;
+                  const benchData = performanceSeries.map((d) => ({ time: toTime(d.date), value: d.benchmark }));
+                  const portData = performanceSeries.map((d) => ({ time: toTime(d.date), value: d.value }));
+                  benchmarkSeries.setData(benchData);
+                  portfolioSeries.setData(portData);
                   chart.timeScale().fitContent();
-                  
+
                   const resize = () => { chart.applyOptions({ width: node.clientWidth }); };
                   window.addEventListener('resize', resize);
                 }

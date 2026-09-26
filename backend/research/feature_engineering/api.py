@@ -1,21 +1,18 @@
 """Feature Registry and API for unified ML pipeline."""
 
-import pandas as pd
-from datetime import datetime
-from typing import Literal, Optional, List, Dict, Any
-import numpy as np
+from typing import Literal
 
-from research.feature_engineering.base import FeatureBuilder
+import pandas as pd
+
 from research.feature_engineering.calendar_effects import CalendarEffectsBuilder
 from research.feature_engineering.chart_patterns import ChartPatternsBuilder
-from research.feature_engineering.cross_sectional import CrossSectionalBuilder
-from research.feature_engineering.ff5_betas import FF5BetasBuilder
 from research.feature_engineering.microstructure import MicrostructureBuilder
+from research.feature_engineering.pipeline import FeaturePipeline
 from research.feature_engineering.price_factors import PriceFactorsBuilder
 from research.feature_engineering.sentiment_factors import SentimentFactorsBuilder
 from research.feature_engineering.technical_factors import TechnicalFactorsBuilder
 from research.feature_engineering.volatility_factors import VolatilityFactorsBuilder
-from research.feature_engineering.pipeline import FeaturePipeline
+
 
 class FeatureManifest:
     """Registry definition for features."""
@@ -27,7 +24,7 @@ class FeatureManifest:
         category: str,
         lookback: int,
         warmup: int,
-        source_columns: List[str],
+        source_columns: list[str],
         availability_delay: str = "T+0",
         uses_cross_section: bool = False,
         uses_news: bool = False,
@@ -66,8 +63,8 @@ def get_canonical_pipeline() -> FeaturePipeline:
     ])
 
 def build_features(
-    data: pd.DataFrame, 
-    as_of: Optional[pd.Timestamp | str] = None, 
+    data: pd.DataFrame,
+    as_of: pd.Timestamp | str | None = None,
     mode: Literal["research", "serving"] = "serving"
 ) -> pd.DataFrame:
     """
@@ -75,7 +72,7 @@ def build_features(
     Enforces V2-1 Point-in-time constraints.
     """
     df = data.copy()
-    
+
     if as_of is not None:
         as_of_ts = pd.to_datetime(as_of)
         if isinstance(df.index, pd.DatetimeIndex):
@@ -86,14 +83,14 @@ def build_features(
         elif 'date' in df.columns:
             df['date'] = pd.to_datetime(df['date'])
             df = df[df['date'] <= as_of_ts].copy()
-            
+
     if len(df) == 0:
         return df
-        
+
     pipeline = get_canonical_pipeline()
-    
+
     if mode == "research" and len(df) >= 20:
         pipeline.validate_causality(df)
-        
+
     features = pipeline.run(df)
     return features

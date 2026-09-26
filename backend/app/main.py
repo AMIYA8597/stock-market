@@ -70,11 +70,6 @@ async def lifespan(app: FastAPI):
         from app.tasks import retraining_trigger as _retraining_trigger_tasks  # noqa: F401
     except Exception as exc:
         logger.warning("scheduled_task_registration_deferred", error=str(exc))
-    try:
-        from app.jobs.ingestion import setup_scheduler
-        setup_scheduler(app)
-    except Exception as exc:
-        logger.warning("ingestion_scheduler_unavailable", error=str(exc))
     background_tasks = await startup_events()
     yield
     await shutdown_events(background_tasks)

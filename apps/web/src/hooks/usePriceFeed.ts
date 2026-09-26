@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { realtime, ConnectionStatus } from "@/lib/realtime";
+import { realtime, ConnectionStatus, isWsEnvelope } from "@/lib/realtime";
 
 export interface LivePriceTick {
   symbol: string;
@@ -25,21 +25,21 @@ let initialized = false;
 function initGlobalListener() {
   if (initialized) return;
   initialized = true;
-  realtime.onMessage((message) => {
-    if (message.type !== "tick") return;
-    
-    const payload = message.payload || {};
-    if (!message.symbol || typeof payload.price !== "number") return;
-    
-    const symbol = message.symbol.toUpperCase();
+  realtime.onMessage((raw) => {
+    if (!isWsEnvelope(raw) || raw.type !== "tick") return;
+
+    const payload = raw.payload ?? {};
+    if (!raw.symbol || typeof payload.price !== "number") return;
+
+    const symbol = raw.symbol.toUpperCase();
     globalTicks.set(symbol, {
       symbol,
       price: payload.price,
-      change_pct: payload.change_pct ?? 0,
-      timestamp: message.timestamp ?? new Date().toISOString(),
-      source: message.source,
+      change_pct: typeof payload.change_pct === "number" ? payload.change_pct : 0,
+      timestamp: raw.ts ?? new Date().toISOString(),
+      source: raw.source,
     });
-    
+
     subscribers.forEach((cb) => cb());
   });
 }

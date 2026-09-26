@@ -11,11 +11,22 @@ def test_sentiment_analyzer_unavailable_raises() -> None:
     """When the model is not initialized and initialize() cannot load it
     (e.g. no-op mock, or FinBERT missing), analyze_sentiment must fail
     loudly rather than return a fabricated neutral-leaning score. A missing
-    model means sentiment is genuinely unavailable, not "90% neutral"."""
+    model means sentiment is genuinely unavailable, not "90% neutral".
+
+    initialize() is mocked to fail rather than relying on FinBERT actually
+    being unreachable: whether the real ProsusAI/finbert download succeeds
+    depends on the runtime's network access, which is not something this
+    test should be sensitive to. What must hold regardless of environment
+    is that analyze_sentiment_batch propagates initialize()'s failure
+    instead of swallowing it into a fallback score.
+    """
     analyzer = FinBERTSentimentAnalyzer()
     analyzer._initialized = False
-    with pytest.raises(RuntimeError):
-        analyzer.analyze_sentiment("TCS shares rise on strong earnings.")
+    with patch.object(
+        analyzer, "initialize", side_effect=RuntimeError("FinBERT unavailable")
+    ):
+        with pytest.raises(RuntimeError):
+            analyzer.analyze_sentiment("TCS shares rise on strong earnings.")
 
 
 def test_get_stock_sentiment_with_mocked_headlines() -> None:

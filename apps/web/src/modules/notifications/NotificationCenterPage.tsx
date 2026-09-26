@@ -109,7 +109,7 @@ export function NotificationCenterPage(): JSX.Element {
                 </div>
                 <div className="text-right">
                   <Badge variant={alert.direction.includes("BUY") ? "bull" : "bear"}>
-                    {alert.confidence}% Conf
+                    {(alert.confidence * 100).toFixed(0)}% Conf
                   </Badge>
                   <p className="mt-1 text-[11px] text-[var(--ds-text-muted)]">
                     {new Date(alert.timestamp).toLocaleTimeString()}

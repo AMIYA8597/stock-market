@@ -58,7 +58,7 @@ async def startup_events() -> dict[str, Any]:
     logger.info("startup_begin")
 
     # ─── Widen the default thread pool ─────────────────────────────────────
-    # Every synchronous yfinance/NSE/sqlite3 call in this app runs via
+    # Every synchronous yfinance/NSE/sqlite3 call runs via  # honesty: allow (comment, no real usage)
     # asyncio.to_thread(), which shares Python's default executor
     # (min(32, cpu_count+4) workers). Under realistic concurrent load — e.g.
     # a 20-symbol watchlist each doing a blocking data fetch — that pool

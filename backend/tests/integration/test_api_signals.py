@@ -1,8 +1,8 @@
+from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from unittest.mock import patch
-import pytest
 
 from app.api.v1.intelligence import router as intelligence_router
 
