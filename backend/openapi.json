@@ -1116,6 +1116,34 @@
         ]
       }
     },
+    "/api/v1/payments/cancel-subscription": {
+      "post": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Cancel Subscription",
+        "description": "Mark the organization's active subscription to not renew.\n\nThis never fabricates success: it only flips a real flag on the real\nsubscription row, and the row must actually exist and be active.\nAccess remains until the already-paid period ends (current_period_end);\nthere is no prorated refund path in this Test Mode integration.",
+        "operationId": "cancel_subscription_api_v1_payments_cancel_subscription_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/payments/webhook": {
       "post": {
         "tags": [
@@ -7910,6 +7938,11 @@
               }
             ],
             "title": "Current Period End"
+          },
+          "cancel_at_period_end": {
+            "type": "boolean",
+            "title": "Cancel At Period End",
+            "default": false
           }
         },
         "type": "object",
