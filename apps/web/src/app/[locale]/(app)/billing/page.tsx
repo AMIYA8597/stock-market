@@ -46,7 +46,7 @@ export default function BillingDashboard() {
                 : "border-transparent text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)]"
             }`}
           >
-            <Receipt className="w-4 h-4" /> Ledger & Transactions
+            <Receipt className="w-4 h-4" /> Order History
           </button>
         </div>
 
