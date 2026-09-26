@@ -1098,11 +1098,12 @@ async def get_full_prediction(
 
 
     try:
-        from app.database.connection import async_session_factory
         from sqlalchemy import select
+
+        from app.database.connection import async_session_factory
         from app.models.market import Instrument
-        from app.models.research import Prediction, ModelExplanation, ModelRegistry
-        
+        from app.models.research import ModelExplanation, ModelRegistry, Prediction
+
         async with async_session_factory() as session:
             inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
             if inst:
@@ -1113,7 +1114,7 @@ async def get_full_prediction(
                     .where((ModelRegistry.status == "active") & (ModelRegistry.model_family == "XGBoost"))
                     .order_by(ModelRegistry.created_at.desc())
                 )).scalars().first()
-                
+
                 if active_model:
                     import json
                     pred = Prediction(
@@ -1124,7 +1125,7 @@ async def get_full_prediction(
                     )
                     session.add(pred)
                     await session.flush()
-                    
+
                     expl = ModelExplanation(
                         prediction_id=pred.id,
                         explanation_data={"reasoning": reasoning_msg, "features": ensemble.get("top_features", [])}
