@@ -51,8 +51,13 @@ jobs:
           python-version: "3.12"
           
       - name: Install dependencies
-        run: cd backend && uv sync --frozen
-        
+        # ruff/mypy/pytest/pytest-asyncio all live in the "dev" optional
+        # group in pyproject.toml -- plain `uv sync --frozen` only installs
+        # the base dependency list, so every step below was failing with
+        # "Failed to spawn: ruff" (and would have failed the same way on
+        # mypy/pytest right after) before this.
+        run: cd backend && uv sync --frozen --all-extras
+
       - name: Run Ruff
         run: cd backend && uv run ruff check .
         
@@ -64,16 +69,22 @@ jobs:
         
       - name: Migrations & DB tests
         env:
-          MIGRATIONS_DATABASE_URL: "postgresql+psycopg://postgres:password@localhost:5432/testdb"
+          # +psycopg (v3) isn't installed by this project -- only
+          # psycopg2-binary is a declared dependency (see pyproject.toml).
+          MIGRATIONS_DATABASE_URL: "postgresql+psycopg2://postgres:password@localhost:5432/testdb"
           ENVIRONMENT: test
         run: |
           cd backend
-          # In real execution, roles would be created here if needed by migrations
+          # The nq_api role no longer needs to be created here: the
+          # rls.sql migration payload now creates it itself if missing.
           uv run alembic upgrade head
           uv run alembic check
           uv run alembic downgrade base
           uv run alembic upgrade head
-          uv run pytest tests/integration/db/
+          # tests/integration/db/ has never existed in this repo; the two
+          # DB-backed integration tests actually live directly under
+          # tests/integration/.
+          uv run pytest tests/integration/test_repository.py tests/integration/test_schema.py
 
   web:
     runs-on: ubuntu-latest
@@ -90,7 +101,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install
       - name: Typecheck
-        run: pnpm tsc --noEmit
+        # `pnpm tsc --noEmit` from the workspace root has no tsconfig.json
+        # to find (each app/package has its own), so tsc printed its own
+        # --help text and exited 1 instead of type-checking anything.
+        run: pnpm --filter @neuroquant/web run type-check
       - name: Test Symbols
         run: pnpm --filter web exec vitest run src/lib/symbols.test.ts
       - name: Build

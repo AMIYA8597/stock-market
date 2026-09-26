@@ -44,8 +44,12 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id', name=op.f('pk_blog_posts')),
-        sa.UniqueConstraint('slug', name=op.f('uq_blog_posts_slug')),
     )
+    # A unique index (below), not a separate UniqueConstraint, is what the
+    # model's `mapped_column(..., unique=True, index=True)` actually
+    # produces -- a redundant explicit UniqueConstraint here made
+    # `alembic check` report a phantom drift ("detected removed unique
+    # constraint") against a completely fresh database.
     op.create_index(op.f('ix_blog_posts_slug'), 'blog_posts', ['slug'], unique=True)
 
     op.create_table('csrf_tokens',
@@ -56,8 +60,10 @@ def upgrade() -> None:
         sa.Column('used_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint('id', name=op.f('pk_csrf_tokens')),
-        sa.UniqueConstraint('token', name=op.f('uq_csrf_tokens_token')),
     )
+    # Same reasoning as blog_posts.slug above: the unique index below is
+    # what the model actually produces, and the separate UniqueConstraint
+    # this replaced was phantom drift as far as `alembic check` is concerned.
     op.create_index(op.f('ix_csrf_tokens_token'), 'csrf_tokens', ['token'], unique=True)
     op.create_index(op.f('ix_csrf_tokens_user_id'), 'csrf_tokens', ['user_id'], unique=False)
 
