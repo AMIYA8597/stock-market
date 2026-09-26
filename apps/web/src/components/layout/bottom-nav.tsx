@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
 import { LayoutDashboard, TrendingUp, Briefcase, Menu, TerminalSquare } from "lucide-react";
 import { cn } from "@neuroquant/ui";
 import { useUIStore } from "@/stores/ui-store";
