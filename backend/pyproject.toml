@@ -30,15 +30,20 @@ dependencies = [
     "aiohttp>=3.9.1",
     "httpx>=0.25.2",
     # ML & Scientific Computing
-    # Upper bounds are intentional: numpy 2.3+/pandas 3.x/scikit-learn 1.6+
-    # are recent major-version bumps that have shown native-extension
-    # instability (segfaults) in combination on this stack as of early
-    # 2026. Pin to the last well-tested minor line until those are vetted.
+    # Upper bounds are intentional: numpy 2.3+/pandas 3.x are recent
+    # major-version bumps that have shown native-extension instability
+    # (segfaults) in combination on this stack as of early 2026. Pin to
+    # the last well-tested minor line until those are vetted.
+    # scikit-learn's lower bound is 1.6.0, not a defensive upper bound:
+    # research/models/ensemble/meta_learner.py imports FrozenEstimator,
+    # added in sklearn 1.6.0 -- pinning below that (as an earlier,
+    # overly-broad version of this same defensive pin did) breaks that
+    # import outright.
     "numpy>=1.26.3,<2.3.0",
     "pandas>=2.1.4,<3.0.0",
     "pandas-ta",
     "scipy>=1.11.4,<1.15.0",
-    "scikit-learn>=1.3.2,<1.6.0",
+    "scikit-learn>=1.6.0,<1.8.0",
     "torch>=2.2.0",
     "pytorch-lightning>=2.2.0",
     "torch-geometric>=2.4.0",
@@ -51,6 +56,9 @@ dependencies = [
     "optuna>=3.5.0",
     "openai>=1.12.0",
     "google-generativeai>=0.4.0",
+    # research/models/online_learner/adaptive_learner.py imports this
+    # directly but it was never declared as a dependency anywhere.
+    "river>=0.21.0",
     # Data Sources
     "yfinance>=1.5.1",
     "alpha_vantage>=2.3.1",
