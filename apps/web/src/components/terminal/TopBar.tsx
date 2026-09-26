@@ -125,10 +125,15 @@ export default function TopBar({
       }
     }
 
+    const KNOWN_MACRO_BIAS = ["risk_on", "risk_off", "mixed"] as const;
+
     async function loadGlobalContext() {
       try {
-        const data = await fetchApi<any>("/market/global-context");
-        if (active) setMacroBias(data.macro_bias ?? "unavailable");
+        const data = await fetchApi<{ macro_bias?: string }>("/market/global-context");
+        const bias = data.macro_bias;
+        const isKnown = (v: string | undefined): v is (typeof KNOWN_MACRO_BIAS)[number] =>
+          !!v && (KNOWN_MACRO_BIAS as readonly string[]).includes(v);
+        if (active) setMacroBias(isKnown(bias) ? bias : "unavailable");
       } catch (err) {
         console.error("Failed to load global market context", err);
         if (active) setMacroBias("unavailable");

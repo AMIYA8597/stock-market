@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { realtime, ConnectionStatus } from "@/lib/realtime";
+import { realtime, ConnectionStatus, isWsEnvelope } from "@/lib/realtime";
 
 export interface LiveSignalTick {
   symbol: string;
@@ -24,28 +24,28 @@ let initialized = false;
 function initGlobalListener() {
   if (initialized) return;
   initialized = true;
-  realtime.onMessage((message) => {
-    if (message.type !== "signal" && message.type !== "signal_update") return;
-    
-    const payload = message.payload || {};
+  realtime.onMessage((raw) => {
+    if (!isWsEnvelope(raw) || (raw.type !== "signal" && raw.type !== "signal_update")) return;
+
+    const payload = raw.payload ?? {};
     if (
-      !message.symbol ||
+      !raw.symbol ||
       typeof payload.signal !== "number" ||
       typeof payload.confidence !== "number" ||
-      !payload.direction
+      typeof payload.direction !== "string"
     ) {
       return;
     }
-    
-    const symbol = message.symbol.toUpperCase();
+
+    const symbol = raw.symbol.toUpperCase();
     globalSignals.set(symbol, {
       symbol,
       signal: payload.signal,
       confidence: payload.confidence,
-      direction: payload.direction,
-      timestamp: message.timestamp ?? new Date().toISOString(),
+      direction: payload.direction as LiveSignalTick["direction"],
+      timestamp: raw.ts ?? new Date().toISOString(),
     });
-    
+
     subscribers.forEach((cb) => cb());
   });
 }
