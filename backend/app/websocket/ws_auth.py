@@ -19,6 +19,6 @@ async def authenticate_ws(websocket: WebSocket, token: str) -> str | None:
         logger.debug(f"WS auth failed: {e}")
         try:
             await websocket.close(code=1008, reason="Authentication failed")
-        except:
+        except Exception:
             pass
         return None

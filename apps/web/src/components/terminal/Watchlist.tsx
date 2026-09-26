@@ -203,8 +203,10 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
     const fetchSearch = async () => {
       try {
         // Fallback to relative URL if no env var
-        const data = await fetchApi<any>(`/market/search?q=${encodeURIComponent(query)}`);
-          const filtered = data.results.filter((r: { ticker: string }) => !activeSymbols.includes(r.ticker));
+        const data = await fetchApi<{ results: { ticker: string; name: string }[] }>(
+          `/market/search?q=${encodeURIComponent(query)}`
+        );
+          const filtered = data.results.filter((r) => !activeSymbols.includes(r.ticker));
           setSearchResults(filtered.slice(0, 8));
         
       } catch (err) {

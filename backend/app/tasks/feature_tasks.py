@@ -11,9 +11,9 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.database.connection import async_session_factory
-from app.models.research import Dataset as FeatureVector
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
+from app.models.research import Dataset as FeatureVector
 from app.models.research import Dataset as NewsSentiment
 from research.feature_engineering.pipeline import FeaturePipeline
 

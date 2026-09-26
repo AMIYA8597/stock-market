@@ -154,10 +154,12 @@ async def content_control(
 @router.post("/ingest")
 async def trigger_ingestion(ctx: RequestContext = Depends(get_current_context)):
     _require_org_admin(ctx)
-    import asyncio
+    # app.jobs.ingestion.IngestionPipeline imported a module
+    # (app.services.data_ingestion.provider_manager) that never existed in
+    # this codebase - every call here raised ModuleNotFoundError. Route to
+    # the real, working ingestion pipeline (app.tasks.market_data_tasks)
+    # instead of a duplicate pipeline that could never actually run.
+    from app.tasks.market_data_tasks import backfill_historical_data
 
-    from app.jobs.ingestion import IngestionPipeline
-
-    pipeline = IngestionPipeline()
-    asyncio.create_task(pipeline.run_full_ingestion())
-    return {"message": "Ingestion triggered"}
+    task = backfill_historical_data.delay()
+    return {"message": "Ingestion triggered", "task_id": task.id}

@@ -8,8 +8,8 @@ from sqlalchemy import select
 from tabulate import tabulate
 
 from app.database.connection import async_session_factory
-from app.models.research import Dataset as FeatureVector
 from app.models.instrument import Instrument
+from app.models.research import Dataset as FeatureVector
 from research.models.baselines.arima import ARIMADirectionalClassifier
 from research.models.baselines.naive import NaiveDirectionalClassifier
 from research.models.lightgbm_model.classifier import LightGBMDirectionalClassifier

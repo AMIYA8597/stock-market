@@ -96,7 +96,7 @@ class LLMReasoningEngine:
         You are an institutional quantitative trading AI.
         Generate a strictly concise, 1-sentence reasoning for the following signal based ONLY on the evidence pack.
         DO NOT invent, synthesize, or output any numerical performance records, accuracy scores, or price targets that are not explicitly provided below.
-        
+
         Evidence Pack:
         {json.dumps(evidence_pack, indent=2)}
         """
@@ -135,14 +135,14 @@ class LLMReasoningEngine:
                         if abs(num - float(ev_num_str)) < 0.001:
                             found = True
                             break
-                    except:
+                    except Exception:
                         pass
 
                 # Allow common small integers like 14-day RSI
                 if not found and num not in [0.0, 1.0, 14.0]:
                     logger.warning(f"LLM hallucinated number {num}. Stripping numerical claims.")
                     return LLMReasoningEngine._heuristic_fallback(evidence)
-            except:
+            except Exception:
                 pass
 
         return text

@@ -29,7 +29,7 @@ def require_feature(feature_key: str) -> Callable:
                 OrganizationSubscription.organization_id == ctx.organization_id,
                 OrganizationSubscription.status == "active",
                 PlanEntitlement.feature_key == feature_key,
-                PlanEntitlement.is_enabled == True
+                PlanEntitlement.is_enabled
             )
         )
         entitlement = result.scalars().first()

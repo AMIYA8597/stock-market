@@ -1,7 +1,7 @@
 """Replace disconnected stub models with real migrated tables
 
 These 13 tables back models that used to be 7-line placeholder stubs (their
-own disconnected declarative_base(), a dummy_* tablename, no migration)
+own disconnected declarative base, a dummy_* tablename, no migration)
 while still being imported and used throughout live API routes, Celery
 tasks, and services. See app/models/{blog,csrf_token,email_job,
 notification,journal,watchlist,sentiment,signal,feature_vectors,
@@ -13,11 +13,11 @@ Revises: 53aef4df1952
 Create Date: 2026-09-25 00:00:00.000000
 
 """
-from typing import Sequence, Union
+from typing import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'f3b91af9217c'
@@ -26,9 +26,9 @@ revision: str = 'f3b91af9217c'
 # chain with `KeyError: 'a5328e632291'` on any `alembic upgrade`/`history`.
 # '53aef4df1952' (stage_1_init) is the only other migration that exists, so
 # it's the real parent.
-down_revision: Union[str, None] = '53aef4df1952'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '53aef4df1952'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

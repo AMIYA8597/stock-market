@@ -65,10 +65,15 @@ export function NotificationMenu(): JSX.Element {
             const isBuy = item.direction.includes("BUY");
             const badgeVariant = isBuy ? "buy" : "sell";
             const timeAgo = formatTimeAgo(item.timestamp);
-            const formattedPrice = item.current_price.toLocaleString("en-IN", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            });
+            // The live signal WS stream doesn't include a price snapshot, so
+            // this is genuinely unavailable rather than always present.
+            const formattedPrice =
+              typeof item.current_price === "number"
+                ? item.current_price.toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })
+                : null;
             const formattedConf = safeFormat(item.confidence * 100, 1) + "%";
             const patternsStr =
               item.patterns_detected && item.patterns_detected.length > 0
@@ -115,9 +120,11 @@ export function NotificationMenu(): JSX.Element {
                         {formattedConf} conf
                       </span>
                     </div>
-                    <span className="text-[10px] font-semibold text-[var(--ds-text-primary)]">
-                      ₹{formattedPrice}
-                    </span>
+                    {formattedPrice && (
+                      <span className="text-[10px] font-semibold text-[var(--ds-text-primary)]">
+                        ₹{formattedPrice}
+                      </span>
+                    )}
                   </div>
                 </div>
               </DropdownItem>

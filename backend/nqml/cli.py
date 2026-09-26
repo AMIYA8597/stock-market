@@ -1,4 +1,5 @@
 import typer
+
 from nqml.data.datasets import app as dataset_app
 
 app = typer.Typer(help="NeuroQuant ML CLI")

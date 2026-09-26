@@ -9,8 +9,19 @@ on:
 jobs:
   guard:
     runs-on: ubuntu-latest
+    # gitleaks-action calls the PR-commits API to scan the diff, which the
+    # default GITHUB_TOKEN doesn't have read access to unless granted here.
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
+      # gitleaks-action needs the full commit history to diff the range it
+      # scans; the default shallow clone (fetch-depth: 1) makes its `git log`
+      # fail with "unknown revision" the moment that range spans more than
+      # the single fetched commit.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -19,6 +30,8 @@ jobs:
         run: python scripts/honesty_guard.py
       - name: Gitleaks
         uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   backend:
     runs-on: ubuntu-latest
