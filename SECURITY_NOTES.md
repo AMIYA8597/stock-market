@@ -13,6 +13,17 @@ Following the exhaustive S-Series Security Audit (Phases S0-S7), the application
 ## Secret Handling Process
 - `.env` files are correctly gitignored and MUST NOT be committed to the repository.
 - `.env.example` contains ONLY placeholder values and is committed to serve as a template.
+
+> [!WARNING]
+> **Past incident:** `backend/.env` and `apps/web/.env.local` were briefly tracked
+> in this repository's git history at the repo owner's explicit request (real
+> `SUPABASE_SECRET_KEY` and database credentials included). They have since been
+> untracked, but the values committed at that time remain permanently visible in
+> git history to anyone with repository access — untracking does not remove them
+> retroactively. Those specific credentials were not rotated (owner's explicit
+> decision). If repository access is ever widened (e.g., made public, or a new
+> collaborator/CI integration is added), rotate the Supabase service-role key and
+> database password *before* doing so.
 - The repository is actively scanned for secrets using `gitleaks` via a pre-commit hook and CI checks.
 
 > [!WARNING]
