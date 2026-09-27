@@ -1,19 +1,33 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import type { Session } from '@supabase/supabase-js';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
 
 const intlMiddleware = createMiddleware(routing);
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+// Both @supabase/ssr's createServerClient() and the browser client throw
+// immediately if these are missing/empty, which previously crashed every
+// single request (including public marketing pages) with a 500 the moment
+// NEXT_PUBLIC_SUPABASE_URL/ANON_KEY weren't configured. Real auth genuinely
+// requires real credentials, but a misconfigured/unset Supabase project
+// must not take down the entire app - it must just mean no one can have a
+// session, which the existing "no session -> redirect to /login" logic
+// below already handles correctly.
+const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
+let warnedMissingSupabaseConfig = false;
+
 export async function middleware(request: NextRequest) {
   // First, run next-intl middleware to handle locales
   const response = intlMiddleware(request);
 
-  // Then, attach supabase to the response to refresh sessions
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  let session: Session | null = null;
+
+  if (isSupabaseConfigured) {
+    // Then, attach supabase to the response to refresh sessions
+    const supabase = createServerClient(supabaseUrl!, supabaseAnonKey!, {
       cookies: {
         get(name: string) {
           return request.cookies.get(name)?.value;
@@ -43,10 +57,16 @@ export async function middleware(request: NextRequest) {
           });
         },
       },
-    }
-  );
+    });
 
-  const { data: { session } } = await supabase.auth.getSession();
+    ({ data: { session } } = await supabase.auth.getSession());
+  } else if (!warnedMissingSupabaseConfig) {
+    warnedMissingSupabaseConfig = true;
+    console.warn(
+      '[middleware] NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not set. ' +
+        'Auth is disabled: every request is treated as unauthenticated and protected routes will redirect to /login.'
+    );
+  }
 
   // Handle protected routes
   const pathname = request.nextUrl.pathname;
