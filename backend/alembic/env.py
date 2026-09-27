@@ -83,6 +83,12 @@ def run_migrations_online() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        # psycopg2 has no connect timeout by default (unlike the app's main
+        # asyncpg engine, which sets one - see app/database/connection.py).
+        # Without this, `alembic upgrade head` against an unreachable host
+        # hangs on the OS-level TCP timeout (60s+) with zero feedback
+        # instead of failing fast with a clear connection error.
+        connect_args={"connect_timeout": 10},
     )
 
     with connectable.connect() as connection:
