@@ -25,9 +25,9 @@ out/
 # ───────────────────────────────────────────────────
 # Environment & Secrets  (NEVER COMMIT THESE)
 # ───────────────────────────────────────────────────
-# .env
-# .env.*
-# !.env.example
+.env
+.env.*
+!.env.example
 *.pem
 keys/
 **/LLM-*
