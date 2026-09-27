@@ -2,7 +2,7 @@
 # MAKEFILE — Algorithmic Trading Platform (new-prompt.txt MASTER BUILD)
 # ════════════════════════════════════════════════════════════════════════════════
 
-.PHONY: help dev test lint migrate data-fetch features train-hmm train-tft train-gnn train-all backtest-full notebooks docs docker-up docker-down
+.PHONY: help dev test test-backend test-frontend lint lint-backend lint-frontend migrate migrate-new data-fetch features train-hmm train-tft train-gnn train-all backtest-full notebooks docs docker-up docker-down format type-check clean
 
 help:
 	@echo "╔════════════════════════════════════════════════════════════════════════════════╗"
@@ -11,9 +11,9 @@ help:
 	@echo "╚════════════════════════════════════════════════════════════════════════════════╝"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev                    Start local development stack (docker compose)"
-	@echo "  make docker-up              Start Docker compose services"
-	@echo "  make docker-down            Stop Docker compose services"
+	@echo "  make dev                    Start local Postgres+Redis, then run backend/frontend yourself"
+	@echo "  make docker-up              Start local Postgres+Redis (docker-compose.dev.yml)"
+	@echo "  make docker-down            Stop local Postgres+Redis"
 	@echo ""
 	@echo "Database & Schema:"
 	@echo "  make migrate                Run Alembic migrations"
@@ -36,8 +36,7 @@ help:
 	@echo "Quality:"
 	@echo "  make test                   Run all tests (backend + frontend)"
 	@echo "  make test-backend           Run pytest on backend/tests/"
-	@echo "  make # make test-frontend target removed
-# lint-frontend target removed          Run jest on frontend tests"
+	@echo "  make test-frontend          Run vitest on frontend tests"
 	@echo "  make lint                   Lint all code (ruff, mypy, eslint)"
 	@echo "  make format                 Auto-format all code"
 	@echo "  make type-check             Python type checking (mypy strict)"
@@ -47,16 +46,22 @@ help:
 	@echo ""
 
 # ── Development ──────────────────────────────────────────────────────────────────
-dev:
-	docker compose up --build
+# There is no frontend/backend Dockerfile-based service in this repo -- only
+# local Postgres+Redis are containerized (docker-compose.dev.yml), as an
+# alternative to a real Supabase Postgres project. Run the app itself with
+# `pnpm dev` (frontend, apps/web) and `uvicorn app.main:app --reload`
+# (backend, from backend/) directly.
+dev: docker-up
+	@echo "Postgres+Redis are up. Now run 'pnpm dev' (frontend) and, from backend/,"
+	@echo "'uvicorn app.main:app --reload --port 8000' (backend) in separate terminals."
 
 docker-up:
-	docker compose up -d
-	@echo "✓ Docker services started (frontend :3000, backend :8000, postgres :5432, redis :6379)"
+	docker compose -f docker-compose.dev.yml up -d
+	@echo "✓ Local Postgres (:5432) and Redis (:6379) started"
 
 docker-down:
-	docker compose down
-	@echo "✓ Docker services stopped"
+	docker compose -f docker-compose.dev.yml down
+	@echo "✓ Local Postgres and Redis stopped"
 
 # ── Database ─────────────────────────────────────────────────────────────────────
 migrate:
@@ -108,17 +113,15 @@ notebooks:
 	@echo "✓ Jupyter Lab started"
 
 # ── Testing & Quality ────────────────────────────────────────────────────────────
-test: test-backend # make test-frontend target removed
-# lint-frontend target removed
+test: test-backend test-frontend
 	@echo "✓ All tests completed"
 
 test-backend:
 	cd backend && pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=55
 	@echo "✓ Backend tests completed (55% coverage threshold)"
 
-# make test-frontend target removed
-# lint-frontend target removed:
-	pnpm --filter @neuroquant/web test:run
+test-frontend:
+	pnpm --filter @neuroquant/web test
 	@echo "✓ Frontend tests completed"
 
 lint: lint-backend lint-frontend
