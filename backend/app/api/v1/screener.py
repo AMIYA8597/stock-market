@@ -29,17 +29,10 @@ async def post_screener_run(
         import numpy as np
         from sqlalchemy import select
 
+        from app.core.numeric import safe_round
         from app.models.instrument import Instrument
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
-
-        # Helper to round float values safely, handling NaNs and Inf
-        def safe_round(val: float, places: int) -> float:
-            import math
-
-            if val is None or math.isnan(val) or math.isinf(val):
-                return 0.0
-            return round(float(val), places)
 
         # 1. Fetch active symbols matching request exchange list
         # We apply a limit here to prevent N+1 exploding with 25k records
