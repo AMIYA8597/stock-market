@@ -13,11 +13,14 @@ from app.core.config import Settings
 
 def test_razorpay_webhook_secret_is_loaded_from_environment(monkeypatch):
     monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", "a_real_operator_configured_secret")
-    settings = Settings()
+    # _env_file=None: isolate from whatever backend/.env actually exists on
+    # disk in this environment (a developer's real, credential-filled file),
+    # so this test's result depends only on the monkeypatched process env.
+    settings = Settings(_env_file=None)
     assert settings.RAZORPAY_WEBHOOK_SECRET == "a_real_operator_configured_secret"
 
 
 def test_razorpay_webhook_secret_defaults_to_a_detectable_placeholder(monkeypatch):
     monkeypatch.delenv("RAZORPAY_WEBHOOK_SECRET", raising=False)
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert "replace_me" in settings.RAZORPAY_WEBHOOK_SECRET.lower()

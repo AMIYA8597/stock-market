@@ -13,10 +13,10 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -125,7 +125,13 @@ class Settings(BaseSettings):
     )
 
     # ─── CORS ─────────────────────────────────────────────────────────────
-    BACKEND_CORS_ORIGINS: list[str] = Field(
+    # NoDecode: these accept a plain comma-separated string (see the
+    # "before" validators below) as well as a JSON array. Without NoDecode,
+    # pydantic-settings tries to json.loads() any list[str] field's raw env
+    # value *before* our validator runs, which raises SettingsError for any
+    # non-JSON comma-separated value -- exactly the format .env.example
+    # documents and real deployments use (e.g. ALLOWED_HOSTS=a.com,b.com).
+    BACKEND_CORS_ORIGINS: Annotated[list[str], NoDecode] = Field(
         default=[
             "http://localhost:3000",
             "http://localhost:3001",
@@ -134,11 +140,11 @@ class Settings(BaseSettings):
         ],
         description="List of allowed CORS origins (comma-separated or JSON array)",
     )
-    CORS_ALLOW_METHODS: list[str] = Field(
+    CORS_ALLOW_METHODS: Annotated[list[str], NoDecode] = Field(
         default=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         description="Allowed CORS HTTP methods",
     )
-    CORS_ALLOW_HEADERS: list[str] = Field(
+    CORS_ALLOW_HEADERS: Annotated[list[str], NoDecode] = Field(
         default=[
             "Authorization",
             "Content-Type",
@@ -148,7 +154,7 @@ class Settings(BaseSettings):
         ],
         description="Allowed CORS headers",
     )
-    ALLOWED_HOSTS: list[str] = Field(
+    ALLOWED_HOSTS: Annotated[list[str], NoDecode] = Field(
         default=[], description="Trusted hosts for Host header validation"
     )
     SECURITY_CSP_POLICY: str = Field(
