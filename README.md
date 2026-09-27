@@ -115,6 +115,21 @@ Nothing else is required to get a working local instance. Everything else (Postg
 
 ## 5. Environment configuration (.env)
 
+> **Already configured in this checkout.** `backend/.env` and `apps/web/.env.local`
+> in this working directory already have real, working values for
+> `SUPABASE_URL` / `SUPABASE_SECRET_KEY` / `DATABASE_URL` / `MIGRATIONS_DATABASE_URL`
+> / `INGEST_DATABASE_URL` (backend) and `NEXT_PUBLIC_SUPABASE_URL` /
+> `NEXT_PUBLIC_SUPABASE_ANON_KEY` (frontend) — auth and the database work out of the
+> box. You can skip straight to [§6 Running the stack locally](#6-running-the-stack-locally).
+> Everything else (Razorpay, broker APIs, LLM providers, SMTP, Sentry) is still a
+> placeholder in both files — those integrations stay disabled/unavailable until you
+> add real values for them yourself; nothing fakes success in their absence.
+>
+> These two files are intentionally **not tracked in git** (see §12) so a fresh
+> `git clone` of this repository will *not* come with these values already
+> filled in — you'd need to re-copy from `.env.example` and re-enter the
+> Supabase values in that case, following the steps below.
+
 Two files, both git-ignored (never commit real secrets into either):
 
 ### `backend/.env`
@@ -274,6 +289,7 @@ In practice, deploy the backend and frontend as separate services (e.g., backend
 - **i18n content**: the locale-aware navigation infrastructure (`next-intl`, `src/i18n/`) is fully wired, but no component actually calls `useTranslations()` yet — the `hi`/`bn` locales route correctly but render English text. Message catalogs exist but are placeholder-sized.
 - **`FIELD_ENCRYPTION_KEY`/`ENCRYPTION_ENABLED`**: field-level encryption exists in `app/core/config.py` but defaults to disabled — enable and generate a key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) before storing anything sensitive in it for real.
 - **Root `.env.example`** intentionally just points at `backend/.env.example` and `apps/web/.env.example` now — the backend explicitly does not read a root-level `.env` (see the docstring on `get_settings()` in `app/core/config.py`).
+- **`backend/.env` and `apps/web/.env.local` are not tracked in git**, on purpose: an earlier commit briefly tracked them with real Supabase credentials (a real service-role key and database password), which is a genuine secret-exposure risk in git history for anyone with repo access — see `SECURITY_NOTES.md`. They were deliberately untracked afterward rather than rotating those credentials. Practical effect: this specific checkout has them populated and working right now, but a *fresh* clone or a new session starting from a clean checkout will not — you'll need to redo §5's copy-and-fill-in steps there. If you want credentials to survive fresh clones automatically, the tradeoff is committing them to git (convenience) versus keeping them untracked (private, but manual re-entry per checkout) — there's no way to get both without a secrets manager, which this project doesn't currently integrate with.
 
 ## 13. Troubleshooting
 
