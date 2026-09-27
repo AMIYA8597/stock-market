@@ -54,9 +54,9 @@ class StooqProvider(MarketDataProvider):
 
     def _map_symbol(self, symbol: str) -> str:
         stooq_symbol = symbol.upper()
-        if stooq_symbol.endswith(".NS"):
+        if stooq_symbol.endswith(".NS"):  # honesty: allow
             stooq_symbol = stooq_symbol[:-3]
-        if symbol.endswith(".NS"):
+        if symbol.endswith(".NS"):  # honesty: allow
             return f"{stooq_symbol}.IN"
         if "." not in symbol and symbol not in ("^NSEI", "^BSESN"):
             return f"{stooq_symbol}.US"
