@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import pandas as pd
 import yfinance as yf
 
-from app.models.instrument import Instrument
 from app.services.ingestion.base import (
     DataUnavailableError,
     Interval,
@@ -25,6 +24,27 @@ _YF_INTERVAL_MAP: dict[Interval, str] = {
 }
 
 
+def _to_yfinance_symbol(symbol: str) -> str:
+    """Map a canonical/raw symbol to its Yahoo Finance ticker.
+
+    This pipeline's own universe ingestion (NSESource.get_universe())
+    already establishes the convention: a bare NSE equity canonical
+    symbol (e.g. "RELIANCE") maps to "{symbol}.NS" on Yahoo Finance.
+    Indices (^NSEI), FX pairs (USDINR=X), and any symbol that already
+    carries an explicit suffix (e.g. "RELIANCE.NS", "RELIANCE.BO") are
+    passed through unchanged.
+
+    Previously this normalization was dead code: the condition guarding
+    it was `not symbol.endswith("")`, which is always False (every
+    string ends with the empty string), so the bare canonical symbol
+    was always sent to Yahoo Finance as-is - which does not resolve for
+    NSE equities without the .NS suffix.
+    """
+    if "^" in symbol or "=" in symbol or "." in symbol:
+        return symbol
+    return f"{symbol}.NS"
+
+
 class YFinanceProvider(MarketDataProvider):
     """Yahoo Finance provider implementation."""
 
@@ -34,11 +54,7 @@ class YFinanceProvider(MarketDataProvider):
         self.timeout = timeout
 
     async def get_quote(self, symbol: str) -> Quote:
-        yf_symbol = (
-            Instrument.normalize_symbol(symbol) + ""
-            if not symbol.endswith("") and "^" not in symbol and "=" not in symbol
-            else symbol
-        )
+        yf_symbol = _to_yfinance_symbol(symbol)
         try:
             def _fetch():
                 ticker = yf.Ticker(yf_symbol)
@@ -80,11 +96,7 @@ class YFinanceProvider(MarketDataProvider):
     async def get_ohlcv(
         self, symbol: str, interval: Interval, start: datetime, end: datetime
     ) -> list[OHLCVBar]:
-        yf_symbol = (
-            Instrument.normalize_symbol(symbol) + ""
-            if not symbol.endswith("") and "^" not in symbol and "=" not in symbol
-            else symbol
-        )
+        yf_symbol = _to_yfinance_symbol(symbol)
         y_interval = _YF_INTERVAL_MAP[interval]
 
         try:

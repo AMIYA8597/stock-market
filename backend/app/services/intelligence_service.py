@@ -727,25 +727,18 @@ class IntelligenceService:
         return rows
 
     async def get_drift(self) -> list[DriftItem]:
-        from sqlalchemy import text
-
-        from app.database.connection import async_session_factory
-        rows = []
-        try:
-            async with async_session_factory() as session:
-                # Dummy drift reading from Postgres, normally would be from model_registry or a drift table
-                res = await session.execute(text("SELECT model_family FROM model_registry WHERE status = 'active'"))
-                for row in res.fetchall():
-                    rows.append(DriftItem(
-                        model=row.model_family,
-                        psi_score=0.05,
-                        js_divergence=0.02,
-                        ks_statistic=0.03,
-                        drift_detected=False
-                    ))
-        except Exception:
-            pass
-        return rows
+        # No real drift-detection pipeline exists yet (no frozen reference
+        # distribution, no ADWIN/KS computation against a live comparison
+        # window - see docs on required drift architecture). This used to
+        # construct DriftItem with fields (psi_score, js_divergence,
+        # ks_statistic) that don't exist on the DriftItem schema
+        # (adwin_p_value, residual_distribution, ks_stat), so every
+        # construction raised a validation error that a bare
+        # `except Exception: pass` silently swallowed - it always returned
+        # [] in practice, just via a masked bug rather than honestly. Return
+        # [] directly until real drift detection is implemented, rather
+        # than serve hardcoded fake psi/js/ks values as if measured.
+        return []
 
     async def get_ensemble_weights_history(self, days: int) -> list[EnsembleWeightPoint]:
         # No more sqlite
