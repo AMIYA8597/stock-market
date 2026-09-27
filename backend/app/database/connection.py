@@ -43,6 +43,13 @@ def _get_engine_kwargs() -> dict:
         connect_args = {
             "server_settings": {"application_name": "neuroquant-api"},
             "command_timeout": 15.0,  # roughly equivalent to statement_timeout for asyncpg
+            # Bounds the initial TCP/SSL handshake itself (distinct from
+            # command_timeout, which only bounds a query once connected).
+            # Without this, a DB host that's unreachable at boot (down,
+            # firewalled, wrong network route) hangs FastAPI's startup
+            # lifespan forever instead of logging the warning already
+            # written for this case below and letting the app continue.
+            "timeout": 10.0,
         }
         if settings.DB_SSL_REQUIRED:
             connect_args["ssl"] = True
