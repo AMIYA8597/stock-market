@@ -217,6 +217,48 @@ def test_build_ensemble_signal_all_models(sample_df):
 
         res = build_ensemble_signal_sync("TEST", sample_df)
         assert res["model_status"] == "trained"
+        # Regression test: model_status == "trained" only means some
+        # component model (xgboost/lstm/tft/...) is trained. It says
+        # nothing about how those component scores were fused. No real
+        # EnsembleMetaLearner artifact is mocked/available here, so fusion
+        # must fall back to the fixed 0.7/0.3/0.1 formula - and that must
+        # be visible as ensemble_method, not silently reported as if a
+        # trained combiner produced this ensemble.
+        assert res["ensemble_method"] == "fixed_weight_fallback"
+
+
+def test_build_ensemble_signal_uses_real_meta_learner_when_available(sample_df):
+    """When a real trained EnsembleMetaLearner artifact loads successfully,
+    ensemble_method must report "meta_learner", not the fallback label -
+    the field must reflect which fusion path actually ran, not always
+    report the fallback."""
+    sample_df["ATRr_14"] = 0.5
+    sample_df["close"] = 100.0
+    with patch("app.services.prediction_engine.detect_regime") as mock_regime, \
+         patch("app.services.prediction_engine.compute_kelly_fraction", return_value=0.1), \
+         patch("pathlib.Path.exists", return_value=False):
+
+        mock_regime.return_value = {
+            "regime": "NEUTRAL", "bull_prob": 0.5, "bear_prob": 0.5,
+            "regime_confidence": 0.5, "hmm_used": True,
+            "conditional_vol": 0.02, "vol_forecast_5d": 0.045, "vol_forecast_21d": 0.09
+        }
+
+        meta_learner_mock = MagicMock()
+        meta_learner_mock.lr_model = MagicMock()
+        meta_learner_mock.predict_proba.return_value = 0.7
+        meta_learner_mock.coefficients = {"xgboost": 0.4, "tft": 0.6}
+
+        import sys
+        sys.modules['research.models.ensemble.meta_learner'] = MagicMock(
+            EnsembleMetaLearner=MagicMock(load=MagicMock(return_value=meta_learner_mock))
+        )
+        try:
+            res = build_ensemble_signal_sync("TEST", sample_df)
+        finally:
+            del sys.modules['research.models.ensemble.meta_learner']
+
+        assert res["ensemble_method"] == "meta_learner"
 
 @pytest.mark.asyncio
 async def test_build_ensemble_signal(sample_df):

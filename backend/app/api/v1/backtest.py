@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 # import random  # removed per policy
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -14,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, get_rate_limiter
 from app.core.entitlements import require_feature
+from app.core.numeric import safe_round
 from app.models.backtest import BacktestJob
 from app.schemas.backtest import (
     BacktestMetrics,
@@ -28,11 +27,6 @@ from app.schemas.backtest import (
 from app.tasks.backtest_tasks import run_backtest_job_task
 
 router = APIRouter(prefix="/backtest", tags=["backtest"])
-
-def safe_round(val: float, places: int) -> float:
-    if val is None or math.isnan(val) or math.isinf(val):
-        return 0.0
-    return round(float(val), places)
 
 @router.post("/run", response_model=BacktestRunResponse, status_code=202)
 async def post_backtest_run(
