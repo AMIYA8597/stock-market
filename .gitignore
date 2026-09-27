@@ -145,6 +145,12 @@ backend/vulture_report.txt
 tree_output.txt
 tree_utf8.txt
 
+# Ad-hoc `alembic ... --sql > migration.sql` dumps and misplaced-cwd command
+# output (backend/alembic/rls.sql is the one real, intentionally tracked
+# SQL file and is unaffected by this pattern).
+migration.sql
+_stray_migration_files_backup/
+
 # Claude Code agent worktrees / scratch (not application source)
 .claude/
 
