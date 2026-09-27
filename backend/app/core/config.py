@@ -333,12 +333,6 @@ class Settings(BaseSettings):
     )
 
     # ─── Billing & Email Security ───────────────────────────────────────
-    PAYMENT_WEBHOOK_SECRET: str = Field(
-        default="", description="Shared secret for payment webhook signature validation"
-    )
-    PAYMENT_WEBHOOK_TOLERANCE_SECONDS: int = Field(
-        default=300, description="Allowed age (seconds) for payment webhook signatures"
-    )
     SENTRY_DSN: str = Field(default="", description="Sentry DSN for production error tracking")
     PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = Field(
         default=30, description="Password reset token validity window in minutes"
@@ -351,6 +345,18 @@ class Settings(BaseSettings):
     )
     RAZORPAY_KEY_SECRET: str = Field(
         default="replace_me_razorpay_key_secret", description="Razorpay API Key Secret"
+    )
+    # This was previously missing from Settings entirely: app/api/v1/payments.py's
+    # webhook handler read it via getattr(settings, "RAZORPAY_WEBHOOK_SECRET", ...),
+    # which always fell through to the hardcoded default because pydantic-settings
+    # only loads fields declared on the model - so no operator-configured env value
+    # could ever reach it, regardless of what RAZORPAY_WEBHOOK_SECRET was set to.
+    # (There was also a separate, unused PAYMENT_WEBHOOK_SECRET/
+    # PAYMENT_WEBHOOK_TOLERANCE_SECONDS pair here from an earlier generic-webhook
+    # design that no code ever read; removed rather than kept alongside this.)
+    RAZORPAY_WEBHOOK_SECRET: str = Field(
+        default="replace_me_razorpay_webhook_secret",
+        description="Razorpay webhook signature verification secret",
     )
 
     # ─── WebSocket ────────────────────────────────────────────────────────
