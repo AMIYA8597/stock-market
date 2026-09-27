@@ -140,48 +140,50 @@ async def test_get_counterfactuals(service):
     res = await service.get_counterfactuals("AAPL", req)
     assert isinstance(res, list)
 
-@patch('sqlite3.connect')
-@patch('app.core.config.get_settings')
+@patch('app.database.connection.async_session_factory')
 @pytest.mark.asyncio
-async def test_get_model_accuracy(mock_settings, mock_connect, service):
-    mock_settings.return_value.SYNC_DATABASE_URL = "sqlite:///test.db"
-    mock_conn = MagicMock()
-    mock_connect.return_value.__enter__.return_value = mock_conn
-    mock_cur = MagicMock()
-    mock_conn.cursor.return_value = mock_cur
-    mock_cur.fetchone.return_value = {"accuracy": 0.8, "precision": 0.7, "recall": 0.75, "auc": 0.85}
+async def test_get_model_accuracy(mock_session_factory, service):
+    """Regression test: get_model_accuracy() actually queries via
+    app.database.connection.async_session_factory() (a real async SQLAlchemy
+    session), not sqlite3.connect - the previous version of this test mocked
+    sqlite3.connect, which the implementation never calls, so the test made
+    a real, unmocked network connection attempt to whatever DATABASE_URL is
+    configured (backend/.env) every time it ran. With no connect timeout
+    configured anywhere, that could - and did - hang indefinitely instead of
+    failing fast, in an environment where that network path is blocked."""
+    mock_row = MagicMock()
+    mock_row.model_family = "xgboost"
+    mock_row.metrics_json = {"precision": 0.7, "recall": 0.75, "accuracy": 0.8}
+    mock_result = MagicMock()
+    mock_result.fetchall.return_value = [mock_row]
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_session_factory.return_value.__aexit__ = AsyncMock(return_value=None)
 
     res = await service.get_model_accuracy()
-    assert len(res) >= 0
+    assert len(res) == 1
+    assert res[0].model == "xgboost"
+    assert res[0].precision == 0.7
+    assert res[0].recall == 0.75
+    assert res[0].directional_accuracy == 0.8
 
-@patch('sqlite3.connect')
-@patch('app.core.config.get_settings')
+
 @pytest.mark.asyncio
-async def test_get_drift(mock_settings, mock_connect, service):
-    mock_settings.return_value.SYNC_DATABASE_URL = "sqlite:///test.db"
-    mock_conn = MagicMock()
-    mock_connect.return_value.__enter__.return_value = mock_conn
-    mock_cur = MagicMock()
-    mock_conn.cursor.return_value = mock_cur
-    # simulate history length >= 10
-    mock_cur.fetchall.return_value = [{"accuracy": 0.9}] * 5 + [{"accuracy": 0.5}] * 5
-
+async def test_get_drift_returns_empty_list(service):
+    """get_drift() has no real drift-detection pipeline implemented yet
+    (no frozen reference distribution, no live ADWIN/KS computation). It
+    must honestly report that as an empty result rather than serve
+    hardcoded fake psi/js/ks values as if they were measured drift."""
     res = await service.get_drift()
-    assert len(res) >= 0
+    assert res == []
 
-@patch('sqlite3.connect')
-@patch('app.core.config.get_settings')
+
 @pytest.mark.asyncio
-async def test_get_ensemble_weights_history(mock_settings, mock_connect, service):
-    mock_settings.return_value.SYNC_DATABASE_URL = "sqlite:///test.db"
-    mock_conn = MagicMock()
-    mock_connect.return_value.__enter__.return_value = mock_conn
-    mock_cur = MagicMock()
-    mock_conn.cursor.return_value = mock_cur
-    mock_cur.fetchall.return_value = [{"accuracy": 0.8, "created_at": "2024-01-01T00:00:00"}]
-
+async def test_get_ensemble_weights_history(service):
     res = await service.get_ensemble_weights_history(5)
-    assert len(res) >= 0
+    assert res == []
 
 @pytest.mark.asyncio
 async def test_get_economic_calendar(service):
