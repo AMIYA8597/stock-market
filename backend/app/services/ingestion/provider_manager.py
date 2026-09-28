@@ -5,6 +5,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from app.core.config import get_settings
 from app.database.redis_client import cache_get, cache_set, get_redis_client
 from app.services.ingestion.base import (
     DataUnavailableError,
@@ -16,9 +17,23 @@ from app.services.ingestion.base import (
 from app.services.ingestion.binance_source import BinanceSource
 from app.services.ingestion.nse_source import NSESource
 from app.services.ingestion.stooq_source import StooqProvider
+from app.services.ingestion.upstox_source import UpstoxSource
 from app.services.ingestion.yfinance_source import YFinanceProvider
 
 logger = logging.getLogger(__name__)
+
+
+def _default_equity_providers() -> list:
+    # Upstox first when configured: it's the official exchange-fed source
+    # for this app's NSE universe, with yfinance/NSE/stooq as fallback for
+    # any instrument Upstox hasn't been mapped for yet (see
+    # app/tasks/upstox_instrument_tasks.py) or if it errors/rate-limits.
+    settings = get_settings()
+    providers: list = []
+    if settings.UPSTOX_ENABLED:
+        providers.append(UpstoxSource())
+    providers.extend([YFinanceProvider(), NSESource(), StooqProvider()])
+    return providers
 
 
 class ProviderManager:
@@ -30,8 +45,7 @@ class ProviderManager:
     """
 
     def __init__(self, providers: list | None = None):
-        # Default order: yfinance -> nse -> stooq
-        self.providers = providers if providers is not None else [YFinanceProvider(), NSESource(), StooqProvider()]
+        self.providers = providers if providers is not None else _default_equity_providers()
         # TTL definitions (seconds)
         self.ttls = {"quote": 10, "intraday": 60, "daily": 24 * 60 * 60, "index": 30}
 
