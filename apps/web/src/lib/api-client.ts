@@ -85,6 +85,12 @@ export const authApi = {
   getProfile(): Promise<UserProfile> {
     return fetchApi("/users/profile");
   },
+  register(data: { email: string; password: string; full_name?: string }): Promise<{ id: string; email: string; message: string }> {
+    return fetchApi("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 export const usersApi = {
