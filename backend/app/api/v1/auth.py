@@ -60,11 +60,30 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
                 headers={"apikey": settings.SUPABASE_SECRET_KEY}
             )
             resp.raise_for_status()
-            data = resp.json()
-            auth_id = data.get("user", {}).get("id")
-            if not auth_id:
-                raise ValueError("No user ID from Supabase")
+        except httpx.HTTPStatusError as e:
+            try:
+                detail = e.response.json().get("msg") or e.response.json().get("error_description")
+            except Exception:
+                detail = None
+            raise HTTPException(status_code=400, detail=detail or "Registration failed") from e
+        except httpx.HTTPError as e:
+            raise HTTPException(status_code=502, detail="Could not reach the auth service") from e
 
+        data = resp.json()
+        auth_id = (data.get("user") or {}).get("id")
+        if not auth_id:
+            # Supabase returns `user: null` with a 200 OK (rather than an
+            # error) when the email is already registered and confirmed -
+            # this is intentional on their end, to avoid letting an
+            # attacker learn which emails have accounts. Surface it as an
+            # actionable message instead of the previous raw "No user ID
+            # from Supabase" string.
+            raise HTTPException(
+                status_code=409,
+                detail="An account with this email already exists. Try signing in, or use Forgot Password.",
+            )
+
+        try:
             user = User(
                 email=payload.email,
                 full_name=payload.full_name,
@@ -73,9 +92,18 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
             )
             db.add(user)
             await db.commit()
-            return {"id": str(user.id), "email": user.email, "message": "Registered successfully"}
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except Exception:
+            await db.rollback()
+            # A local User row can already exist for this Supabase account
+            # (e.g. JIT-provisioned by an earlier authenticated request) -
+            # treat that as success rather than a hard failure.
+            result = await db.execute(select(User).where(User.auth_id == auth_id))
+            existing = result.scalars().first()
+            if existing:
+                return {"id": str(existing.id), "email": existing.email, "message": "Registered successfully"}
+            raise HTTPException(status_code=409, detail="Email already registered") from None
+
+        return {"id": str(user.id), "email": user.email, "message": "Registered successfully"}
 
 @router.post("/login", response_model=TokenResponse)
 async def login(payload: AuthLogin, db: AsyncSession = Depends(get_db)):

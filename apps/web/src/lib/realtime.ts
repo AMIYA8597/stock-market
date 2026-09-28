@@ -1,7 +1,7 @@
 "use client";
 import { createClient } from '@/lib/supabase/client';
 
-import { getWsBaseUrl } from "@/lib/runtime-config";
+import { getApiBaseUrl, getWsBaseUrl } from "@/lib/runtime-config";
 
 export type ConnectionStatus = "connected" | "reconnecting" | "disconnected";
 
@@ -47,32 +47,61 @@ class RealtimeManager {
       this.reconnectTimer = null;
     }
 
+    let token: string | undefined;
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token;
+    } catch {
+      // ignore
+    }
+
+    if (!token) {
+      // No session (public page, or not logged in yet) - there's nothing
+      // to stream. Bail out instead of opening a WebSocket with an empty
+      // ticket, which the backend correctly rejects with 403, which then
+      // re-triggered this same reconnect loop forever - GlobalToast (and
+      // therefore this connect()) mounts on every single page including
+      // the public marketing/auth pages, so that loop flooded the console
+      // everywhere, not just the dashboard.
+      this.setStatus("disconnected");
+      return;
+    }
+
+    let ticket = "";
+    try {
+      const apiUrl = getApiBaseUrl();
+      const res = await fetch(`${apiUrl}/api/v1/websocket_url/ticket`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        ticket = data.ticket;
+      }
+    } catch {
+      // ignore
+    }
+
+    if (!ticket) {
+      // Have a session but couldn't mint a ticket (transient network/API
+      // hiccup) - worth retrying with backoff, same as a dropped socket.
+      this.setStatus("reconnecting");
+      this.reconnectTimer = setTimeout(() => {
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30000);
+        this.connect();
+      }, this.reconnectDelay + (Math.random() * 500));
+      return;
+    }
+
     this.setStatus("reconnecting");
 
     const cleanWsUrl = getWsBaseUrl();
     const base = cleanWsUrl.replace(/\/+$/, "");
     const wsBase = base.endsWith("/ws") ? base : `${base}/ws`;
-    
-    let ticket = "";
-    try {
-        const supabase = createClient();
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (token) {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-            const res = await fetch(`${apiUrl}/api/v1/websocket_url/ticket`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                ticket = data.ticket;
-            }
-        }
-    } catch (e) {}
 
     const wsUrl = `${wsBase}/stream?ticket=${ticket}`;
-    
+
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
