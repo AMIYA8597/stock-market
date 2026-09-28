@@ -225,7 +225,7 @@ class Settings(BaseSettings):
         default="", description="Base32 TOTP secret for Angel One login"
     )
 
-    # ─── Upstox Integration ───────────────────────────────────────────────
+    # ─── Upstox Integration (OAuth / trading) ──────────────────────────────
     UPSTOX_API_KEY: str = Field(default="", description="Upstox API Client ID (API Key)")
     UPSTOX_API_SECRET: str = Field(default="", description="Upstox API Client Secret")
     UPSTOX_REDIRECT_URI: str = Field(
@@ -235,6 +235,29 @@ class Settings(BaseSettings):
     UPSTOX_MAX_ORDER_VALUE: float = Field(
         default=10000.0,
         description="Hard server-side risk cap limit on per-order value in INR (e.g. ₹10,000)",
+    )
+
+    # ─── Upstox Integration (free read-only Analytics Token, market data) ──
+    # A separate credential from UPSTOX_API_KEY/SECRET above: the Analytics
+    # Token (Upstox Developer -> Analytics) is free, read-only, valid one
+    # year, and covers Market Quote / Historical Data / WebSocket - it
+    # cannot place or modify orders, unlike the OAuth flow above which is
+    # for the (currently unused, paper-trading-only) broker integration.
+    UPSTOX_ANALYTICS_TOKEN: str = Field(
+        default="", description="Upstox free read-only Analytics Token for market data"
+    )
+    UPSTOX_ENABLED: bool = Field(
+        default=False, description="Enable the Upstox market data provider"
+    )
+    UPSTOX_BASE_URL: str = Field(
+        default="https://api.upstox.com", description="Upstox REST API base URL"
+    )
+    UPSTOX_WS_ENABLED: bool = Field(
+        default=False, description="Enable the Upstox real-time WebSocket feed"
+    )
+    UPSTOX_WS_MODE: str = Field(
+        default="full",
+        description="Upstox WebSocket feed mode: ltpc | full | option_greeks | full_d30",
     )
 
     # ─── Email / Notifications ────────────────────────────────────────────
