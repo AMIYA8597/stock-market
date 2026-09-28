@@ -170,7 +170,32 @@ async def get_current_context(
         result = await db.execute(select(User).where(User.auth_id == sub))
         user = result.scalars().first()
         if not user:
-            raise HTTPException(status_code=401, detail="User profile not found")
+            # A valid Supabase-signed token proves this account is real and
+            # confirmed - so a missing local row means our own /auth/register
+            # never ran for it (e.g. a client that called supabase-js
+            # directly), not that the user is unauthorized. Provision it now
+            # instead of hard-failing every authenticated request forever.
+            email = payload.get("email")
+            if not email:
+                raise HTTPException(status_code=401, detail="Token missing email claim")
+            user = User(
+                email=email,
+                full_name=payload.get("user_metadata", {}).get("full_name"),
+                auth_id=sub,
+                status="active",
+            )
+            db.add(user)
+            try:
+                await db.commit()
+                await db.refresh(user)
+            except Exception:
+                await db.rollback()
+                # Lost a race with a concurrent request provisioning the same
+                # user; re-fetch rather than surface a spurious 500.
+                result = await db.execute(select(User).where(User.auth_id == sub))
+                user = result.scalars().first()
+                if not user:
+                    raise HTTPException(status_code=401, detail="User profile not found")
 
         if user.status != "active":
             raise HTTPException(status_code=403, detail="User account suspended")
