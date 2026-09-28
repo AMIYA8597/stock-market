@@ -75,22 +75,35 @@ export async function middleware(request: NextRequest) {
   
   const isPublicPath = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/pricing', '/blog'].includes(pathWithoutLocale) || pathWithoutLocale.startsWith('/blog/');
 
+  // Remembers where an unauthenticated visitor was headed so login can send
+  // them back there - kept in a cookie rather than a ?next= query param so
+  // it never shows up in the address bar.
+  const NEXT_COOKIE = 'nq_next';
+
   if (!session && !isPublicPath && !pathname.startsWith('/api') && !pathname.startsWith('/_next') && !pathname.match(/\.(.*)$/)) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/login`;
     url.search = '';
-    url.searchParams.set('next', pathWithoutLocale);
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    redirect.cookies.set(NEXT_COOKIE, pathWithoutLocale, {
+      maxAge: 600,
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+    });
+    return redirect;
   }
 
   if (session && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
     const locale = hasLocale ? pathname.split('/')[1] : 'en';
-    const next = request.nextUrl.searchParams.get('next');
-    const destination = next && next.startsWith('/') ? next : '/dashboard';
+    const storedNext = request.cookies.get(NEXT_COOKIE)?.value;
+    const destination = storedNext && storedNext.startsWith('/') ? storedNext : '/dashboard';
     const url = request.nextUrl.clone();
     url.pathname = `/${locale}${destination}`;
     url.search = '';
-    return NextResponse.redirect(url);
+    const redirect = NextResponse.redirect(url);
+    redirect.cookies.delete(NEXT_COOKIE);
+    return redirect;
   }
 
   return response;
