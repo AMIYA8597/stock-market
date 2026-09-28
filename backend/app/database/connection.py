@@ -52,7 +52,13 @@ def _get_engine_kwargs() -> dict:
             "timeout": 10.0,
         }
         if settings.DB_SSL_REQUIRED:
-            connect_args["ssl"] = True
+            # "require" (encrypt, don't verify the cert chain) rather than
+            # True (full verification via ssl.create_default_context()):
+            # Supabase's connection pooler (PgBouncer/Supavisor) presents a
+            # certificate chain that terminates in a self-signed cert not
+            # in the public CA trust store, so strict verification always
+            # fails with CERTIFICATE_VERIFY_FAILED against it.
+            connect_args["ssl"] = "require"
 
         if settings.DB_POOL_MODE == "transaction":
             connect_args["statement_cache_size"] = 0
