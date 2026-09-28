@@ -28,7 +28,15 @@ jobs:
           python-version: "3.12"
       - name: Run Honesty Guard
         run: python scripts/honesty_guard.py
+      # if: always() - without this, a failing Honesty Guard step (even a
+      # false positive) makes GitHub Actions skip every later step in this
+      # job by default, including Gitleaks. That's exactly how a real
+      # secret leak in backend/.env.example and apps/web/.env.example
+      # reached main undetected: the guard failed first on an unrelated
+      # false positive, so gitleaks never ran to catch it. These two scans
+      # must be independent - one's failure must never suppress the other.
       - name: Gitleaks
+        if: always()
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
