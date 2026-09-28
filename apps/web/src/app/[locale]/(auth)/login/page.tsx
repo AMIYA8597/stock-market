@@ -1,12 +1,8 @@
 'use client';
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useRouter } from '@/i18n/navigation';
 import { createClient } from '@/lib/supabase/client';
 
 export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -22,8 +18,11 @@ export default function LoginPage() {
     if (signInError) {
       setError(signInError.message);
     } else {
-      const next = searchParams.get('next');
-      router.push(next || '/dashboard');
+      // Full navigation (not router.push) so middleware re-runs with the
+      // now-valid session and reads the nq_next cookie to send us back to
+      // wherever we were headed before login - keeps the redirect logic
+      // in one place (middleware.ts) instead of duplicating it here.
+      window.location.reload();
     }
   };
 
