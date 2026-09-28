@@ -78,13 +78,17 @@ export async function middleware(request: NextRequest) {
   if (!session && !isPublicPath && !pathname.startsWith('/api') && !pathname.startsWith('/_next') && !pathname.match(/\.(.*)$/)) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/login`;
+    url.search = '';
     url.searchParams.set('next', pathWithoutLocale);
     return NextResponse.redirect(url);
   }
 
   if (session && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
+    const locale = hasLocale ? pathname.split('/')[1] : 'en';
+    const next = request.nextUrl.searchParams.get('next');
+    const destination = next && next.startsWith('/') ? next : '/dashboard';
     const url = request.nextUrl.clone();
-    url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/dashboard`;
+    url.pathname = `/${locale}${destination}`;
     url.search = '';
     return NextResponse.redirect(url);
   }
