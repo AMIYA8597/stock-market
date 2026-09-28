@@ -85,6 +85,7 @@ export async function middleware(request: NextRequest) {
   if (session && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/dashboard`;
+    url.search = '';
     return NextResponse.redirect(url);
   }
 
