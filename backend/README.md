@@ -1,6 +1,21 @@
+---
+title: NeuroQuant API
+emoji: 📈
+colorFrom: blue
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # NeuroQuant Backend
 
 This directory contains the FastAPI backend and Machine Learning research engine for NeuroQuant.
+
+> If deploying this folder as a Hugging Face Space: the YAML block above
+> must be the literal first thing in this file (Spaces reads it to pick
+> the Docker SDK and which port `EXPOSE`d by `Dockerfile` to route to -
+> without it, the Space won't start). Don't move it below this heading.
 
 ## Architecture
 The backend is split into two primary domains:
