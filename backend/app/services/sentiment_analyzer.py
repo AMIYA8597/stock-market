@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# How long a Google News scrape result is reused for the same query before
+# re-fetching. Without this, scrape_google_news() ran live on every single
+# prediction request with no caching at all - the one place in this codebase
+# that genuinely hit an external HTTPS endpoint synchronously per request.
+_NEWS_CACHE_TTL_SECONDS = 900  # 15 minutes
 
 
 class FinBERTSentimentAnalyzer:
@@ -25,6 +32,12 @@ class FinBERTSentimentAnalyzer:
     def __init__(self) -> None:
         self.vader = None
         self._initialized = getattr(self, "_initialized", False)
+        # Guarded like _initialized above: __init__ re-runs on every
+        # FinBERTSentimentAnalyzer() call even though __new__ returns the
+        # same singleton, so an unguarded `self._news_cache = {}` here would
+        # wipe the cache on every call and defeat its purpose.
+        if not hasattr(self, "_news_cache"):
+            self._news_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
     def get_stock_sentiment(self, symbol: str, headlines: list[dict]) -> float:
         """Calculate average sentiment score for a list of headlines."""
@@ -196,7 +209,20 @@ class FinBERTSentimentAnalyzer:
         return unique_headlines
 
     def scrape_google_news(self, query: str) -> list[dict[str, Any]]:
-        """Scrape headlines from Google News RSS for a specific query."""
+        """Scrape headlines from Google News RSS for a specific query.
+
+        Cached per query for _NEWS_CACHE_TTL_SECONDS - headline-level news
+        doesn't change meaningfully minute to minute, and without this,
+        every prediction request for a popular symbol re-scraped Google
+        News synchronously, adding real latency and risking a live rate
+        limit / block during any burst of traffic.
+        """
+        cached = self._news_cache.get(query)
+        if cached is not None:
+            cached_at, headlines = cached
+            if time.monotonic() - cached_at < _NEWS_CACHE_TTL_SECONDS:
+                return headlines
+
         from urllib.parse import quote
 
         encoded_query = quote(query)
@@ -204,6 +230,7 @@ class FinBERTSentimentAnalyzer:
 
         headlines = []
         headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        succeeded = False
         try:
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -231,9 +258,17 @@ class FinBERTSentimentAnalyzer:
                             "source": "Google News",
                         }
                     )
+            succeeded = True
         except Exception as e:
             logger.warning(
                 f"No sentiment tilt this cycle: Failed to scrape Google News for {query}: {e}"
             )
+
+        # Only cache a successful scrape (even if it legitimately found zero
+        # headlines) - never cache a transient failure, or every call for
+        # the next 15 minutes would keep returning empty after the network
+        # issue clears.
+        if succeeded:
+            self._news_cache[query] = (time.monotonic(), headlines)
 
         return headlines
