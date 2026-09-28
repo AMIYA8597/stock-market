@@ -58,6 +58,7 @@ from app.core.request_id_middleware import RequestIDMiddleware
 from app.core.structured_logging import configure_logging
 from app.database.connection import async_session_factory
 from app.database.redis_client import InMemoryCache, get_redis_client
+from app.websocket.router import router as websocket_router
 
 settings = get_settings()
 
@@ -127,6 +128,11 @@ def create_app() -> FastAPI:
 
     # ─── Mount Routers ─────────────────────────────────────────
     _app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+    # The websocket router (prefix="/ws" is already built into it) exposes
+    # real endpoints - /ws/prices, /ws/signals, /ws/alerts,
+    # /ws/backtest-progress, /ws/stream - that existed in the codebase but
+    # were never reachable: nothing ever imported or included this router.
+    _app.include_router(websocket_router)
 
     @_app.get("/liveness", tags=["health"])
     async def liveness() -> dict[str, str]:
