@@ -413,11 +413,18 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validate_production_keys(self) -> Settings:
         if self.ENVIRONMENT == "production":
+            # UPSTOX_API_KEY/SECRET are intentionally not required here: this
+            # app is documented as fully functional in paper-trading mode
+            # with no broker keys at all (backend/.env.example, README.md).
+            # upstox_service.py already raises its own clear error the
+            # moment something actually tries to use the Upstox integration
+            # without them configured - that's the right place for this
+            # check, not a blanket production-startup crash that would take
+            # down the entire app (including paper trading, which needs no
+            # broker credentials) over an optional feature being unused.
             required_keys = {
                 "DATABASE_URL": self.DATABASE_URL,
                 "REDIS_URL": self.REDIS_URL,
-                "UPSTOX_API_KEY": self.UPSTOX_API_KEY,
-                "UPSTOX_API_SECRET": self.UPSTOX_API_SECRET,
             }
             for key, val in required_keys.items():
                 if (
