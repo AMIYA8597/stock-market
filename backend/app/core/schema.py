@@ -4,8 +4,10 @@ from sqlalchemy import text
 
 from app.core.config import get_settings
 from app.core.database import engine
+from app.core.logging import get_logger
 
 settings = get_settings()
+logger = get_logger(__name__)
 
 async def schema_guard() -> dict:
     # Get current DB revision
@@ -25,7 +27,8 @@ async def schema_guard() -> dict:
         alembic_cfg.set_main_option("script_location", os.path.join(os.path.dirname(__file__), "..", "..", "alembic"))
         script = ScriptDirectory.from_config(alembic_cfg)
         code_head = script.get_current_head()
-    except Exception:
+    except Exception as e:
+        logger.warning("schema_guard_code_head_failed", error=str(e), error_type=type(e).__name__)
         code_head = None
 
     if db_revision == code_head:
