@@ -1,39 +1,50 @@
 'use client';
 import { useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
+import { authApi, ApiError } from '@/lib/api-client';
+import { useRouter } from '@/i18n/navigation';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const router = useRouter();
 
-  const handleReset = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const supabase = createClient();
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
-    if (resetError) {
-      setError(resetError.message);
-    } else {
-      setSuccess(true);
+    if (!email.trim()) return;
+    setSubmitting(true);
+    try {
+      // Always responds the same way whether or not the email is
+      // registered, so this can't be used to enumerate accounts - the user
+      // finds out for certain only by checking their inbox.
+      await authApi.forgotPassword(email.trim());
+      router.push(`/reset-password?email=${encodeURIComponent(email.trim())}`);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Something went wrong. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-24">
-      <form onSubmit={handleReset} className="flex flex-col gap-4 w-80">
-        <h1 className="text-2xl font-bold">Reset Password</h1>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4 w-80">
+        <h1 className="text-2xl font-bold text-[var(--nq-text-primary)]">Forgot Password</h1>
+        <p className="text-sm text-[var(--nq-text-secondary)]">
+          Enter your account email and we&apos;ll send you a password reset code.
+        </p>
         {error && <p className="text-red-500 text-sm">{error}</p>}
-        {success && <p className="text-green-500 text-sm">Check your email for reset link</p>}
         <input
           type="email"
           placeholder="Email"
+          autoFocus
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="border p-2 text-black"
+          className="border border-[var(--nq-border)] bg-[var(--nq-bg-surface)] p-2 text-[var(--nq-text-primary)] placeholder:text-[var(--nq-text-secondary)]"
         />
-        <button type="submit" className="bg-blue-600 text-white p-2">
-          Send Reset Link
+        <button type="submit" disabled={submitting} className="bg-blue-600 text-white p-2 disabled:opacity-50">
+          {submitting ? 'Sending...' : 'Send Reset Code'}
         </button>
       </form>
     </div>

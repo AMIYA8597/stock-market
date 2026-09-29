@@ -16,6 +16,13 @@ class User(Base):
     auth_id: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Only populated by the is_test_mode()/local-dev registration fallback in
+    # auth.py - real production accounts are backed by Supabase, which owns
+    # password storage/hashing entirely; this column stays NULL for those
+    # rows rather than duplicating a second copy of the credential.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -2,6 +2,7 @@
 SQLAlchemy ORM models for Stage 2.
 """
 from app.models.alerts import Alert, AlertEvent
+from app.models.auth_security import EmailOTP
 from app.models.autotrade import AutoTradeSetting
 from app.models.backtest import BacktestJob
 from app.models.billing import OrganizationSubscription as Subscription

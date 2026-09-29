@@ -237,6 +237,20 @@ async def get_current_context(
         if user.status != "active":
             raise HTTPException(status_code=403, detail="User account suspended")
 
+        # Authoritative OTP-verification gate. /auth/login already checks
+        # this before issuing tokens, but a Supabase JWT can also be
+        # obtained by calling Supabase's own auth API directly with the
+        # public anon key (bypassing our /auth/register + OTP flow
+        # entirely) - so this must be enforced here too, since this is the
+        # function every protected endpoint actually goes through. /auth/me
+        # is exempted so the frontend can detect "authenticated but
+        # unverified" and prompt for the OTP rather than getting a bare 403.
+        if not user.email_verified and not request.url.path.rstrip("/").endswith("/auth/me"):
+            raise HTTPException(
+                status_code=403,
+                detail="Please verify your email before continuing. Check your inbox for the verification code.",
+            )
+
         # Self-healing: also covers accounts created before this org-
         # provisioning existed, not just ones JIT-provisioned just above.
         await ensure_personal_organization(db, user)
