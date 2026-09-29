@@ -29,7 +29,15 @@ async def ensure_personal_organization(db: AsyncSession, user: User) -> None:
     those endpoints.
     """
     existing = await db.execute(select(OrgMember).where(OrgMember.user_id == user.id))
-    if existing.scalars().first():
+    membership = existing.scalars().first()
+    if membership:
+        # Heals accounts that got a membership row created with the
+        # lowercase "owner" bug below before it was fixed - role_hierarchy
+        # only recognizes uppercase role names, so those accounts would
+        # otherwise stay 403'd forever even after this fix ships.
+        if membership.role != membership.role.upper():
+            membership.role = membership.role.upper()
+            await db.commit()
         return
     org = Organization(
         name=user.full_name or user.email.split("@")[0],
@@ -38,7 +46,13 @@ async def ensure_personal_organization(db: AsyncSession, user: User) -> None:
     )
     db.add(org)
     await db.flush()
-    db.add(OrgMember(organization_id=org.id, user_id=user.id, role="owner", status="active"))
+    # role_hierarchy in dependencies.py's require_role() looks role names up
+    # case-sensitively against uppercase keys ("OWNER", "VIEWER", ...) - a
+    # lowercase "owner" here silently matched nothing, defaulted to level 0,
+    # and made every require_role() check 403 regardless of the org/
+    # membership actually existing. Matches the convention already used in
+    # organizations.py's own owner-membership creation.
+    db.add(OrgMember(organization_id=org.id, user_id=user.id, role="OWNER", status="active"))
     await db.commit()
 
 
