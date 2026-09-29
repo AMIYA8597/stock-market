@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.dependencies import get_current_user_or_none
+from app.core.security import ensure_personal_organization
 from app.core.test_state import is_test_mode
 from app.database.connection import get_db
 from app.models.identity import User
@@ -46,6 +47,7 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
             )
             db.add(user)
             await db.commit()
+            await ensure_personal_organization(db, user)
             return {"id": str(user.id), "email": user.email, "message": "Registered successfully"}
         except Exception:
             await db.rollback()
@@ -92,6 +94,7 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
             )
             db.add(user)
             await db.commit()
+            await ensure_personal_organization(db, user)
         except Exception:
             await db.rollback()
             # A local User row can already exist for this Supabase account
@@ -100,6 +103,7 @@ async def register(payload: AuthRegister, db: AsyncSession = Depends(get_db)):
             result = await db.execute(select(User).where(User.auth_id == auth_id))
             existing = result.scalars().first()
             if existing:
+                await ensure_personal_organization(db, existing)
                 return {"id": str(existing.id), "email": existing.email, "message": "Registered successfully"}
             raise HTTPException(status_code=409, detail="Email already registered") from None
 

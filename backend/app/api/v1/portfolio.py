@@ -49,7 +49,11 @@ async def list_portfolios(
     deposits_res = await db.execute(
         select(PaperWallet.balance).where(PaperWallet.user_id == uid)
     )
-    initial_cap = float(deposits_res.scalar_one()) or 0.0
+    # scalar_one() raises when a brand-new user has no PaperWallet row yet
+    # (nothing to fall back to via `or 0.0` if it never returns) - that was
+    # a 500 on every first /portfolio call for a freshly created account.
+    balance = deposits_res.scalar_one_or_none()
+    initial_cap = float(balance) if balance is not None else 0.0
 
     holdings = await get_holdings(current_user=current_user, db=db)
 
@@ -867,7 +871,11 @@ async def get_portfolio(
     deposits_res = await db.execute(
         select(PaperWallet.balance).where(PaperWallet.user_id == uid)
     )
-    initial_cap = float(deposits_res.scalar_one()) or 0.0
+    # scalar_one() raises when a brand-new user has no PaperWallet row yet
+    # (nothing to fall back to via `or 0.0` if it never returns) - that was
+    # a 500 on every first /portfolio call for a freshly created account.
+    balance = deposits_res.scalar_one_or_none()
+    initial_cap = float(balance) if balance is not None else 0.0
 
     holdings = await get_holdings(current_user=current_user, db=db)
 
