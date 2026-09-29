@@ -39,7 +39,7 @@ async def get_shap_explanation(symbol: str, db: AsyncSession = Depends(get_db)) 
         from sqlalchemy import select
 
         from app.models.instrument import Instrument
-        from app.models.research import ModelRegistry as ModelArtifact
+        from app.models.model_artifact import ModelArtifact
 
         stmt = (
             select(ModelArtifact)
