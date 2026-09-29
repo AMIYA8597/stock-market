@@ -171,8 +171,8 @@ function BacktestLabPage(): JSX.Element {
             </span>
             <Input
               type="number"
-              min={1}
-              step={1000}
+              min={1000}
+              step={1}
               value={initialCapital}
               onChange={(e) => setInitialCapital(e.target.value)}
               disabled={submitting}
