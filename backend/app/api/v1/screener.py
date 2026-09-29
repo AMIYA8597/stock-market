@@ -31,21 +31,27 @@ async def post_screener_run(
 
         from app.core.numeric import safe_round
         from app.models.instrument import Instrument
+        from app.models.market import Exchange
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
 
         # 1. Fetch active symbols matching request exchange list
         # We apply a limit here to prevent N+1 exploding with 25k records
         # In a real system, filtering is pushed down to SQL/Elasticsearch
-        stmt = select(Instrument).where(Instrument.is_active)
+        # Instrument only stores exchange_id (a FK) - the exchange code
+        # ("NSE" etc.) lives on the related Exchange row, so it must be
+        # joined in rather than read directly off Instrument.
+        stmt = select(Instrument, Exchange.code).join(
+            Exchange, Instrument.exchange_id == Exchange.id
+        ).where(Instrument.is_active)
         if request.exchange:
-            stmt = stmt.where(Instrument.exchange.in_([ex.upper() for ex in request.exchange]))
+            stmt = stmt.where(Exchange.code.in_([ex.upper() for ex in request.exchange]))
         stmt = stmt.limit(1000)  # Fetch up to 1000 candidates for screening
         res = await db.execute(stmt)
-        symbols = res.scalars().all()
+        symbols = res.all()
 
         results = []
-        for s in symbols:
+        for s, exchange_code in symbols:
             # Query latest 30 daily OHLCV bars for this symbol
             ohlcv_stmt = (
                 select(OHLCV)
@@ -123,9 +129,9 @@ async def post_screener_run(
 
             results.append(
                 {
-                    "ticker": s.symbol,
+                    "ticker": s.canonical_symbol,
                     "name": s.display_name,
-                    "exchange": s.exchange,
+                    "exchange": exchange_code,
                     "asset_type": "EQUITY",
                     "price": latest_price,
                     "change_pct": change_pct,
@@ -147,10 +153,22 @@ async def post_screener_run(
             if filters.asset_class and item["asset_type"] != filters.asset_class.upper():
                 continue
 
-            mcap_base = item["market_cap"] * 1000000.0
-            if filters.market_cap_min is not None and mcap_base < float(filters.market_cap_min):
-                continue
-            if filters.market_cap_max is not None and mcap_base > float(filters.market_cap_max):
+            if item["market_cap"] is not None:
+                mcap_base = item["market_cap"] * 1000000.0
+                if filters.market_cap_min is not None and mcap_base < float(
+                    filters.market_cap_min
+                ):
+                    continue
+                if filters.market_cap_max is not None and mcap_base > float(
+                    filters.market_cap_max
+                ):
+                    continue
+            elif filters.market_cap_min is not None or filters.market_cap_max is not None:
+                # No fundamentals provider is wired in, so market_cap is
+                # always None today - can't honestly evaluate a cap filter
+                # without data, so exclude rather than guess (this used to
+                # crash unconditionally with None * 1000000.0 regardless of
+                # whether a cap filter was even requested).
                 continue
 
             if filters.pe_ratio_max is not None:
