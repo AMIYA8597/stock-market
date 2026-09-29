@@ -85,8 +85,44 @@ export const authApi = {
   getProfile(): Promise<UserProfile> {
     return fetchApi("/users/profile");
   },
-  register(data: { email: string; password: string; full_name?: string }): Promise<{ id: string; email: string; message: string }> {
+  register(data: { email: string; password: string; full_name?: string }): Promise<{ email: string; message: string }> {
     return fetchApi("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  checkEmail(email: string): Promise<{ exists: boolean }> {
+    return fetchApi("/auth/check-email", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+  login(data: { email: string; password: string }): Promise<TokenResponse> {
+    return fetchApi("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  verifySignupOtp(data: { email: string; otp: string; password: string }): Promise<TokenResponse> {
+    return fetchApi("/auth/verify-signup-otp", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  resendOtp(data: { email: string; purpose: "signup" | "password_reset" }): Promise<{ message: string }> {
+    return fetchApi("/auth/resend-otp", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+  forgotPassword(email: string): Promise<{ message: string }> {
+    return fetchApi("/auth/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+  resetPassword(data: { email: string; otp: string; new_password: string }): Promise<{ message: string }> {
+    return fetchApi("/auth/reset-password", {
       method: "POST",
       body: JSON.stringify(data),
     });

@@ -1,4 +1,5 @@
 ﻿import logging
+import uuid
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy import select
@@ -11,6 +12,21 @@ from app.models.identity import User
 logger = logging.getLogger(__name__)
 
 
+def _as_user_id(raw: str) -> uuid.UUID | str:
+    """RequestContext.user_id is always a plain str (set via str(user.id)).
+    Comparing that directly against User.id - a UUID(as_uuid=True) column -
+    works against real Postgres (which casts implicitly) but raises
+    AttributeError: 'str' object has no attribute 'hex' when the same query
+    runs against SQLite's stricter bind-parameter processing, since nothing
+    ever exercised an authenticated request end-to-end against SQLite before
+    now. Casting back to a real UUID keeps the query portable across both.
+    """
+    try:
+        return uuid.UUID(raw)
+    except (ValueError, AttributeError):
+        return raw
+
+
 async def get_current_user(
     ctx: RequestContext = Depends(get_current_context),
     db: AsyncSession = Depends(get_db),
@@ -20,7 +36,7 @@ async def get_current_user(
     """
     if not ctx.user_id:
         raise HTTPException(status_code=401, detail="User context required")
-    result = await db.execute(select(User).where(User.id == ctx.user_id))
+    result = await db.execute(select(User).where(User.id == _as_user_id(ctx.user_id)))
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
@@ -39,7 +55,7 @@ async def get_current_user_or_none(
             return None
         ctx = await get_current_context(request, token, api_key, db)
         if ctx.user_id:
-            result = await db.execute(select(User).where(User.id == ctx.user_id))
+            result = await db.execute(select(User).where(User.id == _as_user_id(ctx.user_id)))
             return result.scalars().first()
         return None
     except HTTPException:

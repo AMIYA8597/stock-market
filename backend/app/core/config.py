@@ -269,6 +269,27 @@ class Settings(BaseSettings):
     )
     ALERT_EMAIL_ENABLED: bool = Field(default=False, description="Enable email alerts")
 
+    # ─── Auth security (OTP + brute-force lockout) ────────────────────────
+    OTP_LENGTH: int = Field(default=6, description="Number of digits in email OTP codes")
+    OTP_EXPIRE_MINUTES: int = Field(
+        default=10, description="Minutes an email OTP remains valid before expiring"
+    )
+    OTP_MAX_ATTEMPTS: int = Field(
+        default=5, description="Max wrong-OTP attempts before the code is invalidated"
+    )
+    OTP_RESEND_COOLDOWN_SECONDS: int = Field(
+        default=60, description="Minimum seconds between OTP resend requests for the same email"
+    )
+    LOGIN_MAX_FAILED_ATTEMPTS: int = Field(
+        default=5, description="Failed password attempts before an account is temporarily locked"
+    )
+    LOGIN_LOCKOUT_MINUTES: int = Field(
+        default=15, description="Minutes an account stays locked after too many failed logins"
+    )
+    PASSWORD_MIN_LENGTH: int = Field(
+        default=12, description="Minimum password length enforced server-side at registration/reset"
+    )
+
     # ─── ML & Model Settings ──────────────────────────────────────────────
     MODEL_CHECKPOINT_DIR: str = Field(
         default="./data/models", description="Directory for storing trained model checkpoints"
