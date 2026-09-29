@@ -1,7 +1,10 @@
 "use client";
 
-import { Search, Bell, Wifi, WifiOff, Command, Menu, Moon, Sun } from "lucide-react";
+import { Search, Bell, Wifi, WifiOff, Command, Menu, Moon, Sun, User, LogOut } from "lucide-react";
 import { useUIStore } from "@/stores/ui-store";
+import { useAuth } from "@/hooks/useAuth";
+import { Link } from "@/i18n/navigation";
+import { Dropdown, DropdownTrigger, DropdownContent, DropdownItem, DropdownLabel, DropdownSeparator } from "@neuroquant/ui";
 
 interface TopbarProps {
   connectionStatus: "connected" | "reconnecting" | "disconnected";
@@ -10,6 +13,15 @@ interface TopbarProps {
 
 export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
   const { openCommandPalette, toggleMobileSidebar, themeMode, toggleThemeMode } = useUIStore();
+  const { user, logout } = useAuth();
+
+  const initials =
+    user?.full_name
+      ?.split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "NQ";
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/10 bg-[rgba(7,9,15,0.76)] px-4 py-3 backdrop-blur-2xl sm:px-6">
@@ -87,12 +99,32 @@ export function Topbar({ connectionStatus, alertCount = 0 }: TopbarProps) {
         </button>
 
         {/* Profile */}
-        <button 
-          className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--nq-accent),#65f7d2)] text-sm font-bold text-black shadow-[0_12px_24px_rgba(0,212,245,0.18)]"
-          aria-label="User profile"
-        >
-          NQ
-        </button>
+        <Dropdown>
+          <DropdownTrigger
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--nq-accent),#65f7d2)] text-sm font-bold text-black shadow-[0_12px_24px_rgba(0,212,245,0.18)] outline-none"
+            aria-label="User profile"
+          >
+            {initials}
+          </DropdownTrigger>
+          <DropdownContent align="end">
+            <DropdownLabel className="truncate">{user?.email ?? "Account"}</DropdownLabel>
+            <DropdownSeparator />
+            <DropdownItem asChild>
+              <Link href="/profile" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Profile
+              </Link>
+            </DropdownItem>
+            <DropdownSeparator />
+            <DropdownItem
+              onSelect={() => void logout()}
+              className="flex items-center gap-2 text-[var(--nq-bear)] hover:text-[var(--nq-bear)]"
+            >
+              <LogOut className="h-4 w-4" />
+              Sign Out
+            </DropdownItem>
+          </DropdownContent>
+        </Dropdown>
       </div>
       </div>
     </header>
