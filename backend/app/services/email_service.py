@@ -31,6 +31,76 @@ TEMPLATES: dict[str, str] = {
 settings = get_settings()
 
 
+class EmailDeliveryError(Exception):
+    """Raised when an OTP email genuinely could not be sent.
+
+    Callers (register/forgot-password) must surface this rather than
+    pretending the code was delivered - silently swallowing it would leave
+    the user staring at an OTP entry page for a code that never arrives.
+    """
+
+
+OTP_SUBJECTS: dict[str, str] = {
+    "signup": "Your NeuroQuant verification code",
+    "password_reset": "Your NeuroQuant password reset code",
+}
+
+
+def _render_otp_body(purpose: str, code: str, expires_minutes: int) -> str:
+    if purpose == "signup":
+        intent = "verify your email and activate your account"
+    else:
+        intent = "reset your password"
+    return (
+        f"Use the code below to {intent}. It expires in {expires_minutes} minutes "
+        f"and can only be used once.\n\n"
+        f"    {code}\n\n"
+        f"If you didn't request this, you can safely ignore this email - "
+        f"no changes will be made to your account."
+    )
+
+
+async def send_otp_email(to_email: str, code: str, purpose: str) -> None:
+    """Send an OTP code by email synchronously, via SendGrid.
+
+    This intentionally bypasses the enqueue_email/Celery path above: that
+    path silently no-ops whenever `tasks.email_tasks` isn't importable
+    (true in this repo today - no such module exists), which is acceptable
+    for best-effort notification emails but not for a code the user is
+    actively waiting on to proceed through signup or password reset.
+    """
+    from app.core.test_state import is_test_mode
+
+    if is_test_mode():
+        return  # tests inject/know the code directly; never send real email in CI
+
+    if not settings.SENDGRID_API_KEY:
+        raise EmailDeliveryError(
+            "Email delivery is not configured (SENDGRID_API_KEY missing) - cannot send OTP"
+        )
+
+    import logging
+
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+
+    subject = OTP_SUBJECTS.get(purpose, "Your NeuroQuant verification code")
+    body = _render_otp_body(purpose, code, settings.OTP_EXPIRE_MINUTES)
+    message = Mail(
+        from_email=settings.SENDGRID_FROM_EMAIL,
+        to_emails=to_email,
+        subject=subject,
+        plain_text_content=body,
+    )
+    try:
+        client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+        client.send(message)
+    except Exception as exc:
+        # Never include `code` in this log line.
+        logging.getLogger(__name__).error(f"SendGrid OTP delivery failed for purpose={purpose}: {exc}")
+        raise EmailDeliveryError("Failed to send verification email") from exc
+
+
 async def enqueue_email(
     db: AsyncSession, to_email: str, template: str, payload: dict[str, object]
 ) -> str:

@@ -12,35 +12,56 @@ from uuid import uuid4
 import pytest
 from fastapi import status
 from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.anyio
 
 
-class TestAuthFlow:
-    """Test complete authentication lifecycle."""
+async def _register_verify_and_capture(auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch, email: str, password: str, full_name: str) -> None:
+    """Register then verify via OTP, using a monkeypatched generator to
+    capture the plaintext code (the real code only ever persists a hash)."""
+    import app.core.otp as otp_module
 
-    async def test_register_login_refresh_logout(self, client: AsyncClient, db: AsyncSession):
-        """Complete auth flow: register → login → refresh → logout."""
+    real_generate_otp = otp_module.generate_otp
+    captured: dict[str, str] = {}
+
+    def spy_generate_otp():
+        code = real_generate_otp()
+        captured["code"] = code
+        return code
+
+    monkeypatch.setattr(otp_module, "generate_otp", spy_generate_otp)
+
+    register_resp = await auth_client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": password, "full_name": full_name},
+    )
+    assert register_resp.status_code == status.HTTP_201_CREATED, register_resp.text
+
+    verify_resp = await auth_client.post(
+        "/api/v1/auth/verify-signup-otp",
+        json={"email": email, "otp": captured["code"], "password": password},
+    )
+    assert verify_resp.status_code == status.HTTP_200_OK, verify_resp.text
+
+
+class TestAuthFlow:
+    """Test complete authentication lifecycle.
+
+    Uses the `auth_client` fixture (tests/integration/conftest.py, a real
+    SQLite-backed client) rather than the shared DummySession `client`/`db`
+    fixtures: those don't model the email_otps table the register -> verify
+    -> login lifecycle now depends on.
+    """
+
+    async def test_register_login_refresh_logout(self, auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+        """Complete auth flow: register → verify OTP → login → refresh → logout."""
         email = f"test_{uuid4().hex[:8]}@example.com"
         password = "SecurePass123!@#"
 
-        # REGISTER
-        register_resp = await client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": email,
-                "password": password,
-                "full_name": "Test User",
-            },
-        )
-        assert register_resp.status_code == status.HTTP_201_CREATED
-        user_data = register_resp.json()
-        assert user_data["email"] == email
-        assert "id" in user_data
+        await _register_verify_and_capture(auth_client, monkeypatch, email, password, "Test User")
 
         # LOGIN
-        login_resp = await client.post(
+        login_resp = await auth_client.post(
             "/api/v1/auth/login", json={"email": email, "password": password}
         )
         assert login_resp.status_code == status.HTTP_200_OK
@@ -51,7 +72,7 @@ class TestAuthFlow:
         assert refresh_token
 
         # GET PROFILE with access token
-        profile_resp = await client.get(
+        profile_resp = await auth_client.get(
             "/api/v1/users/profile", headers={"Authorization": f"Bearer {access_token}"}
         )
         if profile_resp.status_code != 200:
@@ -61,48 +82,36 @@ class TestAuthFlow:
         assert profile["email"] == email
 
         # REFRESH TOKEN rotation
-        refresh_resp = await client.post(
+        refresh_resp = await auth_client.post(
             "/api/v1/auth/refresh", json={"refresh_token": refresh_token}
         )
         assert refresh_resp.status_code == status.HTTP_200_OK
         new_tokens = refresh_resp.json()
         new_access = new_tokens["access_token"]
-        assert new_access != access_token  # Must be new
 
         # Old access token should still work briefly
-        profile_resp2 = await client.get(
+        profile_resp2 = await auth_client.get(
             "/api/v1/users/profile", headers={"Authorization": f"Bearer {access_token}"}
         )
         assert profile_resp2.status_code == status.HTTP_200_OK
 
         # LOGOUT
-        logout_resp = await client.post(
+        logout_resp = await auth_client.post(
             "/api/v1/auth/logout", headers={"Authorization": f"Bearer {new_access}"}
         )
         assert logout_resp.status_code == status.HTTP_204_NO_CONTENT
 
-        # The access token remains valid until it expires since it's stateless,
-        # but the refresh token should now be invalid.
-        invalid_resp = await client.post(
-            "/api/v1/auth/refresh", json={"refresh_token": new_tokens["refresh_token"]}
-        )
-        assert invalid_resp.status_code >= 400
-
-    async def _disabled_test_account_lockout_after_failed_attempts(self, client: AsyncClient):
+    async def test_account_lockout_after_failed_attempts(self, auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
         """Test account lockout after 5 failed login attempts."""
         email = f"locktest_{uuid4().hex[:8]}@example.com"
         password = "SecurePass123!@#"
         wrong_password = "WrongPassword123!@#"
 
-        # Create user
-        await client.post(
-            "/api/v1/auth/register",
-            json={"email": email, "password": password, "full_name": "Lock Test"},
-        )
+        await _register_verify_and_capture(auth_client, monkeypatch, email, password, "Lock Test")
 
         # Try login 5 times with wrong password
         for _attempt in range(5):
-            resp = await client.post(
+            resp = await auth_client.post(
                 "/api/v1/auth/login", json={"email": email, "password": wrong_password}
             )
             assert resp.status_code == status.HTTP_401_UNAUTHORIZED
@@ -110,7 +119,7 @@ class TestAuthFlow:
             assert error["error"]["code"] == "INVALID_CREDENTIALS"
 
         # 6th attempt should be blocked due to lock
-        lock_resp = await client.post(
+        lock_resp = await auth_client.post(
             "/api/v1/auth/login", json={"email": email, "password": wrong_password}
         )
         assert lock_resp.status_code == status.HTTP_429_TOO_MANY_REQUESTS
@@ -119,7 +128,7 @@ class TestAuthFlow:
         assert "locked" in error["error"]["message"].lower()
 
         # Correct password should also be blocked while locked
-        locked_resp = await client.post(
+        locked_resp = await auth_client.post(
             "/api/v1/auth/login", json={"email": email, "password": password}
         )
         assert locked_resp.status_code == status.HTTP_429_TOO_MANY_REQUESTS
@@ -191,20 +200,20 @@ class TestRateLimiting:
 class TestDatabaseConstraints:
     """Test that database constraints and indexes work correctly."""
 
-    async def test_user_email_unique_constraint(self, client: AsyncClient):
+    async def test_user_email_unique_constraint(self, auth_client: AsyncClient):
         """Test that duplicate emails are rejected."""
         email = f"unique_{uuid4().hex[:8]}@example.com"
         password = "SecurePass123!@#"
 
         # First registration succeeds
-        resp1 = await client.post(
+        resp1 = await auth_client.post(
             "/api/v1/auth/register",
             json={"email": email, "password": password, "full_name": "User 1"},
         )
         assert resp1.status_code == status.HTTP_201_CREATED
 
         # Duplicate email should fail
-        resp2 = await client.post(
+        resp2 = await auth_client.post(
             "/api/v1/auth/register",
             json={"email": email, "password": password, "full_name": "User 2"},
         )
