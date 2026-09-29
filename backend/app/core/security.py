@@ -11,13 +11,36 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.database.connection import get_db
-from app.models.identity import ApiKey, OrgMember, User
+from app.models.identity import ApiKey, Organization, OrgMember, User
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+async def ensure_personal_organization(db: AsyncSession, user: User) -> None:
+    """Give a user a personal Organization + membership if they have none.
+
+    Most endpoints (alerts history, billing, etc.) are organization-scoped
+    and 403/empty without one. A user created outside the onboarding flow -
+    a direct /auth/register call, or JIT provisioning from a bare Supabase
+    JWT - would otherwise never get one and be permanently locked out of
+    those endpoints.
+    """
+    existing = await db.execute(select(OrgMember).where(OrgMember.user_id == user.id))
+    if existing.scalars().first():
+        return
+    org = Organization(
+        name=user.full_name or user.email.split("@")[0],
+        slug=f"user-{user.id.hex}",
+        status="active",
+    )
+    db.add(org)
+    await db.flush()
+    db.add(OrgMember(organization_id=org.id, user_id=user.id, role="owner", status="active"))
+    await db.commit()
+
 
 class RequestContext:
     def __init__(
@@ -199,6 +222,10 @@ async def get_current_context(
 
         if user.status != "active":
             raise HTTPException(status_code=403, detail="User account suspended")
+
+        # Self-healing: also covers accounts created before this org-
+        # provisioning existed, not just ones JIT-provisioned just above.
+        await ensure_personal_organization(db, user)
 
         # Resolve organization
         org_id = request.headers.get("X-Organization-ID")
