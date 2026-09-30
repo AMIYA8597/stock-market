@@ -15,19 +15,19 @@ logger = logging.getLogger(__name__)
 
 async def _evaluate_alerts():
     async with async_session_factory() as session:
-        stmt = (
-            select(Alert, Instrument)
-            .outerjoin(Instrument, Alert.instrument_id == Instrument.id)
-            .where(Alert.enabled.is_(True), Alert.is_triggered.is_(False))
-        )
+        stmt = select(Alert).where(Alert.is_active.is_(True))
         result = await session.execute(stmt)
-        rows = result.all()
+        alerts = result.scalars().all()
 
-        for alert, instrument in rows:
+        for alert in alerts:
+            symbol = alert.symbol
+
+            inst_result = await session.execute(
+                select(Instrument).where(Instrument.canonical_symbol == symbol)
+            )
+            instrument = inst_result.scalars().first()
             if not instrument:
                 continue
-
-            symbol = instrument.canonical_symbol
 
             try:
                 # Fetch latest quote snapshot from DB
@@ -63,9 +63,8 @@ async def _evaluate_alerts():
                         triggered = True
 
                 if triggered:
-                    alert.is_triggered = True
-                    alert.triggered_at = datetime.now(UTC)
-                    alert.enabled = False
+                    alert.is_active = False
+                    alert.last_triggered_at = datetime.now(UTC)
                     await session.commit()
 
                     logger.info(f"Alert {alert.id} TRIGGERED for {symbol} at {price}")
@@ -83,7 +82,7 @@ async def _evaluate_alerts():
                             "alert_type": alert.alert_type,
                             "threshold": float(alert.threshold),
                             "trigger_price": price,
-                            "triggered_at": alert.triggered_at.isoformat(),
+                            "triggered_at": alert.last_triggered_at.isoformat(),
                         },
                         "ts": datetime.now(UTC).isoformat(),
                         "source": "DATABASE"

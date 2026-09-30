@@ -13,8 +13,8 @@ from sqlalchemy.dialects.postgresql import insert
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
-from app.models.research import Dataset as FeatureVector
-from app.models.research import Dataset as NewsSentiment
+from app.models.feature_vectors import FeatureVector
+from app.models.sentiment import NewsSentiment
 from research.feature_engineering.pipeline import FeaturePipeline
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ async def _build_feature_vectors_async(symbol: str) -> dict[str, Any]:
         df = pd.DataFrame(
             [
                 {
-                    "time": r.time,
+                    "time": r.timestamp,
                     "open": float(r.open),
                     "high": float(r.high),
                     "low": float(r.low),
@@ -68,7 +68,7 @@ async def _build_feature_vectors_async(symbol: str) -> dict[str, Any]:
 
         result = await session.execute(
             select(NewsSentiment).where(
-                or_(NewsSentiment.symbol_id == instrument.id, NewsSentiment.symbol_id is None)
+                or_(NewsSentiment.symbol_id == instrument.id, NewsSentiment.symbol_id.is_(None))
             )
         )
         news_records = result.scalars().all()
@@ -157,7 +157,7 @@ async def _build_feature_vectors_async(symbol: str) -> dict[str, Any]:
                 ).fillna(0.0)
 
         # 1.6 Fetch Regime Data
-        from app.models.research import Dataset as RegimeState
+        from app.models.regime_states import RegimeState
 
         result = await session.execute(
             select(RegimeState).where(RegimeState.symbol_id == instrument.id)
@@ -222,24 +222,24 @@ async def _build_feature_vectors_async(symbol: str) -> dict[str, Any]:
                     "time": row["time"],
                     "symbol_id": instrument.id,
                     "features": clean_dict,
-                    "feature_version": FEATURE_VERSION,
                 }
             )
 
         if not records:
             return {"status": "success", "count": 0}
 
-        # Idempotent upsert
-        stmt = insert(FeatureVector).values(records)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["time", "symbol_id"],
-            set_={
-                "features": stmt.excluded.features,
-                "feature_version": stmt.excluded.feature_version,
-            },
-        )
-
-        await session.execute(stmt)
+        for rec in records:
+            existing = await session.execute(
+                select(FeatureVector).where(
+                    FeatureVector.time == rec["time"],
+                    FeatureVector.symbol_id == rec["symbol_id"],
+                )
+            )
+            row_obj = existing.scalars().first()
+            if row_obj:
+                row_obj.features = rec["features"]
+            else:
+                session.add(FeatureVector(**rec))
         await session.commit()
 
         return {"status": "success", "count": len(records), "symbol": symbol}
