@@ -120,7 +120,7 @@ async def post_screener_run(
             if latest_sig:
                 sig_dir = latest_sig.direction
                 sig_conf = float(latest_sig.confidence)
-                regime_map = {0: "bull", 1: "bear", 2: "sideways", 3: "crisis"}
+                regime_map = {0: "sideways", 1: "bull", 2: "bear", 3: "crisis"}
                 regime_state = regime_map.get(latest_sig.regime_state, "sideways")
             else:
                 sig_dir = "NEUTRAL"

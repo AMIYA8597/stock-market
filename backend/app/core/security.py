@@ -139,7 +139,8 @@ def verify_supabase_token(token: str) -> dict[str, Any]:
         # Legacy/dev fallback: shared HS256 secret.
         secret = settings.SUPABASE_JWT_SECRET
         if is_test_mode() and not secret:
-            secret = "your-super-secret-jwt-token-with-at-least-32-characters-long"
+            from app.core.test_state import TEST_JWT_SECRET
+            secret = TEST_JWT_SECRET
         if not secret:
             raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
 

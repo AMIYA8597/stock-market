@@ -11,8 +11,8 @@ from sqlalchemy import select
 
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
-from app.models.research import Dataset as FeatureVector
-from app.models.research import ModelRegistry as ModelArtifact
+from app.models.feature_vectors import FeatureVector
+from app.models.model_artifact import ModelArtifact
 from app.services.ml_engine.training_pipeline import TrainingPipeline
 
 logger = logging.getLogger(__name__)

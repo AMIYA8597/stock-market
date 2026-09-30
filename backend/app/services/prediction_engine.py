@@ -1074,8 +1074,8 @@ async def get_full_prediction(
         # Run the LLM reasoning asynchronously
         evidence_pack = {
             "symbol": symbol,
-            "signal": ensemble.get("action", "HOLD"),
-            "confidence": float(ensemble.get("confidence", 50.0)),
+            "signal": ensemble.get("direction", "HOLD"),
+            "confidence": float(ensemble.get("confidence", 0.0)),
             "technicals": technicals_dict,
             "sentiment": "Neutral"
         }
@@ -1106,17 +1106,16 @@ async def get_full_prediction(
 
         from app.database.connection import async_session_factory
         from app.models.market import Instrument
-        from app.models.research import ModelExplanation, ModelRegistry, Prediction
+        from app.models.model_artifact import ModelArtifact
+        from app.models.research import ModelExplanation, Prediction
 
         async with async_session_factory() as session:
             inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
             if inst:
-                # Find active model registry for XGBoost or whatever is used
-                # We'll just pick the active XGBoost model for now
                 active_model = (await session.execute(
-                    select(ModelRegistry)
-                    .where((ModelRegistry.status == "active") & (ModelRegistry.model_family == "XGBoost"))
-                    .order_by(ModelRegistry.created_at.desc())
+                    select(ModelArtifact)
+                    .where(ModelArtifact.symbol_id == inst.id, ModelArtifact.is_active.is_(True))
+                    .order_by(ModelArtifact.created_at.desc())
                 )).scalars().first()
 
                 if active_model:
