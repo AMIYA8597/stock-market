@@ -41,6 +41,6 @@ describe('Safety Guard Rails', () => {
       }
     }
     
-    expect(badStringsFound).toBeGreaterThanOrEqual(0);
+    expect(badStringsFound).toBe(0);
   });
 });

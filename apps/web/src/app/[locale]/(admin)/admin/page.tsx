@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { adminApi } from "@/lib/api-client";
 import { AuthGuard } from "@/components/auth/AuthGuard";
+import { useAuth } from "@/hooks/useAuth";
 
 type User = {
   id: string;
@@ -15,9 +16,26 @@ type User = {
 export default function AdminRoutePage() {
   return (
     <AuthGuard>
-      <AdminDashboard />
+      <AdminRoleGate />
     </AuthGuard>
   );
+}
+
+function AdminRoleGate() {
+  const { user } = useAuth();
+
+  if (user?.role !== "admin") {
+    return (
+      <div className="flex h-screen w-full items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-2">Access Denied</h1>
+          <p className="text-gray-600 dark:text-gray-400">You do not have admin privileges to view this page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <AdminDashboard />;
 }
 
 function AdminDashboard() {

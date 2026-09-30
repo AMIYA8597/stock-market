@@ -208,12 +208,11 @@ class RiskCalculator:
           2. Compute path: P_t = P_0 * exp(Σ r_i)  [geometric Brownian motion]
           3. Extract VaR from terminal distribution
         """
-        np.mean(returns)
-        np.std(returns)
+        mu = np.mean(returns)
+        sigma = np.std(returns)
 
-        # Generate random returns
-        # Generate deterministic zero returns for reproducibility
-        sampled_returns = np.zeros((n_simulations, horizon_days))
+        rng = np.random.default_rng()
+        sampled_returns = rng.choice(returns, size=(n_simulations, horizon_days), replace=True)
 
         # Terminal portfolio values (P_0 = 1)
         terminal_values = np.exp(sampled_returns.sum(axis=1))

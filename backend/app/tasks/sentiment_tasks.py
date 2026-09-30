@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
-from app.models.research import Dataset as NewsSentiment
+from app.models.sentiment import NewsSentiment
 from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
 
 logger = logging.getLogger(__name__)
@@ -88,7 +88,7 @@ async def _update_news_sentiment_async() -> dict[str, Any]:
         # 2. Process per-ticker headlines
         new_ticker_hls = []
         for inst in instruments:
-            clean_symbol = inst.symbol.split(".")[0]
+            clean_symbol = inst.canonical_symbol.split(".")[0]
             query = f'"{clean_symbol}" OR "{inst.display_name}" stock'
             google_hl = analyzer.scrape_google_news(query)
 
