@@ -22,7 +22,7 @@ from app.core.otp import (
 )
 from app.core.rate_limit import check_rate_limit
 from app.core.security import ensure_personal_organization
-from app.core.test_state import is_test_mode
+from app.core.test_state import TEST_JWT_SECRET, is_test_mode
 from app.database.connection import get_db
 from app.models.identity import User
 from app.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
@@ -121,7 +121,7 @@ def _password_policy_error(exc: PasswordPolicyError) -> HTTPException:
 def _issue_test_token(user: User) -> TokenResponse:
     import jwt
 
-    secret = settings.SUPABASE_JWT_SECRET or "your-super-secret-jwt-token-with-at-least-32-characters-long"
+    secret = settings.SUPABASE_JWT_SECRET or TEST_JWT_SECRET
     token = jwt.encode({"sub": str(user.auth_id), "type": "access"}, secret, algorithm="HS256")
     return TokenResponse(access_token=token, refresh_token="test_refresh")
 
@@ -388,7 +388,7 @@ async def refresh(payload: AuthRefresh, db: AsyncSession = Depends(get_db)):
 
         import jwt
 
-        secret = settings.SUPABASE_JWT_SECRET or "your-super-secret-jwt-token-with-at-least-32-characters-long"
+        secret = settings.SUPABASE_JWT_SECRET or TEST_JWT_SECRET
         token = jwt.encode(
             {"sub": str(user.auth_id) if user and hasattr(user, "auth_id") else "test", "type": "access", "jti": str(_uuid.uuid4())},
             secret,

@@ -82,12 +82,13 @@ async def _scan_one_user(setting: AutoTradeSetting) -> dict:
 
             ensemble = pred.get("ensemble", {}) or {}
             direction = ensemble.get("direction", "NEUTRAL")
-            confidence = float(ensemble.get("confidence", 0.0) or 0.0)
+            confidence_raw = float(ensemble.get("confidence", 0.0) or 0.0)
+            confidence_pct = confidence_raw * 100.0 if confidence_raw <= 1.0 else confidence_raw
             side = _DIRECTION_TO_SIDE.get(direction)
 
-            if not side or confidence < float(setting.min_confidence):
+            if not side or confidence_pct < float(setting.min_confidence):
                 skipped.append(
-                    {"symbol": symbol, "reason": f"direction={direction} confidence={confidence}"}
+                    {"symbol": symbol, "reason": f"direction={direction} confidence={confidence_pct:.1f}%"}
                 )
                 continue
 

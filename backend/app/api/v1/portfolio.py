@@ -271,7 +271,7 @@ async def get_performance(
                         pass
 
         cash = float(holdings_res.cash_balance)
-        Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
+        bench_base = Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
 
         # Calculate daily values
         for i, (dt, date_str, bench_val) in enumerate(last_10):
@@ -575,8 +575,8 @@ async def post_optimize(
         stmt = select(Instrument).where(Instrument.canonical_symbol.in_(universe))
         res = await db.execute(stmt)
         symbols = res.scalars().all()
-        ticker_to_symbol_id = {s.symbol: s.id for s in symbols}
-        symbol_id_to_ticker = {s.id: s.symbol for s in symbols}
+        ticker_to_symbol_id = {s.canonical_symbol: s.id for s in symbols}
+        symbol_id_to_ticker = {s.id: s.canonical_symbol for s in symbols}
 
         # 2. Get latest 252 available dates in OHLCV table for this universe
         dates_list = []

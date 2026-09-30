@@ -503,7 +503,7 @@ export const portfolioApi = {
   },
 
   getRisk(portfolioId: number): Promise<RiskMetrics> {
-    return fetchApi(`/portfolio/risk-metrics`);
+    return fetchApi(`/portfolio/${portfolioId}/risk-metrics`);
   },
 
   optimize(data: OptimizeRequest): Promise<OptimizeResponse> {
