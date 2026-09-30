@@ -32,10 +32,8 @@ async def complete_onboarding(
     result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user:
-        user.preferences = {
-            "profile": payload.profile,
-            "marketPrefs": payload.market_prefs,
-            "workspace": payload.workspace
-        }
+        profile_name = payload.profile.get("full_name") or payload.profile.get("name")
+        if profile_name and isinstance(profile_name, str):
+            user.full_name = profile_name
         await db.commit()
     return {"success": True, "message": "Onboarding completed"}

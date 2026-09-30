@@ -16,7 +16,7 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models.identity import User as CSRFToken
+from app.models.csrf_token import CSRFToken
 
 settings = get_settings()
 
