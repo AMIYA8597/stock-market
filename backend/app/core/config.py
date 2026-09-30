@@ -471,11 +471,12 @@ class Settings(BaseSettings):
                 "REDIS_URL": self.REDIS_URL,
             }
             for key, val in required_keys.items():
+                val_lower = str(val).lower()
                 if (
                     not val
-                    or "changeme" in str(val)
-                    or "your_" in str(val)
-                    or "REPLACE_ME" in str(val)
+                    or "changeme" in val_lower
+                    or "your_" in val_lower
+                    or "replace_me" in val_lower
                 ):
                     raise ValueError(
                         f"Missing or insecure value for required production key: {key}"
