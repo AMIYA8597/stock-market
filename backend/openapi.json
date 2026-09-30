@@ -8853,9 +8853,39 @@
             ],
             "title": "Full Name"
           },
-          "status": {
+          "role": {
             "type": "string",
-            "title": "Status"
+            "title": "Role"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "is_2fa_enabled": {
+            "type": "boolean",
+            "title": "Is 2Fa Enabled"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
           }
         },
         "type": "object",
@@ -8863,7 +8893,11 @@
           "id",
           "email",
           "full_name",
-          "status"
+          "role",
+          "is_active",
+          "is_2fa_enabled",
+          "created_at",
+          "last_login_at"
         ],
         "title": "UserProfileResponse"
       },
