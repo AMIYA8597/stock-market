@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
-from app.models.identity import User
+from app.models.identity import OrgMember, User
 from app.models.notification import Notification
 from app.schemas.errors import ErrorCode, ErrorResponse
 
@@ -63,7 +63,10 @@ async def create_notification(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    if current_user.role != "ADMIN":
+    admin_check = await db.execute(
+        select(OrgMember).where(OrgMember.user_id == current_user.id, OrgMember.role.in_(["admin", "owner"]))
+    )
+    if not admin_check.scalars().first():
         raise HTTPException(
             status_code=403,
             detail=ErrorResponse.create(

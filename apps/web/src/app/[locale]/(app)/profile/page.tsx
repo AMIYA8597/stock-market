@@ -73,14 +73,14 @@ export default function ProfilePage() {
                   <p className="text-xs uppercase tracking-wider text-[var(--nq-text-tertiary)]">Current Plan</p>
                   <div className="mt-1 flex items-center gap-2">
                     <Badge variant="default" className="text-[10px] uppercase bg-[var(--nq-accent)] text-black font-bold">
-                      PRO
+                      FREE
                     </Badge>
                     <span className="text-xs text-[var(--nq-text-secondary)]">Active</span>
                   </div>
                 </div>
               </div>
               <p className="text-sm text-[var(--nq-text-secondary)]">
-                You currently have access to all premium features, including AI signals, real-time data, and advanced portfolio analytics.
+                Upgrade to PRO for AI signals, real-time data, and advanced portfolio analytics.
               </p>
               <Button variant="outline" className="w-full">
                 Manage Billing

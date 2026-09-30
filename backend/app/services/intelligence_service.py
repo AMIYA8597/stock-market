@@ -120,11 +120,11 @@ class IntelligenceService:
                     "xgboost": {"status": "UNAVAILABLE", "reason": "No model loaded"},
                 },
                 model_weights={
-                    "tft": 0.28,
-                    "hmm_garch": 0.13,
-                    "gnn": 0.12,
-                    "lstm_attn": 0.22,
-                    "xgboost": 0.25,
+                    "tft": 0.20,
+                    "hmm_garch": 0.20,
+                    "gnn": 0.20,
+                    "lstm_attn": 0.20,
+                    "xgboost": 0.20,
                 },
                 regime=RegimeDetails(
                     state="SIDEWAYS",
@@ -175,18 +175,17 @@ class IntelligenceService:
             vol_forecast_21d=round(mom_sub.get("vol_21d", 0.05), 5),
         )
 
+        gnn_sub = ens.get("gnn", {})
         gnn_signal = GNNSignal(
-            spillover_risk=round(abs(raw_ens) * 0.5 + 0.1, 4),
-            embedding_norm=round(0.6 + confidence * 1.8, 4),
-            top_correlated_assets=["NIFTY50", "BANKNIFTY", "FINNIFTY"],
+            spillover_risk=round(float(gnn_sub.get("spillover_risk", 0.0)), 4),
+            embedding_norm=round(float(gnn_sub.get("embedding_norm", 0.0)), 4),
+            top_correlated_assets=gnn_sub.get("top_correlated_assets", []),
         )
 
+        lstm_sub = ens.get("lstm_attn", {})
         lstm_signal = LSTMAttnSignal(
-            raw_signal=round(raw_ens, 4),
-            attention_peaks=[
-                {"timestep": 7.0, "weight": round(0.15 + abs(raw_ens) * 0.1, 4)},
-                {"timestep": 21.0, "weight": round(0.2 + confidence * 0.1, 4)},
-            ],
+            raw_signal=round(float(lstm_sub.get("raw_signal", raw_ens)), 4),
+            attention_peaks=lstm_sub.get("attention_peaks", []),
         )
 
         xgb_signal = XGBoostSignal(
@@ -194,15 +193,10 @@ class IntelligenceService:
             top_features=xgb_sub.get("top_features", []),
         )
 
-        model_weights = self._normalize_weights(
-            {
-                "tft": 0.28,
-                "hmm_garch": 0.13,
-                "gnn": 0.12,
-                "lstm_attn": 0.22,
-                "xgboost": 0.25,
-            }
-        )
+        raw_weights = ens.get("model_weights", {})
+        if not raw_weights or not isinstance(raw_weights, dict):
+            raw_weights = {"tft": 0.20, "hmm_garch": 0.20, "gnn": 0.20, "lstm_attn": 0.20, "xgboost": 0.20}
+        model_weights = self._normalize_weights(raw_weights)
 
         bull_prob = reg_sub.get("bull_prob", 0.33)
         bear_prob = reg_sub.get("bear_prob", 0.33)
@@ -329,12 +323,30 @@ class IntelligenceService:
         state = reg_sub.get("regime", "SIDEWAYS")
         probs = reg_sub.get("probs", {"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34})
 
-        t_matrix = [
-            [0.85, 0.05, 0.08, 0.02],
-            [0.05, 0.80, 0.10, 0.05],
-            [0.10, 0.10, 0.75, 0.05],
-            [0.02, 0.18, 0.10, 0.70],
-        ]
+        history = await self.get_regime_history(days=90)
+        t_matrix = [[0.25] * 4 for _ in range(4)]
+        days_in_state = 1
+        last_transition_date = date.today()
+
+        if len(history) >= 2:
+            from collections import defaultdict
+            transitions: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+            for i in range(1, len(history)):
+                transitions[history[i - 1].state][history[i].state] += 1
+            for from_s_idx, from_s in enumerate(REGIME_STATES):
+                total = sum(transitions[from_s].values())
+                if total > 0:
+                    for to_s_idx, to_s in enumerate(REGIME_STATES):
+                        t_matrix[from_s_idx][to_s_idx] = round(transitions[from_s][to_s] / total, 3)
+
+            for j in range(len(history) - 1, -1, -1):
+                if history[j].state == state:
+                    days_in_state = len(history) - j
+                    last_transition_date = history[j].time if isinstance(history[j].time, date) else date.today()
+                else:
+                    break
+            if days_in_state > len(history):
+                days_in_state = len(history)
 
         vol_1d = (
             math.sqrt(reg_sub.get("regime_variance", 0.01))
@@ -348,8 +360,8 @@ class IntelligenceService:
             cond_vol_1d=round(vol_1d, 5),
             cond_vol_5d=round(vol_1d * math.sqrt(5.0), 5),
             cond_vol_21d=round(vol_1d * math.sqrt(21.0), 5),
-            days_in_state=21,
-            last_transition_date=date.today() - timedelta(days=21),
+            days_in_state=days_in_state,
+            last_transition_date=last_transition_date,
         )
 
     async def get_regime_history(self, days: int) -> list[RegimeHistoryPoint]:
@@ -438,20 +450,45 @@ class IntelligenceService:
         return rows
 
     async def get_regime_statistics(self) -> list[RegimeStatisticsItem]:
-        return [
-            RegimeStatisticsItem(
-                state="BULL", avg_duration=48.2, avg_return=0.0012, avg_vol=0.011, freq=0.36
-            ),
-            RegimeStatisticsItem(
-                state="BEAR", avg_duration=29.7, avg_return=-0.0016, avg_vol=0.022, freq=0.23
-            ),
-            RegimeStatisticsItem(
-                state="SIDEWAYS", avg_duration=38.5, avg_return=0.0002, avg_vol=0.009, freq=0.31
-            ),
-            RegimeStatisticsItem(
-                state="CRISIS", avg_duration=11.3, avg_return=-0.0034, avg_vol=0.038, freq=0.10
-            ),
-        ]
+        history = await self.get_regime_history(days=504)
+        if not history:
+            return []
+
+        from collections import defaultdict
+        state_days: dict[str, list[float]] = defaultdict(list)
+        state_vols: dict[str, list[float]] = defaultdict(list)
+        durations: dict[str, list[int]] = defaultdict(list)
+
+        current_state = history[0].state
+        current_run = 1
+        for i in range(1, len(history)):
+            if history[i].state == current_state:
+                current_run += 1
+            else:
+                durations[current_state].append(current_run)
+                current_state = history[i].state
+                current_run = 1
+        durations[current_state].append(current_run)
+
+        for point in history:
+            state_vols[point.state].append(point.cond_vol)
+
+        total_points = len(history)
+        results = []
+        for state in REGIME_STATES:
+            count = sum(1 for p in history if p.state == state)
+            if count == 0:
+                continue
+            avg_dur = sum(durations.get(state, [1])) / max(len(durations.get(state, [1])), 1)
+            vols = state_vols.get(state, [0.0])
+            avg_vol = sum(vols) / max(len(vols), 1)
+            freq = count / total_points
+            avg_ret = {"BULL": avg_vol * 0.1, "BEAR": -avg_vol * 0.1, "SIDEWAYS": 0.0, "CRISIS": -avg_vol * 0.15}.get(state, 0.0)
+            results.append(RegimeStatisticsItem(
+                state=state, avg_duration=round(avg_dur, 1), avg_return=round(avg_ret, 5),
+                avg_vol=round(avg_vol, 5), freq=round(freq, 3),
+            ))
+        return results
 
     async def get_shap(self, symbol: str) -> ExplainShapResponse:
         try:
@@ -480,8 +517,8 @@ class IntelligenceService:
             for feat in top_features:
                 name = feat["name"]
                 shap_val = feat["shap_value"]
-                feat_val = round(shap_val * 10.0, 4)
-                pct_rank = round(0.50 + shap_val * 0.40, 4)
+                feat_val = round(float(feat.get("feature_value", 0.0)), 4)
+                pct_rank = round(float(feat.get("pct_rank", 0.0)), 4)
                 contribs.append(
                     SHAPContribution(
                         name=name,
@@ -715,11 +752,11 @@ class IntelligenceService:
                     metrics = row.metrics_json or {}
                     rows.append(ModelAccuracyItem(
                         model=row.model_family,
-                        precision=metrics.get('precision', 0.8),
-                        recall=metrics.get('recall', 0.8),
-                        directional_accuracy=metrics.get('accuracy', 0.8),
-                        p50_rmse=0.0,
-                        winkler_coverage_score=0.8
+                        precision=metrics.get('precision', 0.0),
+                        recall=metrics.get('recall', 0.0),
+                        directional_accuracy=metrics.get('accuracy', 0.0),
+                        p50_rmse=metrics.get('p50_rmse', 0.0),
+                        winkler_coverage_score=metrics.get('winkler_coverage_score', 0.0),
                     ))
         except Exception as e:
             import logging
@@ -923,21 +960,21 @@ class IntelligenceService:
 
         exposures = [
             FactorExposureItem(factor="MKT", beta=round(beta_mkt, 3)),
-            FactorExposureItem(factor="SMB", beta=0.12),
-            FactorExposureItem(factor="HML", beta=-0.05),
-            FactorExposureItem(factor="RMW", beta=0.18),
-            FactorExposureItem(factor="CMA", beta=0.08),
             FactorExposureItem(factor="Momentum", beta=round(mom_factor, 3)),
             FactorExposureItem(factor="Volatility", beta=round(vol_factor, 3)),
         ]
+
+        residual_vol = tracking_error / math.sqrt(252.0) if tracking_error > 0 else 0.0
+        computed_factors = [e for e in exposures if abs(e.beta) > 0.001]
+        total_beta_sq = sum(e.beta ** 2 for e in computed_factors)
+        factor_concentration = total_beta_sq / (total_beta_sq + residual_vol ** 2) if (total_beta_sq + residual_vol ** 2) > 0 else 0.0
 
         metrics = {
             "alpha_annualized": round(alpha * 252.0, 4),
             "tracking_error": round(tracking_error, 4),
             "information_ratio": round(info_ratio, 4),
-            "factor_concentration": 0.45,
-            "residual_volatility": round(tracking_error / math.sqrt(252.0), 4),
-            "active_share": 0.72,
+            "factor_concentration": round(factor_concentration, 4),
+            "residual_volatility": round(residual_vol, 4),
         }
 
         return FactorExposureResponse(

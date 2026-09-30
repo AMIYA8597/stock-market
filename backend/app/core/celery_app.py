@@ -19,6 +19,7 @@ celery_app = Celery(
     # so none of the @shared_task-decorated functions below are registered
     # and the beat schedule's task names below can never resolve.
     include=[
+        "app.tasks.alert_tasks",
         "app.tasks.autotrade_tasks",
         "app.tasks.backtest_tasks",
         "app.tasks.feature_tasks",
@@ -58,4 +59,3 @@ celery_app.conf.update(
     },
 )
 
-celery_app.autodiscover_tasks(['app.tasks', 'app.tasks.alert_tasks'])

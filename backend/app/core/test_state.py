@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 
+TEST_JWT_SECRET = "test-only-jwt-secret-not-for-production-use-32chars!"
 TEST_USERS_BY_EMAIL: dict[str, dict[str, object]] = {}
 TEST_USERS_BY_ID: dict[str, dict[str, object]] = {}
 TEST_REFRESH_SESSIONS: dict[str, dict[str, object]] = {}

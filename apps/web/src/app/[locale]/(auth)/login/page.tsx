@@ -47,7 +47,9 @@ export default function LoginPage() {
     // Full navigation (not router.push) so middleware re-runs with the
     // now-valid session and reads the nq_next cookie to send us back to
     // wherever we were headed before login.
-    window.location.href = '/dashboard';
+    const nextCookie = document.cookie.split('; ').find(c => c.startsWith('nq_next='));
+    const nextPath = nextCookie ? decodeURIComponent(nextCookie.split('=')[1] ?? '/dashboard') : '/dashboard';
+    window.location.href = nextPath;
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
