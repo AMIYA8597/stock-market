@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, get_redis
 from app.models.blog import BlogPost
+from app.models.identity import OrgMember
 from app.schemas.errors import ErrorCode, ErrorResponse
 
 router = APIRouter(prefix="/blog", tags=["blog"])
@@ -32,8 +33,11 @@ class BlogPostUpdate(BaseModel):
     status: Literal["draft", "published"] | None = None
 
 
-def _admin_only(current_user: dict) -> None:
-    if current_user.role != "ADMIN":
+async def _admin_only(current_user, db: AsyncSession) -> None:
+    admin_check = await db.execute(
+        select(OrgMember).where(OrgMember.user_id == current_user.id, OrgMember.role.in_(["admin", "owner"]))
+    )
+    if not admin_check.scalars().first():
         raise HTTPException(
             status_code=403,
             detail=ErrorResponse.create(
@@ -106,7 +110,7 @@ async def create_post(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    _admin_only(current_user)
+    await _admin_only(current_user, db)
 
     exists = await db.execute(select(BlogPost).where(BlogPost.slug == payload.slug))
     if exists.scalar_one_or_none() is not None:
@@ -140,7 +144,7 @@ async def update_post(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    _admin_only(current_user)
+    await _admin_only(current_user, db)
 
     result = await db.execute(select(BlogPost).where(BlogPost.slug == slug))
     post = result.scalar_one_or_none()

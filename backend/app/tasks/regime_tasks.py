@@ -13,7 +13,7 @@ from sqlalchemy import select
 from app.database.connection import async_session_factory
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
-from app.models.research import Dataset as RegimeState
+from app.models.regime_states import RegimeState
 from research.models.hmm_garch.inference import InferenceEngine
 
 logger = logging.getLogger(__name__)
@@ -46,14 +46,14 @@ async def _update_regime_states_async() -> dict[str, Any]:
             ohlcv_records = ohlcv_res.scalars().all()
 
             if len(ohlcv_records) < 100:
-                logger.warning(f"Not enough data for {inst.symbol}. Need at least 100 days.")
+                logger.warning(f"Not enough data for {inst.canonical_symbol}. Need at least 100 days.")
                 continue
 
             # Convert to DataFrame (reverse to be chronological)
             df = pd.DataFrame(
                 [
                     {
-                        "time": r.time,
+                        "time": r.timestamp,
                         "close": float(r.close),
                     }
                     for r in reversed(ohlcv_records)
@@ -72,7 +72,7 @@ async def _update_regime_states_async() -> dict[str, Any]:
             # We rebuild df correctly from ohlcv_records
             df_full = pd.DataFrame([
                 {
-                    "time": r.time,
+                    "time": r.timestamp,
                     "open": float(r.open) if hasattr(r, 'open') else float(r.close),
                     "high": float(r.high) if hasattr(r, 'high') else float(r.close),
                     "low": float(r.low) if hasattr(r, 'low') else float(r.close),
