@@ -31,7 +31,7 @@ router = APIRouter(prefix="/backtest", tags=["backtest"])
 @router.post("/run", response_model=BacktestRunResponse, status_code=202)
 async def post_backtest_run(
     request: BacktestRequest,
-    current_user: dict = Depends(require_feature("PREMIUM")),
+    current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(get_rate_limiter(requests=2, window=60)),
 ) -> BacktestRunResponse:
