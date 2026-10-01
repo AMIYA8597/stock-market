@@ -64,7 +64,7 @@ async def create_notification(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     admin_check = await db.execute(
-        select(OrgMember).where(OrgMember.user_id == current_user.id, OrgMember.role.in_(["admin", "owner"]))
+        select(OrgMember).where(OrgMember.user_id == current_user.id, OrgMember.role.in_(["ADMIN", "OWNER"]))
     )
     if not admin_check.scalars().first():
         raise HTTPException(
@@ -98,7 +98,7 @@ async def create_notification(
         is_read=False,
     )
     db.add(row)
-    await db.flush()
+    await db.commit()
     return {"id": str(row.id)}
 
 

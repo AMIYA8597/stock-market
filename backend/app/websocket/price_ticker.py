@@ -21,7 +21,16 @@ logger = logging.getLogger(__name__)
 
 import time
 
-from app.services.data_ingestion.scheduler import is_market_hours
+def is_market_hours() -> bool:
+    """Check if Indian stock market is open (9:15 AM - 3:30 PM IST, Mon-Fri)."""
+    from datetime import datetime, timezone, timedelta
+    IST = timezone(timedelta(hours=5, minutes=30))
+    now = datetime.now(IST)
+    if now.weekday() >= 5:
+        return False
+    market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
+    market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
+    return market_open <= now <= market_close
 
 
 class TokenBucket:

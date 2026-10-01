@@ -35,18 +35,7 @@ async def get_regime_current(
     )
     instrument = inst_res.scalars().first()
     if not instrument:
-        now = datetime.now(UTC)
-        return RegimeCurrentResponse(
-            state="bull",
-            state_index=0,
-            probs=[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")],
-            transition_matrix=[[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]]
-            * 4,
-            cond_vol_1d=Decimal("0.150000"),
-            cond_vol_5d=Decimal("0.150000"),
-            cond_vol_21d=Decimal("0.150000"),
-            updated_at=now,
-        )
+        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
 
     # 2. Fetch latest regime state
     regime_res = await db.execute(
@@ -58,28 +47,13 @@ async def get_regime_current(
     regime = regime_res.scalars().first()
 
     if not regime:
-        # Fallback to defaults if no regime calculated yet
-        now = datetime.now(UTC)
-        return RegimeCurrentResponse(
-            state="bull",
-            state_index=0,
-            probs=[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")],
-            transition_matrix=[[Decimal("1.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]]
-            * 4,
-            cond_vol_1d=Decimal("0.150000"),
-            cond_vol_5d=Decimal("0.150000"),
-            cond_vol_21d=Decimal("0.150000"),
-            days_in_state=1,
-            last_transition_date=now,
-            timestamp=now,
-        )
+        raise HTTPException(status_code=404, detail=f"No regime data computed yet for {symbol}")
 
     return RegimeCurrentResponse(
         state=LABELS.get(regime.viterbi_state, "bull"),
         state_index=regime.viterbi_state,
         probs=regime.state_probs,
-        transition_matrix=[[Decimal("0.0"), Decimal("0.0"), Decimal("0.0"), Decimal("0.0")]]
-        * 4,  # We aren't storing the transition matrix yet, can return empty for now
+        transition_matrix=None,
         cond_vol_1d=regime.conditional_vol,
         cond_vol_5d=regime.vol_forecast_5d or regime.conditional_vol,
         cond_vol_21d=regime.vol_forecast_21d or regime.conditional_vol,
