@@ -924,12 +924,29 @@ export function LightweightCandlestickChart({
         time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
       }))));
     } else if (chartStyle === "iv-smile" || chartStyle === "volatility-cone" || chartStyle === "correlation-heatmap" || chartStyle === "rolling-correlation" || chartStyle === "elliott-wave" || chartStyle === "gann") {
+      const unavailableReasons: Record<string, string> = {
+        "iv-smile": "Requires real options chain with IV per strike",
+        "volatility-cone": "Requires custom visualization (not a time-series chart)",
+        "correlation-heatmap": "Requires multi-asset price data loaded simultaneously",
+        "rolling-correlation": "Requires benchmark data loaded simultaneously",
+        "elliott-wave": "Requires specialized wave-detection algorithm",
+        "gann": "Requires specialized geometric projection engine",
+      };
       mainSeries = mainChart.addSeries(CandlestickSeries, {
         upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
       });
       mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
         time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
       }))));
+      mainChart.applyOptions({
+        watermark: {
+          visible: true,
+          text: `${chartStyle.replace(/-/g, " ").toUpperCase()} — UNAVAILABLE\n${unavailableReasons[chartStyle] ?? "Data source not connected"}`,
+          color: "rgba(255, 59, 92, 0.4)",
+          fontSize: 14,
+          fontFamily: "monospace",
+        },
+      });
     } else {
       mainSeries = mainChart.addSeries(CandlestickSeries, {
         upColor: "#00E676",
