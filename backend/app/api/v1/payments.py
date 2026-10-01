@@ -31,6 +31,57 @@ class SubscriptionResponse(BaseModel):
     current_period_end: str | None
     cancel_at_period_end: bool = False
 
+@router.get("/methods")
+async def get_payment_methods():
+    return {
+        "methods": [
+            {"code": "UPI", "label": "UPI", "enabled": True, "min_amount": 1, "max_amount": 100000},
+            {"code": "CARD", "label": "Credit/Debit Card", "enabled": True, "min_amount": 100, "max_amount": 500000},
+            {"code": "NETBANKING", "label": "Net Banking", "enabled": True, "min_amount": 100, "max_amount": 500000},
+        ],
+        "generated_at": datetime.now(UTC).isoformat(),
+    }
+
+
+@router.get("/balance")
+async def get_wallet_balance(
+    ctx: RequestContext = Depends(get_current_context),
+):
+    return {"currency": "INR", "wallet_balance": 0, "updated_at": datetime.now(UTC).isoformat()}
+
+
+@router.get("/history")
+async def get_payment_history(
+    limit: int = 20,
+    ctx: RequestContext = Depends(get_current_context),
+    db: AsyncSession = Depends(get_db),
+):
+    if not ctx.organization_id:
+        return {"items": [], "total": 0, "limit": limit}
+
+    result = await db.execute(
+        select(PaymentEvent)
+        .where(PaymentEvent.processing_status.in_(["processed", "test_mode"]))
+        .order_by(PaymentEvent.created_at.desc())
+        .limit(limit)
+    )
+    events = result.scalars().all()
+    items = []
+    for e in events:
+        payload = e.payload if isinstance(e.payload, dict) else {}
+        items.append({
+            "payment_id": str(e.id),
+            "intent_id": e.provider_event_id,
+            "amount": payload.get("amount", 0),
+            "currency": payload.get("currency", "INR"),
+            "method": payload.get("method", "unknown"),
+            "status": e.processing_status,
+            "created_at": e.created_at.isoformat() if e.created_at else None,
+            "completed_at": e.processed_at.isoformat() if e.processed_at else None,
+        })
+    return {"items": items, "total": len(items), "limit": limit}
+
+
 @router.get("/plans")
 async def get_plans(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Plan).where(Plan.is_active))

@@ -118,7 +118,7 @@ def create_app() -> FastAPI:
         # to localhost/127.0.0.1 only and skipped outside development.
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1):\d+$"
         if settings.ENVIRONMENT == "development"
-        else None,
+        else r"^https://neuroquant[a-z0-9-]*\.vercel\.app$",
         allow_credentials=True,
         allow_methods=settings.CORS_ALLOW_METHODS,
         allow_headers=settings.CORS_ALLOW_HEADERS,

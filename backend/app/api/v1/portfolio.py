@@ -428,6 +428,19 @@ async def post_transaction(
 
 
 @router.get(
+    "/{portfolio_id}/risk-metrics",
+    response_model=RiskMetricsResponse,
+    summary="Portfolio risk metrics by ID",
+)
+async def get_risk_metrics_by_id(
+    portfolio_id: int,
+    current_user: dict | None = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RiskMetricsResponse:
+    return await get_risk_metrics(current_user=current_user, db=db)
+
+
+@router.get(
     "/risk-metrics",
     response_model=RiskMetricsResponse,
     summary="Portfolio risk metrics",

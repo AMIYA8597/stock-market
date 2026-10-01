@@ -214,25 +214,34 @@ function adaptTechnicalSignalToRaw(raw: UnknownRecord): UnknownRecord {
   };
 }
 
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  if (typeof window === "undefined") return {};
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    return { Authorization: `Bearer ${session.access_token}` };
+  }
+  return {};
+}
+
 async function fetchSignalWithFallback(symbol: string): Promise<UnknownRecord> {
+  const authHeaders = await getAuthHeaders();
   try {
-    // The ML ensemble endpoint does real feature/data work before it can even tell us
-    // the model isn't trained, which can take many seconds under load. Give up fast and
-    // fall back to the technical signal rather than blocking the whole watchlist on it.
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
     const response = await fetch(`${API_URL}/predictions/${encodeURIComponent(symbol)}`, {
       method: "GET",
       cache: "no-store",
       signal: controller.signal,
+      headers: { ...authHeaders },
     }).finally(() => clearTimeout(timeoutId));
     return await parseJson<UnknownRecord>(response);
   } catch {
-    // ML model likely not trained yet (503) — fall back to the always-available
-    // technical signal so the UI shows real data instead of a hard error.
     const response = await fetch(`${API_URL}/signals/${encodeURIComponent(symbol)}`, {
       method: "GET",
       cache: "no-store",
+      headers: { ...authHeaders },
     });
     const raw = await parseJson<UnknownRecord>(response);
     return adaptTechnicalSignalToRaw(raw);
@@ -253,10 +262,12 @@ export const intelligenceApi = {
   },
 
   async getForecast(symbol: string, horizons: number[] = [1, 5, 10, 15, 20, 25, 30]): Promise<ForecastResponse> {
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(`${API_URL}/predictions/forecast`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...authHeaders,
       },
       body: JSON.stringify({ symbol, horizons }),
       cache: "no-store",
@@ -272,9 +283,10 @@ export const intelligenceApi = {
     symbol: string,
     horizons: readonly string[] = ALL_FORECAST_HORIZONS
   ): Promise<ForecastPoint[]> {
+    const authHeaders = await getAuthHeaders();
     const response = await fetch(`${API_URL}/predictions/forecast`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders },
       body: JSON.stringify({ symbol, horizons }),
       cache: "no-store",
     });
