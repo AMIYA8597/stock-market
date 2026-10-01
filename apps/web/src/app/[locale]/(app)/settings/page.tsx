@@ -1,15 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
 import { AuthGuard } from "@/components/auth/AuthGuard";
 import { useAuth } from "@/hooks/useAuth";
+import { useUIStore } from "@/stores/ui-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, Button } from "@neuroquant/ui";
 import { Settings, Moon, Sun, Monitor, Bell, ShieldAlert } from "lucide-react";
 import { useState } from "react";
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const [theme, setTheme] = useState<"dark" | "light" | "system">("dark");
+  const themeMode = useUIStore((s) => s.themeMode);
+  const setThemeMode = useUIStore((s) => s.setThemeMode);
   const [notifications, setNotifications] = useState(true);
 
   return (
@@ -24,7 +25,6 @@ export default function SettingsPage() {
         </div>
 
         <div className="grid gap-6">
-          {/* Theme Settings */}
           <Card className="bg-[var(--bg-surface)] border-[var(--border-subtle)]">
             <CardHeader>
               <CardTitle className="text-lg">Appearance</CardTitle>
@@ -32,32 +32,24 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-4">
-                <Button 
-                  variant={theme === "light" ? "default" : "outline"}
-                  onClick={() => setTheme("light")}
-                  className={theme === "light" ? "bg-[var(--nq-accent)] text-black" : ""}
+                <Button
+                  variant={themeMode === "light" ? "default" : "outline"}
+                  onClick={() => setThemeMode("light")}
+                  className={themeMode === "light" ? "bg-[var(--nq-accent)] text-black" : ""}
                 >
                   <Sun className="mr-2 h-4 w-4" /> Light
                 </Button>
-                <Button 
-                  variant={theme === "dark" ? "default" : "outline"}
-                  onClick={() => setTheme("dark")}
-                  className={theme === "dark" ? "bg-[var(--nq-accent)] text-black" : ""}
+                <Button
+                  variant={themeMode === "dark" ? "default" : "outline"}
+                  onClick={() => setThemeMode("dark")}
+                  className={themeMode === "dark" ? "bg-[var(--nq-accent)] text-black" : ""}
                 >
                   <Moon className="mr-2 h-4 w-4" /> Dark
-                </Button>
-                <Button 
-                  variant={theme === "system" ? "default" : "outline"}
-                  onClick={() => setTheme("system")}
-                  className={theme === "system" ? "bg-[var(--nq-accent)] text-black" : ""}
-                >
-                  <Monitor className="mr-2 h-4 w-4" /> System
                 </Button>
               </div>
             </CardContent>
           </Card>
 
-          {/* Notifications */}
           <Card className="bg-[var(--bg-surface)] border-[var(--border-subtle)]">
             <CardHeader>
               <CardTitle className="text-lg">Notifications</CardTitle>
@@ -72,7 +64,7 @@ export default function SettingsPage() {
                     <p className="text-xs text-[var(--nq-text-secondary)]">Receive push notifications for AI signals.</p>
                   </div>
                 </div>
-                <Button 
+                <Button
                   variant={notifications ? "default" : "outline"}
                   onClick={() => setNotifications(!notifications)}
                   className={notifications ? "bg-[var(--nq-bull)] text-black" : ""}
@@ -95,7 +87,6 @@ export default function SettingsPage() {
             </CardContent>
           </Card>
 
-          {/* API Keys */}
           <Card className="bg-[var(--bg-surface)] border-[var(--border-subtle)]">
             <CardHeader>
               <CardTitle className="text-lg">API & Broker Integrations</CardTitle>

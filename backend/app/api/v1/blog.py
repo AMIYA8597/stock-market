@@ -35,7 +35,7 @@ class BlogPostUpdate(BaseModel):
 
 async def _admin_only(current_user, db: AsyncSession) -> None:
     admin_check = await db.execute(
-        select(OrgMember).where(OrgMember.user_id == current_user.id, OrgMember.role.in_(["admin", "owner"]))
+        select(OrgMember).where(OrgMember.user_id == current_user.id, OrgMember.role.in_(["ADMIN", "OWNER"]))
     )
     if not admin_check.scalars().first():
         raise HTTPException(
@@ -133,11 +133,11 @@ async def create_post(
         published_at=published_at,
     )
     db.add(post)
-    await db.flush()
+    await db.commit()
     return {"id": str(post.id), "slug": post.slug}
 
 
-@router.patch("/posts/{slug}")
+@router.patch("/posts/{slug}", status_code=200)
 async def update_post(
     slug: str,
     payload: BlogPostUpdate,
@@ -168,4 +168,5 @@ async def update_post(
         if payload.status == "published" and post.published_at is None:
             post.published_at = datetime.now(UTC)
 
+    await db.commit()
     return {"id": str(post.id), "slug": post.slug}
