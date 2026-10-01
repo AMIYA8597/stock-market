@@ -192,10 +192,22 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
 
             data = resp.json()
             logger.info("supabase_signup_response status=%s body=%s", resp.status_code, data)
-            user_obj = data.get("user") or {}
+
+            # Supabase GoTrue signup responses:
+            # - New user: {user: {id: "...", identities: [...], ...}}
+            # - Existing confirmed user: {user: {id: "...", identities: [], ...}} or {user: null}
+            # - Existing unconfirmed: returns the user again (re-sends confirmation)
+            user_obj = data if isinstance(data, dict) and "id" in data else (data.get("user") or {})
             auth_id = user_obj.get("id")
-            identities = user_obj.get("identities", [])
-            if not auth_id or (auth_id and len(identities) == 0):
+            identities = user_obj.get("identities")
+
+            if not auth_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="An account with this email already exists. Try signing in, or use Forgot Password.",
+                )
+
+            if isinstance(identities, list) and len(identities) == 0:
                 raise HTTPException(
                     status_code=409,
                     detail="An account with this email already exists. Try signing in, or use Forgot Password.",
