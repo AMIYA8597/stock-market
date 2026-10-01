@@ -94,26 +94,15 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
   const [chartBars, setChartBars] = useState<PriceBar[]>([]);
   const [chartLoading, setChartLoading] = useState<boolean>(false);
   const [chartStyle, setChartStyle] = useState<
-    | "line"
-    | "candlestick"
-    | "ohlc-bar"
-    | "area"
-    | "baseline"
-    | "heikin-ashi"
-    | "hollow-candlestick"
-    | "volume"
-    | "renko"
-    | "point-figure"
-    | "kagi"
-    | "range-bar"
-    | "three-line-break"
-    | "equivolume"
-    | "tick"
-    | "volume-profile"
-    | "market-profile"
-    | "spread"
-    | "relative-strength"
-    | "mountain"
+    | "line" | "candlestick" | "ohlc-bar" | "area" | "baseline" | "heikin-ashi"
+    | "hollow-candlestick" | "volume" | "renko" | "point-figure" | "kagi"
+    | "range-bar" | "three-line-break" | "equivolume" | "tick"
+    | "volume-profile" | "market-profile" | "spread" | "relative-strength" | "mountain"
+    | "vwap" | "anchored-vwap" | "cvd" | "open-interest" | "oi-price"
+    | "put-call-ratio" | "iv-smile" | "volatility-cone" | "correlation-heatmap"
+    | "rolling-correlation" | "returns-distribution" | "histogram-returns"
+    | "drawdown" | "rolling-volatility" | "rolling-sharpe" | "rolling-beta"
+    | "fibonacci" | "pivot-points" | "ichimoku-standalone" | "elliott-wave" | "gann"
   >("candlestick");
   const [chartHeight, setChartHeight] = useState<number>(420);
   const [styleDropdownOpen, setStyleDropdownOpen] = useState(false);
@@ -484,6 +473,11 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                       "hollow-candlestick", "volume", "renko", "point-figure", "kagi",
                       "range-bar", "three-line-break", "equivolume", "tick",
                       "volume-profile", "market-profile", "spread", "relative-strength", "mountain",
+                      "vwap", "anchored-vwap", "cvd", "open-interest", "oi-price",
+                      "put-call-ratio", "iv-smile", "volatility-cone", "correlation-heatmap",
+                      "rolling-correlation", "returns-distribution", "histogram-returns",
+                      "drawdown", "rolling-volatility", "rolling-sharpe", "rolling-beta",
+                      "fibonacci", "pivot-points", "ichimoku-standalone", "elliott-wave", "gann",
                     ] as const).map((style) => (
                       <button
                         key={style}
@@ -491,7 +485,7 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                         onClick={() => { setChartStyle(style); setStyleDropdownOpen(false); }}
                         className={`w-full text-left rounded px-2 py-1 text-xs hover:bg-[rgba(255,255,255,0.05)] ${chartStyle === style ? "text-[var(--nq-accent-cyan)] font-semibold" : "text-[var(--nq-text-secondary)]"}`}
                       >
-                        {style === "ohlc-bar" ? "OHLC Bar" : style === "point-figure" ? "Point & Figure" : style.charAt(0).toUpperCase() + style.slice(1).replace(/-/g, " ")}
+                        {style === "ohlc-bar" ? "OHLC Bar" : style === "point-figure" ? "Point & Figure" : style === "cvd" ? "Cumulative Volume Delta" : style === "oi-price" ? "OI + Price" : style === "iv-smile" ? "IV Smile/Skew" : style === "vwap" ? "VWAP" : style === "anchored-vwap" ? "Anchored VWAP" : style.charAt(0).toUpperCase() + style.slice(1).replace(/-/g, " ")}
                       </button>
                     ))}
                   </div>
