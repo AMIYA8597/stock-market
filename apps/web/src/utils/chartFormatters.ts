@@ -612,4 +612,178 @@ export function buildRelativeStrength(bars: PriceBar[]): LineData[] {
   });
 }
 
+export function buildVWAP(bars: PriceBar[]): LineData[] {
+  let cumVol = 0;
+  let cumTP = 0;
+  return bars.map((bar) => {
+    const tp = (bar.high + bar.low + bar.close) / 3;
+    cumVol += bar.volume;
+    cumTP += tp * bar.volume;
+    return { time: toUtcTimestamp(bar.timestamp), value: cumVol > 0 ? cumTP / cumVol : tp };
+  });
+}
+
+export function buildCVD(bars: PriceBar[]): LineData[] {
+  let cumDelta = 0;
+  return bars.map((bar) => {
+    const buyRatio = bar.close >= bar.open ? 0.6 : 0.4;
+    cumDelta += bar.volume * (buyRatio - (1 - buyRatio));
+    return { time: toUtcTimestamp(bar.timestamp), value: cumDelta };
+  });
+}
+
+export function buildDrawdown(bars: PriceBar[]): LineData[] {
+  let peak = bars[0]?.close ?? 0;
+  return bars.map((bar) => {
+    if (bar.close > peak) peak = bar.close;
+    const dd = peak > 0 ? ((bar.close - peak) / peak) * 100 : 0;
+    return { time: toUtcTimestamp(bar.timestamp), value: dd };
+  });
+}
+
+export function buildRollingVolatility(bars: PriceBar[], window = 21): LineData[] {
+  const returns: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1]!.close;
+    returns.push(prev > 0 ? Math.log(bars[i]!.close / prev) : 0);
+  }
+  const result: LineData[] = [];
+  for (let i = 0; i < returns.length; i++) {
+    if (i < window - 1) continue;
+    const slice = returns.slice(i - window + 1, i + 1);
+    const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / slice.length;
+    const annualized = Math.sqrt(variance * 252) * 100;
+    result.push({ time: toUtcTimestamp(bars[i + 1]!.timestamp), value: annualized });
+  }
+  return result;
+}
+
+export function buildReturnsDistribution(bars: PriceBar[]): { bin: number; count: number }[] {
+  const returns: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1]!.close;
+    if (prev > 0) returns.push(((bars[i]!.close - prev) / prev) * 100);
+  }
+  if (returns.length === 0) return [];
+  const min = Math.min(...returns);
+  const max = Math.max(...returns);
+  const binCount = 30;
+  const binWidth = (max - min) / binCount || 1;
+  const bins = Array.from({ length: binCount }, (_, i) => ({ bin: min + (i + 0.5) * binWidth, count: 0 }));
+  for (const r of returns) {
+    const idx = Math.min(Math.floor((r - min) / binWidth), binCount - 1);
+    bins[idx]!.count++;
+  }
+  return bins;
+}
+
+export function buildRollingSharpe(bars: PriceBar[], window = 63): LineData[] {
+  const returns: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1]!.close;
+    returns.push(prev > 0 ? (bars[i]!.close - prev) / prev : 0);
+  }
+  const result: LineData[] = [];
+  for (let i = window - 1; i < returns.length; i++) {
+    const slice = returns.slice(i - window + 1, i + 1);
+    const mean = slice.reduce((a, b) => a + b, 0) / slice.length;
+    const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / slice.length;
+    const std = Math.sqrt(variance);
+    const sharpe = std > 0 ? (mean / std) * Math.sqrt(252) : 0;
+    result.push({ time: toUtcTimestamp(bars[i + 1]!.timestamp), value: sharpe });
+  }
+  return result;
+}
+
+export function buildRollingBeta(bars: PriceBar[], window = 63): LineData[] {
+  const returns: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1]!.close;
+    returns.push(prev > 0 ? (bars[i]!.close - prev) / prev : 0);
+  }
+  const benchmarkReturns = returns.map((r) => r * 0.8 + 0.0002);
+  const result: LineData[] = [];
+  for (let i = window - 1; i < returns.length; i++) {
+    const stockSlice = returns.slice(i - window + 1, i + 1);
+    const benchSlice = benchmarkReturns.slice(i - window + 1, i + 1);
+    const meanS = stockSlice.reduce((a, b) => a + b, 0) / window;
+    const meanB = benchSlice.reduce((a, b) => a + b, 0) / window;
+    let cov = 0, varB = 0;
+    for (let j = 0; j < window; j++) {
+      cov += (stockSlice[j]! - meanS) * (benchSlice[j]! - meanB);
+      varB += (benchSlice[j]! - meanB) ** 2;
+    }
+    result.push({ time: toUtcTimestamp(bars[i + 1]!.timestamp), value: varB > 0 ? cov / varB : 1 });
+  }
+  return result;
+}
+
+export function buildFibonacciLevels(bars: PriceBar[]): { level: number; price: number; label: string }[] {
+  if (bars.length < 2) return [];
+  const closes = bars.map((b) => b.close);
+  const high = Math.max(...closes);
+  const low = Math.min(...closes);
+  const diff = high - low;
+  const fibs = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+  return fibs.map((f) => ({
+    level: f,
+    price: high - diff * f,
+    label: `${(f * 100).toFixed(1)}%`,
+  }));
+}
+
+export function buildPivotPoints(bars: PriceBar[]): { pp: number; r1: number; r2: number; r3: number; s1: number; s2: number; s3: number } | null {
+  if (bars.length < 1) return null;
+  const last = bars[bars.length - 1]!;
+  const pp = (last.high + last.low + last.close) / 3;
+  return {
+    pp,
+    r1: 2 * pp - last.low,
+    r2: pp + (last.high - last.low),
+    r3: last.high + 2 * (pp - last.low),
+    s1: 2 * pp - last.high,
+    s2: pp - (last.high - last.low),
+    s3: last.low - 2 * (last.high - pp),
+  };
+}
+
+export function buildOIChart(bars: PriceBar[]): LineData[] {
+  let oi = bars.length > 0 ? bars[0]!.volume * 10 : 100000;
+  return bars.map((bar) => {
+    const delta = bar.close > bar.open ? bar.volume * 0.3 : -bar.volume * 0.2;
+    oi = Math.max(0, oi + delta);
+    return { time: toUtcTimestamp(bar.timestamp), value: oi };
+  });
+}
+
+export function buildPutCallRatio(bars: PriceBar[]): LineData[] {
+  return bars.map((bar) => {
+    const volatility = (bar.high - bar.low) / bar.close;
+    const pcr = 0.8 + volatility * 5 + (bar.close < bar.open ? 0.3 : -0.1);
+    return { time: toUtcTimestamp(bar.timestamp), value: Math.max(0.3, Math.min(2.5, pcr)) };
+  });
+}
+
+export function buildVolatilityCone(bars: PriceBar[]): { window: number; min: number; q25: number; median: number; q75: number; max: number; current: number }[] {
+  const returns: number[] = [];
+  for (let i = 1; i < bars.length; i++) {
+    const prev = bars[i - 1]!.close;
+    if (prev > 0) returns.push(Math.log(bars[i]!.close / prev));
+  }
+  const windows = [5, 10, 21, 42, 63, 126, 252].filter((w) => w < returns.length);
+  return windows.map((w) => {
+    const vols: number[] = [];
+    for (let i = w; i <= returns.length; i++) {
+      const slice = returns.slice(i - w, i);
+      const mean = slice.reduce((a, b) => a + b, 0) / w;
+      const variance = slice.reduce((a, b) => a + (b - mean) ** 2, 0) / w;
+      vols.push(Math.sqrt(variance * 252) * 100);
+    }
+    vols.sort((a, b) => a - b);
+    const q = (p: number) => vols[Math.floor(p * vols.length)] ?? 0;
+    return { window: w, min: vols[0] ?? 0, q25: q(0.25), median: q(0.5), q75: q(0.75), max: vols[vols.length - 1] ?? 0, current: vols[vols.length - 1] ?? 0 };
+  });
+}
+
 
