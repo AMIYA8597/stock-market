@@ -23,7 +23,7 @@ import { useUIStore } from "@/stores/ui-store";
 import { OrgSwitcher } from "./org-switcher";
 
 const navItems = [
-  { label: "Terminal", href: "/", icon: LayoutDashboard },
+  { label: "Terminal", href: "/terminal", icon: LayoutDashboard },
   { label: "Markets", href: "/markets", icon: TrendingUp },
   { label: "Research", href: "/research", icon: BookOpen },
   { label: "Signals", href: "/signals", icon: Activity },
