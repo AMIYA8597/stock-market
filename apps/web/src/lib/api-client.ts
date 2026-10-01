@@ -317,7 +317,7 @@ export const marketApi = {
     );
   },
   getZones(symbol: string): Promise<any> {
-    return fetchApi(`/zones/${encodeURIComponent(symbol)}`);
+    return fetchApi(`/market/zones/${encodeURIComponent(symbol)}`);
   },
   getPatterns(symbol: string): Promise<any> {
     return fetchApi(`/market/patterns/${encodeURIComponent(symbol)}`);

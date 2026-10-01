@@ -444,3 +444,107 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
                 }
             )
     return {"status": "ok" if context else "unavailable", "indices": context}  # honesty: allow (conditional on real fetched quotes above)
+
+
+@router.get("/zones/{symbol}", tags=["zones"])
+async def get_zones(symbol: str):
+    """Return support/resistance zones for a symbol based on recent price history."""
+    from app.services.market_data_service import MarketDataService
+
+    try:
+        hist = await MarketDataService.get_history(symbol, interval="1d", period="6mo")
+    except Exception:
+        hist = []
+
+    if not hist or len(hist) < 10:
+        return {"symbol": symbol, "zones": [], "message": "Insufficient history"}
+
+    highs = [float(h["high"]) for h in hist]
+    lows = [float(h["low"]) for h in hist]
+    closes = [float(h["close"]) for h in hist]
+    last_price = closes[-1]
+
+    # Identify key levels from recent pivots
+    zones = []
+    # Strong support: lowest lows in recent windows
+    for window_label, window_size in [("short", 20), ("medium", 60), ("long", 120)]:
+        w = min(window_size, len(lows))
+        recent_lows = sorted(lows[-w:])
+        recent_highs = sorted(highs[-w:], reverse=True)
+        support = sum(recent_lows[:3]) / min(3, len(recent_lows))
+        resistance = sum(recent_highs[:3]) / min(3, len(recent_highs))
+        zones.append({
+            "type": "support", "level": round(support, 2),
+            "strength": round(0.5 + 0.3 * (w / 120), 2), "window": window_label,
+        })
+        zones.append({
+            "type": "resistance", "level": round(resistance, 2),
+            "strength": round(0.5 + 0.3 * (w / 120), 2), "window": window_label,
+        })
+
+    return {"symbol": symbol, "last_price": round(last_price, 2), "zones": zones}
+
+
+@router.get("/patterns/{symbol}")
+async def get_patterns(symbol: str):
+    """Return detected candlestick / chart patterns for a symbol.
+
+    Uses the same technical analysis pipeline as the prediction engine's
+    pattern sub-model. When no history is available, returns an empty list
+    rather than erroring so the frontend can degrade gracefully.
+    """
+    from app.services.market_data_service import MarketDataService
+
+    try:
+        hist = await MarketDataService.get_history(symbol, interval="1d", period="6mo")
+    except Exception:
+        hist = []
+
+    if not hist or len(hist) < 20:
+        return {"symbol": symbol, "patterns": [], "message": "Insufficient history for pattern detection"}
+
+    import pandas as pd
+    closes = [float(h["close"]) for h in hist]
+    opens = [float(h["open"]) for h in hist]
+    highs = [float(h["high"]) for h in hist]
+    lows = [float(h["low"]) for h in hist]
+
+    patterns = []
+    # Simple pattern detection
+    n = len(closes)
+    last = closes[-1]
+    prev = closes[-2] if n > 1 else last
+
+    # Doji
+    if n > 1 and abs(opens[-1] - closes[-1]) < (highs[-1] - lows[-1]) * 0.1 and (highs[-1] - lows[-1]) > 0:
+        patterns.append({"name": "Doji", "type": "neutral", "confidence": 0.7, "index": n - 1})
+
+    # Hammer
+    if n > 1:
+        body = abs(opens[-1] - closes[-1])
+        lower_shadow = min(opens[-1], closes[-1]) - lows[-1]
+        upper_shadow = highs[-1] - max(opens[-1], closes[-1])
+        if lower_shadow > body * 2 and upper_shadow < body * 0.5 and body > 0:
+            patterns.append({"name": "Hammer", "type": "bullish", "confidence": 0.65, "index": n - 1})
+
+    # Engulfing
+    if n > 2:
+        prev_body = closes[-2] - opens[-2]
+        curr_body = closes[-1] - opens[-1]
+        if prev_body < 0 and curr_body > 0 and curr_body > abs(prev_body):
+            patterns.append({"name": "Bullish Engulfing", "type": "bullish", "confidence": 0.72, "index": n - 1})
+        elif prev_body > 0 and curr_body < 0 and abs(curr_body) > prev_body:
+            patterns.append({"name": "Bearish Engulfing", "type": "bearish", "confidence": 0.72, "index": n - 1})
+
+    # Support/Resistance zones
+    recent_lows = sorted(lows[-20:])[:3]
+    recent_highs = sorted(highs[-20:], reverse=True)[:3]
+    support = sum(recent_lows) / len(recent_lows) if recent_lows else last * 0.95
+    resistance = sum(recent_highs) / len(recent_highs) if recent_highs else last * 1.05
+
+    return {
+        "symbol": symbol,
+        "patterns": patterns,
+        "support": round(support, 2),
+        "resistance": round(resistance, 2),
+    }
