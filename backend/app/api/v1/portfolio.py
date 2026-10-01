@@ -556,7 +556,7 @@ async def get_risk_metrics(
 async def post_optimize(
     request: OptimizationRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_feature("PREMIUM")),
+    current_user: dict = Depends(get_current_user),
 ) -> OptimizationResponse:
     """Return normalized optimization output for requested universe and method."""
     try:

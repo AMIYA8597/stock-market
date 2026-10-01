@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, prefer-const, react-hooks/exhaustive-deps, react/no-unescaped-entities, react/display-name */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@/i18n/navigation";
 import { intelligenceApi } from "@/lib/intelligence-api";
 import { marketApi, predictionsApi } from "@/lib/api-client";
@@ -93,8 +93,63 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
   >("1d");
   const [chartBars, setChartBars] = useState<PriceBar[]>([]);
   const [chartLoading, setChartLoading] = useState<boolean>(false);
-  const [chartStyle, setChartStyle] = useState<"candlestick" | "heikin-ashi" | "line">("candlestick");
-  const [chartHeight, setChartHeight] = useState<number>(360);
+  const [chartStyle, setChartStyle] = useState<
+    | "line"
+    | "candlestick"
+    | "ohlc-bar"
+    | "area"
+    | "baseline"
+    | "heikin-ashi"
+    | "hollow-candlestick"
+    | "volume"
+    | "renko"
+    | "point-figure"
+    | "kagi"
+    | "range-bar"
+    | "three-line-break"
+    | "equivolume"
+    | "tick"
+    | "volume-profile"
+    | "market-profile"
+    | "spread"
+    | "relative-strength"
+    | "mountain"
+  >("candlestick");
+  const [chartHeight, setChartHeight] = useState<number>(420);
+  const [styleDropdownOpen, setStyleDropdownOpen] = useState(false);
+  const [indicatorsDropdownOpen, setIndicatorsDropdownOpen] = useState(false);
+  const [activeIndicators, setActiveIndicators] = useState({
+    ema9: false,
+    ema21: true,
+    ema50: true,
+    ema200: false,
+    sma20: false,
+    sma50: false,
+    sma100: false,
+    bollingerBands: true,
+    patterns: true,
+    superTrend: true,
+    ichimoku: false,
+    vwap: true,
+    rsi: true,
+    macd: true,
+    atr: true,
+    smc: true,
+  });
+  const [predictions, setPredictions] = useState<{ target_date: string; predicted_price: number; prediction_low?: number; prediction_high?: number }[]>([]);
+  const [forecastError, setForecastError] = useState<string | null>(null);
+
+  const chartControlsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (chartControlsRef.current && !chartControlsRef.current.contains(e.target as Node)) {
+        setStyleDropdownOpen(false);
+        setIndicatorsDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const { ticks, status } = usePriceFeed([symbol]);
   const liveTick = ticks.get(symbol.toUpperCase());
@@ -262,6 +317,25 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
     };
   }, [symbol]);
 
+  // Fetch AI/ML multi-horizon forecast predictions
+  useEffect(() => {
+    if (!symbol) { setPredictions([]); return; }
+    let active = true;
+    intelligenceApi
+      .getMultiHorizonForecast(symbol)
+      .then((points) => {
+        if (!active) return;
+        setPredictions(points);
+        setForecastError(points.length === 0 ? "No forecast data yet" : null);
+      })
+      .catch(() => {
+        if (!active) return;
+        setPredictions([]);
+        setForecastError("Forecast unavailable");
+      });
+    return () => { active = false; };
+  }, [symbol]);
+
   const latestPrice = liveTick?.price ?? quote?.price;
   const latestChangePct = liveTick?.change_pct ?? quote?.change_percent;
 
@@ -374,15 +448,15 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
 
       <section className="relative z-10 mt-6 grid gap-4 xl:grid-cols-[1fr_320px]">
         <ChartCard title={`Price History (${chartInterval.toUpperCase()})`} subtitle="Live interactive candlestick overlays">
-          {/* Timeframe Selector and Chart Style controls */}
+          {/* Timeframe + Chart Style + Indicators controls */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--nq-border)] pb-3 mb-3">
             <div className="flex items-center gap-1 overflow-x-auto ds-scrollable py-1">
-              {(["1m", "5m", "15m", "1h", "1d", "1w", "1mo"] as const).map((interval) => (
+              {(["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1d", "1w", "1mo"] as const).map((interval) => (
                 <button
                   key={interval}
                   type="button"
                   onClick={() => setChartInterval(interval)}
-                  className={`rounded border px-2.5 py-1 text-xs font-semibold font-mono transition-colors uppercase ${
+                  className={`rounded border px-2 py-1 text-[10px] font-semibold font-mono transition-colors uppercase whitespace-nowrap ${
                     chartInterval === interval
                       ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]"
                       : "border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] hover:border-[var(--nq-border-hover)]"
@@ -392,21 +466,84 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-1">
-              {(["candlestick", "heikin-ashi", "line"] as const).map((style) => (
+            <div ref={chartControlsRef} className="flex items-center gap-2">
+              {/* Chart Style Dropdown - 20 types */}
+              <div className="relative">
                 <button
-                  key={style}
                   type="button"
-                  onClick={() => setChartStyle(style)}
-                  className={`rounded border px-2.5 py-1 text-xs font-semibold transition-colors capitalize ${
-                    chartStyle === style
-                      ? "border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.12)] text-[var(--nq-text-primary)]"
-                      : "border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] hover:border-[var(--nq-border-hover)]"
-                  }`}
+                  onClick={() => { setStyleDropdownOpen(!styleDropdownOpen); setIndicatorsDropdownOpen(false); }}
+                  className="flex items-center gap-1 rounded border border-[var(--nq-border)] px-2.5 py-1 text-xs text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] hover:border-[var(--nq-border-hover)] transition-colors"
                 >
-                  {style.replace("-", " ")}
+                  <span className="capitalize">{chartStyle === "ohlc-bar" ? "OHLC Bar" : chartStyle === "point-figure" ? "Point & Figure" : chartStyle.replace(/-/g, " ")}</span>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                 </button>
-              ))}
+                {styleDropdownOpen && (
+                  <div className="absolute right-0 top-full z-[100] mt-1 w-48 max-h-[320px] overflow-y-auto rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-1 shadow-lg ds-scrollable">
+                    {([
+                      "candlestick", "line", "ohlc-bar", "area", "baseline", "heikin-ashi",
+                      "hollow-candlestick", "volume", "renko", "point-figure", "kagi",
+                      "range-bar", "three-line-break", "equivolume", "tick",
+                      "volume-profile", "market-profile", "spread", "relative-strength", "mountain",
+                    ] as const).map((style) => (
+                      <button
+                        key={style}
+                        type="button"
+                        onClick={() => { setChartStyle(style); setStyleDropdownOpen(false); }}
+                        className={`w-full text-left rounded px-2 py-1 text-xs hover:bg-[rgba(255,255,255,0.05)] ${chartStyle === style ? "text-[var(--nq-accent-cyan)] font-semibold" : "text-[var(--nq-text-secondary)]"}`}
+                      >
+                        {style === "ohlc-bar" ? "OHLC Bar" : style === "point-figure" ? "Point & Figure" : style.charAt(0).toUpperCase() + style.slice(1).replace(/-/g, " ")}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {/* Indicators Dropdown - 16 indicators */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => { setIndicatorsDropdownOpen(!indicatorsDropdownOpen); setStyleDropdownOpen(false); }}
+                  className="flex items-center gap-1 rounded border border-[var(--nq-border)] px-2.5 py-1 text-xs text-[var(--nq-text-secondary)] hover:text-[var(--nq-text-primary)] hover:border-[var(--nq-border-hover)] transition-colors"
+                >
+                  <span>Indicators ({Object.values(activeIndicators).filter(Boolean).length})</span>
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                </button>
+                {indicatorsDropdownOpen && (
+                  <div className="absolute right-0 top-full z-[100] mt-1 w-52 max-h-[380px] overflow-y-auto rounded border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-2 shadow-lg ds-scrollable">
+                    <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold border-b border-[var(--nq-border)] pb-1 mb-1">Overlays</p>
+                    {([
+                      ["ema9", "EMA 9"],
+                      ["ema21", "EMA 21"],
+                      ["ema50", "EMA 50"],
+                      ["ema200", "EMA 200"],
+                      ["sma20", "SMA 20"],
+                      ["sma50", "SMA 50"],
+                      ["sma100", "SMA 100"],
+                      ["bollingerBands", "Bollinger Bands"],
+                      ["superTrend", "SuperTrend"],
+                      ["ichimoku", "Ichimoku Cloud"],
+                      ["vwap", "VWAP"],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 cursor-pointer rounded px-1.5 py-0.5 hover:bg-[rgba(255,255,255,0.05)] text-[10px] text-[var(--nq-text-secondary)] select-none">
+                        <input type="checkbox" checked={activeIndicators[key]} onChange={() => setActiveIndicators((prev) => ({ ...prev, [key]: !prev[key] }))} className="rounded border-[var(--nq-border)] text-[var(--nq-accent-cyan)] focus:ring-0 bg-transparent h-3 w-3" />
+                        <span className={activeIndicators[key] ? "text-[var(--nq-text-primary)] font-medium" : ""}>{label}</span>
+                      </label>
+                    ))}
+                    <p className="text-[9px] uppercase tracking-wider text-[var(--nq-text-muted)] font-semibold border-b border-[var(--nq-border)] pb-0.5 mb-1 mt-2">Analysis & Oscillators</p>
+                    {([
+                      ["patterns", "Pattern Detector"],
+                      ["rsi", "RSI (14)"],
+                      ["macd", "MACD"],
+                      ["atr", "ATR (14)"],
+                      ["smc", "Smart Money Concepts"],
+                    ] as const).map(([key, label]) => (
+                      <label key={key} className="flex items-center gap-2 cursor-pointer rounded px-1.5 py-0.5 hover:bg-[rgba(255,255,255,0.05)] text-[10px] text-[var(--nq-text-secondary)] select-none">
+                        <input type="checkbox" checked={activeIndicators[key]} onChange={() => setActiveIndicators((prev) => ({ ...prev, [key]: !prev[key] }))} className="rounded border-[var(--nq-border)] text-[var(--nq-accent-cyan)] focus:ring-0 bg-transparent h-3 w-3" />
+                        <span className={activeIndicators[key] ? "text-[var(--nq-text-primary)] font-medium" : ""}>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -425,18 +562,8 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                 height={chartHeight}
                 symbol={symbol}
                 liveTick={liveTick}
-                indicators={{
-                  ema21: true,
-                  ema50: true,
-                  vwap: true,
-                  rsi: true,
-                  macd: true,
-                  superTrend: true,
-                  patterns: true,
-                  smc: true,
-                  bollingerBands: true,
-                  atr: true,
-                }}
+                indicators={activeIndicators}
+                predictions={predictions}
               />
             ) : (
               <div className="flex h-full items-center justify-center p-4 text-center text-sm text-[var(--nq-text-secondary)]">
@@ -500,6 +627,68 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                 <div className="rounded border border-[var(--nq-border)] px-2 py-1">Consensus: {ensemble?.consensus_direction ?? "--"}</div>
                 <div className="rounded border border-[var(--nq-border)] px-2 py-1">Confidence: {ensemble ? ensemble.consensus_confidence.toFixed(2) : "--"}</div>
               </div>
+            )}
+          </ChartCard>
+
+          <ChartCard title="AI/ML Forecast" subtitle="Multi-horizon SARIMAX predictions">
+            {predictions.length > 0 ? (
+              <div className="space-y-1.5">
+                {predictions.slice(0, 6).map((p, i) => {
+                  const horizonLabel = p.target_date;
+                  const price = p.predicted_price;
+                  const low = p.prediction_low;
+                  const high = p.prediction_high;
+                  const isUp = latestPrice ? price > latestPrice : false;
+                  return (
+                    <div key={i} className="flex items-center justify-between rounded border border-[var(--nq-border)] px-2 py-1.5 text-xs">
+                      <span className="text-[var(--nq-text-secondary)] font-mono text-[10px]">{horizonLabel}</span>
+                      <div className="flex items-center gap-2">
+                        {low != null && high != null && (
+                          <span className="text-[9px] text-[var(--nq-text-muted)]">{formatInr(low)} – {formatInr(high)}</span>
+                        )}
+                        <span className={`font-semibold font-mono ${isUp ? "text-[#00E676]" : "text-[#FF3B5C]"}`}>
+                          {isUp ? "▲" : "▼"} ₹{formatInr(price)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-3 text-center text-xs text-[var(--nq-text-secondary)]">
+                {forecastError ?? "Loading forecast..."}
+              </div>
+            )}
+          </ChartCard>
+
+          <ChartCard title="Model Breakdown" subtitle="Individual AI model signals">
+            {signal?.models ? (
+              <div className="space-y-1.5">
+                {Object.entries(signal.models).map(([name, model]: [string, any]) => {
+                  const dir = model?.direction ?? model?.signal ?? "NEUTRAL";
+                  const conf = model?.confidence ?? model?.score ?? 0;
+                  const isGreen = dir === "BUY" || dir === "STRONG_BUY" || dir === "BULLISH";
+                  const isRed = dir === "SELL" || dir === "STRONG_SELL" || dir === "BEARISH";
+                  return (
+                    <div key={name} className="flex items-center justify-between rounded border border-[var(--nq-border)] px-2 py-1.5 text-xs">
+                      <span className="text-[var(--nq-text-secondary)] capitalize">{name.replace(/_/g, " ")}</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-1.5 rounded-full bg-[rgba(255,255,255,0.05)] overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${isGreen ? "bg-[#00E676]" : isRed ? "bg-[#FF3B5C]" : "bg-[#FFB800]"}`}
+                            style={{ width: `${Math.min(100, Math.abs(Number(conf)) * 100)}%` }}
+                          />
+                        </div>
+                        <span className={`font-semibold text-[10px] ${isGreen ? "text-[#00E676]" : isRed ? "text-[#FF3B5C]" : "text-[#FFB800]"}`}>
+                          {dir}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-3 text-center text-xs text-[var(--nq-text-secondary)]">Loading model signals...</div>
             )}
           </ChartCard>
 
