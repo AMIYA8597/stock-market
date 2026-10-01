@@ -19,7 +19,7 @@ settings = get_settings()
 
 @dataclass(slots=True)
 class RateLimitConfig:
-    max_requests: int = 100
+    max_requests: int = 600
     window_seconds: int = 60
 
 
