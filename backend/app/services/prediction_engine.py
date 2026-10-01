@@ -464,7 +464,7 @@ def build_ensemble_signal_sync(
         gnn_score = float(gnn_res["raw_signal"])
         gnn_confidence = float(1.0 - gnn_res["contagion_score"])
         gnn_top_correlated = [{"ticker": "^NSEI", "correlation": float(gnn_res["corr_to_index"])}]
-        gnn_status = "trained"
+        gnn_status = "heuristic"  # ContagionRiskAnalyzer is a formula-based substitute, not a trained GNN
     except Exception as e:
         logger.warning(f"Failed to compute GNN contagion risk for {symbol}: {e}")
 
@@ -696,6 +696,7 @@ def build_ensemble_signal_sync(
             "raw_signal": tft_score,
             "horizon_days": 5,
             "status": tft_status,
+            "actual_model": "QuantileLGBM",  # Honest label: this is LightGBM quantile regression, not a Temporal Fusion Transformer
         },
         "lstm_attn": {
             "raw_signal": lstm_score,
@@ -707,6 +708,7 @@ def build_ensemble_signal_sync(
             "embedding_norm": 1.0,
             "top_correlated_assets": gnn_top_correlated,
             "status": gnn_status,
+            "actual_model": "ContagionRiskAnalyzer (formula-based)",  # Not a trained GNN — see gnn/model.py for the real architecture
         },
         "hmm_garch": {
             "regime_signal": hmm_score,
@@ -726,11 +728,13 @@ def build_ensemble_signal_sync(
 
 def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any]]:
     closes = df["close"].values[-90:]  # Use last 90 days
+    forecast_method = "lstm_scratch"  # Trains from scratch each call (15 epochs) — not a pre-trained model
     try:
         from app.services.ml_engine.lstm_forecaster import deep_learning_forecast
         pred_mean, pred_ci = deep_learning_forecast(closes, max(horizons))
     except Exception as e:
         logger.warning(f"LSTM price forecast failed: {e}. Falling back to ExponentialSmoothing.")
+        forecast_method = "exponential_smoothing"
         # Fallback: simple exponential smoothing trend
         try:
             model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
@@ -740,6 +744,7 @@ def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any
             pred_ci = np.column_stack([pred_mean - ci_width, pred_mean + ci_width])
         except Exception as ee:
             logger.error(f"HoltWinters forecast fallback failed: {ee}")
+            forecast_method = "flat_projection"
             current_close = float(df["close"].iloc[-1])
             pred_mean = np.full(max(horizons), current_close)
             pred_ci = np.column_stack([pred_mean * 0.97, pred_mean * 1.03])
@@ -760,6 +765,7 @@ def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any
                 "prediction_high": round(high, 2),
                 "change_pct": round(change_pct, 4),
                 "target_date": (datetime.now(UTC) + timedelta(days=h)).date().isoformat(),
+                "forecast_method": forecast_method,
             }
         )
     return output
