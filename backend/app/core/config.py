@@ -432,7 +432,7 @@ class Settings(BaseSettings):
         default=True, description="Enable rate limiting on API endpoints"
     )
     DEFAULT_RATE_LIMIT: str = Field(
-        default="100/minute", description="Default rate limit (requests/time_window)"
+        default="600/minute", description="Default rate limit (requests/time_window)"
     )
     AUTH_RATE_LIMIT: str = Field(
         default="10/minute", description="Rate limit specifically for authentication endpoints"
