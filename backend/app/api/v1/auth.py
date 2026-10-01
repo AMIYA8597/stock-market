@@ -517,3 +517,35 @@ async def me(current_user: User | None = Depends(get_current_user_or_none)):
         "status": current_user.status,
         "email_verified": current_user.email_verified,
     }
+
+
+@router.get("/auth/upstox/login-url")
+async def upstox_login_url():
+    try:
+        from app.services.upstox_service import UpstoxService
+        url = UpstoxService.get_login_url()
+        return {"login_url": url}
+    except ValueError as e:
+        return {"login_url": None, "error": str(e)}
+
+
+@router.get("/auth/upstox/status")
+async def upstox_auth_status():
+    from app.services.upstox_service import UpstoxService
+    return {
+        "authenticated": UpstoxService.ACCESS_TOKEN is not None,
+        "profile": UpstoxService.USER_PROFILE,
+        "connection_status": UpstoxService.CONNECTION_STATUS,
+    }
+
+
+@router.get("/auth/upstox/callback")
+async def upstox_callback(code: str | None = None, error: str | None = None):
+    if error or not code:
+        raise HTTPException(status_code=400, detail=error or "No authorization code received")
+    try:
+        from app.services.upstox_service import UpstoxService
+        result = await UpstoxService.exchange_code_for_token(code)
+        return {"success": True, "profile": result.get("user_profile")}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
