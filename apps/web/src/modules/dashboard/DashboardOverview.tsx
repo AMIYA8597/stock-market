@@ -51,6 +51,29 @@ function formatRatio(value: number | null | undefined): string {
 
 export function DashboardOverview(): JSX.Element {
   const [createAlertOpen, setCreateAlertOpen] = useState(false);
+  const [alertSymbol, setAlertSymbol] = useState("NIFTY50");
+  const [alertThreshold, setAlertThreshold] = useState("1.0");
+  const [alertSubmitting, setAlertSubmitting] = useState(false);
+
+  const handleCreateAlert = async () => {
+    setAlertSubmitting(true);
+    try {
+      await alertsApi.create({
+        name: `${alertSymbol} Price Alert`,
+        symbol: alertSymbol,
+        alert_type: "price",
+        conditions: { threshold: parseFloat(alertThreshold) },
+        channels: ["in_app"],
+        cooldown_minutes: 15,
+        is_active: true,
+      });
+      setCreateAlertOpen(false);
+    } catch {
+      // silently close — alerts page has full error handling
+    } finally {
+      setAlertSubmitting(false);
+    }
+  };
 
   const {
     data: pnl,
@@ -450,15 +473,15 @@ export function DashboardOverview(): JSX.Element {
       >
         <div className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input defaultValue="NIFTY50" />
-            <Input defaultValue="Breakout > 1.0%" />
+            <Input value={alertSymbol} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAlertSymbol(e.target.value)} placeholder="Symbol" />
+            <Input value={alertThreshold} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAlertThreshold(e.target.value)} placeholder="Threshold %" />
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setCreateAlertOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => setCreateAlertOpen(false)}>
-              Create Alert
+            <Button type="button" onClick={handleCreateAlert} disabled={alertSubmitting}>
+              {alertSubmitting ? "Creating..." : "Create Alert"}
             </Button>
           </div>
         </div>
