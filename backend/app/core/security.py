@@ -302,3 +302,57 @@ async def get_current_context(
         detail="Not authenticated",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+# ── Field Encryption ──
+
+_fernet_cipher = None
+
+
+def _get_fernet_cipher():
+    global _fernet_cipher
+    if _fernet_cipher is not None:
+        return _fernet_cipher
+    settings = get_settings()
+    if not settings.FIELD_ENCRYPTION_KEY:
+        if settings.ENCRYPTION_ENABLED:
+            raise RuntimeError("FIELD_ENCRYPTION_KEY required when ENCRYPTION_ENABLED=true")
+        return None
+    try:
+        from cryptography.fernet import Fernet
+        _fernet_cipher = Fernet(settings.FIELD_ENCRYPTION_KEY.encode())
+    except ImportError:
+        if settings.ENCRYPTION_ENABLED:
+            raise RuntimeError("cryptography is required when ENCRYPTION_ENABLED=true")
+        return None
+    except Exception as e:
+        raise RuntimeError(f"Invalid FIELD_ENCRYPTION_KEY: {e}")
+    return _fernet_cipher
+
+
+def encrypt_field(plaintext: str) -> str:
+    settings = get_settings()
+    if not settings.ENCRYPTION_ENABLED:
+        return plaintext
+    cipher = _get_fernet_cipher()
+    if cipher is None:
+        return plaintext
+    try:
+        return cipher.encrypt(plaintext.encode()).decode()
+    except Exception as e:
+        logger.error("encrypt_field_error error=%s", str(e))
+        raise ValueError(f"Field encryption failed: {e}") from e
+
+
+def decrypt_field(ciphertext: str) -> str:
+    settings = get_settings()
+    if not settings.ENCRYPTION_ENABLED:
+        return ciphertext
+    cipher = _get_fernet_cipher()
+    if cipher is None:
+        return ciphertext
+    try:
+        return cipher.decrypt(ciphertext.encode()).decode()
+    except Exception as e:
+        logger.error("decrypt_field_error error=%s", str(e))
+        raise ValueError("Field decryption failed: invalid token or key") from e
