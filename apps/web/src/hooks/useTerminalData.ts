@@ -8,7 +8,12 @@ import { watchlistApi } from "@/lib/api-client";
 import { useSignalFeed } from "@/hooks/useSignalFeed";
 import type { SignalResponse } from "@/types/intelligence";
 
-
+const DEFAULT_NIFTY50_SYMBOLS = [
+  "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
+  "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK",
+  "AXISBANK", "LT", "WIPRO", "HCLTECH", "ASIANPAINT",
+  "MARUTI", "SUNPHARMA", "TITAN", "ULTRACEMCO", "BAJFINANCE",
+];
 
 interface TerminalDataState {
   symbols: string[];
@@ -60,10 +65,10 @@ export const useTerminalData = (): TerminalDataState => {
       console.warn("Failed to load user watchlist, falling back to defaults", err);
     }
 
-    symbolsRef.current = [];
-    setSymbols([]);
-    setWlLists([[], [], [], []]);
-    return [];
+    symbolsRef.current = DEFAULT_NIFTY50_SYMBOLS;
+    setSymbols(DEFAULT_NIFTY50_SYMBOLS);
+    setWlLists([DEFAULT_NIFTY50_SYMBOLS, [], [], []]);
+    return DEFAULT_NIFTY50_SYMBOLS;
   }, []);
 
   const refreshAll = useCallback(
