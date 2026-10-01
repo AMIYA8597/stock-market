@@ -485,7 +485,11 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
                         onClick={() => { setChartStyle(style); setStyleDropdownOpen(false); }}
                         className={`w-full text-left rounded px-2 py-1 text-xs hover:bg-[rgba(255,255,255,0.05)] ${chartStyle === style ? "text-[var(--nq-accent-cyan)] font-semibold" : "text-[var(--nq-text-secondary)]"}`}
                       >
-                        {style === "ohlc-bar" ? "OHLC Bar" : style === "point-figure" ? "Point & Figure" : style === "cvd" ? "Cumulative Volume Delta" : style === "oi-price" ? "OI + Price" : style === "iv-smile" ? "IV Smile/Skew" : style === "vwap" ? "VWAP" : style === "anchored-vwap" ? "Anchored VWAP" : style.charAt(0).toUpperCase() + style.slice(1).replace(/-/g, " ")}
+                        {(() => {
+                          const unavailable = ["iv-smile", "volatility-cone", "correlation-heatmap", "rolling-correlation", "elliott-wave", "gann"];
+                          const label = style === "ohlc-bar" ? "OHLC Bar" : style === "point-figure" ? "Point & Figure" : style === "cvd" ? "Cumulative Volume Delta" : style === "oi-price" ? "OI + Price" : style === "iv-smile" ? "IV Smile/Skew" : style === "vwap" ? "VWAP" : style === "anchored-vwap" ? "Anchored VWAP" : style.charAt(0).toUpperCase() + style.slice(1).replace(/-/g, " ");
+                          return unavailable.includes(style) ? `${label} ⚠` : label;
+                        })()}
                       </button>
                     ))}
                   </div>
