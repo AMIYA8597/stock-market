@@ -122,7 +122,7 @@ def _issue_test_token(user: User) -> TokenResponse:
     import jwt
 
     secret = settings.SUPABASE_JWT_SECRET or TEST_JWT_SECRET
-    token = jwt.encode({"sub": str(user.auth_id), "type": "access"}, secret, algorithm="HS256")
+    token = jwt.encode({"sub": str(user.auth_id), "type": "access", "aud": "authenticated"}, secret, algorithm="HS256")
     return TokenResponse(access_token=token, refresh_token="test_refresh")
 
 
@@ -367,9 +367,11 @@ async def login(payload: AuthLogin, request: Request, db: AsyncSession = Depends
             )
             resp.raise_for_status()
             data = resp.json()
-        except Exception as exc:
+        except httpx.HTTPStatusError as exc:
             await record_failed_login(db, user)
             raise invalid_credentials from exc
+        except httpx.HTTPError as exc:
+            raise HTTPException(status_code=502, detail="Could not reach the auth service. Please try again.") from exc
 
     await reset_failed_login(db, user)
     return TokenResponse(

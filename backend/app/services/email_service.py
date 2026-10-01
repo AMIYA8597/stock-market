@@ -93,8 +93,10 @@ async def send_otp_email(to_email: str, code: str, purpose: str) -> None:
         plain_text_content=body,
     )
     try:
+        import asyncio
+
         client = SendGridAPIClient(settings.SENDGRID_API_KEY)
-        client.send(message)
+        await asyncio.to_thread(client.send, message)
     except Exception as exc:
         # Never include `code` in this log line.
         logging.getLogger(__name__).error(f"SendGrid OTP delivery failed for purpose={purpose}: {exc}")
