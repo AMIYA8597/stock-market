@@ -12,13 +12,14 @@ class RegimeCurrentResponse(BaseModel):
     state: str = Field(..., description="bull|bear|sideways|crisis")
     state_index: int = Field(..., ge=0, le=3)
     probs: list[Decimal] = Field(..., description="[P(bull), P(bear), P(sideways), P(crisis)]")
-    transition_matrix: list[list[Decimal]] = Field(..., description="4x4 A matrix")
+    transition_matrix: list[list[Decimal]] | None = Field(default=None, description="4x4 A matrix")
     cond_vol_1d: Decimal = Field(..., gt=0, description="conditional volatility 1-day")
     cond_vol_5d: Decimal = Field(..., gt=0)
     cond_vol_21d: Decimal = Field(..., gt=0)
-    days_in_state: int
-    last_transition_date: datetime
-    timestamp: datetime
+    days_in_state: int = 1
+    last_transition_date: datetime | None = None
+    timestamp: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class RegimeHistoryPoint(BaseModel):
