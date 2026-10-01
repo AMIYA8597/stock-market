@@ -191,11 +191,11 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                 raise HTTPException(status_code=502, detail="Could not reach the auth service") from e
 
             data = resp.json()
-            auth_id = (data.get("user") or {}).get("id")
-            if not auth_id:
-                # Supabase returns `user: null` with 200 OK (not an error) when
-                # the email is already registered and confirmed, to avoid
-                # letting an attacker learn which emails have accounts.
+            logger.info("supabase_signup_response status=%s body=%s", resp.status_code, data)
+            user_obj = data.get("user") or {}
+            auth_id = user_obj.get("id")
+            identities = user_obj.get("identities", [])
+            if not auth_id or (auth_id and len(identities) == 0):
                 raise HTTPException(
                     status_code=409,
                     detail="An account with this email already exists. Try signing in, or use Forgot Password.",
