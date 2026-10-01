@@ -271,8 +271,6 @@ async def get_performance(
                         pass
 
         cash = float(holdings_res.cash_balance)
-        bench_base = Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
-
         # Calculate daily values
         for i, (dt, date_str, bench_val) in enumerate(last_10):
             port_val = cash

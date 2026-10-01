@@ -455,7 +455,6 @@ class IntelligenceService:
             return []
 
         from collections import defaultdict
-        state_days: dict[str, list[float]] = defaultdict(list)
         state_vols: dict[str, list[float]] = defaultdict(list)
         durations: dict[str, list[int]] = defaultdict(list)
 
