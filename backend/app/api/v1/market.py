@@ -87,42 +87,55 @@ async def get_quote(
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
 
+    from app.services.market_data_service import MarketDataService
+
+    # Try DB first
     result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
     instrument = result.scalars().first()
-    if not instrument:
-        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
+    if instrument:
+        result = await db.execute(
+            select(QuoteSnapshot)
+            .where(QuoteSnapshot.instrument_id == instrument.id)
+            .order_by(QuoteSnapshot.observed_at.desc())
+            .limit(1)
+        )
+        quote = result.scalars().first()
+        if quote and float(quote.price or 0) > 0:
+            return QuoteResponse(
+                ticker=symbol,
+                name=instrument.display_name or symbol,
+                price=Decimal(str(float(quote.price or 0.0))),
+                change=Decimal(str(quote.change or 0.0)),
+                change_pct=Decimal(str(quote.change_pct or 0.0)),
+                volume=Decimal(str(quote.volume or 0.0)),
+                market_cap=None, pe_ratio=None, week_52_high=None, week_52_low=None,
+                regime=None, signal=None,
+                timestamp=quote.observed_at,
+                data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
+                source="canonical_db",
+            )
 
-    result = await db.execute(
-        select(QuoteSnapshot)
-        .where(QuoteSnapshot.instrument_id == instrument.id)
-        .order_by(QuoteSnapshot.observed_at.desc())
-        .limit(1)
-    )
-    quote = result.scalars().first()
+    # Fallback to yfinance
+    try:
+        yf_quote = await MarketDataService._yfinance_quote(symbol)
+        if yf_quote and yf_quote.get("price", 0) > 0:
+            return QuoteResponse(
+                ticker=symbol,
+                name=yf_quote.get("name", symbol),
+                price=Decimal(str(yf_quote["price"])),
+                change=Decimal(str(yf_quote.get("change", 0.0))),
+                change_pct=Decimal(str(yf_quote.get("change_pct", 0.0))),
+                volume=Decimal(str(yf_quote.get("volume", 0))),
+                market_cap=None, pe_ratio=None, week_52_high=None, week_52_low=None,
+                regime=None, signal=None,
+                timestamp=datetime.now(UTC),
+                data_freshness_seconds=0,
+                source="yfinance",
+            )
+    except Exception as e:
+        logger.warning(f"yfinance quote fallback failed for {symbol}: {e}")
 
-    if not quote:
-        raise HTTPException(status_code=404, detail=f"No quotes available for {symbol}")
-
-    price_val = float(quote.price or 0.0)
-    change_pct = float(quote.change_pct or 0.0)
-
-    return QuoteResponse(
-        ticker=symbol,
-        name=instrument.display_name or symbol,
-        price=Decimal(str(price_val)),
-        change=Decimal(str(quote.change or 0.0)),
-        change_pct=Decimal(str(change_pct)),
-        volume=Decimal(str(quote.volume or 0.0)),
-        market_cap=None,
-        pe_ratio=None,
-        week_52_high=None,
-        week_52_low=None,
-        regime=None,
-        signal=None,
-        timestamp=quote.observed_at,
-        data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
-        source="canonical_db",
-    )
+    raise HTTPException(status_code=404, detail=f"No quotes available for {symbol}")
 
 
 _INTERVAL_DEFAULT_PERIOD = {
@@ -141,40 +154,41 @@ async def get_history(
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
 
+    from app.services.market_data_service import MarketDataService
+
     effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
-    period_days = {"1d": 1, "5d": 5, "1w": 7, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
-    days = period_days.get(effective_period, 30)
-    start_time = datetime.now(UTC) - timedelta(days=days)
 
-    result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
-    instrument = result.scalars().first()
-    if not instrument:
-        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
+    # Try MarketDataService which has DB-first + yfinance fallback
+    try:
+        bars_raw = await MarketDataService.get_history(symbol, interval, effective_period)
+        source = getattr(bars_raw, 'source', 'yfinance')
+    except Exception as e:
+        logger.warning(f"MarketDataService.get_history failed for {symbol}: {e}")
+        bars_raw = []
+        source = "none"
 
-    result = await db.execute(
-        select(OHLCV)
-        .where(
-            (OHLCV.instrument_id == instrument.id) &
-            (OHLCV.interval == interval) &
-            (OHLCV.timestamp >= start_time)
-        )
-        .order_by(OHLCV.timestamp.asc())
-    )
-    bars_data = result.scalars().all()
-
-    if not bars_data:
+    if not bars_raw:
         raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
 
     bars = []
-    for b in bars_data:
+    for b in bars_raw:
+        ts = b.get("time") or b.get("timestamp", "")
+        if isinstance(ts, str):
+            try:
+                from dateutil.parser import parse as dt_parse
+                ts_int = int(dt_parse(ts).timestamp())
+            except Exception:
+                ts_int = 0
+        else:
+            ts_int = int(ts) if ts else 0
         bars.append(
             OHLCVBar(
-                time=int(b.timestamp.timestamp()),
-                open=float(b.open or 0.0),
-                high=float(b.high or 0.0),
-                low=float(b.low or 0.0),
-                close=float(b.close or 0.0),
-                volume=float(b.volume or 0.0)
+                time=ts_int,
+                open=float(b.get("open", 0.0)),
+                high=float(b.get("high", 0.0)),
+                low=float(b.get("low", 0.0)),
+                close=float(b.get("close", 0.0)),
+                volume=float(b.get("volume", 0.0)),
             )
         )
 
@@ -182,7 +196,7 @@ async def get_history(
         symbol=symbol.upper(),
         interval=interval,
         bars=bars,
-        source="canonical_db",
+        source=source,
     )
 
 
@@ -213,6 +227,27 @@ async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
                 timestamp=quote.observed_at,
             )
         )
+
+    # Fallback: if DB has no indices, fetch from yfinance
+    if not indices:
+        import asyncio
+        from app.services.market_data_service import MarketDataService
+        yf_indices = [("^NSEI", "NIFTY 50"), ("^BSESN", "SENSEX"), ("^NSEBANK", "BANK NIFTY")]
+        for yf_sym, name in yf_indices:
+            try:
+                q = await MarketDataService._yfinance_quote(yf_sym)
+                if q and q.get("price", 0) > 0:
+                    indices.append(IndexData(
+                        name=name, ticker=yf_sym,
+                        value=Decimal(str(q["price"])),
+                        change=Decimal(str(q.get("change", 0))),
+                        change_pct=Decimal(str(q.get("change_pct", 0))),
+                        regime_state="unknown",
+                        timestamp=datetime.now(UTC),
+                    ))
+            except Exception:
+                pass
+
     return IndicesResponse(indices=indices)
 
 
@@ -268,8 +303,33 @@ async def get_movers(
                 change_pct=Decimal(str(r.change_pct or 0)),
                 volume=Decimal(str(r.volume or 0)),
                 signal_direction=await _latest_signal_direction(db, inst.id),
+                signal_confidence=0.5,
+                rank=len(assets) + 1,
             )
         )
+
+    # Fallback: if DB has no movers, fetch top Nifty50 stocks from yfinance
+    if not assets:
+        from app.services.market_data_service import MarketDataService
+        for sym in MarketDataService.NSE_NIFTY50[:20]:
+            try:
+                q = await MarketDataService._yfinance_quote(sym)
+                if q and q.get("price", 0) > 0:
+                    assets.append(MoverData(
+                        ticker=sym, name=q.get("name", sym), exchange=exchange,
+                        price=Decimal(str(q["price"])),
+                        change_pct=Decimal(str(q.get("change_pct", 0))),
+                        volume=Decimal(str(q.get("volume", 0))),
+                        signal_direction="neutral",
+                        signal_confidence=0.0,
+                        rank=len(assets) + 1,
+                    ))
+            except Exception:
+                pass
+        if type == "losers":
+            assets.sort(key=lambda a: float(a.change_pct))
+        elif type == "volume":
+            assets.sort(key=lambda a: float(a.volume), reverse=True)
 
     return MoversResponse(assets=assets, exchange=exchange, type=type, generated_at=datetime.now(UTC))
 
