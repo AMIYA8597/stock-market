@@ -6,7 +6,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import require_role
-from app.core.entitlements import require_feature
 from app.core.security import RequestContext
 from app.database.connection import get_db
 from app.models.alerts import Alert, AlertEvent
@@ -22,7 +21,6 @@ class AlertCreate(BaseModel):
 async def create_alert(
     payload: AlertCreate,
     ctx: RequestContext = Depends(require_role("VIEWER")),
-    _ = Depends(require_feature("ALERTS")),
     db: AsyncSession = Depends(get_db)
 ):
     if not ctx.organization_id:

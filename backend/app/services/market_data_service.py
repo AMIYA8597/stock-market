@@ -82,6 +82,13 @@ class MarketDataService:
         await cls._nse_bucket.consume(1.0)
 
     # NSE Top 50 stocks with  suffix
+    NSE_NIFTY50 = [
+        "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
+        "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK",
+        "AXISBANK", "LT", "WIPRO", "HCLTECH", "ASIANPAINT",
+        "MARUTI", "SUNPHARMA", "TITAN", "ULTRACEMCO", "BAJFINANCE",
+    ]
+
     NSE_NIFTY50_DEPRECATED = [
         "RELIANCE",
         "TCS",
@@ -261,9 +268,45 @@ class MarketDataService:
                 batch_res[sym] = res
         return batch_res
 
+    @classmethod
+    async def _yfinance_quote(cls, symbol: str) -> dict:
+        """Fetch a live quote directly from yfinance."""
+        sym = cls._normalize_symbol(symbol)
+        yf_sym = sym if sym.startswith("^") or "." in sym else f"{sym}.NS"
+
+        await cls._throttle_yfinance(yf_sym)
+
+        def _fetch():
+            session = cls.get_session()
+            ticker = yf.Ticker(yf_sym, session=session)
+            info = ticker.info or {}
+            price = safe_float(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose"), 0.0)
+            prev_close = safe_float(info.get("previousClose") or info.get("regularMarketPreviousClose"), price)
+            change = price - prev_close if prev_close else 0.0
+            change_pct = (change / prev_close * 100) if prev_close else 0.0
+            return {
+                "symbol": sym,
+                "price": price,
+                "open": safe_float(info.get("open") or info.get("regularMarketOpen"), price),
+                "high": safe_float(info.get("dayHigh") or info.get("regularMarketDayHigh"), price),
+                "low": safe_float(info.get("dayLow") or info.get("regularMarketDayLow"), price),
+                "volume": int(safe_float(info.get("volume") or info.get("regularMarketVolume"), 0)),
+                "previous_close": prev_close,
+                "change": round(change, 2),
+                "change_pct": round(change_pct, 2),
+                "market_cap": safe_float(info.get("marketCap"), 0.0),
+                "week_52_high": safe_float(info.get("fiftyTwoWeekHigh"), price),
+                "week_52_low": safe_float(info.get("fiftyTwoWeekLow"), price),
+                "source": "yfinance",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+
+        async with cls._semaphore:
+            return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=10.0)
+
     @staticmethod
     async def get_quote(symbol: str) -> dict:
-        """Fetch live quote from canonical PostgreSQL database instead of yfinance."""
+        """Fetch live quote — tries canonical DB first, falls back to yfinance."""
         from sqlalchemy import select
 
         from app.database.connection import async_session_factory
@@ -271,42 +314,76 @@ class MarketDataService:
 
         sym = MarketDataService._normalize_symbol(symbol)
 
-        async with async_session_factory() as db:
-            result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
-            instrument = result.scalars().first()
-            if not instrument:
-                raise ValueError(sym)
+        try:
+            async with async_session_factory() as db:
+                result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
+                instrument = result.scalars().first()
+                if instrument:
+                    result = await db.execute(
+                        select(QuoteSnapshot)
+                        .where(QuoteSnapshot.instrument_id == instrument.id)
+                        .order_by(QuoteSnapshot.observed_at.desc())
+                        .limit(1)
+                    )
+                    quote = result.scalars().first()
+                    if quote and safe_float(quote.price) > 0:
+                        return {
+                            "symbol": sym,
+                            "price": float(quote.price),
+                            "open": float(quote.price),
+                            "high": float(quote.price),
+                            "low": float(quote.price),
+                            "volume": int(quote.volume or 0),
+                            "previous_close": float(quote.price),
+                            "change": float(quote.change or 0.0),
+                            "change_pct": float(quote.change_pct or 0.0),
+                            "market_cap": 0.0,
+                            "week_52_high": float(quote.price),
+                            "week_52_low": float(quote.price),
+                            "source": "canonical_db",
+                            "timestamp": quote.observed_at.isoformat(),
+                        }
+        except Exception as db_err:
+            logger.debug(f"DB quote lookup failed for {sym}: {db_err}")
 
-            result = await db.execute(
-                select(QuoteSnapshot)
-                .where(QuoteSnapshot.instrument_id == instrument.id)
-                .order_by(QuoteSnapshot.observed_at.desc())
-                .limit(1)
+        return await MarketDataService._yfinance_quote(symbol)
+
+    @classmethod
+    async def _yfinance_history(cls, symbol: str, interval: str, period: str) -> list[dict]:
+        """Fetch historical bars directly from yfinance."""
+        sym = cls._normalize_symbol(symbol)
+        yf_sym = sym if sym.startswith("^") or "." in sym else f"{sym}.NS"
+
+        await cls._throttle_yfinance(yf_sym)
+
+        def _fetch():
+            session = cls.get_session()
+            df = yf.download(
+                yf_sym, period=period, interval=interval,
+                progress=False, threads=False, session=session,
             )
-            quote = result.scalars().first()
-            if not quote:
-                raise ValueError(sym)
+            if df.empty:
+                return []
+            bars = []
+            for ts, row in df.iterrows():
+                bars.append({
+                    "time": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
+                    "timestamp": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
+                    "open": safe_float(row.get("Open")),
+                    "high": safe_float(row.get("High")),
+                    "low": safe_float(row.get("Low")),
+                    "close": safe_float(row.get("Close")),
+                    "volume": safe_float(row.get("Volume")),
+                })
+            return bars
 
-            return {
-                "symbol": sym,
-                "price": float(quote.price or 0.0),
-                "open": float(quote.price or 0.0), # QuoteSnapshot doesn't have open natively, fallback to price
-                "high": float(quote.price or 0.0),
-                "low": float(quote.price or 0.0),
-                "volume": int(quote.volume or 0.0),
-                "previous_close": float(quote.price or 0.0),
-                "change": float(quote.change or 0.0),
-                "change_pct": float(quote.change_pct or 0.0),
-                "market_cap": 0.0,
-                "week_52_high": float(quote.price or 0.0),
-                "week_52_low": float(quote.price or 0.0),
-                "source": "canonical_db",
-                "timestamp": quote.observed_at.isoformat()
-            }
+        async with cls._semaphore:
+            bars = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=15.0)
+            return HistoryList(bars, source="yfinance")
 
     @staticmethod
     async def get_history(symbol: str, interval: str, period: str) -> list[dict]:
-        """Fetch historical bars from the canonical PostgreSQL database."""
+        """Fetch historical bars — tries canonical DB first, falls back to yfinance."""
         from datetime import UTC, datetime, timedelta
 
         from sqlalchemy import select
@@ -318,7 +395,6 @@ class MarketDataService:
 
         period_days = {"1m": 1, "5m": 5, "15m": 5, "1h": 30, "1d": 30, "5d": 150, "1wk": 180, "1w": 180, "1mo": 730, "3mo": 1825, "6mo": 3650, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
 
-        # Approximate mappings of period string to timedelta days if it ends with d, mo, y
         days = period_days.get(period, 30)
         if period.endswith('d') and period[:-1].isdigit():
             days = int(period[:-1])
@@ -327,36 +403,39 @@ class MarketDataService:
 
         start_time = datetime.now(UTC) - timedelta(days=days)
 
-        async with async_session_factory() as db:
-            result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
-            instrument = result.scalars().first()
-            if not instrument:
-                return HistoryList([], source="canonical_db")
+        try:
+            async with async_session_factory() as db:
+                result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
+                instrument = result.scalars().first()
+                if instrument:
+                    result = await db.execute(
+                        select(OHLCV)
+                        .where(
+                            (OHLCV.instrument_id == instrument.id) &
+                            (OHLCV.interval == interval) &
+                            (OHLCV.timestamp >= start_time)
+                        )
+                        .order_by(OHLCV.timestamp.asc())
+                    )
+                    bars_data = result.scalars().all()
 
-            result = await db.execute(
-                select(OHLCV)
-                .where(
-                    (OHLCV.instrument_id == instrument.id) &
-                    (OHLCV.interval == interval) &
-                    (OHLCV.timestamp >= start_time)
-                )
-                .order_by(OHLCV.timestamp.asc())
-            )
-            bars_data = result.scalars().all()
+                    if bars_data:
+                        bars = []
+                        for b in bars_data:
+                            bars.append({
+                                "time": b.timestamp.isoformat(),
+                                "timestamp": b.timestamp.isoformat(),
+                                "open": float(b.open),
+                                "high": float(b.high),
+                                "low": float(b.low),
+                                "close": float(b.close),
+                                "volume": float(b.volume),
+                            })
+                        return HistoryList(bars, source="canonical_db")
+        except Exception as db_err:
+            logger.debug(f"DB history lookup failed for {sym}: {db_err}")
 
-            bars = []
-            for b in bars_data:
-                bars.append({
-                    "time": b.timestamp.isoformat(),
-                    "open": float(b.open),
-                    "high": float(b.high),
-                    "low": float(b.low),
-                    "close": float(b.close),
-                    "volume": float(b.volume)
-                })
-
-            res_list = HistoryList(bars, source="canonical_db")
-            return res_list
+        return await MarketDataService._yfinance_history(symbol, interval, period)
 
     @classmethod
     async def get_intraday_candles(cls, symbol: str, interval: str) -> list[dict]:
