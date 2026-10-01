@@ -26,6 +26,18 @@ import {
   buildRelativeStrength,
   calculateVolumeProfile,
   calculateMarketProfile,
+  buildVWAP,
+  buildCVD,
+  buildDrawdown,
+  buildRollingVolatility,
+  buildReturnsDistribution,
+  buildRollingSharpe,
+  buildRollingBeta,
+  buildFibonacciLevels,
+  buildPivotPoints,
+  buildOIChart,
+  buildPutCallRatio,
+  buildVolatilityCone,
 } from "@/utils/chartFormatters";
 import { marketApi } from "@/lib/api-client";
 
@@ -69,7 +81,28 @@ interface LightweightCandlestickChartProps {
     | "market-profile"
     | "spread"
     | "relative-strength"
-    | "mountain";
+    | "mountain"
+    | "vwap"
+    | "anchored-vwap"
+    | "cvd"
+    | "open-interest"
+    | "oi-price"
+    | "put-call-ratio"
+    | "iv-smile"
+    | "volatility-cone"
+    | "correlation-heatmap"
+    | "rolling-correlation"
+    | "returns-distribution"
+    | "histogram-returns"
+    | "drawdown"
+    | "rolling-volatility"
+    | "rolling-sharpe"
+    | "rolling-beta"
+    | "fibonacci"
+    | "pivot-points"
+    | "ichimoku-standalone"
+    | "elliott-wave"
+    | "gann";
   indicators?: {
     ema9?: boolean;
     ema21?: boolean;
@@ -779,6 +812,124 @@ export function LightweightCandlestickChart({
           })),
         ),
       );
+    } else if (chartStyle === "vwap" || chartStyle === "anchored-vwap") {
+      mainSeries = mainChart.addSeries(CandlestickSeries, {
+        upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
+      });
+      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
+        time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      }))));
+      const vwapSeries = mainChart.addSeries(LineSeries, { color: "#FFB800", lineWidth: 2, title: "VWAP" });
+      vwapSeries.setData(sanitizeSeriesData(buildVWAP(bars)));
+      addedSeries.push(vwapSeries);
+    } else if (chartStyle === "cvd") {
+      mainSeries = mainChart.addSeries(AreaSeries, {
+        topColor: "rgba(0, 230, 118, 0.3)", bottomColor: "rgba(255, 59, 92, 0.1)",
+        lineColor: "#00E676", lineWidth: 2,
+      });
+      mainSeries.setData(sanitizeSeriesData(buildCVD(bars)));
+    } else if (chartStyle === "open-interest") {
+      mainSeries = mainChart.addSeries(AreaSeries, {
+        topColor: "rgba(139, 92, 246, 0.3)", bottomColor: "rgba(139, 92, 246, 0.0)",
+        lineColor: "#8B5CF6", lineWidth: 2,
+      });
+      mainSeries.setData(sanitizeSeriesData(buildOIChart(bars)));
+    } else if (chartStyle === "oi-price") {
+      mainSeries = mainChart.addSeries(CandlestickSeries, {
+        upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
+      });
+      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
+        time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      }))));
+      const oiSeries = mainChart.addSeries(LineSeries, { color: "#8B5CF6", lineWidth: 2, title: "OI", priceScaleId: "oi" });
+      oiSeries.setData(sanitizeSeriesData(buildOIChart(bars)));
+      addedSeries.push(oiSeries);
+    } else if (chartStyle === "put-call-ratio") {
+      mainSeries = mainChart.addSeries(LineSeries, { color: "#F59E0B", lineWidth: 2 });
+      mainSeries.setData(sanitizeSeriesData(buildPutCallRatio(bars)));
+    } else if (chartStyle === "drawdown") {
+      mainSeries = mainChart.addSeries(AreaSeries, {
+        topColor: "rgba(255, 59, 92, 0.0)", bottomColor: "rgba(255, 59, 92, 0.3)",
+        lineColor: "#FF3B5C", lineWidth: 2,
+      });
+      mainSeries.setData(sanitizeSeriesData(buildDrawdown(bars)));
+    } else if (chartStyle === "rolling-volatility") {
+      mainSeries = mainChart.addSeries(LineSeries, { color: "#F97316", lineWidth: 2 });
+      mainSeries.setData(sanitizeSeriesData(buildRollingVolatility(bars)));
+    } else if (chartStyle === "rolling-sharpe") {
+      mainSeries = mainChart.addSeries(LineSeries, { color: "#06B6D4", lineWidth: 2 });
+      mainSeries.setData(sanitizeSeriesData(buildRollingSharpe(bars)));
+    } else if (chartStyle === "rolling-beta") {
+      mainSeries = mainChart.addSeries(LineSeries, { color: "#A855F7", lineWidth: 2 });
+      mainSeries.setData(sanitizeSeriesData(buildRollingBeta(bars)));
+    } else if (chartStyle === "returns-distribution" || chartStyle === "histogram-returns") {
+      const dist = buildReturnsDistribution(bars);
+      mainSeries = mainChart.addSeries(HistogramSeries, { color: "#06B6D4" });
+      mainSeries.setData(sanitizeSeriesData(dist.map((d, i) => ({
+        time: (1600000000 + i * 86400) as UTCTimestamp, value: d.count, color: d.bin >= 0 ? "#00E676" : "#FF3B5C",
+      }))));
+    } else if (chartStyle === "fibonacci") {
+      mainSeries = mainChart.addSeries(CandlestickSeries, {
+        upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
+      });
+      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
+        time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      }))));
+      const fibs = buildFibonacciLevels(bars);
+      for (const fib of fibs) {
+        const fibLine = mainChart.addSeries(LineSeries, {
+          color: fib.level === 0.5 ? "#FFB800" : fib.level === 0.618 ? "#FF3B5C" : "rgba(255,255,255,0.25)",
+          lineWidth: 1, lineStyle: 2, title: fib.label,
+        });
+        fibLine.setData(sanitizeSeriesData([
+          { time: toUtcTimestamp(bars[0]!.timestamp), value: fib.price },
+          { time: toUtcTimestamp(bars[bars.length - 1]!.timestamp), value: fib.price },
+        ]));
+        addedSeries.push(fibLine);
+      }
+    } else if (chartStyle === "pivot-points") {
+      mainSeries = mainChart.addSeries(CandlestickSeries, {
+        upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
+      });
+      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
+        time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      }))));
+      const pivots = buildPivotPoints(bars);
+      if (pivots) {
+        const levels = [
+          { price: pivots.r3, color: "#FF3B5C", title: "R3" },
+          { price: pivots.r2, color: "#FF6B6B", title: "R2" },
+          { price: pivots.r1, color: "#FFA07A", title: "R1" },
+          { price: pivots.pp, color: "#FFB800", title: "PP" },
+          { price: pivots.s1, color: "#90EE90", title: "S1" },
+          { price: pivots.s2, color: "#00C853", title: "S2" },
+          { price: pivots.s3, color: "#00E676", title: "S3" },
+        ];
+        for (const lev of levels) {
+          const levSeries = mainChart.addSeries(LineSeries, {
+            color: lev.color, lineWidth: 1, lineStyle: 2, title: lev.title,
+          });
+          levSeries.setData(sanitizeSeriesData([
+            { time: toUtcTimestamp(bars[0]!.timestamp), value: lev.price },
+            { time: toUtcTimestamp(bars[bars.length - 1]!.timestamp), value: lev.price },
+          ]));
+          addedSeries.push(levSeries);
+        }
+      }
+    } else if (chartStyle === "ichimoku-standalone") {
+      mainSeries = mainChart.addSeries(CandlestickSeries, {
+        upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
+      });
+      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
+        time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      }))));
+    } else if (chartStyle === "iv-smile" || chartStyle === "volatility-cone" || chartStyle === "correlation-heatmap" || chartStyle === "rolling-correlation" || chartStyle === "elliott-wave" || chartStyle === "gann") {
+      mainSeries = mainChart.addSeries(CandlestickSeries, {
+        upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
+      });
+      mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
+        time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
+      }))));
     } else {
       mainSeries = mainChart.addSeries(CandlestickSeries, {
         upColor: "#00E676",

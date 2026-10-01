@@ -915,6 +915,9 @@ async def get_full_prediction(
     end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=2 * 365)  # 2 years
 
+    df = None
+
+    # Try DB first
     try:
         from sqlalchemy import select
 
@@ -923,9 +926,7 @@ async def get_full_prediction(
 
         async with async_session_factory() as session:
             inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
-            if not inst:
-                bars = []
-            else:
+            if inst:
                 bars = (await session.execute(
                     select(OHLCV)
                     .where(
@@ -937,35 +938,55 @@ async def get_full_prediction(
                     .order_by(OHLCV.timestamp.asc())
                 )).scalars().all()
 
-        class DummyBar:
-            def __init__(self, time, open, high, low, close, volume):
-                self.time = time
-                self.open = open
-                self.high = high
-                self.low = low
-                self.close = close
-                self.volume = volume
-
-        bars = [DummyBar(b.timestamp, float(b.open), float(b.high), float(b.low), float(b.close), float(b.volume)) for b in bars]
-        if not bars or len(bars) < 60:
-            raise ValueError(f"Insufficient OHLCV data for {symbol} (need at least 60 rows)")
-
-        df = pd.DataFrame(
-            [
-                {
-                    "time": b.time.replace(tzinfo=None) if b.time.tzinfo else b.time,
-                    "open": b.open,
-                    "high": b.high,
-                    "low": b.low,
-                    "close": b.close,
-                    "volume": b.volume,
-                }
-                for b in bars
-            ]
-        )
+                if bars and len(bars) >= 60:
+                    df = pd.DataFrame(
+                        [
+                            {
+                                "time": b.timestamp.replace(tzinfo=None) if b.timestamp.tzinfo else b.timestamp,
+                                "open": float(b.open),
+                                "high": float(b.high),
+                                "low": float(b.low),
+                                "close": float(b.close),
+                                "volume": float(b.volume),
+                            }
+                            for b in bars
+                        ]
+                    )
     except Exception as e:
-        logger.error(f"Failed to fetch market data for {symbol}: {e}")
-        raise ValueError(f"Failed to fetch market data for {symbol}") from e
+        logger.warning(f"DB fetch for prediction data failed for {symbol}: {e}")
+
+    # Fallback to yfinance via MarketDataService
+    if df is None or len(df) < 60:
+        try:
+            yf_bars = await MarketDataService.get_history(symbol, interval="1d", period="2y")
+            if yf_bars and len(yf_bars) >= 60:
+                rows = []
+                for b in yf_bars:
+                    ts = b.get("time") or b.get("timestamp", "")
+                    if isinstance(ts, str):
+                        try:
+                            from dateutil.parser import parse as dt_parse
+                            ts_dt = dt_parse(ts).replace(tzinfo=None)
+                        except Exception:
+                            ts_dt = datetime.now(UTC).replace(tzinfo=None)
+                    elif isinstance(ts, (int, float)):
+                        ts_dt = datetime.utcfromtimestamp(ts)
+                    else:
+                        ts_dt = datetime.now(UTC).replace(tzinfo=None)
+                    rows.append({
+                        "time": ts_dt,
+                        "open": float(b.get("open", 0)),
+                        "high": float(b.get("high", 0)),
+                        "low": float(b.get("low", 0)),
+                        "close": float(b.get("close", 0)),
+                        "volume": float(b.get("volume", 0)),
+                    })
+                df = pd.DataFrame(rows)
+        except Exception as e:
+            logger.error(f"yfinance fallback for prediction data failed for {symbol}: {e}")
+
+    if df is None or len(df) < 60:
+        raise ValueError(f"Insufficient OHLCV data for {symbol} (need at least 60 rows)")
 
     # -------------------------------------------------------------
     # NEW POINT-IN-TIME FEATURE LIBRARY CALL (Part 3 V2-3)

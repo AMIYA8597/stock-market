@@ -32,32 +32,40 @@ async def get_prediction(
     norm_symbol = MarketDataService._normalize_symbol(symbol)
 
     # Check if we have an active XGBoost model for this symbol
-    stmt = (
-        select(ModelArtifact)
-        .join(Instrument)
-        .where(
-            Instrument.canonical_symbol == norm_symbol,
-            ModelArtifact.is_active,
+    artifact_path = None
+    model_version = None
+    try:
+        stmt = (
+            select(ModelArtifact)
+            .join(Instrument)
+            .where(
+                Instrument.canonical_symbol == norm_symbol,
+                ModelArtifact.is_active,
+            )
         )
-    )
-    result = await db.execute(stmt)
-    artifact = result.scalar_one_or_none()
+        result = await db.execute(stmt)
+        artifact = result.scalar_one_or_none()
+        if artifact:
+            artifact_path = artifact.artifact_path
+            model_version = artifact.version_tag
+    except Exception:
+        pass
 
-    if not artifact:
+    try:
+        return await get_full_prediction(
+            symbol,
+            bypass_cache=False,
+            artifact_path=artifact_path,
+            model_version=model_version,
+        )
+    except Exception as e:
         raise HTTPException(
             status_code=503,
             detail=ErrorResponse.create(
                 code="MODEL_NOT_TRAINED",
-                message=f"ML prediction engine is offline until training phase for {symbol}.",
+                message=f"Prediction unavailable for {symbol}: {str(e)[:200]}",
             ).dict(),
         )
-
-    return await get_full_prediction(
-        symbol,
-        bypass_cache=False,
-        artifact_path=artifact.artifact_path,
-        model_version=artifact.version_tag,
-    )
 
 
 @router.post("/forecast")
@@ -88,13 +96,28 @@ async def get_latest_forecast(
 async def get_ensemble_data(
     symbol: str, _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
 ):
-    raise HTTPException(
-        status_code=503,
-        detail=ErrorResponse.create(
-            code="MODEL_NOT_TRAINED",
-            message="ML prediction engine is offline until training phase.",
-        ).dict(),
-    )
+    norm_symbol = MarketDataService._normalize_symbol(symbol)
+    try:
+        result = await get_full_prediction(norm_symbol, bypass_cache=False)
+        ens = result.get("ensemble", {})
+        models = []
+        model_weights = ens.get("model_weights", {})
+        for name, weight in model_weights.items():
+            models.append({"name": name, "weight": float(weight)})
+        return {
+            "symbol": norm_symbol,
+            "consensus_direction": ens.get("direction", "NEUTRAL"),
+            "consensus_confidence": float(ens.get("confidence", 0.5)),
+            "models": models,
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code="MODEL_NOT_TRAINED",
+                message=f"Ensemble unavailable for {symbol}: {str(e)[:200]}",
+            ).dict(),
+        )
 
 
 @router.get("/history/{symbol}")
