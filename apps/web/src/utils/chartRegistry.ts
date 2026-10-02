@@ -65,10 +65,10 @@ export const CHART_REGISTRY: ChartDefinition[] = [
   { id: "orderflow-imbalance", name: "Order-Flow Imbalance", category: "volume-orderflow", requiredData: ["tick-data"], description: "Aggressive buy/sell imbalance", implemented: false, unavailableReason: "Requires tick-level trade data with aggressor flag" },
 
   // OPTIONS (10)
-  { id: "open-interest", name: "Open Interest", category: "options", requiredData: ["ohlcv"], description: "Estimated OI from volume analysis", implemented: true },
+  { id: "open-interest", name: "Open Interest", category: "options", requiredData: ["options-chain"], description: "Real exchange open interest data", implemented: false, unavailableReason: "Requires real exchange OI data feed — cannot be manufactured from OHLCV" },
   { id: "change-in-oi", name: "Change in OI", category: "options", requiredData: ["options-chain"], description: "Day-over-day open interest change", implemented: false, unavailableReason: "Requires real options chain data with daily OI snapshots" },
-  { id: "oi-price", name: "OI + Price", category: "options", requiredData: ["ohlcv"], description: "Price with estimated OI overlay", implemented: true },
-  { id: "put-call-ratio", name: "Put-Call Ratio", category: "options", requiredData: ["ohlcv"], description: "Estimated PCR from volatility analysis", implemented: true },
+  { id: "oi-price", name: "OI + Price", category: "options", requiredData: ["options-chain"], description: "Price with real OI overlay", implemented: false, unavailableReason: "Requires real exchange OI data feed" },
+  { id: "put-call-ratio", name: "Put-Call Ratio", category: "options", requiredData: ["options-chain"], description: "Real put-call ratio from options chain", implemented: false, unavailableReason: "Requires real options chain data — cannot be estimated from price" },
   { id: "max-pain", name: "Max Pain", category: "options", requiredData: ["options-chain"], description: "Strike with maximum option seller profit", implemented: false, unavailableReason: "Requires real options chain with OI per strike" },
   { id: "iv-smile", name: "IV Smile / Skew", category: "options", requiredData: ["options-chain"], description: "Implied volatility across strikes", implemented: false, unavailableReason: "Requires real options chain with IV per strike" },
   { id: "iv-surface", name: "IV Surface", category: "options", requiredData: ["options-chain"], description: "3D implied volatility surface", implemented: false, unavailableReason: "Requires real options chain across strikes and expiries" },
