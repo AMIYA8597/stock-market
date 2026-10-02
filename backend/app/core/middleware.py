@@ -16,10 +16,20 @@ from app.database.redis_client import _redis_pool_singleton
 
 settings = get_settings()
 
+import re
+
+_CORS_ORIGIN_RE = re.compile(
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://neuroquant[a-z0-9-]*\.vercel\.app$"
+)
+
+
+def _is_allowed_origin(origin: str) -> bool:
+    return origin in settings.BACKEND_CORS_ORIGINS or bool(_CORS_ORIGIN_RE.match(origin))
+
 
 @dataclass(slots=True)
 class RateLimitConfig:
-    max_requests: int = 600
+    max_requests: int = 1200
     window_seconds: int = 60
 
 
@@ -107,7 +117,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         "Retry-After": str(retry_after),
                         "X-Request-ID": request_id,
                     }
-                    if origin and origin in settings.BACKEND_CORS_ORIGINS:
+                    if origin and _is_allowed_origin(origin):
                         headers["Access-Control-Allow-Origin"] = origin
                         headers["Access-Control-Allow-Credentials"] = "true"
 

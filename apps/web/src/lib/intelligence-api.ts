@@ -255,10 +255,18 @@ export const intelligenceApi = {
   },
 
   async getBulkSignals(symbols: string[]): Promise<SignalResponse[]> {
-    const results = await Promise.allSettled(symbols.map(fetchSignalWithFallback));
-    return results
-      .filter((res): res is PromiseFulfilledResult<UnknownRecord> => res.status === 'fulfilled')
-      .map(res => normalizeSignalResponse(res.value));
+    const CONCURRENCY = 5;
+    const all: SignalResponse[] = [];
+    for (let i = 0; i < symbols.length; i += CONCURRENCY) {
+      const batch = symbols.slice(i, i + CONCURRENCY);
+      const results = await Promise.allSettled(batch.map(fetchSignalWithFallback));
+      for (const res of results) {
+        if (res.status === "fulfilled") {
+          all.push(normalizeSignalResponse(res.value));
+        }
+      }
+    }
+    return all;
   },
 
   async getForecast(symbol: string, horizons: number[] = [1, 5, 10, 15, 20, 25, 30]): Promise<ForecastResponse> {
