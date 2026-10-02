@@ -81,65 +81,52 @@ class MarketDataService:
     async def _throttle_nse(cls) -> None:
         await cls._nse_bucket.consume(1.0)
 
-    # NSE Top 50 stocks with  suffix
+    # Full Nifty 50 constituents (Oct 2026)
     NSE_NIFTY50 = [
         "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
         "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK",
         "AXISBANK", "LT", "WIPRO", "HCLTECH", "ASIANPAINT",
         "MARUTI", "SUNPHARMA", "TITAN", "ULTRACEMCO", "BAJFINANCE",
+        "NESTLEIND", "M&M", "TATASTEEL", "NTPC", "POWERGRID",
+        "ONGC", "COALINDIA", "JSWSTEEL", "GRASIM", "ADANIENT",
+        "ADANIPORTS", "BAJAJFINSV", "TECHM", "DRREDDY", "CIPLA",
+        "DIVISLAB", "BRITANNIA", "APOLLOHOSP", "TATACONSUM", "HEROMOTOCO",
+        "EICHERMOT", "BPCL", "SHREECEM", "INDUSINDBK", "HINDALCO",
+        "SBILIFE", "HDFCLIFE", "TATAMOTORS", "BAJAJ-AUTO", "TRENT",
     ]
 
-    NSE_NIFTY50_DEPRECATED = [
-        "RELIANCE",
-        "TCS",
-        "HDFCBANK",
-        "INFY",
-        "ICICIBANK",
-        "HINDUNILVR",
-        "ITC",
-        "SBIN",
-        "BHARTIARTL",
-        "KOTAKBANK",
-        "AXISBANK",
-        "LT",
-        "WIPRO",
-        "HCLTECH",
-        "ASIANPAINT",
-        "MARUTI",
-        "SUNPHARMA",
-        "TITAN",
-        "ULTRACEMCO",
-        "BAJFINANCE",
-        "NESTLEIND",
-        "M&M",
-        "TATASTEEL",
-        "NTPC",
-        "POWERGRID",
-        "ONGC",
-        "COALINDIA",
-        "JSWSTEEL",
-        "GRASIM",
-        "ADANIENT",
-        "ADANIPORTS",
-        "BAJAJFINSV",
-        "TECHM",
-        "DRREDDY",
-        "CIPLA",
-        "DIVISLAB",
-        "BRITANNIA",
-        "APOLLOHOSP",
-        "TATACONSUM",
-        "HEROMOTOCO",
-        "EICHERMOT",
-        "BPCL",
-        "SHREECEM",
-        "INDUSINDBK",
-        "UPL",
-        "HINDALCO",
-        "SBILIFE",
-        "HDFCLIFE",
-        "TATAMOTORS",
-        "BAJAJ-AUTO",
+    # Nifty Next 50 constituents
+    NSE_NIFTY_NEXT50 = [
+        "ADANIGREEN", "ADANIPOWER", "AMBUJACEM", "AUROPHARMA", "BANKBARODA",
+        "BERGEPAINT", "BOSCHLTD", "CANBK", "CHOLAFIN", "COLPAL",
+        "DABUR", "DLF", "GAIL", "GODREJCP", "HAL",
+        "HAVELLS", "ICICIPRULI", "IDEA", "IDFCFIRSTB", "INDHOTEL",
+        "INDUSTOWER", "IOC", "IRCTC", "JINDALSTEL", "JSWENERGY",
+        "LICI", "LODHA", "LTIM", "LUPIN", "MARICO",
+        "MAXHEALTH", "NHPC", "NYKAA", "OBEROIRLTY", "OFSS",
+        "PAGEIND", "PAYTM", "PEL", "PERSISTENT", "PIDILITIND",
+        "PNB", "POLYCAB", "RECLTD", "SAIL", "SIEMENS",
+        "SRF", "TATAPOWER", "TORNTPHARM", "VEDL", "ZOMATO",
+    ]
+
+    # Combined universe for broader coverage
+    NSE_TOP100 = NSE_NIFTY50 + NSE_NIFTY_NEXT50
+
+    # Major NSE indices
+    NSE_INDICES = [
+        ("^NSEI", "NIFTY 50"),
+        ("^BSESN", "SENSEX"),
+        ("^NSEBANK", "BANK NIFTY"),
+        ("^CNXIT", "NIFTY IT"),
+        ("^CNXPHARMA", "NIFTY PHARMA"),
+        ("^CNXFMCG", "NIFTY FMCG"),
+        ("^CNXAUTO", "NIFTY AUTO"),
+        ("^CNXMETAL", "NIFTY METAL"),
+        ("^CNXREALTY", "NIFTY REALTY"),
+        ("^CNXENERGY", "NIFTY ENERGY"),
+        ("^CNXINFRA", "NIFTY INFRA"),
+        ("^CNXPSUBANK", "NIFTY PSU BANK"),
+        ("^INDIAVIX", "INDIA VIX"),
     ]
 
     @classmethod
@@ -561,15 +548,13 @@ class MarketDataService:
 
     @staticmethod
     async def get_indices() -> list[dict]:
-        """Fetch quotes for ^NSEI, ^BSESN, and ^NSEBANK concurrently.
+        """Fetch quotes for all major NSE/BSE indices concurrently."""
+        index_pairs = MarketDataService.NSE_INDICES
+        index_symbols = [sym for sym, _ in index_pairs]
+        names_map = {sym: name for sym, name in index_pairs}
 
-        Maps ticker symbols to display names: NIFTY 50, BSE Sensex, Bank Nifty.
-        """
-        index_symbols = ["^NSEI", "^BSESN", "^NSEBANK"]
         tasks = [MarketDataService.get_quote(sym) for sym in index_symbols]
         res = await asyncio.gather(*tasks, return_exceptions=True)
-
-        names_map = {"^NSEI": "NIFTY 50", "^BSESN": "BSE Sensex", "^NSEBANK": "Bank Nifty"}
 
         indices = []
         for sym, q in zip(index_symbols, res, strict=False):
