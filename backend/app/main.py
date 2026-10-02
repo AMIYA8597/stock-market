@@ -20,7 +20,6 @@ if _backend_root_str not in sys.path:
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from loguru import logger
 
@@ -109,15 +108,6 @@ def create_app() -> FastAPI:
 
     _app.add_middleware(RequestIDMiddleware)
 
-    _app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://neuroquant[a-z0-9-]*\.vercel\.app$",
-        allow_credentials=True,
-        allow_methods=settings.CORS_ALLOW_METHODS,
-        allow_headers=settings.CORS_ALLOW_HEADERS,
-    )
-
     register_exception_handlers(_app)
 
     # ─── Mount Routers ─────────────────────────────────────────
@@ -194,4 +184,72 @@ def create_app() -> FastAPI:
     return _app
 
 
-app = create_app()
+import re as _re
+
+
+class _CORSWrapper:
+    """Raw ASGI CORS middleware that wraps the app at the outermost level.
+
+    Starlette's CORSMiddleware is incompatible with BaseHTTPMiddleware
+    (headers get stripped). This ASGI-level wrapper avoids that issue.
+    """
+
+    _ORIGIN_RE = _re.compile(
+        r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+        r"|^https://neuroquant[a-z0-9-]*\.vercel\.app$"
+    )
+
+    def __init__(self, app):
+        self.app = app
+        s = get_settings()
+        self._origins = set(s.BACKEND_CORS_ORIGINS)
+        self._methods = ", ".join(s.CORS_ALLOW_METHODS)
+        self._headers = ", ".join(s.CORS_ALLOW_HEADERS)
+
+    def _allowed(self, origin: str) -> bool:
+        return origin in self._origins or bool(self._ORIGIN_RE.match(origin))
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers = dict(scope.get("headers", []))
+        origin = (headers.get(b"origin") or b"").decode()
+
+        if scope["method"] == "OPTIONS" and origin and self._allowed(origin):
+            response_headers = [
+                (b"access-control-allow-origin", origin.encode()),
+                (b"access-control-allow-credentials", b"true"),
+                (b"access-control-allow-methods", self._methods.encode()),
+                (b"access-control-allow-headers", self._headers.encode()),
+                (b"access-control-max-age", b"86400"),
+                (b"vary", b"Origin"),
+                (b"content-length", b"0"),
+            ]
+            await send({"type": "http.response.start", "status": 200, "headers": response_headers})
+            await send({"type": "http.response.body", "body": b""})
+            return
+
+        if not origin or not self._allowed(origin):
+            await self.app(scope, receive, send)
+            return
+
+        cors_headers = [
+            (b"access-control-allow-origin", origin.encode()),
+            (b"access-control-allow-credentials", b"true"),
+            (b"vary", b"Origin"),
+        ]
+
+        async def send_with_cors(message):
+            if message["type"] == "http.response.start":
+                existing = list(message.get("headers", []))
+                existing.extend(cors_headers)
+                message = {**message, "headers": existing}
+            await send(message)
+
+        await self.app(scope, receive, send_with_cors)
+
+
+_inner_app = create_app()
+app = _CORSWrapper(_inner_app)
