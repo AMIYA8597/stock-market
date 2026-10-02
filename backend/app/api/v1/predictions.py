@@ -159,3 +159,101 @@ async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)
             "regime_breakdown": metric.regime_breakdown,
         }
     }
+
+
+@router.get("/model-inventory")
+async def model_inventory():
+    """Return honest inventory of all ML models and their training status."""
+    from pathlib import Path
+
+    MODEL_DIR = Path(__file__).parent.parent.parent / "data" / "models"
+    ARTIFACT_DIR = Path(__file__).parent.parent.parent / "data" / "artifacts"
+
+    models = {
+        "xgboost": {
+            "name": "XGBoost Directional Classifier",
+            "type": "gradient_boosting",
+            "status": "untrained",
+            "artifact_pattern": "xgboost_*.pkl",
+            "description": "Real XGBClassifier with isotonic calibration and SHAP explainability",
+        },
+        "lstm_attention": {
+            "name": "LSTM-Attention Classifier",
+            "type": "deep_learning",
+            "status": "untrained",
+            "artifact_pattern": "lstm_attention_*.pkl",
+            "description": "PyTorch LSTM with learned attention weights (32 hidden, 20 epochs)",
+        },
+        "hmm_garch": {
+            "name": "HMM-GARCH Regime Detector",
+            "type": "statistical",
+            "status": "trained",
+            "description": "From-scratch Student-t HMM + GARCH(1,1). Fits on-the-fly from price data.",
+        },
+        "tft_quantile": {
+            "name": "Quantile LightGBM Forecaster",
+            "actual_model": "LightGBM (NOT Temporal Fusion Transformer)",
+            "type": "gradient_boosting",
+            "status": "untrained",
+            "artifact_pattern": "tft_forecaster.pkl",
+            "description": "3 quantile LightGBM regressors (p10/p50/p90). Labeled 'TFT' in legacy code but is LightGBM.",
+        },
+        "gnn_contagion": {
+            "name": "Contagion Risk Analyzer",
+            "actual_model": "Formula-based heuristic (NOT a trained GNN)",
+            "type": "heuristic",
+            "status": "heuristic",
+            "description": "Computes correlation-based contagion risk. Real GNN architecture exists in research/models/gnn/model.py but is not used in production.",
+        },
+        "online_learner": {
+            "name": "Online Adaptive Learner",
+            "type": "online_learning",
+            "status": "untrained",
+            "artifact_pattern": "online_learner_*.pkl",
+            "description": "Incremental logistic regression updated with each prediction call.",
+        },
+        "lstm_forecaster": {
+            "name": "LSTM Price Forecaster",
+            "type": "deep_learning",
+            "status": "trains_from_scratch",
+            "description": "Trains a fresh LSTM/BiLSTM/GRU/CNN-LSTM for 15 epochs per call. Not a pre-trained model.",
+        },
+        "meta_learner": {
+            "name": "Ensemble Meta-Learner",
+            "type": "ensemble",
+            "status": "untrained",
+            "artifact_pattern": "meta_learner.pkl",
+            "description": "Logistic regression combining OOF predictions from all component models.",
+        },
+        "finbert_sentiment": {
+            "name": "FinBERT Sentiment Analyzer",
+            "type": "nlp",
+            "status": "pretrained",
+            "description": "ProsusAI/finbert for financial sentiment. Falls back to VADER if transformers unavailable.",
+        },
+    }
+
+    for key, model in models.items():
+        pattern = model.get("artifact_pattern")
+        if pattern:
+            found = list(MODEL_DIR.glob(pattern)) + list(ARTIFACT_DIR.glob(pattern))
+            if found:
+                model["status"] = "trained"
+                model["artifact_paths"] = [str(f.name) for f in found]
+
+    hmm_json = list(MODEL_DIR.glob("hmm_garch/*.json"))
+    if hmm_json:
+        models["hmm_garch"]["artifact_paths"] = [str(f.name) for f in hmm_json]
+
+    trained = sum(1 for m in models.values() if m["status"] == "trained")
+    total = len(models)
+
+    return {
+        "models": models,
+        "summary": {
+            "total": total,
+            "trained": trained,
+            "untrained": total - trained,
+            "production_ready": trained >= 3,
+        },
+    }
