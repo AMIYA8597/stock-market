@@ -152,8 +152,8 @@ class UpstoxSource(MarketDataProvider):
             if not entry:
                 raise DataUnavailableError(f"No OHLC entry for {symbol} in Upstox response")
 
-            live = entry.get("live_ohlc", {})
-            prev = entry.get("prev_ohlc", {})
+            live = entry.get("live_ohlc") or entry.get("ohlc") or {}
+            prev = entry.get("prev_ohlc") or {}
             price = float(live.get("close") or entry.get("last_price") or 0.0)
             prev_close = float(prev.get("close") or 0.0)
 
