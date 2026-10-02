@@ -185,7 +185,7 @@ async def post_screener_run(
                 except Exception:
                     return None
 
-            all_symbols = list(MarketDataService.NSE_NIFTY50) + list(MarketDataService.NSE_NIFTY_NEXT50)
+            all_symbols = list(MarketDataService.NSE_ALL_STOCKS)
             for batch_start in range(0, len(all_symbols), 10):
                 batch = all_symbols[batch_start:batch_start + 10]
                 batch_results = await asyncio.gather(*[_screen_symbol(s) for s in batch], return_exceptions=True)

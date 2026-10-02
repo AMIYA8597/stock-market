@@ -11,6 +11,13 @@ from datetime import UTC, datetime, timedelta
 import yfinance as yf
 
 from app.core.logging import get_logger
+from app.services.stock_universe import (
+    ALL_STOCKS as _ALL_STOCKS,
+    INDICES as _INDICES,
+    NIFTY_50 as _NIFTY_50,
+    NIFTY_NEXT50 as _NIFTY_NEXT50,
+    TOP100 as _TOP100,
+)
 
 logger = get_logger(__name__)
 
@@ -81,53 +88,12 @@ class MarketDataService:
     async def _throttle_nse(cls) -> None:
         await cls._nse_bucket.consume(1.0)
 
-    # Full Nifty 50 constituents (Oct 2026)
-    NSE_NIFTY50 = [
-        "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
-        "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK",
-        "AXISBANK", "LT", "WIPRO", "HCLTECH", "ASIANPAINT",
-        "MARUTI", "SUNPHARMA", "TITAN", "ULTRACEMCO", "BAJFINANCE",
-        "NESTLEIND", "M&M", "TATASTEEL", "NTPC", "POWERGRID",
-        "ONGC", "COALINDIA", "JSWSTEEL", "GRASIM", "ADANIENT",
-        "ADANIPORTS", "BAJAJFINSV", "TECHM", "DRREDDY", "CIPLA",
-        "DIVISLAB", "BRITANNIA", "APOLLOHOSP", "TATACONSUM", "HEROMOTOCO",
-        "EICHERMOT", "BPCL", "SHREECEM", "INDUSINDBK", "HINDALCO",
-        "SBILIFE", "HDFCLIFE", "TATAMOTORS", "BAJAJ-AUTO", "TRENT",
-    ]
-
-    # Nifty Next 50 constituents
-    NSE_NIFTY_NEXT50 = [
-        "ADANIGREEN", "ADANIPOWER", "AMBUJACEM", "AUROPHARMA", "BANKBARODA",
-        "BERGEPAINT", "BOSCHLTD", "CANBK", "CHOLAFIN", "COLPAL",
-        "DABUR", "DLF", "GAIL", "GODREJCP", "HAL",
-        "HAVELLS", "ICICIPRULI", "IDEA", "IDFCFIRSTB", "INDHOTEL",
-        "INDUSTOWER", "IOC", "IRCTC", "JINDALSTEL", "JSWENERGY",
-        "LICI", "LODHA", "LTIM", "LUPIN", "MARICO",
-        "MAXHEALTH", "NHPC", "NYKAA", "OBEROIRLTY", "OFSS",
-        "PAGEIND", "PAYTM", "PEL", "PERSISTENT", "PIDILITIND",
-        "PNB", "POLYCAB", "RECLTD", "SAIL", "SIEMENS",
-        "SRF", "TATAPOWER", "TORNTPHARM", "VEDL", "ZOMATO",
-    ]
-
-    # Combined universe for broader coverage
-    NSE_TOP100 = NSE_NIFTY50 + NSE_NIFTY_NEXT50
-
-    # Major NSE indices
-    NSE_INDICES = [
-        ("^NSEI", "NIFTY 50"),
-        ("^BSESN", "SENSEX"),
-        ("^NSEBANK", "BANK NIFTY"),
-        ("^CNXIT", "NIFTY IT"),
-        ("^CNXPHARMA", "NIFTY PHARMA"),
-        ("^CNXFMCG", "NIFTY FMCG"),
-        ("^CNXAUTO", "NIFTY AUTO"),
-        ("^CNXMETAL", "NIFTY METAL"),
-        ("^CNXREALTY", "NIFTY REALTY"),
-        ("^CNXENERGY", "NIFTY ENERGY"),
-        ("^CNXINFRA", "NIFTY INFRA"),
-        ("^CNXPSUBANK", "NIFTY PSU BANK"),
-        ("^INDIAVIX", "INDIA VIX"),
-    ]
+    # Stock universe from centralized module (1000+ symbols)
+    NSE_NIFTY50 = _NIFTY_50
+    NSE_NIFTY_NEXT50 = _NIFTY_NEXT50
+    NSE_TOP100 = _TOP100
+    NSE_ALL_STOCKS = _ALL_STOCKS
+    NSE_INDICES = _INDICES
 
     @classmethod
     def get_session(cls):

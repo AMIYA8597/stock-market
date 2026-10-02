@@ -466,16 +466,11 @@ async def search_symbols(
             )
         )
 
-    # Fallback: if DB has no instruments, search against known symbol lists
+    # Fallback: if DB has no instruments, search against full 1000+ symbol universe
     if not results:
-        from app.services.market_data_service import MarketDataService
-        query_upper = q.strip().upper()
-        all_known = MarketDataService.NSE_NIFTY50 + MarketDataService.NSE_NIFTY_NEXT50
-        for sym in all_known:
-            if query_upper in sym:
-                results.append(SearchResult(ticker=sym, name=sym, exchange="NSE", asset_type="EQUITY"))
-                if len(results) >= 20:
-                    break
+        from app.services.stock_universe import search_symbols as search_universe
+        for sym in search_universe(q.strip(), limit=20):
+            results.append(SearchResult(ticker=sym, name=sym, exchange="NSE", asset_type="EQUITY"))
 
     return SearchResponse(query=q, results=results, total_matched=len(results))
 
@@ -491,7 +486,7 @@ async def get_economic_calendar() -> EconomicCalendarResponse:
 
 @router.get("/universe", response_model=UniverseResponse)
 async def get_market_universe(
-    limit: int = Query(default=50, ge=1, le=500),
+    limit: int = Query(default=50, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> UniverseResponse:
@@ -526,7 +521,7 @@ async def get_market_universe(
     # Fallback: if DB has no instruments, return known symbol lists
     if not infos:
         from app.services.market_data_service import MarketDataService
-        all_known = MarketDataService.NSE_TOP100
+        all_known = MarketDataService.NSE_ALL_STOCKS
         page = all_known[offset:offset + limit]
         for sym in page:
             infos.append(
