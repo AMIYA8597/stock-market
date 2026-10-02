@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import math
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import yfinance as yf
 
@@ -304,9 +304,78 @@ class MarketDataService:
         async with cls._semaphore:
             return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=10.0)
 
+    @classmethod
+    async def _upstox_quote(cls, symbol: str) -> dict | None:
+        """Try Upstox Analytics Token for a live quote. Returns None if unavailable."""
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None):
+                return None
+            from app.services.ingestion.upstox_source import UpstoxSource
+            source = UpstoxSource()
+            quote = await source.get_quote(symbol)
+            return {
+                "symbol": cls._normalize_symbol(symbol),
+                "price": quote.price,
+                "open": quote.price,
+                "high": quote.price,
+                "low": quote.price,
+                "volume": int(quote.volume or 0),
+                "previous_close": quote.price - quote.change if quote.change else quote.price,
+                "change": round(quote.change, 2),
+                "change_pct": round(quote.change_pct, 2),
+                "market_cap": 0.0,
+                "week_52_high": quote.price,
+                "week_52_low": quote.price,
+                "source": "upstox",
+                "timestamp": quote.timestamp.isoformat() if quote.timestamp else datetime.now(UTC).isoformat(),
+            }
+        except Exception as e:
+            logger.debug(f"Upstox quote failed for {symbol}: {e}")
+            return None
+
+    @classmethod
+    async def _upstox_history(cls, symbol: str, interval: str, period: str) -> list[dict] | None:
+        """Try Upstox for historical bars. Returns None if unavailable."""
+        try:
+            from app.core.config import get_settings
+            settings = get_settings()
+            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None):
+                return None
+            from app.services.ingestion.upstox_source import UpstoxSource
+            source = UpstoxSource()
+            period_days = {"1d": 30, "5d": 150, "1w": 180, "1mo": 730, "1y": 365, "2y": 730}
+            days = period_days.get(period, 30)
+            if period.endswith('d') and period[:-1].isdigit():
+                days = int(period[:-1])
+            elif period.endswith('y') and period[:-1].isdigit():
+                days = int(period[:-1]) * 365
+            start = datetime.now(UTC) - timedelta(days=days)
+            end = datetime.now(UTC)
+            bars = await source.get_ohlcv(symbol, interval, start, end)
+            if not bars:
+                return None
+            return [
+                {
+                    "time": b.time.isoformat(),
+                    "timestamp": b.time.isoformat(),
+                    "open": b.open,
+                    "high": b.high,
+                    "low": b.low,
+                    "close": b.close,
+                    "volume": b.volume,
+                    "source": "upstox",
+                }
+                for b in bars
+            ]
+        except Exception as e:
+            logger.debug(f"Upstox history failed for {symbol}: {e}")
+            return None
+
     @staticmethod
     async def get_quote(symbol: str) -> dict:
-        """Fetch live quote — tries canonical DB first, falls back to yfinance."""
+        """Fetch live quote — tries DB → Upstox → yfinance."""
         from sqlalchemy import select
 
         from app.database.connection import async_session_factory
@@ -345,6 +414,10 @@ class MarketDataService:
                         }
         except Exception as db_err:
             logger.debug(f"DB quote lookup failed for {sym}: {db_err}")
+
+        upstox_result = await MarketDataService._upstox_quote(symbol)
+        if upstox_result:
+            return upstox_result
 
         return await MarketDataService._yfinance_quote(symbol)
 
@@ -434,6 +507,10 @@ class MarketDataService:
                         return HistoryList(bars, source="canonical_db")
         except Exception as db_err:
             logger.debug(f"DB history lookup failed for {sym}: {db_err}")
+
+        upstox_bars = await MarketDataService._upstox_history(symbol, interval, period)
+        if upstox_bars:
+            return upstox_bars
 
         return await MarketDataService._yfinance_history(symbol, interval, period)
 

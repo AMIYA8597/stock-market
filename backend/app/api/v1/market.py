@@ -608,3 +608,32 @@ async def get_patterns(symbol: str):
         "support": round(support, 2),
         "resistance": round(resistance, 2),
     }
+
+
+@router.post("/instruments/sync-upstox", tags=["instruments"])
+async def sync_upstox_instruments():
+    """Trigger Upstox NSE instrument master sync.
+
+    Downloads instrument keys from Upstox's public instrument file and
+    populates InstrumentAlias rows so UpstoxSource can resolve symbols.
+    """
+    try:
+        from app.tasks.upstox_instrument_tasks import _sync_upstox_instruments_async
+        result = await _sync_upstox_instruments_async(create_missing=True)
+        return {"status": "ok", **result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Instrument sync failed: {e}")
+
+
+@router.get("/instruments/status", tags=["instruments"])
+async def instruments_status(db: AsyncSession = Depends(get_db)):
+    """Check how many instruments and Upstox aliases exist."""
+    total_instruments = (await db.execute(select(Instrument))).scalars().all()
+    upstox_aliases = (await db.execute(
+        select(InstrumentAlias).where(InstrumentAlias.provider == "upstox")
+    )).scalars().all()
+    return {
+        "total_instruments": len(total_instruments),
+        "upstox_aliases": len(upstox_aliases),
+        "upstox_ready": len(upstox_aliases) > 0,
+    }
