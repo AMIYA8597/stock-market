@@ -221,7 +221,7 @@ class UpstoxSource(MarketDataProvider):
         if not self.token:
             return {"status": "down", "provider": self.name, "error": "UPSTOX_ANALYTICS_TOKEN not configured"}
         try:
-            await self.get_quote("NIFTY 50")
+            await self.get_quote("RELIANCE")
             return {"status": "ok", "provider": self.name}  # honesty: allow (only reached after a real successful probe above)
         except Exception as e:
             return {"status": "down", "provider": self.name, "error": str(e)}
