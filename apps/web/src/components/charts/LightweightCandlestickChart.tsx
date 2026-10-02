@@ -35,9 +35,6 @@ import {
   buildRollingBeta,
   buildFibonacciLevels,
   buildPivotPoints,
-  buildOIChart,
-  buildPutCallRatio,
-  buildVolatilityCone,
 } from "@/utils/chartFormatters";
 import { marketApi } from "@/lib/api-client";
 
@@ -828,25 +825,27 @@ export function LightweightCandlestickChart({
         lineColor: "#00E676", lineWidth: 2,
       });
       mainSeries.setData(sanitizeSeriesData(buildCVD(bars)));
-    } else if (chartStyle === "open-interest") {
-      mainSeries = mainChart.addSeries(AreaSeries, {
-        topColor: "rgba(139, 92, 246, 0.3)", bottomColor: "rgba(139, 92, 246, 0.0)",
-        lineColor: "#8B5CF6", lineWidth: 2,
-      });
-      mainSeries.setData(sanitizeSeriesData(buildOIChart(bars)));
-    } else if (chartStyle === "oi-price") {
+    } else if (chartStyle === "open-interest" || chartStyle === "oi-price" || chartStyle === "put-call-ratio") {
       mainSeries = mainChart.addSeries(CandlestickSeries, {
         upColor: "#00E676", downColor: "#FF3B5C", wickUpColor: "#00E676", wickDownColor: "#FF3B5C", borderVisible: false,
       });
       mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
         time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
       }))));
-      const oiSeries = mainChart.addSeries(LineSeries, { color: "#8B5CF6", lineWidth: 2, title: "OI", priceScaleId: "oi" });
-      oiSeries.setData(sanitizeSeriesData(buildOIChart(bars)));
-      addedSeries.push(oiSeries);
-    } else if (chartStyle === "put-call-ratio") {
-      mainSeries = mainChart.addSeries(LineSeries, { color: "#F59E0B", lineWidth: 2 });
-      mainSeries.setData(sanitizeSeriesData(buildPutCallRatio(bars)));
+      const oiReasons: Record<string, string> = {
+        "open-interest": "Requires real exchange OI data feed — cannot be manufactured from OHLCV",
+        "oi-price": "Requires real exchange OI data feed — cannot be manufactured from OHLCV",
+        "put-call-ratio": "Requires real options chain data — cannot be estimated from price alone",
+      };
+      mainChart.applyOptions({
+        watermark: {
+          visible: true,
+          text: `${chartStyle.replace(/-/g, " ").toUpperCase()} — UNAVAILABLE\n${oiReasons[chartStyle] ?? "Data source not connected"}`,
+          color: "rgba(255, 59, 92, 0.4)",
+          fontSize: 14,
+          fontFamily: "monospace",
+        },
+      });
     } else if (chartStyle === "drawdown") {
       mainSeries = mainChart.addSeries(AreaSeries, {
         topColor: "rgba(255, 59, 92, 0.0)", bottomColor: "rgba(255, 59, 92, 0.3)",

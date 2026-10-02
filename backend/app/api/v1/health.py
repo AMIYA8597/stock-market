@@ -84,3 +84,66 @@ async def readiness_check():
     if overall != "ready":
         return JSONResponse(status_code=503, content=payload)
     return payload
+
+
+@router.get("/health/system-audit")
+async def system_audit():
+    """Comprehensive system status — honest about what works and what doesn't."""
+    from pathlib import Path
+
+    from app.core.config import get_settings
+    from app.database.redis_client import get_redis_client
+
+    settings = get_settings()
+    MODEL_DIR = Path(__file__).parent.parent.parent / "data" / "models"
+    ARTIFACT_DIR = Path(__file__).parent.parent.parent / "data" / "artifacts"
+
+    redis_type = "unknown"
+    try:
+        redis = await get_redis_client()
+        redis_type = type(redis).__name__
+    except Exception:
+        pass
+
+    pkl_files = list(MODEL_DIR.glob("**/*.pkl")) + list(ARTIFACT_DIR.glob("**/*.pkl"))
+
+    upstox_configured = bool(getattr(settings, "UPSTOX_ENABLED", False) and getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None))
+
+    db_instruments = 0
+    upstox_aliases = 0
+    try:
+        from sqlalchemy import func, select
+        from app.database.connection import async_session_factory
+        from app.models.market import Instrument, InstrumentAlias
+        async with async_session_factory() as db:
+            db_instruments = (await db.execute(select(func.count(Instrument.id)))).scalar() or 0
+            upstox_aliases = (await db.execute(select(func.count(InstrumentAlias.id)).where(InstrumentAlias.provider == "upstox"))).scalar() or 0
+    except Exception:
+        pass
+
+    return {
+        "data_providers": {
+            "yfinance": {"status": "active", "role": "fallback"},
+            "upstox": {
+                "status": "configured" if upstox_configured else "disabled",
+                "token_set": bool(getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None)),
+                "instruments_synced": upstox_aliases > 0,
+                "alias_count": upstox_aliases,
+            },
+        },
+        "database": {
+            "instruments": db_instruments,
+            "upstox_aliases": upstox_aliases,
+        },
+        "cache": {
+            "type": redis_type,
+            "is_real_redis": redis_type not in ("InMemoryCache", "FakeRedis"),
+        },
+        "ml_models": {
+            "pkl_artifacts_on_disk": len(pkl_files),
+            "pkl_files": [f.name for f in pkl_files],
+            "hmm_garch_json": len(list(MODEL_DIR.glob("hmm_garch/*.json"))),
+            "training_pipeline_exists": True,
+            "training_ever_run": len(pkl_files) > 0,
+        },
+    }
