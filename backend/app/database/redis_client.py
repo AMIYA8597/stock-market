@@ -79,25 +79,42 @@ class InMemoryPubSub:
 
 class InMemoryCache:
     """Simple in‑memory fallback implementing a subset of Redis methods used in the app.
-    Stores values in a dict; methods are async for compatibility.
+    Stores values in a dict with TTL support; methods are async for compatibility.
     """
 
     def __init__(self):
         self.store: dict[str, any] = {}
+        self._expiry: dict[str, float] = {}
         self.hash_store: dict[str, dict[str, int]] = {}
         self.sorted_sets: dict[str, dict[str, float]] = {}
         self.set_store: dict[str, set[str]] = {}
         self.active_pubsubs: set[InMemoryPubSub] = set()
 
+    def _is_expired(self, key: str) -> bool:
+        import time
+        exp = self._expiry.get(key)
+        if exp is not None and time.monotonic() > exp:
+            self.store.pop(key, None)
+            self._expiry.pop(key, None)
+            return True
+        return False
+
     async def get(self, key: str):
+        if self._is_expired(key):
+            return None
         return self.store.get(key)
 
     async def set(self, key: str, value: any, ex: int | None = None) -> bool:
+        import time
         self.store[key] = value
+        if ex is not None:
+            self._expiry[key] = time.monotonic() + ex
         return True
 
     async def setex(self, key: str, ttl: int, value: any) -> bool:
+        import time
         self.store[key] = value
+        self._expiry[key] = time.monotonic() + ttl
         return True
 
     async def delete(self, key: str) -> int:
@@ -108,6 +125,8 @@ class InMemoryCache:
         return deleted
 
     async def exists(self, key: str) -> int:
+        if self._is_expired(key):
+            return 0
         return int(
             key in self.store
             or key in self.hash_store
@@ -167,8 +186,11 @@ class InMemoryCache:
         return len(self.sorted_sets.get(key, {}))
 
     async def expire(self, key: str, ttl: int) -> bool:
-        _ = (key, ttl)
-        return True
+        import time
+        if key in self.store:
+            self._expiry[key] = time.monotonic() + ttl
+            return True
+        return False
 
     async def zrange(self, key: str, start: int, end: int, withscores: bool = False) -> list[Any]:
         items = sorted(self.sorted_sets.get(key, {}).items(), key=lambda item: item[1])

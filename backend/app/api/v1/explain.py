@@ -271,33 +271,27 @@ async def get_attention_explanation(symbol: str, model: str = "lstm_attn") -> At
 
         # Standardize columns
         rename_map = {}
-        RSI_col = "RSI_14" if "RSI_14" in df.columns else [c for c in df.columns if "RSI" in c][0]
-        MACDh_col = (
-            "MACDh_12_26_9"
-            if "MACDh_12_26_9" in df.columns
-            else [c for c in df.columns if "MACDh" in c][0]
-        )
-        BBP_col = (
-            "BBP_20_2.0_2.0"
-            if "BBP_20_2.0_2.0" in df.columns
-            else (
-                "BBP_20_2.0"
-                if "BBP_20_2.0" in df.columns
-                else [c for c in df.columns if "BBP" in c][0]
-            )
-        )
-        ATR_col = "ATRr_14" if "ATRr_14" in df.columns else [c for c in df.columns if "ATR" in c][0]
-        ADX_col = "ADX_14" if "ADX_14" in df.columns else [c for c in df.columns if "ADX" in c][0]
+        def _find_col(df_cols, primary: str, pattern: str) -> str | None:
+            if primary in df_cols:
+                return primary
+            matches = [c for c in df_cols if pattern in c]
+            return matches[0] if matches else None
 
-        if RSI_col != "RSI_14":
+        RSI_col = _find_col(df.columns, "RSI_14", "RSI")
+        MACDh_col = _find_col(df.columns, "MACDh_12_26_9", "MACDh")
+        BBP_col = _find_col(df.columns, "BBP_20_2.0_2.0", "BBP") or _find_col(df.columns, "BBP_20_2.0", "BBP")
+        ATR_col = _find_col(df.columns, "ATRr_14", "ATR")
+        ADX_col = _find_col(df.columns, "ADX_14", "ADX")
+
+        if RSI_col and RSI_col != "RSI_14":
             rename_map[RSI_col] = "RSI_14"
-        if MACDh_col != "MACDh_12_26_9":
+        if MACDh_col and MACDh_col != "MACDh_12_26_9":
             rename_map[MACDh_col] = "MACDh_12_26_9"
-        if BBP_col != "BBP_20_2.0":
+        if BBP_col and BBP_col != "BBP_20_2.0":
             rename_map[BBP_col] = "BBP_20_2.0"
-        if ATR_col != "ATRr_14":
+        if ATR_col and ATR_col != "ATRr_14":
             rename_map[ATR_col] = "ATRr_14"
-        if ADX_col != "ADX_14":
+        if ADX_col and ADX_col != "ADX_14":
             rename_map[ADX_col] = "ADX_14"
         if rename_map:
             df = df.rename(columns=rename_map)

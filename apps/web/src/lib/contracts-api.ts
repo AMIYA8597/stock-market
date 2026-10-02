@@ -737,12 +737,15 @@ export const contractsApi = {
     return postJson<JournalEntry, Partial<JournalEntry>>("/journal", payload);
   },
 
-  deleteJournal(id: string): Promise<boolean> {
-    return fetch(`${API_URL}/journal/${encodeURIComponent(id)}`, {
+  async deleteJournal(id: string): Promise<boolean> {
+    const token = await getAccessToken();
+    const res = await fetch(`${API_URL}/journal/${encodeURIComponent(id)}`, {
       method: "DELETE",
-    }).then((res) => {
-      if (!res.ok) throw new Error("Failed to delete journal entry");
-      return true;
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     });
+    if (!res.ok) throw new Error("Failed to delete journal entry");
+    return true;
   },
 };
