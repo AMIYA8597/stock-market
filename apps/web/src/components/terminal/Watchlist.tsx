@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchApi } from "@/lib/api-client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { fetchApi, marketApi } from "@/lib/api-client";
 import { Search, Plus, Trash2 } from "lucide-react";
 import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
@@ -143,9 +143,20 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
   }, [signals, activeTab, wlLists]);
 
   const visibleSignals = useMemo(() => {
-    return activeSymbols
-      .map((sym) => signals.find((s) => s.symbol.toUpperCase() === sym.toUpperCase()))
-      .filter((item): item is SignalResponse => item !== undefined);
+    return activeSymbols.map((sym) => {
+      const found = signals.find((s) => s.symbol.toUpperCase() === sym.toUpperCase());
+      if (found) return found;
+      return {
+        symbol: sym.toUpperCase(),
+        timestamp: new Date().toISOString(),
+        ensemble: { signal: "NEUTRAL" as const, direction: "NEUTRAL" as const, confidence: 0, kelly_fraction: 0 },
+        models: { tft: { p10: 0, p50: 0, p90: 0, raw_signal: 0, horizon_days: 1 }, hmm_garch: { regime_signal: "", vol_forecast_1d: 0, vol_forecast_21d: 0 }, gnn: { spillover_risk: 0, embedding_norm: 0, top_correlated_assets: [] }, lstm_attn: { raw_signal: 0, attention_peaks: [] }, xgboost: { raw_signal: 0, top_features: [] }, technical: { score: 0, rsi: 0, macd_histogram: 0, bb_position: 0, adx: 0, supertrend_direction: 0, above_vwap: false, indicators_computed: 0 }, pattern: { pattern_score: 0, patterns_detected: [], bullish_count: 0, bearish_count: 0 }, momentum: { momentum_score: 0, ret_1d: 0, ret_5d: 0, ret_21d: 0, jt_momentum: 0, vol_21d: 0, yang_zhang_vol: 0, dist_52w_high: 0, dist_52w_low: 0 }, regime: { regime: "", bull_prob: 0, bear_prob: 0, regime_confidence: 0, hmm_used: false } },
+        model_weights: {},
+        regime: { state: "SIDEWAYS" as const, probs: { bull: 0, bear: 0, sideways: 1, crisis: 0 }, transition_probs: { bull: 0, bear: 0, sideways: 0, crisis: 0 } },
+        target_price_5d: 0, stop_loss: 0, take_profit: 0, prob_buy: 0, prob_sell: 0, max_loss_pct: 0,
+        is_computed: false, message: "Signal loading...", model_status: "fallback" as const,
+      } satisfies SignalResponse;
+    });
   }, [activeSymbols, signals]);
 
   const symbols = useMemo(() => visibleSignals.map((s) => s.symbol), [visibleSignals]);
@@ -159,6 +170,28 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
   }, [signals, selectedSymbol]);
 
   const { ticks } = usePriceFeed(symbols);
+
+  const [restPrices, setRestPrices] = useState<Map<string, { price: number; change_pct: number }>>(new Map());
+  const restFetchedRef = useRef(false);
+
+  useEffect(() => {
+    if (symbols.length === 0 || restFetchedRef.current) return;
+    restFetchedRef.current = true;
+    const BATCH = 10;
+    (async () => {
+      const map = new Map<string, { price: number; change_pct: number }>();
+      for (let i = 0; i < symbols.length; i += BATCH) {
+        try {
+          const batch = symbols.slice(i, i + BATCH);
+          const quotes = await marketApi.getQuotes(batch);
+          for (const q of quotes) {
+            map.set(q.symbol.toUpperCase(), { price: q.price, change_pct: q.change_percent });
+          }
+        } catch { /* ignore batch errors */ }
+      }
+      if (map.size > 0) setRestPrices(map);
+    })();
+  }, [symbols]);
 
   const [tickHistories, setTickHistories] = useState<Record<string, number[]>>({});
   const [groupBySector, setGroupBySector] = useState<boolean>(false);
@@ -296,8 +329,10 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
 
     const { exchange, name } = getExchangeAndName(item.symbol);
     const tick = ticks.get(item.symbol.toUpperCase());
-    const ltpText = tick ? `₹${safeFormat(tick.price, 2)}` : "--";
-    const changePct = tick ? tick.change_pct : null;
+    const rest = restPrices.get(item.symbol.toUpperCase());
+    const displayPrice = tick?.price ?? rest?.price;
+    const ltpText = displayPrice ? `₹${safeFormat(displayPrice, 2)}` : "--";
+    const changePct = tick?.change_pct ?? rest?.change_pct ?? null;
     const isUp = changePct !== null && changePct >= 0;
     const hist = tickHistories[item.symbol.toUpperCase()] || [];
 
