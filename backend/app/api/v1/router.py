@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 
 from app.api.v1 import (
     admin,
+    ai,
     alerts,
     auth,
     autotrade,
@@ -69,6 +70,7 @@ router.include_router(intelligence.router, dependencies=[Depends(get_current_use
 router.include_router(predictions.router, prefix="/predictions", tags=["predictions"], dependencies=[Depends(get_current_user)])
 router.include_router(journal.router)
 router.include_router(onboarding.router, dependencies=[Depends(get_current_user)])
+router.include_router(ai.router, dependencies=[Depends(get_current_user)])
 
 @router.get("/version", tags=["system"])
 async def get_version() -> dict[str, str]:

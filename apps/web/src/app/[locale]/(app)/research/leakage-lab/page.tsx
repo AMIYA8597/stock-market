@@ -9,17 +9,17 @@ export default function LeakageLabPage() {
   return (
     <div className="p-6">
       <h1 className="text-2xl font-bold mb-2">Leakage Lab</h1>
-      <p className="mb-6 text-gray-600">
+      <p className="mb-6 text-[var(--nq-text-secondary)]">
         Comparing model predictions against actual subsequent prints.
       </p>
 
       {PLACEHOLDER_DATA.length === 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4 text-yellow-800">
+        <div className="rounded-lg border border-[var(--nq-border)] bg-[var(--nq-bg-card)] p-4 mb-4 text-[var(--nq-text-secondary)]">
           No prediction data available yet. This chart will populate once the prediction engine has generated and stored predictions with subsequent actual returns.
         </div>
       )}
 
-      <div className="bg-white p-4 rounded-lg shadow border h-[500px]">
+      <div className="bg-[var(--nq-bg-card)] p-4 rounded-lg shadow border border-[var(--nq-border)] h-[500px]">
         <h2 className="text-lg font-semibold mb-4">Predicted vs Actual Returns</h2>
         <ResponsiveContainer width="100%" height="80%">
           <ScatterChart
