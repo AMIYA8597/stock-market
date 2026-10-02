@@ -38,13 +38,27 @@ function getExchangeAndName(symbol: string): { exchange: string; name: string } 
 }
 
 function getSector(symbol: string): string {
-  const sym = symbol.toUpperCase();
-  if (sym === "RELIANCE.NS") return "Energy & Conglomerate";
-  if (["TCS.NS", "INFY.NS", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "AMD", "NFLX"].includes(sym)) return "Technology";
-  if (["HDFCBANK.NS", "ICICIBANK.NS", "SBIN.NS", "AXISBANK.NS", "JPM"].includes(sym)) return "Financials";
-  if (sym === "ITC.NS") return "Consumer Goods";
-  if (sym === "LT.NS") return "Industrials";
-  if (sym === "SUNPHARMA.NS") return "Healthcare";
+  const sym = symbol.toUpperCase().replace(".NS", "");
+  const sectors: Record<string, string[]> = {
+    "Energy & Conglomerate": ["RELIANCE", "ADANIENT", "ADANIPORTS", "ADANIGREEN", "ADANIPOWER"],
+    "Technology": ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM", "LTIM", "PERSISTENT", "OFSS", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "AMD", "NFLX"],
+    "Financials": ["HDFCBANK", "ICICIBANK", "SBIN", "AXISBANK", "KOTAKBANK", "BAJFINANCE", "BAJAJFINSV", "INDUSINDBK", "BANKBARODA", "CANBK", "PNB", "IDFCFIRSTB", "SBILIFE", "HDFCLIFE", "ICICIPRULI", "CHOLAFIN", "LICI", "JPM"],
+    "Consumer Goods": ["ITC", "HINDUNILVR", "NESTLEIND", "BRITANNIA", "TATACONSUM", "DABUR", "GODREJCP", "MARICO", "COLPAL"],
+    "Industrials": ["LT", "SIEMENS", "HAL", "BOSCHLTD", "HAVELLS", "POLYCAB", "INDUSTOWER", "IRCTC"],
+    "Healthcare": ["SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB", "AUROPHARMA", "LUPIN", "TORNTPHARM", "APOLLOHOSP", "MAXHEALTH"],
+    "Automotive": ["MARUTI", "TATAMOTORS", "M&M", "BAJAJ-AUTO", "HEROMOTOCO", "EICHERMOT"],
+    "Metals & Mining": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "COALINDIA", "VEDL", "SAIL", "JINDALSTEL"],
+    "Oil & Gas": ["ONGC", "BPCL", "IOC", "GAIL"],
+    "Power & Utilities": ["NTPC", "POWERGRID", "TATAPOWER", "NHPC", "JSWENERGY", "RECLTD"],
+    "Real Estate": ["DLF", "OBEROIRLTY", "LODHA"],
+    "Building Materials": ["ULTRACEMCO", "GRASIM", "SHREECEM", "AMBUJACEM", "PIDILITIND", "ASIANPAINT", "BERGEPAINT"],
+    "Retail & Consumer": ["TITAN", "TRENT", "NYKAA", "ZOMATO", "PAYTM", "PAGEIND"],
+    "Chemicals": ["SRF", "UPL"],
+    "Telecom": ["BHARTIARTL", "IDEA"],
+  };
+  for (const [sector, symbols] of Object.entries(sectors)) {
+    if (symbols.includes(sym)) return sector;
+  }
   if (sym.endsWith("-USD") || ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "DOGE"].some(c => sym.includes(c))) return "Cryptocurrencies";
   return "Others";
 }

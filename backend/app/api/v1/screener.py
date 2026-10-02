@@ -146,6 +146,53 @@ async def post_screener_run(
                 }
             )
 
+        # Fallback: if DB has no instruments, screen Nifty 50+Next50 via yfinance
+        if not results:
+            import asyncio
+            from app.services.market_data_service import MarketDataService
+
+            async def _screen_symbol(sym: str):
+                try:
+                    history = await MarketDataService.get_history(sym, "1d", "60d")
+                    if not history or len(history) < 15:
+                        return None
+                    closes = [float(b.get("close", 0)) for b in history]
+                    volumes = [float(b.get("volume", 0)) for b in history]
+                    latest_price = closes[-1]
+                    prev_price = closes[-2] if len(closes) > 1 else latest_price
+                    change_pct = ((latest_price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
+
+                    deltas = np.diff(closes)
+                    if len(deltas) >= 14:
+                        gains = np.where(deltas > 0, deltas, 0.0)
+                        losses = np.where(deltas < 0, -deltas, 0.0)
+                        avg_gain = np.mean(gains[-14:])
+                        avg_loss = np.mean(losses[-14:])
+                        rsi_val = 100.0 if avg_loss == 0 else 100.0 - (100.0 / (1.0 + avg_gain / avg_loss))
+                    else:
+                        rsi_val = 50.0
+
+                    momentum_21d = (closes[-1] / closes[-22] - 1.0) if len(closes) >= 22 else 0.0
+                    volume_ratio = (volumes[-1] / np.mean(volumes[-21:])) if len(volumes) >= 21 and np.mean(volumes[-21:]) > 0 else 1.0
+
+                    return {
+                        "ticker": sym, "name": sym, "exchange": "NSE", "asset_type": "EQUITY",
+                        "price": latest_price, "change_pct": change_pct, "pe_ratio": None,
+                        "rsi": rsi_val, "signal_direction": "NEUTRAL", "signal_confidence": 0.5,
+                        "regime_state": "sideways", "momentum_21d": momentum_21d,
+                        "volume_ratio": volume_ratio, "market_cap": None,
+                    }
+                except Exception:
+                    return None
+
+            all_symbols = list(MarketDataService.NSE_NIFTY50) + list(MarketDataService.NSE_NIFTY_NEXT50)
+            for batch_start in range(0, len(all_symbols), 10):
+                batch = all_symbols[batch_start:batch_start + 10]
+                batch_results = await asyncio.gather(*[_screen_symbol(s) for s in batch], return_exceptions=True)
+                for r in batch_results:
+                    if isinstance(r, dict):
+                        results.append(r)
+
         # Apply Filters
         filtered = []
         filters = request.filters
