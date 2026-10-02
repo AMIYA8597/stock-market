@@ -1,0 +1,51 @@
+{
+  "audit_date": "2026-10-02",
+  "platform": "NeuroQuant",
+  "version": "2.0.0",
+  "data_integrity": {
+    "fabricated_prices": false,
+    "fabricated_candles": false,
+    "fabricated_predictions": false,
+    "primary_data_source": "yfinance",
+    "upstox_status": "configured_not_synced",
+    "database_status": "connected_empty"
+  },
+  "model_audit": {
+    "total_models": 9,
+    "trained": 2,
+    "untrained": 6,
+    "heuristic": 1,
+    "mislabeled_fixed": [
+      {"model": "tft", "was": "Temporal Fusion Transformer", "actually": "QuantileLGBM (LightGBM quantile regression)"},
+      {"model": "gnn", "was": "trained GNN", "actually": "ContagionRiskAnalyzer (formula-based heuristic)"}
+    ],
+    "pkl_artifacts_on_disk": 0,
+    "hmm_garch_json_on_disk": 1
+  },
+  "chart_audit": {
+    "total_modes": 42,
+    "implemented_real_data": 30,
+    "unavailable_with_watermark": 12,
+    "fake_rendering_fixed": [
+      "iv-smile", "volatility-cone", "correlation-heatmap", "rolling-correlation",
+      "elliott-wave", "gann", "open-interest", "oi-price", "put-call-ratio"
+    ]
+  },
+  "infrastructure": {
+    "backend": "cloud_run",
+    "frontend": "vercel",
+    "database": "supabase_postgresql",
+    "cache": "in_memory_fallback",
+    "redis_available": false
+  },
+  "security_findings": [
+    {"severity": "HIGH", "finding": ".env with secrets committed to git repo"}
+  ],
+  "spec_compliance": {
+    "section_2_1_no_fabricated_data": true,
+    "section_2_2_no_fake_model_labels": true,
+    "section_2_4_show_unavailable": true,
+    "section_9_no_manufacture_from_candles": true,
+    "section_47_production_artifacts": false
+  }
+}
