@@ -232,7 +232,7 @@ async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
     if not indices:
         import asyncio
         from app.services.market_data_service import MarketDataService
-        yf_indices = [("^NSEI", "NIFTY 50"), ("^BSESN", "SENSEX"), ("^NSEBANK", "BANK NIFTY")]
+        yf_indices = MarketDataService.NSE_INDICES
         for yf_sym, name in yf_indices:
             try:
                 q = await MarketDataService._yfinance_quote(yf_sym)
@@ -308,13 +308,24 @@ async def get_movers(
             )
         )
 
-    # Fallback: if DB has no movers, fetch top Nifty50 stocks from yfinance
+    # Fallback: if DB has no movers, fetch all Nifty50 stocks from yfinance
     if not assets:
+        import asyncio
         from app.services.market_data_service import MarketDataService
-        for sym in MarketDataService.NSE_NIFTY50[:20]:
+
+        async def _fetch_quote(sym: str):
             try:
-                q = await MarketDataService._yfinance_quote(sym)
-                if q and q.get("price", 0) > 0:
+                return await MarketDataService.get_quote(sym)
+            except Exception:
+                return None
+
+        # Fetch all 50 in parallel batches of 10 to respect rate limits
+        all_symbols = list(MarketDataService.NSE_NIFTY50)
+        for batch_start in range(0, len(all_symbols), 10):
+            batch = all_symbols[batch_start:batch_start + 10]
+            results = await asyncio.gather(*[_fetch_quote(s) for s in batch], return_exceptions=True)
+            for sym, q in zip(batch, results):
+                if isinstance(q, dict) and q.get("price", 0) > 0:
                     assets.append(MoverData(
                         ticker=sym, name=q.get("name", sym), exchange=exchange,
                         price=Decimal(str(q["price"])),
@@ -324,12 +335,16 @@ async def get_movers(
                         signal_confidence=0.0,
                         rank=len(assets) + 1,
                     ))
-            except Exception:
-                pass
+
         if type == "losers":
             assets.sort(key=lambda a: float(a.change_pct))
         elif type == "volume":
             assets.sort(key=lambda a: float(a.volume), reverse=True)
+        elif type == "gainers" or type == "momentum":
+            assets.sort(key=lambda a: float(a.change_pct), reverse=True)
+        # Re-rank after sorting
+        for i, a in enumerate(assets):
+            a.rank = i + 1
 
     return MoversResponse(assets=assets, exchange=exchange, type=type, generated_at=datetime.now(UTC))
 
@@ -375,6 +390,50 @@ async def get_heatmap(
             )
         )
 
+    # Fallback: if DB has no instruments, build heatmap from Nifty50 yfinance data
+    if not sectors:
+        import asyncio
+        from app.services.market_data_service import MarketDataService
+
+        sector_map = {
+            "Energy": ["RELIANCE", "ONGC", "BPCL", "IOC", "GAIL"],
+            "IT": ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM"],
+            "Financials": ["HDFCBANK", "ICICIBANK", "SBIN", "AXISBANK", "KOTAKBANK", "BAJFINANCE", "BAJAJFINSV", "INDUSINDBK"],
+            "Consumer": ["HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA", "TATACONSUM", "TITAN"],
+            "Pharma": ["SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB"],
+            "Auto": ["MARUTI", "TATAMOTORS", "M&M", "BAJAJ-AUTO", "HEROMOTOCO", "EICHERMOT"],
+            "Metals": ["TATASTEEL", "JSWSTEEL", "HINDALCO", "COALINDIA"],
+            "Infra": ["LT", "ULTRACEMCO", "GRASIM", "SHREECEM", "ADANIENT", "ADANIPORTS"],
+            "Power": ["NTPC", "POWERGRID"],
+            "Telecom": ["BHARTIARTL"],
+            "Insurance": ["SBILIFE", "HDFCLIFE"],
+            "Healthcare": ["APOLLOHOSP"],
+            "Others": ["ASIANPAINT", "TRENT"],
+        }
+
+        async def _fetch_for_heatmap(sym: str):
+            try:
+                q = await MarketDataService.get_quote(sym)
+                return sym, q
+            except Exception:
+                return sym, None
+
+        all_syms = [s for syms in sector_map.values() for s in syms]
+        for batch_start in range(0, len(all_syms), 10):
+            batch = all_syms[batch_start:batch_start + 10]
+            results = await asyncio.gather(*[_fetch_for_heatmap(s) for s in batch], return_exceptions=True)
+            for r in results:
+                if isinstance(r, tuple):
+                    sym, q = r
+                    if q and q.get("price", 0) > 0:
+                        for sector_name, sector_syms in sector_map.items():
+                            if sym in sector_syms:
+                                metric_value = q.get("change_pct", 0) if metric != "volume_surge" else q.get("volume", 0)
+                                sectors.setdefault(sector_name, []).append(
+                                    SectorNode(ticker=sym, name=sym, value=Decimal(str(q["price"])), metric_value=Decimal(str(metric_value)))
+                                )
+                                break
+
     return HeatmapResponse(exchange=exchange, metric=metric, sectors=sectors, generated_at=datetime.now(UTC))
 
 
@@ -406,6 +465,17 @@ async def search_symbols(
                 asset_type=inst.asset_class or "EQUITY",
             )
         )
+
+    # Fallback: if DB has no instruments, search against known symbol lists
+    if not results:
+        from app.services.market_data_service import MarketDataService
+        query_upper = q.strip().upper()
+        all_known = MarketDataService.NSE_NIFTY50 + MarketDataService.NSE_NIFTY_NEXT50
+        for sym in all_known:
+            if query_upper in sym:
+                results.append(SearchResult(ticker=sym, name=sym, exchange="NSE", asset_type="EQUITY"))
+                if len(results) >= 20:
+                    break
 
     return SearchResponse(query=q, results=results, total_matched=len(results))
 
@@ -453,6 +523,21 @@ async def get_market_universe(
             )
         )
 
+    # Fallback: if DB has no instruments, return known symbol lists
+    if not infos:
+        from app.services.market_data_service import MarketDataService
+        all_known = MarketDataService.NSE_TOP100
+        page = all_known[offset:offset + limit]
+        for sym in page:
+            infos.append(
+                InstrumentInfo(
+                    symbol=sym,
+                    displayName=sym,
+                    exchange="NSE",
+                    yfinanceTicker=f"{sym}.NS",
+                )
+            )
+
     return UniverseResponse(instruments=infos, limit=limit, offset=offset)
 
 
@@ -478,11 +563,23 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
     result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
     instruments = result.scalars().all()
     if not instruments:
-        return {
-            "status": "unavailable",
-            "message": "No global index instruments are configured in the canonical data platform yet.",
-            "indices": [],
-        }
+        # Fallback: fetch indices from yfinance
+        import asyncio
+        from app.services.market_data_service import MarketDataService
+        context = []
+        for yf_sym, name in MarketDataService.NSE_INDICES[:6]:
+            try:
+                q = await MarketDataService.get_quote(yf_sym)
+                if q and q.get("price", 0) > 0:
+                    context.append({
+                        "ticker": yf_sym, "name": name,
+                        "value": float(q["price"]),
+                        "change_pct": float(q.get("change_pct", 0)),
+                        "as_of": q.get("timestamp", datetime.now(UTC).isoformat()),
+                    })
+            except Exception:
+                pass
+        return {"status": "ok" if context else "unavailable", "indices": context}
 
     context = []
     for inst in instruments:
