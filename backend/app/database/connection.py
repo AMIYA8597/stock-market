@@ -60,7 +60,8 @@ def _get_engine_kwargs() -> dict:
             # fails with CERTIFICATE_VERIFY_FAILED against it.
             connect_args["ssl"] = "require"
 
-        if settings.DB_POOL_MODE == "transaction":
+        is_supabase_pooler = "pooler.supabase.com" in settings.DATABASE_URL or ":6543" in settings.DATABASE_URL
+        if settings.DB_POOL_MODE == "transaction" or is_supabase_pooler:
             connect_args["statement_cache_size"] = 0
             connect_args["prepared_statement_cache_size"] = 0
             kwargs["poolclass"] = NullPool
