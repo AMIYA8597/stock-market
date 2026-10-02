@@ -28,6 +28,52 @@ from app.tasks.backtest_tasks import run_backtest_job_task
 
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
+
+@router.get("/strategies")
+async def get_backtest_strategies():
+    """List available backtest strategies with descriptions and parameters."""
+    return {
+        "strategies": [
+            {
+                "name": "momentum",
+                "display_name": "Momentum Strategy",
+                "description": "Buy stocks with strong recent price momentum (21-day returns), sell when momentum fades.",
+                "params": {"lookback_days": 21, "top_n": 10, "rebalance_days": 5},
+            },
+            {
+                "name": "mean_reversion",
+                "display_name": "Mean Reversion Strategy",
+                "description": "Buy oversold stocks (RSI < 30), sell overbought stocks (RSI > 70).",
+                "params": {"rsi_period": 14, "oversold": 30, "overbought": 70},
+            },
+            {
+                "name": "trend_following",
+                "display_name": "Trend Following (SMA Crossover)",
+                "description": "Long when short SMA crosses above long SMA, exit on reverse crossover.",
+                "params": {"short_window": 20, "long_window": 50},
+            },
+            {
+                "name": "breakout",
+                "display_name": "Donchian Breakout",
+                "description": "Enter on N-day high breakout, exit on N/2-day low breakdown.",
+                "params": {"entry_period": 20, "exit_period": 10},
+            },
+            {
+                "name": "ensemble_signal",
+                "display_name": "ML Ensemble Signal",
+                "description": "Trade based on the NeuroQuant 7-layer ML ensemble signal direction and confidence.",
+                "params": {"min_confidence": 0.65, "regime_filter": True},
+            },
+            {
+                "name": "pairs_trading",
+                "display_name": "Statistical Pairs Trading",
+                "description": "Trade mean-reverting pairs based on cointegration and z-score deviation.",
+                "params": {"lookback_days": 60, "entry_z": 2.0, "exit_z": 0.5},
+            },
+        ],
+    }
+
+
 @router.post("/run", response_model=BacktestRunResponse, status_code=202)
 async def post_backtest_run(
     request: BacktestRequest,
