@@ -4,7 +4,7 @@ import { Link } from "@/i18n/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { contractsApi, type ExplainShapResponse } from "@/lib/contracts-api";
 
-const symbols = [] as string[];
+const symbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "SBIN", "BHARTIARTL", "KOTAKBANK", "LT"];
 
 export default function ExplainabilityIndexPage(): JSX.Element {
   const [loading, setLoading] = useState<boolean>(true);

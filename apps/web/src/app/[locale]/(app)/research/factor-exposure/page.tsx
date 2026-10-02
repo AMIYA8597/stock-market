@@ -12,7 +12,7 @@ function pct(value: number | undefined): string {
 }
 
 export default function FactorExposurePage(): JSX.Element {
-  const [symbol, setSymbol] = useState<string>("");
+  const [symbol, setSymbol] = useState<string>("RELIANCE");
   const [windowDays, setWindowDays] = useState<number>(126);
   const [data, setData] = useState<FactorExposureResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
