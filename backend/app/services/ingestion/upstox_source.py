@@ -145,7 +145,9 @@ class UpstoxSource(MarketDataProvider):
                 "/v3/market-quote/ohlc",
                 params={"instrument_key": instrument_key, "interval": "1d"},
             )
-            data = payload.get("data", {})
+            if not payload or not isinstance(payload, dict):
+                raise DataUnavailableError(f"Empty Upstox response for {symbol}")
+            data = payload.get("data") or {}
             entry = data.get(instrument_key) or next(iter(data.values()), None)
             if not entry:
                 raise DataUnavailableError(f"No OHLC entry for {symbol} in Upstox response")
