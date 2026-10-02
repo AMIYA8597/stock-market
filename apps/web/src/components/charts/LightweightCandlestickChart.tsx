@@ -837,7 +837,7 @@ export function LightweightCandlestickChart({
         "oi-price": "Requires real exchange OI data feed — cannot be manufactured from OHLCV",
         "put-call-ratio": "Requires real options chain data — cannot be estimated from price alone",
       };
-      mainChart.applyOptions({
+      (mainChart as any).applyOptions({
         watermark: {
           visible: true,
           text: `${chartStyle.replace(/-/g, " ").toUpperCase()} — UNAVAILABLE\n${oiReasons[chartStyle] ?? "Data source not connected"}`,
@@ -937,7 +937,7 @@ export function LightweightCandlestickChart({
       mainSeries.setData(sanitizeSeriesData(bars.map((bar) => ({
         time: toUtcTimestamp(bar.timestamp), open: bar.open, high: bar.high, low: bar.low, close: bar.close,
       }))));
-      mainChart.applyOptions({
+      (mainChart as any).applyOptions({
         watermark: {
           visible: true,
           text: `${chartStyle.replace(/-/g, " ").toUpperCase()} — UNAVAILABLE\n${unavailableReasons[chartStyle] ?? "Data source not connected"}`,
