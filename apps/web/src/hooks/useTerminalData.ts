@@ -100,6 +100,12 @@ export const useTerminalData = (): TerminalDataState => {
 
       const targetSymbol = symbolsToLoad.includes(selectedSymbol) ? selectedSymbol : (symbolsToLoad[0] ?? "");
 
+      symbolsRef.current = symbolsToLoad;
+      setSymbols(symbolsToLoad);
+      initializedRef.current = true;
+      setLoading(false);
+      setRefreshing(false);
+
       const [bulkResult, singleResult] = await Promise.allSettled([
         intelligenceApi.getBulkSignals(symbolsToLoad),
         intelligenceApi.getSignal(targetSymbol),
@@ -112,19 +118,8 @@ export const useTerminalData = (): TerminalDataState => {
         console.warn("Failed to fetch selected signal (model likely not trained yet):", singleResult.reason);
       }
 
-      symbolsRef.current = symbolsToLoad;
-      setSymbols(symbolsToLoad);
       setWatchlistSignals(bulk);
       setSelectedSignal(single);
-      initializedRef.current = true;
-
-      // Only surface a hard error when we got nothing at all back.
-      if (bulk.length === 0 && single === null) {
-        setError("Live signal feed is unavailable. Check the backend market and signal services.");
-      }
-
-      setLoading(false);
-      setRefreshing(false);
     },
     [loadSymbols, selectedSymbol]
   );

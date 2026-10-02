@@ -380,13 +380,13 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
                     if channel == "prices":
                         for symbol in symbols:
                             await manager.subscribe(websocket, f"prices:{symbol}")
-                    elif channel == "signals":
+                    if channel in ("signals", ""):
                         subscribed_symbols.update(symbols)
                 elif action == "unsubscribe":
                     if channel == "prices":
                         for symbol in symbols:
                             await manager.unsubscribe(websocket, f"prices:{symbol}")
-                    elif channel == "signals":
+                    if channel in ("signals", ""):
                         subscribed_symbols.difference_update(symbols)
             except TimeoutError:
                 pass
