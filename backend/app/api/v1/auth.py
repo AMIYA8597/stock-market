@@ -104,6 +104,42 @@ def _otp_error(reason: str | None) -> HTTPException:
     return HTTPException(status_code=status_code, detail=OTP_ERROR_MESSAGES.get(reason or "invalid", "Invalid code"))
 
 
+async def _supabase_delete_user(auth_id: str) -> None:
+    """Best-effort: delete a Supabase auth user by UUID. Silently ignores all errors."""
+    async with httpx.AsyncClient() as client:
+        try:
+            await client.delete(
+                f"{settings.SUPABASE_URL}/auth/v1/admin/users/{auth_id}",
+                headers={
+                    "apikey": settings.SUPABASE_SECRET_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
+                },
+            )
+        except Exception:
+            pass
+
+
+async def _supabase_find_auth_id_by_email(email: str) -> str | None:
+    """Look up a Supabase auth user UUID by email via the admin API. Returns None on any failure."""
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                f"{settings.SUPABASE_URL}/auth/v1/admin/users",
+                params={"filter": email, "page": 1, "per_page": 50},
+                headers={
+                    "apikey": settings.SUPABASE_SECRET_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
+                },
+            )
+            if resp.status_code == 200:
+                for u in (resp.json().get("users") or []):
+                    if (u.get("email") or "").lower() == email:
+                        return u.get("id")
+        except Exception:
+            pass
+    return None
+
+
 def _password_policy_error(exc: PasswordPolicyError) -> HTTPException:
     return HTTPException(
         status_code=400,
@@ -173,6 +209,13 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             await db.rollback()
             raise HTTPException(status_code=409, detail="Email already registered") from exc
     else:
+        # Before creating a new Supabase auth user, clean up any orphaned one
+        # (a previous signup where local DB commit or OTP email failed, leaving
+        # a Supabase auth record with no matching local row).
+        orphan_auth_id = await _supabase_find_auth_id_by_email(email)
+        if orphan_auth_id:
+            await _supabase_delete_user(orphan_auth_id)
+
         async with httpx.AsyncClient() as client:
             try:
                 resp = await client.post(
@@ -202,6 +245,8 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             identities = user_obj.get("identities")
 
             if not auth_id:
+                # Supabase still returned user:null despite orphan cleanup — the
+                # account is genuinely confirmed and in active use.
                 raise HTTPException(
                     status_code=409,
                     detail="An account with this email already exists. Try signing in, or use Forgot Password.",
@@ -225,11 +270,12 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                 await db.commit()
             except Exception:
                 await db.rollback()
-                result = await db.execute(select(User).where(User.auth_id == auth_id))
-                existing_user = result.scalars().first()
-                if not existing_user:
-                    raise HTTPException(status_code=409, detail="Email already registered") from None
-                user = existing_user
+                # Local insert failed — roll back Supabase too so no orphan is created.
+                await _supabase_delete_user(auth_id)
+                raise HTTPException(
+                    status_code=500,
+                    detail="Registration failed due to a server error. Please try again.",
+                ) from None
 
     await ensure_personal_organization(db, user)
 
@@ -237,11 +283,19 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
     try:
         await send_otp_email(email, code, "signup")
     except EmailDeliveryError as exc:
-        # The account already exists at this point (locally, and in
-        # Supabase for production) - it is recoverable via /auth/resend-otp,
-        # not stuck, so this is a 503 on the *email step*, not a failed
-        # registration.
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # OTP email send failed — roll back the local user row and the Supabase auth
+        # user so the person can retry registration cleanly once email is working.
+        try:
+            await db.delete(user)
+            await db.commit()
+        except Exception:
+            await db.rollback()
+        if not is_test_mode():
+            await _supabase_delete_user(user.auth_id)
+        raise HTTPException(
+            status_code=503,
+            detail="Could not send verification email. Please try again later.",
+        ) from exc
 
     return {"email": email, "message": "Verification code sent to your email."}
 
