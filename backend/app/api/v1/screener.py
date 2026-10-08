@@ -149,6 +149,7 @@ async def post_screener_run(
         # Fallback: if DB has no instruments, screen Nifty 50+Next50 via yfinance
         if not results:
             import asyncio
+
             from app.services.market_data_service import MarketDataService
 
             async def _screen_symbol(sym: str):

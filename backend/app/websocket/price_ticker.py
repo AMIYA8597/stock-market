@@ -21,9 +21,10 @@ logger = logging.getLogger(__name__)
 
 import time
 
+
 def is_market_hours() -> bool:
     """Check if Indian stock market is open (9:15 AM - 3:30 PM IST, Mon-Fri)."""
-    from datetime import datetime, timezone, timedelta
+    from datetime import datetime, timedelta, timezone
     IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST)
     if now.weekday() >= 5:

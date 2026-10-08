@@ -13,9 +13,17 @@ import yfinance as yf
 from app.core.logging import get_logger
 from app.services.stock_universe import (
     ALL_STOCKS as _ALL_STOCKS,
+)
+from app.services.stock_universe import (
     INDICES as _INDICES,
+)
+from app.services.stock_universe import (
     NIFTY_50 as _NIFTY_50,
+)
+from app.services.stock_universe import (
     NIFTY_NEXT50 as _NIFTY_NEXT50,
+)
+from app.services.stock_universe import (
     TOP100 as _TOP100,
 )
 

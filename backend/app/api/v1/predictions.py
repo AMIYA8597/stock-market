@@ -233,7 +233,7 @@ async def model_inventory():
         },
     }
 
-    for key, model in models.items():
+    for _key, model in models.items():
         pattern = model.get("artifact_pattern")
         if pattern:
             found = list(MODEL_DIR.glob(pattern)) + list(ARTIFACT_DIR.glob(pattern))
