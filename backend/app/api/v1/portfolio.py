@@ -9,7 +9,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db
-from app.core.entitlements import require_feature
 from app.core.numeric import safe_round
 from app.schemas.errors import ErrorCode, ErrorResponse
 from app.schemas.portfolio import (
@@ -271,7 +270,7 @@ async def get_performance(
                         pass
 
         cash = float(holdings_res.cash_balance)
-        bench_base = Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
+        _bench_base = Decimal(str(last_10[0][2])) if last_10 and last_10[0][2] else Decimal("100000")
 
         # Calculate daily values
         for i, (dt, date_str, bench_val) in enumerate(last_10):

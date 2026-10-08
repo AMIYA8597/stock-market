@@ -24,10 +24,10 @@ async def train_model(db: Any) -> None:  # noqa: ANN401
     Saves .pkl artifacts to the models/ directory.
     """
     try:
-        from app.services.prediction_engine import MODEL_DIR, build_ensemble_signal
-        from app.services.market_data_service import MarketDataService
-
         import pandas as pd
+
+        from app.services.market_data_service import MarketDataService
+        from app.services.prediction_engine import build_ensemble_signal
 
         symbols_to_train = MarketDataService.NSE_NIFTY50[:10]
         trained = 0
