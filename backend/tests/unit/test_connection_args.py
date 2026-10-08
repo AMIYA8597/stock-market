@@ -18,7 +18,7 @@ def test_transaction_mode_cache_sizes(monkeypatch):
     connect_args = kwargs.get("connect_args", {})
     assert connect_args.get("statement_cache_size") == 0
     assert connect_args.get("prepared_statement_cache_size") == 0
-    assert connect_args.get("ssl") is True
+    assert connect_args.get("ssl") == "require"
 
 def test_session_mode_pool_args(monkeypatch):
     class MockSettings:

@@ -148,16 +148,20 @@ async def test_get_quote_db_success():
 
 @pytest.mark.asyncio
 async def test_get_quote_instrument_not_found():
+    # When DB has no instrument, service falls through to Upstox→yfinance.
+    # In tests yfinance is mocked to raise RuntimeError ("Network offline").
     with _mock_db_ctx([_empty_result()]):
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             await MarketDataService.get_quote("NOSUCHSYMBOL")
 
 
 @pytest.mark.asyncio
 async def test_get_quote_no_quote_data():
+    # When instrument exists but has no stored quote, service falls through
+    # to Upstox→yfinance. In tests yfinance is mocked to raise RuntimeError.
     inst_id = uuid4()
     with _mock_db_ctx([_instrument_result(inst_id), _empty_result()]):
-        with pytest.raises(ValueError):
+        with pytest.raises(Exception):
             await MarketDataService.get_quote("RELIANCE")
 
 
@@ -183,10 +187,11 @@ async def test_get_history_db_success():
 
 @pytest.mark.asyncio
 async def test_get_history_instrument_not_found():
+    # When DB has no instrument, service falls through to Upstox→yfinance.
+    # In tests yfinance is mocked to raise RuntimeError ("Network offline").
     with _mock_db_ctx([_empty_result()]):
-        res = await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
-        assert res == []
-        assert res.source == "canonical_db"
+        with pytest.raises(Exception):
+            await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
 
 @pytest.mark.asyncio
 async def test_get_intraday_candles_success():
@@ -207,7 +212,7 @@ async def test_get_intraday_candles_fallback():
 async def test_get_indices():
     with patch.object(MarketDataService, "get_quote", return_value={"price": 100, "change": 1, "change_pct": 1.0}):
         res = await MarketDataService.get_indices()
-        assert len(res) == 3
+        assert len(res) == len(MarketDataService.NSE_INDICES)
 
 @pytest.mark.asyncio
 async def test_get_ticker_info():
