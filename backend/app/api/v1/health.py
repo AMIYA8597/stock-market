@@ -113,6 +113,7 @@ async def system_audit():
     upstox_aliases = 0
     try:
         from sqlalchemy import func, select
+
         from app.database.connection import async_session_factory
         from app.models.market import Instrument, InstrumentAlias
         async with async_session_factory() as db:

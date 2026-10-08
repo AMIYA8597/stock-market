@@ -8,12 +8,11 @@ import numpy as np
 import pandas as pd
 from celery import shared_task
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import insert
 
 from app.database.connection import async_session_factory
+from app.models.feature_vectors import FeatureVector
 from app.models.instrument import Instrument
 from app.models.ohlcv import OHLCV
-from app.models.feature_vectors import FeatureVector
 from app.models.sentiment import NewsSentiment
 from research.feature_engineering.pipeline import FeaturePipeline
 

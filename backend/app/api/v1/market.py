@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_rate_limiter
 from app.database.connection import get_db
-from app.models.market import OHLCV, Exchange, Instrument, InstrumentAlias, QuoteSnapshot
+from app.models.market import Exchange, Instrument, InstrumentAlias, QuoteSnapshot
 from app.models.regime_states import RegimeState
 from app.models.signal import EnsembleSignal
 from app.schemas.market import (
@@ -230,7 +230,6 @@ async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
 
     # Fallback: if DB has no indices, fetch from yfinance
     if not indices:
-        import asyncio
         from app.services.market_data_service import MarketDataService
         yf_indices = MarketDataService.NSE_INDICES
         for yf_sym, name in yf_indices:
@@ -311,6 +310,7 @@ async def get_movers(
     # Fallback: if DB has no movers, fetch all Nifty50 stocks from yfinance
     if not assets:
         import asyncio
+
         from app.services.market_data_service import MarketDataService
 
         async def _fetch_quote(sym: str):
@@ -324,7 +324,7 @@ async def get_movers(
         for batch_start in range(0, len(all_symbols), 10):
             batch = all_symbols[batch_start:batch_start + 10]
             results = await asyncio.gather(*[_fetch_quote(s) for s in batch], return_exceptions=True)
-            for sym, q in zip(batch, results):
+            for sym, q in zip(batch, results, strict=False):
                 if isinstance(q, dict) and q.get("price", 0) > 0:
                     assets.append(MoverData(
                         ticker=sym, name=q.get("name", sym), exchange=exchange,
@@ -393,6 +393,7 @@ async def get_heatmap(
     # Fallback: if DB has no instruments, build heatmap from Nifty50 yfinance data
     if not sectors:
         import asyncio
+
         from app.services.market_data_service import MarketDataService
 
         sector_map = {
@@ -559,7 +560,6 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
     instruments = result.scalars().all()
     if not instruments:
         # Fallback: fetch indices from yfinance
-        import asyncio
         from app.services.market_data_service import MarketDataService
         context = []
         for yf_sym, name in MarketDataService.NSE_INDICES[:6]:
@@ -574,7 +574,7 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
                     })
             except Exception:
                 pass
-        return {"status": "ok" if context else "unavailable", "indices": context}
+        return {"status": "ok" if context else "unavailable", "indices": context}  # honesty: allow
 
     context = []
     for inst in instruments:
@@ -655,7 +655,6 @@ async def get_patterns(symbol: str):
     if not hist or len(hist) < 20:
         return {"symbol": symbol, "patterns": [], "message": "Insufficient history for pattern detection"}
 
-    import pandas as pd
     closes = [float(h["close"]) for h in hist]
     opens = [float(h["open"]) for h in hist]
     highs = [float(h["high"]) for h in hist]
@@ -665,7 +664,7 @@ async def get_patterns(symbol: str):
     # Simple pattern detection
     n = len(closes)
     last = closes[-1]
-    prev = closes[-2] if n > 1 else last
+    _prev = closes[-2] if n > 1 else last
 
     # Doji
     if n > 1 and abs(opens[-1] - closes[-1]) < (highs[-1] - lows[-1]) * 0.1 and (highs[-1] - lows[-1]) > 0:
@@ -712,7 +711,7 @@ async def sync_upstox_instruments():
     try:
         from app.tasks.upstox_instrument_tasks import _sync_upstox_instruments_async
         result = await _sync_upstox_instruments_async(create_missing=True)
-        return {"status": "ok", **result}
+        return {"status": "ok", **result}  # honesty: allow
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Instrument sync failed: {e}")
 
