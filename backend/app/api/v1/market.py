@@ -92,6 +92,7 @@ async def get_quote(
     # Try DB first
     result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
     instrument = result.scalars().first()
+
     if instrument:
         result = await db.execute(
             select(QuoteSnapshot)
@@ -100,43 +101,56 @@ async def get_quote(
             .limit(1)
         )
         quote = result.scalars().first()
-        if quote and float(quote.price or 0) > 0:
+
+        if quote:
+            price_val = float(quote.price or 0.0)
+            change_pct = float(quote.change_pct or 0.0)
             return QuoteResponse(
                 ticker=symbol,
                 name=instrument.display_name or symbol,
-                price=Decimal(str(float(quote.price or 0.0))),
+                price=Decimal(str(price_val)),
                 change=Decimal(str(quote.change or 0.0)),
-                change_pct=Decimal(str(quote.change_pct or 0.0)),
+                change_pct=Decimal(str(change_pct)),
                 volume=Decimal(str(quote.volume or 0.0)),
-                market_cap=None, pe_ratio=None, week_52_high=None, week_52_low=None,
-                regime=None, signal=None,
+                market_cap=None,
+                pe_ratio=None,
+                week_52_high=None,
+                week_52_low=None,
+                regime=None,
+                signal=None,
                 timestamp=quote.observed_at,
                 data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
                 source="canonical_db",
             )
 
-    # Fallback to yfinance
+    # Fallback: DB has no data for this symbol — fetch live from yfinance
+    from app.services.market_data_service import MarketDataService
     try:
-        yf_quote = await MarketDataService._yfinance_quote(symbol)
-        if yf_quote and yf_quote.get("price", 0) > 0:
-            return QuoteResponse(
-                ticker=symbol,
-                name=yf_quote.get("name", symbol),
-                price=Decimal(str(yf_quote["price"])),
-                change=Decimal(str(yf_quote.get("change", 0.0))),
-                change_pct=Decimal(str(yf_quote.get("change_pct", 0.0))),
-                volume=Decimal(str(yf_quote.get("volume", 0))),
-                market_cap=None, pe_ratio=None, week_52_high=None, week_52_low=None,
-                regime=None, signal=None,
-                timestamp=datetime.now(UTC),
-                data_freshness_seconds=0,
-                source="yfinance",
-            )
-    except Exception as e:
-        logger.warning(f"yfinance quote fallback failed for {symbol}: {e}")
-
-    raise HTTPException(status_code=404, detail=f"No quotes available for {symbol}")
-
+        q = await MarketDataService.fetch_live_yfinance_quote(symbol)
+        if not q or q.get("price", 0) == 0:
+            raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}")
+        return QuoteResponse(
+            ticker=symbol,
+            name=q.get("name") or symbol,
+            price=Decimal(str(q.get("price", 0))),
+            change=Decimal(str(q.get("change", 0))),
+            change_pct=Decimal(str(q.get("change_pct", 0))),
+            volume=Decimal(str(q.get("volume", 0))),
+            market_cap=None,
+            pe_ratio=None,
+            week_52_high=None,
+            week_52_low=None,
+            regime=None,
+            signal=None,
+            timestamp=datetime.now(UTC),
+            data_freshness_seconds=0,
+            source="yfinance",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("yfinance fallback failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}") from exc
 
 _INTERVAL_DEFAULT_PERIOD = {
     "1m": "5d", "3m": "5d", "5m": "5d", "10m": "5d", "15m": "5d", "30m": "5d", "45m": "5d",
@@ -158,47 +172,60 @@ async def get_history(
 
     effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
 
-    # Try MarketDataService which has DB-first + yfinance fallback
-    try:
-        bars_raw = await MarketDataService.get_history(symbol, interval, effective_period)
-        source = getattr(bars_raw, 'source', 'yfinance')
-    except Exception as e:
-        logger.warning(f"MarketDataService.get_history failed for {symbol}: {e}")
-        bars_raw = []
-        source = "none"
+    result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+    instrument = result.scalars().first()
 
-    if not bars_raw:
-        raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
-
-    bars = []
-    for b in bars_raw:
-        ts = b.get("time") or b.get("timestamp", "")
-        if isinstance(ts, str):
-            try:
-                from dateutil.parser import parse as dt_parse
-                ts_int = int(dt_parse(ts).timestamp())
-            except Exception:
-                ts_int = 0
-        else:
-            ts_int = int(ts) if ts else 0
-        bars.append(
-            OHLCVBar(
-                time=ts_int,
-                open=float(b.get("open", 0.0)),
-                high=float(b.get("high", 0.0)),
-                low=float(b.get("low", 0.0)),
-                close=float(b.get("close", 0.0)),
-                volume=float(b.get("volume", 0.0)),
-            )
+    if instrument:
+        result = await db.execute(
+            select(OHLCV)
+            .where(
+                (OHLCV.instrument_id == instrument.id) &
+                (OHLCV.interval == interval) &
+                (OHLCV.timestamp >= start_time)            )
+            .order_by(OHLCV.timestamp.asc())
         )
+        bars_data = result.scalars().all()
 
-    return HistoryResponse(
-        symbol=symbol.upper(),
-        interval=interval,
-        bars=bars,
-        source=source,
-    )
+        if bars_data:
+            bars = [
+                OHLCVBar(
+                    time=int(b.timestamp.timestamp()),
+                    open=float(b.open or 0.0),
+                    high=float(b.high or 0.0),
+                    low=float(b.low or 0.0),
+                    close=float(b.close or 0.0),
+                    volume=float(b.volume or 0.0),
+                )
+                for b in bars_data
+            ]
+            return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
 
+    # Fallback: DB has no data — fetch from yfinance
+    from app.services.market_data_service import MarketDataService
+    try:
+        norm = MarketDataService._normalize_symbol(symbol)
+        raw = await MarketDataService.get_ohlcv(norm, effective_period, interval)
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}")
+        bars = [
+            OHLCVBar(
+                time=int(r["time"]) if isinstance(r["time"], (int, float)) else int(
+                    datetime.fromisoformat(str(r["time"]).replace("Z", "+00:00")).timestamp()
+                ),
+                open=float(r.get("open", 0)),
+                high=float(r.get("high", 0)),
+                low=float(r.get("low", 0)),
+                close=float(r.get("close", 0)),
+                volume=float(r.get("volume", 0)),
+            )
+            for r in raw
+        ]
+        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="yfinance")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("yfinance history fallback failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}") from exc
 
 @router.get("/indices", response_model=IndicesResponse)
 async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
@@ -467,12 +494,16 @@ async def search_symbols(
             )
         )
 
-    # Fallback: if DB has no instruments, search against full 1000+ symbol universe
+    # Fallback: search the static universe list when DB is empty
     if not results:
-        from app.services.stock_universe import search_symbols as search_universe
-        for sym in search_universe(q.strip(), limit=20):
-            results.append(SearchResult(ticker=sym, name=sym, exchange="NSE", asset_type="EQUITY"))
-
+        q_upper = q.strip().upper()
+        for sym, name in _NSE_STATIC_UNIVERSE:
+            if q_upper in sym or q_upper in name.upper():
+                results.append(
+                    SearchResult(ticker=sym, name=name, exchange="NSE", asset_type="EQUITY")
+                )
+                if len(results) >= 20:
+                    break
     return SearchResponse(query=q, results=results, total_matched=len(results))
 
 
@@ -484,6 +515,27 @@ async def get_economic_calendar() -> EconomicCalendarResponse:
     now = datetime.now(UTC)
     return EconomicCalendarResponse(events=[], period_start=now, period_end=now + timedelta(days=7))
 
+
+_NSE_STATIC_UNIVERSE = [
+    ("RELIANCE", "Reliance Industries"), ("TCS", "Tata Consultancy Services"),
+    ("HDFCBANK", "HDFC Bank"), ("INFY", "Infosys"), ("ICICIBANK", "ICICI Bank"),
+    ("HINDUNILVR", "Hindustan Unilever"), ("SBIN", "State Bank of India"),
+    ("BHARTIARTL", "Bharti Airtel"), ("ITC", "ITC Limited"), ("KOTAKBANK", "Kotak Mahindra Bank"),
+    ("LT", "Larsen & Toubro"), ("AXISBANK", "Axis Bank"), ("ASIANPAINT", "Asian Paints"),
+    ("MARUTI", "Maruti Suzuki"), ("WIPRO", "Wipro"), ("HCLTECH", "HCL Technologies"),
+    ("ULTRACEMCO", "UltraTech Cement"), ("NESTLEIND", "Nestle India"), ("BAJFINANCE", "Bajaj Finance"),
+    ("TITAN", "Titan Company"), ("SUNPHARMA", "Sun Pharmaceutical"), ("TECHM", "Tech Mahindra"),
+    ("POWERGRID", "Power Grid Corporation"), ("NTPC", "NTPC Limited"), ("ONGC", "ONGC"),
+    ("ADANIPORTS", "Adani Ports"), ("COALINDIA", "Coal India"), ("DIVISLAB", "Divi's Laboratories"),
+    ("DRREDDY", "Dr. Reddy's Laboratories"), ("CIPLA", "Cipla"), ("EICHERMOT", "Eicher Motors"),
+    ("GRASIM", "Grasim Industries"), ("HEROMOTOCO", "Hero MotoCorp"), ("HINDALCO", "Hindalco"),
+    ("INDUSINDBK", "IndusInd Bank"), ("JSWSTEEL", "JSW Steel"), ("M&M", "Mahindra & Mahindra"),
+    ("TATAMOTORS", "Tata Motors"), ("TATASTEEL", "Tata Steel"), ("BAJAJFINSV", "Bajaj Finserv"),
+    ("BPCL", "Bharat Petroleum"), ("BRITANNIA", "Britannia Industries"), ("HDFCLIFE", "HDFC Life"),
+    ("SBILIFE", "SBI Life Insurance"), ("TATACONSUM", "Tata Consumer Products"),
+    ("UPL", "UPL Limited"), ("VEDL", "Vedanta"), ("APOLLOHOSP", "Apollo Hospitals"),
+    ("ADANIENT", "Adani Enterprises"), ("BAJAJ-AUTO", "Bajaj Auto"),
+]
 
 @router.get("/universe", response_model=UniverseResponse)
 async def get_market_universe(
@@ -519,21 +571,18 @@ async def get_market_universe(
             )
         )
 
-    # Fallback: if DB has no instruments, return known symbol lists
+    # Fallback: if DB has no instruments, return the well-known NSE universe
     if not infos:
-        from app.services.market_data_service import MarketDataService
-        all_known = MarketDataService.NSE_ALL_STOCKS
-        page = all_known[offset:offset + limit]
-        for sym in page:
-            infos.append(
-                InstrumentInfo(
-                    symbol=sym,
-                    displayName=sym,
-                    exchange="NSE",
-                    yfinanceTicker=f"{sym}.NS",
-                )
+        static = _NSE_STATIC_UNIVERSE[offset : offset + limit]
+        infos = [
+            InstrumentInfo(
+                symbol=sym,
+                displayName=name,
+                exchange="NSE",
+                yfinanceTicker=f"{sym}.NS",
             )
-
+            for sym, name in static
+        ]
     return UniverseResponse(instruments=infos, limit=limit, offset=offset)
 
 
