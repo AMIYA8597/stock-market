@@ -149,7 +149,7 @@ async def test_get_quote_db_success():
 @pytest.mark.asyncio
 async def test_get_quote_instrument_not_found():
     with _mock_db_ctx([_empty_result()]):
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             await MarketDataService.get_quote("NOSUCHSYMBOL")
 
 
@@ -157,7 +157,7 @@ async def test_get_quote_instrument_not_found():
 async def test_get_quote_no_quote_data():
     inst_id = uuid4()
     with _mock_db_ctx([_instrument_result(inst_id), _empty_result()]):
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             await MarketDataService.get_quote("RELIANCE")
 
 
@@ -184,9 +184,8 @@ async def test_get_history_db_success():
 @pytest.mark.asyncio
 async def test_get_history_instrument_not_found():
     with _mock_db_ctx([_empty_result()]):
-        res = await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
-        assert res == []
-        assert res.source == "canonical_db"
+        with pytest.raises(RuntimeError):
+            await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
 
 @pytest.mark.asyncio
 async def test_get_intraday_candles_success():
