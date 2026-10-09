@@ -89,40 +89,65 @@ async def get_quote(
 
     result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
     instrument = result.scalars().first()
-    if not instrument:
-        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
 
-    result = await db.execute(
-        select(QuoteSnapshot)
-        .where(QuoteSnapshot.instrument_id == instrument.id)
-        .order_by(QuoteSnapshot.observed_at.desc())
-        .limit(1)
-    )
-    quote = result.scalars().first()
+    if instrument:
+        result = await db.execute(
+            select(QuoteSnapshot)
+            .where(QuoteSnapshot.instrument_id == instrument.id)
+            .order_by(QuoteSnapshot.observed_at.desc())
+            .limit(1)
+        )
+        quote = result.scalars().first()
 
-    if not quote:
-        raise HTTPException(status_code=404, detail=f"No quotes available for {symbol}")
+        if quote:
+            price_val = float(quote.price or 0.0)
+            change_pct = float(quote.change_pct or 0.0)
+            return QuoteResponse(
+                ticker=symbol,
+                name=instrument.display_name or symbol,
+                price=Decimal(str(price_val)),
+                change=Decimal(str(quote.change or 0.0)),
+                change_pct=Decimal(str(change_pct)),
+                volume=Decimal(str(quote.volume or 0.0)),
+                market_cap=None,
+                pe_ratio=None,
+                week_52_high=None,
+                week_52_low=None,
+                regime=None,
+                signal=None,
+                timestamp=quote.observed_at,
+                data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
+                source="canonical_db",
+            )
 
-    price_val = float(quote.price or 0.0)
-    change_pct = float(quote.change_pct or 0.0)
-
-    return QuoteResponse(
-        ticker=symbol,
-        name=instrument.display_name or symbol,
-        price=Decimal(str(price_val)),
-        change=Decimal(str(quote.change or 0.0)),
-        change_pct=Decimal(str(change_pct)),
-        volume=Decimal(str(quote.volume or 0.0)),
-        market_cap=None,
-        pe_ratio=None,
-        week_52_high=None,
-        week_52_low=None,
-        regime=None,
-        signal=None,
-        timestamp=quote.observed_at,
-        data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
-        source="canonical_db",
-    )
+    # Fallback: DB has no data for this symbol — fetch live from yfinance
+    from app.services.market_data_service import MarketDataService
+    try:
+        q = await MarketDataService.fetch_live_yfinance_quote(symbol)
+        if not q or q.get("price", 0) == 0:
+            raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}")
+        return QuoteResponse(
+            ticker=symbol,
+            name=q.get("name") or symbol,
+            price=Decimal(str(q.get("price", 0))),
+            change=Decimal(str(q.get("change", 0))),
+            change_pct=Decimal(str(q.get("change_pct", 0))),
+            volume=Decimal(str(q.get("volume", 0))),
+            market_cap=None,
+            pe_ratio=None,
+            week_52_high=None,
+            week_52_low=None,
+            regime=None,
+            signal=None,
+            timestamp=datetime.now(UTC),
+            data_freshness_seconds=0,
+            source="yfinance",
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("yfinance fallback failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}") from exc
 
 
 _INTERVAL_DEFAULT_PERIOD = {
@@ -148,42 +173,59 @@ async def get_history(
 
     result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
     instrument = result.scalars().first()
-    if not instrument:
-        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
 
-    result = await db.execute(
-        select(OHLCV)
-        .where(
-            (OHLCV.instrument_id == instrument.id) &
-            (OHLCV.interval == interval) &
-            (OHLCV.timestamp >= start_time)
-        )
-        .order_by(OHLCV.timestamp.asc())
-    )
-    bars_data = result.scalars().all()
-
-    if not bars_data:
-        raise HTTPException(status_code=404, detail=f"No historical data for {symbol}")
-
-    bars = []
-    for b in bars_data:
-        bars.append(
-            OHLCVBar(
-                time=int(b.timestamp.timestamp()),
-                open=float(b.open or 0.0),
-                high=float(b.high or 0.0),
-                low=float(b.low or 0.0),
-                close=float(b.close or 0.0),
-                volume=float(b.volume or 0.0)
+    if instrument:
+        result = await db.execute(
+            select(OHLCV)
+            .where(
+                (OHLCV.instrument_id == instrument.id) &
+                (OHLCV.interval == interval) &
+                (OHLCV.timestamp >= start_time)
             )
+            .order_by(OHLCV.timestamp.asc())
         )
+        bars_data = result.scalars().all()
 
-    return HistoryResponse(
-        symbol=symbol.upper(),
-        interval=interval,
-        bars=bars,
-        source="canonical_db",
-    )
+        if bars_data:
+            bars = [
+                OHLCVBar(
+                    time=int(b.timestamp.timestamp()),
+                    open=float(b.open or 0.0),
+                    high=float(b.high or 0.0),
+                    low=float(b.low or 0.0),
+                    close=float(b.close or 0.0),
+                    volume=float(b.volume or 0.0),
+                )
+                for b in bars_data
+            ]
+            return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
+
+    # Fallback: DB has no data — fetch from yfinance
+    from app.services.market_data_service import MarketDataService
+    try:
+        norm = MarketDataService._normalize_symbol(symbol)
+        raw = await MarketDataService.get_ohlcv(norm, effective_period, interval)
+        if not raw:
+            raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}")
+        bars = [
+            OHLCVBar(
+                time=int(r["time"]) if isinstance(r["time"], (int, float)) else int(
+                    datetime.fromisoformat(str(r["time"]).replace("Z", "+00:00")).timestamp()
+                ),
+                open=float(r.get("open", 0)),
+                high=float(r.get("high", 0)),
+                low=float(r.get("low", 0)),
+                close=float(r.get("close", 0)),
+                volume=float(r.get("volume", 0)),
+            )
+            for r in raw
+        ]
+        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="yfinance")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("yfinance history fallback failed for %s: %s", symbol, exc)
+        raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}") from exc
 
 
 @router.get("/indices", response_model=IndicesResponse)
