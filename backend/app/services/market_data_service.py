@@ -416,6 +416,49 @@ class MarketDataService:
             return HistoryList(bars, source="yfinance")
 
     @staticmethod
+    async def fetch_live_yfinance_quote(symbol: str) -> dict:
+        """Fetch a live quote directly from yfinance (no DB involved)."""
+        sym = MarketDataService._normalize_symbol(symbol)
+        await MarketDataService._throttle_yfinance(sym)
+        session = MarketDataService.get_session()
+        loop = asyncio.get_event_loop()
+
+        def _sync_fetch():
+            ticker = yf.Ticker(sym, session=session)
+            info = ticker.info or {}
+            fast = ticker.fast_info or {}
+            price = (
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or getattr(fast, "last_price", None)
+                or 0.0
+            )
+            prev_close = (
+                info.get("previousClose")
+                or info.get("regularMarketPreviousClose")
+                or getattr(fast, "previous_close", None)
+                or price
+            )
+            change = float(price) - float(prev_close) if prev_close else 0.0
+            change_pct = (change / float(prev_close) * 100.0) if prev_close else 0.0
+            volume = (
+                info.get("volume")
+                or info.get("regularMarketVolume")
+                or getattr(fast, "three_month_average_volume", None)
+                or 0
+            )
+            return {
+                "price": float(price),
+                "change": round(change, 4),
+                "change_pct": round(change_pct, 4),
+                "volume": int(volume or 0),
+                "name": info.get("shortName") or info.get("longName") or sym,
+                "source": "yfinance",
+            }
+
+        return await loop.run_in_executor(None, _sync_fetch)
+
+    @staticmethod
     async def get_history(symbol: str, interval: str, period: str) -> list[dict]:
         """Fetch historical bars — tries canonical DB first, falls back to yfinance."""
         from datetime import UTC, datetime, timedelta
