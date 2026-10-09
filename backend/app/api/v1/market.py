@@ -389,6 +389,17 @@ async def search_symbols(
             )
         )
 
+    # Fallback: search the static universe list when DB is empty
+    if not results:
+        q_upper = q.strip().upper()
+        for sym, name in _NSE_STATIC_UNIVERSE:
+            if q_upper in sym or q_upper in name.upper():
+                results.append(
+                    SearchResult(ticker=sym, name=name, exchange="NSE", asset_type="EQUITY")
+                )
+                if len(results) >= 20:
+                    break
+
     return SearchResponse(query=q, results=results, total_matched=len(results))
 
 
@@ -400,6 +411,27 @@ async def get_economic_calendar() -> EconomicCalendarResponse:
     now = datetime.now(UTC)
     return EconomicCalendarResponse(events=[], period_start=now, period_end=now + timedelta(days=7))
 
+
+_NSE_STATIC_UNIVERSE = [
+    ("RELIANCE", "Reliance Industries"), ("TCS", "Tata Consultancy Services"),
+    ("HDFCBANK", "HDFC Bank"), ("INFY", "Infosys"), ("ICICIBANK", "ICICI Bank"),
+    ("HINDUNILVR", "Hindustan Unilever"), ("SBIN", "State Bank of India"),
+    ("BHARTIARTL", "Bharti Airtel"), ("ITC", "ITC Limited"), ("KOTAKBANK", "Kotak Mahindra Bank"),
+    ("LT", "Larsen & Toubro"), ("AXISBANK", "Axis Bank"), ("ASIANPAINT", "Asian Paints"),
+    ("MARUTI", "Maruti Suzuki"), ("WIPRO", "Wipro"), ("HCLTECH", "HCL Technologies"),
+    ("ULTRACEMCO", "UltraTech Cement"), ("NESTLEIND", "Nestle India"), ("BAJFINANCE", "Bajaj Finance"),
+    ("TITAN", "Titan Company"), ("SUNPHARMA", "Sun Pharmaceutical"), ("TECHM", "Tech Mahindra"),
+    ("POWERGRID", "Power Grid Corporation"), ("NTPC", "NTPC Limited"), ("ONGC", "ONGC"),
+    ("ADANIPORTS", "Adani Ports"), ("COALINDIA", "Coal India"), ("DIVISLAB", "Divi's Laboratories"),
+    ("DRREDDY", "Dr. Reddy's Laboratories"), ("CIPLA", "Cipla"), ("EICHERMOT", "Eicher Motors"),
+    ("GRASIM", "Grasim Industries"), ("HEROMOTOCO", "Hero MotoCorp"), ("HINDALCO", "Hindalco"),
+    ("INDUSINDBK", "IndusInd Bank"), ("JSWSTEEL", "JSW Steel"), ("M&M", "Mahindra & Mahindra"),
+    ("TATAMOTORS", "Tata Motors"), ("TATASTEEL", "Tata Steel"), ("BAJAJFINSV", "Bajaj Finserv"),
+    ("BPCL", "Bharat Petroleum"), ("BRITANNIA", "Britannia Industries"), ("HDFCLIFE", "HDFC Life"),
+    ("SBILIFE", "SBI Life Insurance"), ("TATACONSUM", "Tata Consumer Products"),
+    ("UPL", "UPL Limited"), ("VEDL", "Vedanta"), ("APOLLOHOSP", "Apollo Hospitals"),
+    ("ADANIENT", "Adani Enterprises"), ("BAJAJ-AUTO", "Bajaj Auto"),
+]
 
 @router.get("/universe", response_model=UniverseResponse)
 async def get_market_universe(
@@ -434,6 +466,19 @@ async def get_market_universe(
                 yfinanceTicker=alias.provider_symbol if alias else inst.canonical_symbol,
             )
         )
+
+    # Fallback: if DB has no instruments, return the well-known NSE universe
+    if not infos:
+        static = _NSE_STATIC_UNIVERSE[offset : offset + limit]
+        infos = [
+            InstrumentInfo(
+                symbol=sym,
+                displayName=name,
+                exchange="NSE",
+                yfinanceTicker=f"{sym}.NS",
+            )
+            for sym, name in static
+        ]
 
     return UniverseResponse(instruments=infos, limit=limit, offset=offset)
 
