@@ -98,6 +98,9 @@ class Settings(BaseSettings):
     SUPABASE_SECRET_KEY: str = Field(
         default="", description="Supabase service role secret key (use with caution)"
     )
+    SUPABASE_ANON_KEY: str = Field(
+        default="", description="Supabase anon/publishable key for public auth endpoints"
+    )
     # Note: local RSA JWT keys have been deprecated in favor of Supabase JWTs
     TOKEN_BLACKLIST_ENABLED: bool = Field(
         default=True, description="Enable JWT token blacklist on logout"
