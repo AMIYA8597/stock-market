@@ -44,9 +44,6 @@ jobs:
 
       - name: Build & Push Docker image via Cloud Build
         run: |
-          # Submit build asynchronously to avoid log-streaming permission issues.
-          # gcloud builds submit --tag only accepts one tag; we use :latest and
-          # also tag it with the SHA using a separate `gcloud` step after the build.
           BUILD_ID=$(gcloud builds submit backend/ \
             --tag ${{ env.IMAGE }}:latest \
             --project ${{ env.PROJECT_ID }} \
@@ -55,7 +52,6 @@ jobs:
             --format='value(id)')
           echo "Cloud Build ID: $BUILD_ID"
 
-          # Poll until the build completes (up to 15 minutes)
           for i in $(seq 1 60); do
             STATUS=$(gcloud builds describe "$BUILD_ID" \
               --project ${{ env.PROJECT_ID }} \
@@ -76,19 +72,78 @@ jobs:
             exit 1
           fi
 
+      - name: Run Migrations Against Production DB
+        # Run alembic upgrade head against Supabase before deploying new image
+        # Uses session-mode pooler (port 5432) which supports DDL/migrations
+        if: ${{ secrets.CLOUDRUN_MIGRATIONS_DATABASE_URL != '' }}
+        env:
+          MIGRATIONS_DATABASE_URL: ${{ secrets.CLOUDRUN_MIGRATIONS_DATABASE_URL }}
+          ENVIRONMENT: production
+        run: |
+          pip install uv --quiet
+          cd backend && uv sync --frozen --all-extras --quiet
+          echo "Running alembic upgrade head against production DB..."
+          uv run alembic upgrade head
+          echo "✅ Migrations complete"
+        continue-on-error: true  # Don't block deploy if migrations fail
+
+      - name: Write Cloud Run env vars file
+        # Pull each secret into a step-level env var, then write a YAML file
+        # using Python for reliable quoting of special characters.
+        # Using individual env vars (not CLOUDRUN_ENV_YAML) avoids YAML-in-bash
+        # quoting issues that caused the previous approach to fail silently.
+        env:
+          CR_DATABASE_URL: ${{ secrets.CLOUDRUN_DATABASE_URL }}
+          CR_SUPABASE_URL: ${{ secrets.CLOUDRUN_SUPABASE_URL }}
+          CR_SUPABASE_SECRET_KEY: ${{ secrets.CLOUDRUN_SUPABASE_SECRET_KEY }}
+          CR_SUPABASE_ANON_KEY: ${{ secrets.CLOUDRUN_SUPABASE_ANON_KEY }}
+          CR_RAZORPAY_KEY_ID: ${{ secrets.CLOUDRUN_RAZORPAY_KEY_ID }}
+          CR_RAZORPAY_KEY_SECRET: ${{ secrets.CLOUDRUN_RAZORPAY_KEY_SECRET }}
+        run: |
+          python3 - << 'PYEOF'
+          import os, sys
+
+          env_vars = {
+              "DATABASE_URL":        os.environ.get("CR_DATABASE_URL", ""),
+              "SUPABASE_URL":        os.environ.get("CR_SUPABASE_URL", ""),
+              "SUPABASE_SECRET_KEY": os.environ.get("CR_SUPABASE_SECRET_KEY", ""),
+              "SUPABASE_ANON_KEY":   os.environ.get("CR_SUPABASE_ANON_KEY", ""),
+              "RAZORPAY_KEY_ID":     os.environ.get("CR_RAZORPAY_KEY_ID", ""),
+              "RAZORPAY_KEY_SECRET": os.environ.get("CR_RAZORPAY_KEY_SECRET", ""),
+              "ENVIRONMENT":         "production",
+              "BACKEND_CORS_ORIGINS": "https://neuroquant-sm.vercel.app,http://localhost:3000",
+          }
+
+          # Check if any critical vars are missing
+          missing = [k for k, v in env_vars.items() if not v and k not in ("ENVIRONMENT", "BACKEND_CORS_ORIGINS")]
+          if missing:
+              print(f"⚠️  Missing secrets (will not set env vars): {missing}")
+              sys.exit(0)
+
+          # Write Cloud Run YAML env vars file
+          # Values are YAML-quoted with | (literal block) to handle any special chars
+          lines = []
+          for k, v in env_vars.items():
+              # Use double-quoted YAML string; escape any double quotes in value
+              safe_v = v.replace('\\', '\\\\').replace('"', '\\"')
+              lines.append(f'{k}: "{safe_v}"')
+
+          with open("/tmp/cloudrun-env.yaml", "w") as f:
+              f.write("\n".join(lines) + "\n")
+
+          print("✅ Wrote /tmp/cloudrun-env.yaml with keys:", list(env_vars.keys()))
+          PYEOF
+
       - name: Deploy to Cloud Run
         run: |
-          # Write env vars from GitHub Secret to a temp file, if provided.
-          # Secret CLOUDRUN_ENV_YAML should contain KEY: "VALUE" lines (Cloud Run YAML format).
-          # Example:
-          #   DATABASE_URL: "postgresql+asyncpg://user:pass@host/db"
-          #   SUPABASE_URL: "https://xxx.supabase.co"
-          #   ENVIRONMENT: "production"
           ENV_FILE_FLAG=""
-          if [ -n "${{ secrets.CLOUDRUN_ENV_YAML }}" ]; then
-            echo '${{ secrets.CLOUDRUN_ENV_YAML }}' > /tmp/cloudrun-env.yaml
+          if [ -f /tmp/cloudrun-env.yaml ]; then
             ENV_FILE_FLAG="--env-vars-file /tmp/cloudrun-env.yaml"
+            echo "📋 Using env vars file"
+          else
+            echo "⚠️  No env vars file — Cloud Run will use existing service config"
           fi
+
           gcloud run deploy ${{ env.SERVICE }} \
             --image ${{ env.IMAGE }}:latest \
             --project ${{ env.PROJECT_ID }} \
