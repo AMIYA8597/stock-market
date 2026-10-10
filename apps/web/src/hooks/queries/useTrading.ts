@@ -5,6 +5,7 @@ import { useTradingStore } from "@/stores/tradingStore";
 export const TRADING_QUERY_KEY = ["trading"] as const;
 export const TRADING_AUDIT_LOG_KEY = [...TRADING_QUERY_KEY, "audit-log"] as const;
 export const TRADING_MODE_KEY = [...TRADING_QUERY_KEY, "mode"] as const;
+export const BROKER_STATUS_KEY = [...TRADING_QUERY_KEY, "broker-status"] as const;
 
 export function useTradingModeQuery() {
   const setTradingModeStore = useTradingStore((state) => state.setTradingMode);
@@ -17,6 +18,18 @@ export function useTradingModeQuery() {
       setTradingModeStore(res.mode.toUpperCase() as "PAPER" | "LIVE");
       return res;
     },
+  });
+}
+
+// Real Upstox broker/WebSocket connection state, from the backend's Upstox
+// status endpoint (tradingApi.getUpstoxAuthStatus). The trading-mode endpoint
+// says nothing about the broker, so it must not drive a connection badge.
+export function useBrokerStatusQuery() {
+  return useQuery({
+    queryKey: BROKER_STATUS_KEY,
+    queryFn: () => tradingApi.getUpstoxAuthStatus(),
+    refetchInterval: 30 * 1000,
+    retry: 1,
   });
 }
 

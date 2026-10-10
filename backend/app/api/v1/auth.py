@@ -710,7 +710,11 @@ async def me(current_user: User | None = Depends(get_current_user_or_none)):
     }
 
 
-@router.get("/auth/upstox/login-url")
+# The router already has prefix="/auth"; the old "/auth/upstox/login-url" path
+# was served at /api/v1/auth/auth/upstox/login-url. That legacy path is kept
+# (hidden from the schema) so anything already pointing at it still works.
+@router.get("/upstox/login-url")
+@router.get("/auth/upstox/login-url", include_in_schema=False)
 async def upstox_login_url():
     try:
         from app.services.upstox_service import UpstoxService
@@ -720,8 +724,16 @@ async def upstox_login_url():
         return {"login_url": None, "error": str(e)}
 
 
-@router.get("/auth/upstox/status")
-async def upstox_auth_status():
+# The router already has prefix="/auth"; the old "/auth/upstox/status" path
+# was served at /api/v1/auth/auth/upstox/status. That legacy path is kept
+# (hidden from the schema) so anything already pointing at it still works.
+@router.get("/upstox/status")
+@router.get("/auth/upstox/status", include_in_schema=False)
+async def upstox_auth_status(current_user: User | None = Depends(get_current_user_or_none)):
+    # Requires a signed-in user: the response includes the connected Upstox
+    # account's profile, which must not be readable anonymously.
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
     from app.services.upstox_service import UpstoxService
     return {
         "authenticated": UpstoxService.ACCESS_TOKEN is not None,
@@ -730,7 +742,11 @@ async def upstox_auth_status():
     }
 
 
-@router.get("/auth/upstox/callback")
+# The router already has prefix="/auth"; the old "/auth/upstox/callback" path
+# was served at /api/v1/auth/auth/upstox/callback. That legacy path is kept
+# (hidden from the schema) so anything already pointing at it still works.
+@router.get("/upstox/callback")
+@router.get("/auth/upstox/callback", include_in_schema=False)
 async def upstox_callback(code: str | None = None, error: str | None = None):
     if error or not code:
         raise HTTPException(status_code=400, detail=error or "No authorization code received")

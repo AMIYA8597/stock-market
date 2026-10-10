@@ -427,13 +427,13 @@
         }
       }
     },
-    "/api/v1/auth/auth/upstox/login-url": {
+    "/api/v1/auth/upstox/login-url": {
       "get": {
         "tags": [
           "auth"
         ],
         "summary": "Upstox Login Url",
-        "operationId": "upstox_login_url_api_v1_auth_auth_upstox_login_url_get",
+        "operationId": "upstox_login_url_api_v1_auth_upstox_login_url_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -446,13 +446,13 @@
         }
       }
     },
-    "/api/v1/auth/auth/upstox/status": {
+    "/api/v1/auth/upstox/status": {
       "get": {
         "tags": [
           "auth"
         ],
         "summary": "Upstox Auth Status",
-        "operationId": "upstox_auth_status_api_v1_auth_auth_upstox_status_get",
+        "operationId": "upstox_auth_status_api_v1_auth_upstox_status_get",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -465,13 +465,13 @@
         }
       }
     },
-    "/api/v1/auth/auth/upstox/callback": {
+    "/api/v1/auth/upstox/callback": {
       "get": {
         "tags": [
           "auth"
         ],
         "summary": "Upstox Callback",
-        "operationId": "upstox_callback_api_v1_auth_auth_upstox_callback_get",
+        "operationId": "upstox_callback_api_v1_auth_upstox_callback_get",
         "parameters": [
           {
             "name": "code",
