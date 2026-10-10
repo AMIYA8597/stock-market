@@ -383,7 +383,40 @@ class MarketDataService:
         if upstox_result:
             return upstox_result
 
-        return await MarketDataService._yfinance_quote(symbol)
+        # Try yfinance (may fail on cloud IPs but worth trying)
+        try:
+            yf_result = await MarketDataService._yfinance_quote(symbol)
+            if yf_result and yf_result.get("price", 0) > 0:
+                return yf_result
+        except Exception as yf_err:
+            logger.debug(f"yfinance quote failed for {symbol}: {yf_err}")
+
+        # Final fallback: IndianStockAPI (free, no auth)
+        try:
+            from app.services.indian_stock_api import IndianStockAPI
+            india_result = await asyncio.to_thread(IndianStockAPI.fetch_quote, symbol)
+            if india_result and india_result.get("price", 0) > 0:
+                sym = MarketDataService._normalize_symbol(symbol)
+                return {
+                    "symbol": sym,
+                    "price": float(india_result["price"]),
+                    "open": float(india_result.get("open", india_result["price"])),
+                    "high": float(india_result.get("high", india_result["price"])),
+                    "low": float(india_result.get("low", india_result["price"])),
+                    "volume": int(india_result.get("volume", 0)),
+                    "previous_close": float(india_result.get("previous_close", india_result["price"])),
+                    "change": float(india_result.get("change", 0)),
+                    "change_pct": float(india_result.get("change_pct", 0)),
+                    "market_cap": 0.0,
+                    "week_52_high": float(india_result.get("high", india_result["price"])),
+                    "week_52_low": float(india_result.get("low", india_result["price"])),
+                    "source": "indian_stock_api",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+        except Exception as e:
+            logger.debug(f"IndianStockAPI fallback failed for {symbol}: {e}")
+
+        raise RuntimeError(f"All data sources failed for {symbol}: no quote available")
 
     @classmethod
     async def _yfinance_history(cls, symbol: str, interval: str, period: str) -> list[dict]:
