@@ -8,7 +8,8 @@ export function useSignalQuery(symbol: string) {
     queryKey: [...SIGNALS_QUERY_KEY, symbol],
     queryFn: () => signalsApi.getSignal(symbol),
     enabled: Boolean(symbol),
-    staleTime: 5 * 60 * 1000, // 5 minutes TTL (matches Redis)
+    staleTime: 5 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
+    retry: 1,
   });
 }
