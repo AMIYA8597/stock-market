@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_rate_limiter
 from app.database.connection import get_db
-from app.models.market import Exchange, Instrument, InstrumentAlias, QuoteSnapshot
+from app.models.market import OHLCV, Exchange, Instrument, InstrumentAlias, QuoteSnapshot
 from app.models.regime_states import RegimeState
 from app.models.signal import EnsembleSignal
 from app.schemas.market import (
@@ -30,6 +30,7 @@ from app.schemas.market import (
     SectorNode,
     UniverseResponse,
 )
+from app.services.market_data_service import MarketDataService
 from app.services.market_status import MarketStatusService
 
 _REGIME_LABELS = {0: "sideways", 1: "bull", 2: "bear", 3: "crisis"}
@@ -86,8 +87,6 @@ async def get_quote(
 ) -> QuoteResponse:
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
-
-    from app.services.market_data_service import MarketDataService
 
     # Try DB first
     result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
@@ -168,9 +167,10 @@ async def get_history(
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
 
-    from app.services.market_data_service import MarketDataService
-
     effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
+    # Derive start_time from effective_period for DB OHLCV query
+    _period_days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
+    start_time = datetime.now(UTC) - timedelta(days=_period_days.get(effective_period, 365))
 
     result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
     instrument = result.scalars().first()
@@ -181,7 +181,8 @@ async def get_history(
             .where(
                 (OHLCV.instrument_id == instrument.id) &
                 (OHLCV.interval == interval) &
-                (OHLCV.timestamp >= start_time)            )
+                (OHLCV.timestamp >= start_time)
+            )
             .order_by(OHLCV.timestamp.asc())
         )
         bars_data = result.scalars().all()
@@ -201,7 +202,6 @@ async def get_history(
             return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
 
     # Fallback: DB has no data — fetch from yfinance
-    from app.services.market_data_service import MarketDataService
     try:
         norm = MarketDataService._normalize_symbol(symbol)
         raw = await MarketDataService.get_ohlcv(norm, effective_period, interval)
