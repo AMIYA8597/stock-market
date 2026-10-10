@@ -9,7 +9,7 @@ import { systemApi } from "@/lib/api-client";
 import { useUIStore } from "@/stores/ui-store";
 import type { SignalResponse } from "@/types/intelligence";
 import { useTradingStore } from "@/stores/tradingStore";
-import { useTradingModeQuery, useTriggerKillSwitchMutation } from "@/hooks/queries/useTrading";
+import { useTradingModeQuery, useTriggerKillSwitchMutation, useBrokerStatusQuery } from "@/hooks/queries/useTrading";
 
 import { usePriceFeed } from "@/hooks/usePriceFeed";
 import { fetchApi } from "@/lib/api-client";
@@ -77,9 +77,12 @@ export default function TopBar({
   signalStreamStatus,
 }: TopBarProps): JSX.Element {
   const { tradingMode } = useTradingStore();
-  const { data: tradingData, refetch: fetchStatus } = useTradingModeQuery();
+  const { refetch: fetchStatus } = useTradingModeQuery();
+  const { data: brokerStatus } = useBrokerStatusQuery();
   const { mutateAsync: triggerKillSwitch } = useTriggerKillSwitchMutation();
-  const connectionStatus: string = tradingData ? "connected" : "disconnected";
+  // Only report what the backend's Upstox service actually says; anything
+  // unknown (request failed, not signed in) shows as disconnected.
+  const connectionStatus: string = brokerStatus?.connection_status ?? "disconnected";
   
   const { status: priceFeedStatus } = usePriceFeed(["^NSEI"]);
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
