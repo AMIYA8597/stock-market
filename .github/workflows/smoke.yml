@@ -1,0 +1,62 @@
+name: Post-deploy smoke
+
+# Runs automatically after the CI workflow completes on main (i.e., after a
+# successful Vercel + Cloud Run deploy), and can also be triggered manually
+# with an optional target URL override.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "Frontend URL to smoke-test (default: production)"
+        required: false
+        default: "https://neuroquant-sm.vercel.app"
+
+jobs:
+  smoke:
+    # Only run if the triggering CI workflow succeeded (or if manually dispatched)
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @neuroquant/web exec playwright install --with-deps chromium
+
+      - name: Run smoke tests
+        env:
+          SMOKE_TARGET_URL: ${{ github.event.inputs.target_url || 'https://neuroquant-sm.vercel.app' }}
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+          # Supabase credentials for the smoke test account's project
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_API_URL: ${{ secrets.SMOKE_API_URL }}
+          NEXT_PUBLIC_WS_URL: ${{ secrets.SMOKE_WS_URL }}
+          NEXT_PUBLIC_RAZORPAY_KEY_ID: ${{ secrets.NEXT_PUBLIC_RAZORPAY_KEY_ID }}
+        run: pnpm --filter @neuroquant/web exec playwright test e2e/smoke.spec.ts
+
+      - name: Upload smoke report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: apps/web/playwright-report/
+          retention-days: 7

@@ -2,6 +2,9 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
+  // smoke.spec.ts hits production; exclude it from the regular local/CI run.
+  // Run it explicitly: playwright test e2e/smoke.spec.ts
+  testIgnore: ['**/smoke.spec.ts'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
