@@ -78,11 +78,24 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
+          # Write env vars from GitHub Secret to a temp file, if provided.
+          # Secret CLOUDRUN_ENV_YAML should contain KEY: "VALUE" lines (Cloud Run YAML format).
+          # Example:
+          #   DATABASE_URL: "postgresql+asyncpg://user:pass@host/db"
+          #   SUPABASE_URL: "https://xxx.supabase.co"
+          #   ENVIRONMENT: "production"
+          ENV_FILE_FLAG=""
+          if [ -n "${{ secrets.CLOUDRUN_ENV_YAML }}" ]; then
+            echo '${{ secrets.CLOUDRUN_ENV_YAML }}' > /tmp/cloudrun-env.yaml
+            ENV_FILE_FLAG="--env-vars-file /tmp/cloudrun-env.yaml"
+          fi
           gcloud run deploy ${{ env.SERVICE }} \
             --image ${{ env.IMAGE }}:latest \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
+            --port 7860 \
+            $ENV_FILE_FLAG \
             --quiet
 
       - name: Print Service URL
