@@ -10,7 +10,10 @@ def _mock_require_feature(feature_key: str):
         return {"organization_id": uuid.UUID("3b79b787-f2a8-4a48-abf1-0268d6131a5b"), "sub": "3b79b787-f2a8-4a48-abf1-0268d6131a5b"}
     return _dependency
 
-with patch("app.api.v1.backtest.require_feature", _mock_require_feature):
+# create=True: POST /backtest/run deliberately has no entitlement gate
+# (removed in 06511cd), so the module may not import require_feature at all.
+# The patch stays as a guard in case a gate is ever reintroduced.
+with patch("app.api.v1.backtest.require_feature", _mock_require_feature, create=True):
     import app.api.v1.backtest as backtest_module
     from app.api.v1.backtest import router as backtest_router
     from app.core.dependencies import get_current_user, get_current_user_or_none, get_db
