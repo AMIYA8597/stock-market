@@ -44,11 +44,36 @@ jobs:
 
       - name: Build & Push Docker image via Cloud Build
         run: |
-          gcloud builds submit backend/ \
+          # Submit build asynchronously to avoid log-streaming permission issues
+          BUILD_ID=$(gcloud builds submit backend/ \
             --tag ${{ env.IMAGE }}:${{ github.sha }} \
             --tag ${{ env.IMAGE }}:latest \
             --project ${{ env.PROJECT_ID }} \
-            --quiet
+            --quiet \
+            --async \
+            --format='value(id)')
+          echo "Cloud Build ID: $BUILD_ID"
+
+          # Poll until the build completes (up to 15 minutes)
+          for i in $(seq 1 60); do
+            STATUS=$(gcloud builds describe "$BUILD_ID" \
+              --project ${{ env.PROJECT_ID }} \
+              --format='value(status)' 2>/dev/null || echo "UNKNOWN")
+            echo "Build status: $STATUS (poll $i/60)"
+            if [ "$STATUS" = "SUCCESS" ]; then
+              echo "✅ Build succeeded"
+              break
+            elif [ "$STATUS" = "FAILURE" ] || [ "$STATUS" = "CANCELLED" ] || [ "$STATUS" = "TIMEOUT" ]; then
+              echo "❌ Build failed with status: $STATUS"
+              exit 1
+            fi
+            sleep 15
+          done
+
+          if [ "$STATUS" != "SUCCESS" ]; then
+            echo "❌ Build did not complete within 15 minutes (last status: $STATUS)"
+            exit 1
+          fi
 
       - name: Deploy to Cloud Run
         run: |
