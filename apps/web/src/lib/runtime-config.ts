@@ -23,9 +23,15 @@ function shouldUseRelativeApiProxy(baseUrl: string): boolean {
   }
 
   try {
-    const target = new URL(baseUrl);
     const current = new URL(window.location.origin);
-    return isLocalHostname(target.hostname) && isLocalHostname(current.hostname);
+    // On production/Vercel (non-localhost), always use relative URLs so that
+    // Next.js server-side rewrites proxy the request to the backend.
+    // This avoids CORS entirely — the browser only ever sees the same origin.
+    if (!isLocalHostname(current.hostname)) {
+      return true;
+    }
+    const target = new URL(baseUrl);
+    return isLocalHostname(target.hostname);
   } catch {
     return false;
   }
