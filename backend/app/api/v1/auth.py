@@ -269,6 +269,9 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                 db.add(user)
                 await db.commit()
                 await db.refresh(user)
+                # Capture before ensure_personal_organization commits and expires user.
+                _auth_id = user.auth_id
+                _user_id = user.id
             except Exception:
                 await db.rollback()
                 # Local insert failed — roll back Supabase too so no orphan is created.
@@ -282,9 +285,6 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
 
     # If SendGrid is not configured, skip OTP and auto-verify the account.
     if not settings.SENDGRID_API_KEY:
-        # Capture values before the commit expires the ORM object.
-        _auth_id = user.auth_id
-        _user_id = user.id
         user.email_verified = True
         await db.commit()
         async with httpx.AsyncClient() as client:
