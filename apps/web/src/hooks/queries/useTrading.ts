@@ -14,7 +14,7 @@ export function useTradingModeQuery() {
     queryFn: async () => {
       const res = await tradingApi.getMode();
       // Synchronize Zustand client state with server state
-      setTradingModeStore(res.trading_mode.toUpperCase() as "PAPER" | "LIVE");
+      setTradingModeStore(res.mode.toUpperCase() as "PAPER" | "LIVE");
       return res;
     },
   });
@@ -25,18 +25,6 @@ export function useAuditLogsQuery(limit = 50) {
     queryKey: [...TRADING_AUDIT_LOG_KEY, limit],
     queryFn: () => tradingApi.getAuditLog(limit),
     refetchInterval: 10 * 1000, // Background polling for audit logs
-  });
-}
-
-export function useSetTradingModeMutation() {
-  const queryClient = useQueryClient();
-  
-  return useMutation({
-    mutationFn: (mode: "PAPER" | "LIVE") => tradingApi.setMode(mode),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: TRADING_MODE_KEY });
-      queryClient.invalidateQueries({ queryKey: TRADING_AUDIT_LOG_KEY });
-    },
   });
 }
 
