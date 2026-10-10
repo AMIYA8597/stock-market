@@ -71,6 +71,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("scheduled_task_registration_deferred", error=str(exc))
     background_tasks = await startup_events()
+    # Seed instrument master data (NSE + BSE) if DB is nearly empty.
+    # Runs as a background task so startup is never blocked.
+    import asyncio as _asyncio
+    try:
+        from app.services.instrument_seeder import ensure_seeded
+        _asyncio.get_event_loop().create_task(ensure_seeded())
+    except Exception as _seed_exc:
+        logger.warning(f"instrument_seeder import failed (non-fatal): {_seed_exc}")
     yield
     await shutdown_events(background_tasks)
     logger.info("🛑 QuantEdge API shutting down...")
