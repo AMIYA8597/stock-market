@@ -85,7 +85,15 @@ export const authApi = {
   getProfile(): Promise<UserProfile> {
     return fetchApi("/users/profile");
   },
-  register(data: { email: string; password: string; full_name?: string }): Promise<TokenResponse | { email: string; message: string }> {
+  // Three possible 201 bodies:
+  //  - TokenResponse: auto-verified and signed in (no SendGrid configured)
+  //  - { login_required: true }: account created, auto sign-in failed -> go to login
+  //  - { email, message }: OTP sent, verify on the register page
+  register(data: { email: string; password: string; full_name?: string }): Promise<
+    | TokenResponse
+    | { status: "created"; login_required: true; message: string }
+    | { email: string; message: string }
+  > {
     return fetchApi("/auth/register", {
       method: "POST",
       body: JSON.stringify(data),

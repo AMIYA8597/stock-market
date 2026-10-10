@@ -119,6 +119,44 @@ async def _supabase_delete_user(auth_id: str) -> None:
             pass
 
 
+async def _supabase_confirm_email(auth_id: str) -> int | None:
+    """Mark a Supabase auth user's email as confirmed via the admin API.
+
+    Returns the HTTP status code, or None if the request could not be sent.
+    Never logs the response body (it contains the full user record).
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.put(
+                f"{settings.SUPABASE_URL}/auth/v1/admin/users/{auth_id}",
+                json={"email_confirm": True},
+                headers={
+                    "apikey": settings.SUPABASE_SECRET_KEY,
+                    "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
+                },
+            )
+        except Exception as exc:
+            logger.warning(f"Supabase email confirm request failed: {type(exc).__name__}")
+            return None
+    if resp.status_code != 200:
+        logger.warning(f"Supabase email confirm returned status={resp.status_code}")
+    return resp.status_code
+
+
+def _is_email_not_confirmed(resp: httpx.Response) -> bool:
+    """True if a Supabase password-grant error means 'email not confirmed'."""
+    try:
+        body = resp.json()
+    except Exception:
+        return False
+    if not isinstance(body, dict):
+        return False
+    if body.get("error_code") == "email_not_confirmed":
+        return True
+    text = " ".join(str(body.get(k) or "") for k in ("msg", "error_description", "message"))
+    return "not confirmed" in text.lower()
+
+
 async def _supabase_find_auth_id_by_email(email: str) -> str | None:
     """Look up a Supabase auth user UUID by email via the admin API. Returns None on any failure."""
     async with httpx.AsyncClient() as client:
@@ -249,7 +287,9 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             except Exception as exc:
                 logger.error(f"register: Supabase signup response not JSON: {exc}, body={resp.text[:200]}")
                 raise HTTPException(status_code=502, detail="Auth service returned unexpected response") from exc
-            logger.info("supabase_signup_response status=%s body=%s", resp.status_code, data)
+            # Status only: when Supabase "Confirm email" is off, the signup
+            # body includes a live access_token, so it must never be logged.
+            logger.info("supabase_signup_response status=%s", resp.status_code)
 
             # Supabase GoTrue signup responses:
             # - New user: {user: {id: "...", identities: [...], ...}}
@@ -315,35 +355,32 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
         except Exception as exc:
             logger.error(f"email_verified commit failed: {type(exc).__name__}: {exc}")
             raise HTTPException(status_code=500, detail="Registration failed while finalizing your account. Please try again.") from exc
+        confirm_status = await _supabase_confirm_email(_auth_id)
         async with httpx.AsyncClient() as client:
-            confirm_status = None
-            try:
-                confirm_resp = await client.put(
-                    f"{settings.SUPABASE_URL}/auth/v1/admin/users/{_auth_id}",
-                    json={"email_confirm": True},
-                    headers={
-                        "apikey": settings.SUPABASE_SECRET_KEY,
-                        "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
-                    },
-                )
-                confirm_status = confirm_resp.status_code
-                logger.info(f"Supabase confirm status={confirm_status} body={confirm_resp.text[:200]}")
-            except Exception as exc:
-                logger.warning(f"Failed to confirm Supabase email for {_user_id}: {exc}")
             try:
                 resp = await client.post(
                     f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
                     json={"email": email, "password": payload.password},
                     headers={"apikey": _anon_key},
                 )
-                logger.info(f"Supabase token status={resp.status_code} body={resp.text[:300]}")
+                # Status only - the body is a live access/refresh token pair.
+                logger.info(f"register: Supabase token status={resp.status_code}")
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as exc:
-                raise HTTPException(
-                    status_code=401,
-                    detail=f"Account created but login failed (confirm_status={confirm_status}). Please log in manually.",
-                ) from exc
+                # The account exists and is verified; only the automatic
+                # sign-in failed. Report success and let the frontend send
+                # the user to the login page, instead of a 401 that leaves
+                # them stuck on the register form with an error.
+                logger.warning(
+                    f"register: auto sign-in failed for user {_user_id} "
+                    f"(confirm_status={confirm_status}): {type(exc).__name__}"
+                )
+                return {
+                    "status": "created",
+                    "login_required": True,
+                    "message": "Account created. Please sign in.",
+                }
         try:
             await db.refresh(user)
             await reset_failed_login(db, user)
@@ -507,13 +544,30 @@ async def login(payload: AuthLogin, request: Request, db: AsyncSession = Depends
         await reset_failed_login(db, user)
         return _issue_test_token(user)
 
+    async def _password_grant(client: httpx.AsyncClient) -> httpx.Response:
+        return await client.post(
+            f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
+            json={"email": email, "password": payload.password},
+            headers={"apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SECRET_KEY},
+        )
+
     async with httpx.AsyncClient() as client:
         try:
-            resp = await client.post(
-                f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
-                json={"email": email, "password": payload.password},
-                headers={"apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SECRET_KEY},
-            )
+            resp = await _password_grant(client)
+            if (
+                resp.status_code >= 400
+                and user.email_verified
+                and user.auth_id
+                and _is_email_not_confirmed(resp)
+            ):
+                # Our DB says the email is verified (signup OTP, or auto-verify
+                # when SendGrid is off) but Supabase's own confirmed flag was
+                # never set - e.g. the admin confirm call failed at signup.
+                # Heal it and retry once, instead of reporting a correct
+                # password as "Incorrect password" and counting it toward
+                # the lockout.
+                if await _supabase_confirm_email(str(user.auth_id)) == 200:
+                    resp = await _password_grant(client)
             resp.raise_for_status()
             data = resp.json()
         except httpx.HTTPStatusError as exc:

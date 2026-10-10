@@ -367,3 +367,147 @@ async def test_reset_password_enforces_password_policy(auth_client: AsyncClient,
         json={"email": email, "otp": captured["code"], "new_password": "weak"},
     )
     assert resp.status_code == 400
+
+
+# ─── Register when SendGrid is off (production path) ─────────────────────
+
+
+class _FakeSupabase:
+    """Stands in for httpx.AsyncClient inside app.api.v1.auth: answers the
+    Supabase signup / admin-confirm / password-grant calls register() makes."""
+
+    def __init__(self, token_status: int):
+        self.token_status = token_status
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, *args, **kwargs):  # httpx.AsyncClient() -> self
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def _resp(self, method: str, url: str, status: int, body):
+        import httpx
+
+        return httpx.Response(status, json=body, request=httpx.Request(method, url))
+
+    async def post(self, url: str, **kwargs):
+        self.calls.append(("POST", url))
+        if url.endswith("/auth/v1/signup"):
+            return self._resp("POST", url, 200, {"id": str(uuid.uuid4()), "identities": [{"id": "x"}]})
+        if "grant_type=password" in url:
+            if self.token_status == 200:
+                return self._resp("POST", url, 200, {"access_token": "at", "refresh_token": "rt", "expires_in": 3600})
+            return self._resp("POST", url, self.token_status, {"error_code": "invalid_credentials"})
+        raise AssertionError(f"unexpected POST {url}")
+
+    async def put(self, url: str, **kwargs):
+        self.calls.append(("PUT", url))
+        return self._resp("PUT", url, 200, {})
+
+    async def get(self, url: str, **kwargs):
+        self.calls.append(("GET", url))
+        return self._resp("GET", url, 200, {"users": []})
+
+    async def delete(self, url: str, **kwargs):
+        self.calls.append(("DELETE", url))
+        return self._resp("DELETE", url, 200, {})
+
+
+def _use_production_register_path(monkeypatch: pytest.MonkeyPatch, fake: _FakeSupabase) -> None:
+    import types
+
+    import httpx
+
+    import app.api.v1.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "is_test_mode", lambda: False)
+    monkeypatch.setattr(auth_module.settings, "SENDGRID_API_KEY", "", raising=False)
+    monkeypatch.setattr(
+        auth_module,
+        "httpx",
+        types.SimpleNamespace(
+            AsyncClient=fake,
+            Response=httpx.Response,
+            HTTPError=httpx.HTTPError,
+            HTTPStatusError=httpx.HTTPStatusError,
+        ),
+    )
+
+
+async def test_register_auto_sign_in_returns_tokens(auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    fake = _FakeSupabase(token_status=200)
+    _use_production_register_path(monkeypatch, fake)
+    resp = await auth_client.post(
+        "/api/v1/auth/register",
+        json={"email": _unique_email(), "password": STRONG_PASSWORD, "full_name": "Prod Path"},
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["access_token"] == "at"
+
+
+async def test_register_sends_user_to_login_when_auto_sign_in_fails(
+    auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+):
+    # Account is created and verified; only the automatic sign-in fails.
+    # That must be a success the frontend can route to /login - not a 401
+    # that leaves the user on the register form.
+    fake = _FakeSupabase(token_status=400)
+    _use_production_register_path(monkeypatch, fake)
+    resp = await auth_client.post(
+        "/api/v1/auth/register",
+        json={"email": _unique_email(), "password": STRONG_PASSWORD, "full_name": "Prod Path"},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["login_required"] is True
+    assert "access_token" not in body
+
+
+class _UnconfirmedSupabase(_FakeSupabase):
+    """Supabase whose admin confirm fails at signup time and works later:
+    password grants answer "email not confirmed" until a confirm succeeds."""
+
+    def __init__(self):
+        super().__init__(token_status=400)
+        self.confirm_works = False
+        self.confirmed = False
+
+    async def put(self, url: str, **kwargs):
+        self.calls.append(("PUT", url))
+        if self.confirm_works:
+            self.confirmed = True
+            return self._resp("PUT", url, 200, {})
+        return self._resp("PUT", url, 500, {"msg": "temporarily unavailable"})
+
+    async def post(self, url: str, **kwargs):
+        if "grant_type=password" in url:
+            self.calls.append(("POST", url))
+            if self.confirmed:
+                return self._resp("POST", url, 200, {"access_token": "at2", "refresh_token": "rt2", "expires_in": 3600})
+            return self._resp(
+                "POST", url, 400, {"code": 400, "error_code": "email_not_confirmed", "msg": "Email not confirmed"}
+            )
+        return await super().post(url, **kwargs)
+
+
+async def test_login_heals_unconfirmed_supabase_email(auth_client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    fake = _UnconfirmedSupabase()
+    _use_production_register_path(monkeypatch, fake)
+    email = _unique_email()
+    reg = await auth_client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": STRONG_PASSWORD, "full_name": "Heal Path"},
+    )
+    assert reg.status_code == 201, reg.text
+    assert reg.json()["login_required"] is True
+
+    # Later the admin API works again: login must confirm + retry, not
+    # answer "Incorrect password" for the right password.
+    fake.confirm_works = True
+    resp = await auth_client.post("/api/v1/auth/login", json={"email": email, "password": STRONG_PASSWORD})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["access_token"] == "at2"

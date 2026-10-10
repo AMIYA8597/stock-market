@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { useLocale } from 'next-intl';
 import { authApi, ApiError } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import { Link } from '@/i18n/navigation';
@@ -19,6 +20,7 @@ function extractErrorDetails(err: unknown): string[] | null {
 }
 
 export default function RegisterPage() {
+  const locale = useLocale();
   const [step, setStep] = useState<Step>('form');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,7 +58,16 @@ export default function RegisterPage() {
           access_token: result.access_token,
           refresh_token: result.refresh_token ?? '',
         });
-        window.location.href = '/en/dashboard';
+        // Full navigation so the middleware sees the new session cookie.
+        window.location.href = `/${locale}/dashboard`;
+        return;
+      }
+      if (result && 'login_required' in result && result.login_required) {
+        // Account was created and verified, but the automatic sign-in did
+        // not go through. Send the user to the login page with their email
+        // filled in instead of leaving them on this form.
+        const params = new URLSearchParams({ registered: '1', email });
+        window.location.href = `/${locale}/login?${params.toString()}`;
         return;
       }
       setStep('otp');
@@ -80,7 +91,7 @@ export default function RegisterPage() {
       const tokens = await authApi.verifySignupOtp({ email, otp: otp.trim(), password });
       const supabase = createClient();
       await supabase.auth.setSession({ access_token: tokens.access_token, refresh_token: tokens.refresh_token ?? '' });
-      window.location.href = '/dashboard';
+      window.location.href = `/${locale}/dashboard`;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Verification failed. Please try again.');
     } finally {
