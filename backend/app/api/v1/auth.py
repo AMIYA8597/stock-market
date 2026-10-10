@@ -279,6 +279,42 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
 
     await ensure_personal_organization(db, user)
 
+    # If SendGrid is not configured, skip OTP and auto-verify the account.
+    if not settings.SENDGRID_API_KEY:
+        user.email_verified = True
+        await db.commit()
+        async with httpx.AsyncClient() as client:
+            try:
+                await client.put(
+                    f"{settings.SUPABASE_URL}/auth/v1/admin/users/{user.auth_id}",
+                    json={"email_confirm": True},
+                    headers={
+                        "apikey": settings.SUPABASE_SECRET_KEY,
+                        "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
+                    },
+                )
+            except httpx.HTTPError as exc:
+                logger.warning(f"Failed to confirm Supabase email for {user.id}: {exc}")
+            try:
+                resp = await client.post(
+                    f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
+                    json={"email": email, "password": payload.password},
+                    headers={"apikey": settings.SUPABASE_SECRET_KEY},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            except Exception as exc:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Account created. Please log in manually.",
+                ) from exc
+        await reset_failed_login(db, user)
+        return TokenResponse(
+            access_token=data["access_token"],
+            refresh_token=data.get("refresh_token"),
+            expires_in=data.get("expires_in", 3600),
+        )
+
     code = await create_otp(db, email, "signup")
     try:
         await send_otp_email(email, code, "signup")
