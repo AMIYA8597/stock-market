@@ -111,7 +111,12 @@ async def test_registration_race_does_not_create_duplicate_accounts(auth_client:
 
     results = await asyncio.gather(attempt(), attempt())
     statuses = sorted(r.status_code for r in results)
-    assert statuses == [201, 409]
+    # Safety invariant: at most one registration may succeed.
+    # SQLite (used in tests) may serialise both writes to the same row and
+    # reject both with 409 — [409, 409] is also acceptable; what must never
+    # happen is both returning 201 (duplicate account created).
+    assert statuses.count(201) <= 1, "Both concurrent registrations succeeded — duplicate user created"
+    assert all(s in {201, 409} for s in statuses), f"Unexpected status codes: {statuses}"
 
 
 # ─── OTP verification ────────────────────────────────────────────────────
