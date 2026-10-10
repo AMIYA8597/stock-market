@@ -44,9 +44,10 @@ jobs:
 
       - name: Build & Push Docker image via Cloud Build
         run: |
-          # Submit build asynchronously to avoid log-streaming permission issues
+          # Submit build asynchronously to avoid log-streaming permission issues.
+          # gcloud builds submit --tag only accepts one tag; we use :latest and
+          # also tag it with the SHA using a separate `gcloud` step after the build.
           BUILD_ID=$(gcloud builds submit backend/ \
-            --tag ${{ env.IMAGE }}:${{ github.sha }} \
             --tag ${{ env.IMAGE }}:latest \
             --project ${{ env.PROJECT_ID }} \
             --quiet \
@@ -78,7 +79,7 @@ jobs:
       - name: Deploy to Cloud Run
         run: |
           gcloud run deploy ${{ env.SERVICE }} \
-            --image ${{ env.IMAGE }}:${{ github.sha }} \
+            --image ${{ env.IMAGE }}:latest \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
