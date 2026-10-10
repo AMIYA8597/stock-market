@@ -212,6 +212,9 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             )
             db.add(user)
             await db.commit()
+            await db.refresh(user)
+            _auth_id = user.auth_id
+            _user_id = user.id
         except Exception as exc:
             await db.rollback()
             raise HTTPException(status_code=409, detail="Email already registered") from exc
@@ -303,8 +306,9 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
         logger.error(f"ensure_personal_organization failed: {type(exc).__name__}: {exc}")
         raise HTTPException(status_code=500, detail="Registration failed while setting up your account. Please try again.") from exc
 
-    # If SendGrid is not configured, skip OTP and auto-verify the account.
-    if not settings.SENDGRID_API_KEY:
+    # If SendGrid is not configured (and not in test mode), skip OTP and auto-verify.
+    # In test mode the OTP path is used so tests can monkeypatch OTP generation.
+    if not settings.SENDGRID_API_KEY and not is_test_mode():
         try:
             user.email_verified = True
             await db.commit()

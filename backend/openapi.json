@@ -57,6 +57,23 @@
         }
       }
     },
+    "/api/v1/health/system-audit": {
+      "get": {
+        "summary": "System Audit",
+        "description": "Comprehensive system status \u2014 honest about what works and what doesn't.",
+        "operationId": "system_audit_api_v1_health_system_audit_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/check-email": {
       "post": {
         "tags": [
@@ -404,6 +421,107 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/auth/upstox/login-url": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Upstox Login Url",
+        "operationId": "upstox_login_url_api_v1_auth_auth_upstox_login_url_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/auth/upstox/status": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Upstox Auth Status",
+        "operationId": "upstox_auth_status_api_v1_auth_auth_upstox_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/auth/upstox/callback": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Upstox Callback",
+        "operationId": "upstox_callback_api_v1_auth_auth_upstox_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Code"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -1259,6 +1377,101 @@
         }
       }
     },
+    "/api/v1/payments/methods": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Payment Methods",
+        "operationId": "get_payment_methods_api_v1_payments_methods_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/payments/balance": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Wallet Balance",
+        "operationId": "get_wallet_balance_api_v1_payments_balance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/payments/history": {
+      "get": {
+        "tags": [
+          "payments"
+        ],
+        "summary": "Get Payment History",
+        "operationId": "get_payment_history_api_v1_payments_history_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/payments/plans": {
       "get": {
         "tags": [
@@ -1691,6 +1904,110 @@
         ]
       }
     },
+    "/api/v1/alerts/{alert_id}": {
+      "patch": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Update Alert",
+        "operationId": "update_alert_api_v1_alerts__alert_id__patch",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Delete Alert",
+        "operationId": "delete_alert_api_v1_alerts__alert_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "alert_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Alert Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/alerts/history": {
       "get": {
         "tags": [
@@ -2060,7 +2377,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 500,
+              "maximum": 2000,
               "minimum": 1,
               "default": 50,
               "title": "Limit"
@@ -2166,6 +2483,153 @@
                   "type": "object",
                   "title": "Response Get Global Context Api V1 Market Global Context Get"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/zones/{symbol}": {
+      "get": {
+        "tags": [
+          "market",
+          "zones"
+        ],
+        "summary": "Get Zones",
+        "description": "Return support/resistance zones for a symbol based on recent price history.",
+        "operationId": "get_zones_api_v1_market_zones__symbol__get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/patterns/{symbol}": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Get Patterns",
+        "description": "Return detected candlestick / chart patterns for a symbol.\n\nUses the same technical analysis pipeline as the prediction engine's\npattern sub-model. When no history is available, returns an empty list\nrather than erroring so the frontend can degrade gracefully.",
+        "operationId": "get_patterns_api_v1_market_patterns__symbol__get",
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/instruments/sync-upstox": {
+      "post": {
+        "tags": [
+          "market",
+          "instruments"
+        ],
+        "summary": "Sync Upstox Instruments",
+        "description": "Trigger Upstox NSE+BSE instrument master seed.\n\nDownloads instrument keys from Upstox's public CSV and upserts all\nEQ/INDEX rows into Exchange, Instrument, and InstrumentAlias tables.\nPass ?force=true to re-seed even if already done this session.",
+        "operationId": "sync_upstox_instruments_api_v1_market_instruments_sync_upstox_post",
+        "parameters": [
+          {
+            "name": "force",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Force"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/market/instruments/status": {
+      "get": {
+        "tags": [
+          "market",
+          "instruments"
+        ],
+        "summary": "Instruments Status",
+        "description": "Check how many instruments and Upstox aliases exist.",
+        "operationId": "instruments_status_api_v1_market_instruments_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }
@@ -2584,6 +3048,26 @@
         }
       }
     },
+    "/api/v1/backtest/strategies": {
+      "get": {
+        "tags": [
+          "backtest"
+        ],
+        "summary": "Get Backtest Strategies",
+        "description": "List available backtest strategies with descriptions and parameters.",
+        "operationId": "get_backtest_strategies_api_v1_backtest_strategies_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/backtest/run": {
       "post": {
         "tags": [
@@ -2868,6 +3352,56 @@
             "APIKeyHeader": []
           }
         ]
+      }
+    },
+    "/api/v1/portfolio/{portfolio_id}/risk-metrics": {
+      "get": {
+        "tags": [
+          "portfolio"
+        ],
+        "summary": "Portfolio risk metrics by ID",
+        "operationId": "get_risk_metrics_by_id_api_v1_portfolio__portfolio_id__risk_metrics_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "portfolio_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Portfolio Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RiskMetricsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/portfolio/risk-metrics": {
@@ -3188,6 +3722,84 @@
               "title": "Symbol"
             },
             "description": "Ticker symbol (e.g. RELIANCE.NS)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trading/mode": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Mode",
+        "operationId": "get_mode_api_v1_trading_mode_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModeResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trading/audit-log": {
+      "get": {
+        "tags": [
+          "trading"
+        ],
+        "summary": "Get Audit Log",
+        "operationId": "get_audit_log_api_v1_trading_audit_log_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
           }
         ],
         "responses": {
@@ -4058,6 +4670,34 @@
         }
       }
     },
+    "/api/v1/predictions/model-inventory": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "Model Inventory",
+        "description": "Return honest inventory of all ML models and their training status.",
+        "operationId": "model_inventory_api_v1_predictions_model_inventory_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/journal": {
       "get": {
         "tags": [
@@ -4185,6 +4825,139 @@
         }
       }
     },
+    "/api/v1/onboarding": {
+      "post": {
+        "tags": [
+          "onboarding"
+        ],
+        "summary": "Complete Onboarding",
+        "operationId": "complete_onboarding_api_v1_onboarding_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/train": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Train Endpoint",
+        "description": "Launch model training. Returns 503 if engine not available.",
+        "operationId": "train_endpoint_api_v1_ai_train_post",
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Train Endpoint Api V1 Ai Train Post"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
+    "/api/v1/ai/predict": {
+      "post": {
+        "tags": [
+          "ai"
+        ],
+        "summary": "Predict Endpoint",
+        "description": "Run inference. Returns 503 if model not trained.",
+        "operationId": "predict_endpoint_api_v1_ai_predict_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Predict Endpoint Api V1 Ai Predict Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
+    },
     "/api/v1/version": {
       "get": {
         "tags": [
@@ -4301,6 +5074,67 @@
           "threshold"
         ],
         "title": "AlertCreate"
+      },
+      "AlertUpdate": {
+        "properties": {
+          "symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Symbol"
+          },
+          "alert_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alert Type"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "title": "AlertUpdate"
       },
       "ApiKeyCreate": {
         "properties": {
@@ -6446,6 +7280,24 @@
         ],
         "title": "MemberResponse"
       },
+      "ModeResponse": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "is_live": {
+            "type": "boolean",
+            "title": "Is Live"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "is_live"
+        ],
+        "title": "ModeResponse"
+      },
       "ModelAccuracyMetrics": {
         "properties": {
           "model_name": {
@@ -6823,6 +7675,38 @@
         ],
         "title": "OHLCVBar",
         "description": "Single OHLCV candle."
+      },
+      "OnboardingRequest": {
+        "properties": {
+          "profile": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Profile"
+          },
+          "organization": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Organization"
+          },
+          "marketPrefs": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Marketprefs"
+          },
+          "workspace": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Workspace"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile",
+          "organization",
+          "marketPrefs",
+          "workspace"
+        ],
+        "title": "OnboardingRequest"
       },
       "OptimizationConstraints": {
         "properties": {
@@ -7278,6 +8162,22 @@
         ],
         "title": "PerformanceResponse",
         "description": "GET /portfolio/performance response."
+      },
+      "PredictRequest": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "maxLength": 15,
+            "minLength": 1,
+            "title": "Symbol",
+            "description": "Stock ticker symbol"
+          }
+        },
+        "type": "object",
+        "required": [
+          "symbol"
+        ],
+        "title": "PredictRequest"
       },
       "QuoteResponse": {
         "properties": {
@@ -9239,14 +10139,21 @@
             "description": "[P(bull), P(bear), P(sideways), P(crisis)]"
           },
           "transition_matrix": {
-            "items": {
-              "items": {
-                "type": "string",
-                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "string",
+                    "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
               },
-              "type": "array"
-            },
-            "type": "array",
+              {
+                "type": "null"
+              }
+            ],
             "title": "Transition Matrix",
             "description": "4x4 A matrix"
           },
@@ -9268,17 +10175,44 @@
           },
           "days_in_state": {
             "type": "integer",
-            "title": "Days In State"
+            "title": "Days In State",
+            "default": 1
           },
           "last_transition_date": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Last Transition Date"
           },
           "timestamp": {
-            "type": "string",
-            "format": "date-time",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Timestamp"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           }
         },
         "type": "object",
@@ -9286,13 +10220,9 @@
           "state",
           "state_index",
           "probs",
-          "transition_matrix",
           "cond_vol_1d",
           "cond_vol_5d",
-          "cond_vol_21d",
-          "days_in_state",
-          "last_transition_date",
-          "timestamp"
+          "cond_vol_21d"
         ],
         "title": "RegimeCurrentResponse",
         "description": "GET /regime/current response."
