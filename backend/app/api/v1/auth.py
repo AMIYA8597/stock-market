@@ -282,20 +282,23 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
 
     # If SendGrid is not configured, skip OTP and auto-verify the account.
     if not settings.SENDGRID_API_KEY:
+        # Capture values before the commit expires the ORM object.
+        _auth_id = user.auth_id
+        _user_id = user.id
         user.email_verified = True
         await db.commit()
         async with httpx.AsyncClient() as client:
             try:
                 await client.put(
-                    f"{settings.SUPABASE_URL}/auth/v1/admin/users/{user.auth_id}",
+                    f"{settings.SUPABASE_URL}/auth/v1/admin/users/{_auth_id}",
                     json={"email_confirm": True},
                     headers={
                         "apikey": settings.SUPABASE_SECRET_KEY,
                         "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
                     },
                 )
-            except httpx.HTTPError as exc:
-                logger.warning(f"Failed to confirm Supabase email for {user.id}: {exc}")
+            except Exception as exc:
+                logger.warning(f"Failed to confirm Supabase email for {_user_id}: {exc}")
             try:
                 resp = await client.post(
                     f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
@@ -309,6 +312,7 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                     status_code=401,
                     detail="Account created. Please log in manually.",
                 ) from exc
+        await db.refresh(user)
         await reset_failed_login(db, user)
         return TokenResponse(
             access_token=data["access_token"],
