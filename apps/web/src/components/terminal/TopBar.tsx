@@ -79,7 +79,7 @@ export default function TopBar({
   const { tradingMode } = useTradingStore();
   const { data: tradingData, refetch: fetchStatus } = useTradingModeQuery();
   const { mutateAsync: triggerKillSwitch } = useTriggerKillSwitchMutation();
-  const connectionStatus = tradingData?.connection_status ?? "disconnected";
+  const connectionStatus: string = tradingData ? "connected" : "disconnected";
   
   const { status: priceFeedStatus } = usePriceFeed(["^NSEI"]);
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
