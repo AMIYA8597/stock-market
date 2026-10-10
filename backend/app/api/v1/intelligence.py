@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.schemas.errors import ErrorCode, ErrorResponse
+
+logger = logging.getLogger(__name__)
 from app.schemas.intelligence import (
     CorrelationGraphResponse,
     FactorExposureResponse,
@@ -79,7 +83,17 @@ async def get_signal(symbol: str):
                 message="Invalid symbol.",
             ).dict(),
         )
-    return await intelligence_service.get_signal(symbol)
+    try:
+        return await intelligence_service.get_signal(symbol)
+    except Exception as exc:
+        logger.error("get_signal failed for %s: %s: %s", symbol, type(exc).__name__, exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=ErrorResponse.create(
+                code=ErrorCode.INTERNAL_SERVER_ERROR,
+                message="Signal computation temporarily unavailable.",
+            ).dict(),
+        ) from exc
 
 
 @router.get("/signals/history/{symbol}", response_model=list[SignalHistoryPoint])
