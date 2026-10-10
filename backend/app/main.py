@@ -215,6 +215,12 @@ class _CORSWrapper:
         self._methods = ", ".join(s.CORS_ALLOW_METHODS)
         self._headers = ", ".join(s.CORS_ALLOW_HEADERS)
 
+    def __getattr__(self, name: str):
+        # Proxy unknown attrs (e.g. dependency_overrides, middleware_stack,
+        # router) to the inner FastAPI app so test fixtures work without
+        # needing to import _inner_app directly.
+        return getattr(self.app, name)
+
     def _allowed(self, origin: str) -> bool:
         return origin in self._origins or bool(self._ORIGIN_RE.match(origin))
 

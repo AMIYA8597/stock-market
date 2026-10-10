@@ -669,15 +669,8 @@ export const researchApi = {
 };
 
 export const tradingApi = {
-  getMode(): Promise<{ trading_mode: string; connection_status: string; authenticated: boolean; profile: unknown }> {
+  getMode(): Promise<{ mode: string; is_live: boolean }> {
     return fetchApi("/trading/mode");
-  },
-
-  setMode(mode: string): Promise<{ status: string; trading_mode: string; message: string }> {
-    return fetchApi("/trading/mode", {
-      method: "POST",
-      body: JSON.stringify({ mode }),
-    });
   },
 
   placeOrder(order: {

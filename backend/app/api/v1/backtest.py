@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.dependencies import get_current_user, get_db, get_rate_limiter
+from app.core.entitlements import require_feature
 from app.core.numeric import safe_round
 from app.models.backtest import BacktestJob
 from app.schemas.backtest import (
@@ -79,6 +80,7 @@ async def post_backtest_run(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     _rate_limit: None = Depends(get_rate_limiter(requests=2, window=60)),
+    _entitlement: None = Depends(require_feature("backtest")),
 ) -> BacktestRunResponse:
     user_id_str = str(current_user.get("sub")) if isinstance(current_user, dict) else str(getattr(current_user, "user_id", getattr(current_user, "id", None)))
 

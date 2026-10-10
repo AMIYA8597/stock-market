@@ -10,30 +10,16 @@ from app.core.dependencies import get_current_user
 router = APIRouter(prefix="/trading", tags=["trading"])
 
 
-class TradingModeResponse(BaseModel):
-    trading_mode: str
+class ModeResponse(BaseModel):
+    mode: str
     is_live: bool
 
 
-class SetModeRequest(BaseModel):
-    mode: str
-
-
 @router.get("/mode")
-async def get_trading_mode(
+async def get_mode(
     current_user: dict = Depends(get_current_user),
-) -> TradingModeResponse:
-    return TradingModeResponse(trading_mode="PAPER", is_live=False)
-
-
-@router.post("/mode")
-async def set_trading_mode(
-    request: SetModeRequest,
-    current_user: dict = Depends(get_current_user),
-) -> TradingModeResponse:
-    mode = request.mode.upper()
-    is_live = mode == "LIVE"
-    return TradingModeResponse(trading_mode=mode, is_live=is_live)
+) -> ModeResponse:
+    return ModeResponse(mode="PAPER", is_live=False)
 
 
 @router.get("/audit-log")
