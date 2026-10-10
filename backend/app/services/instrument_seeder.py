@@ -94,7 +94,6 @@ async def seed_instruments_from_upstox(exchange_code: str = "NSE", force: bool =
         logger.info(f"Downloaded {len(rows)} rows for {exchange_code}, seeding DB…")
 
         from sqlalchemy import select
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
 
         from app.database.connection import async_session_factory
         from app.models.market import Exchange, Instrument, InstrumentAlias
