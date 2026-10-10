@@ -559,8 +559,9 @@ class MarketDataService:
         # Try Stooq for daily data — works on cloud IPs unlike yfinance
         if interval in ("1d",):
             try:
-                from app.services.ingestion.stooq_source import StooqProvider
                 from datetime import UTC, timedelta
+
+                from app.services.ingestion.stooq_source import StooqProvider
                 stooq = StooqProvider()
                 days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}.get(period, 365)
                 start = datetime.now(UTC) - timedelta(days=days)
