@@ -77,19 +77,7 @@ class IntelligenceService:
 
     async def get_signal(self, symbol: str) -> SignalResponse:
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    result = future.result(timeout=45)
-            else:
-                result = asyncio.run(get_full_prediction(symbol))
+            result = await get_full_prediction(symbol)
         except Exception as e:
             result = {"is_computed": False, "message": str(e), "symbol": symbol}
 
