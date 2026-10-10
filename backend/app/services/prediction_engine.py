@@ -278,7 +278,17 @@ def build_ensemble_signal_sync(
     df.attrs["symbol"] = symbol
 
     # 1. Detect HMM regime (using real local HMM GARCH detect_regime)
-    regime_info = detect_regime(df)
+    try:
+        regime_info = detect_regime(df)
+    except Exception as _regime_exc:
+        logger.warning("HMM regime detection failed for %s: %s — using heuristic fallback", symbol, _regime_exc)
+        regime_info = {
+            "regime": "SIDEWAYS", "bull_prob": 0.33, "bear_prob": 0.33,
+            "regime_confidence": 0.33, "hmm_used": False,
+            "conditional_vol": 0.015, "vol_forecast_5d": 0.015,
+            "vol_forecast_21d": 0.05, "regime_variance": 0.0,
+            "transition_matrix": None,
+        }
     regime_state = 0
     if regime_info["regime"] == "BULL":
         regime_state = 0
@@ -1002,7 +1012,11 @@ async def get_full_prediction(
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     from research.feature_engineering.api import build_features
 
-    df = build_features(df, mode="serving")
+    try:
+        df = build_features(df, mode="serving")
+    except Exception as _fe_exc:
+        logger.error("Feature engineering failed for %s: %s", symbol, _fe_exc)
+        raise ValueError(f"Feature pipeline error for {symbol}: {_fe_exc}") from _fe_exc
     # -------------------------------------------------------------
 
     # Incremental update for OnlineAdaptiveLearner
@@ -1077,13 +1091,20 @@ async def get_full_prediction(
         logger.warning(f"Failed to incrementally update OnlineAdaptiveLearner for {symbol}: {e}")
 
     # Run the scoring methods
-    from research.models.xgboost_model.classifier import FeatureMismatchError
+    try:
+        from research.models.xgboost_model.classifier import FeatureMismatchError
+    except ImportError:
+        class FeatureMismatchError(Exception):  # type: ignore[misc]
+            missing_features: list = []
 
     try:
         ensemble = await build_ensemble_signal(symbol, df, artifact_path, model_version)
     except FeatureMismatchError as e:
         logger.error(f"Prediction mismatch for {symbol}: {e}")
         raise ValueError(f"model unavailable: missing features {e.missing_features}")
+    except Exception as e:
+        logger.error(f"Ensemble computation failed for {symbol}: {e}")
+        raise ValueError(f"Prediction unavailable for {symbol}: {e}") from e
 
     forecast = forecast_prices(df, horizons=[1, 3, 5, 10, 21])
 

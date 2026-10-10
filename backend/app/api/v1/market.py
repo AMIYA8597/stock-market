@@ -767,7 +767,7 @@ async def sync_upstox_instruments(force: bool = False):
         result = await seed_all_exchanges(force=force)
         return {"status": "ok", **result}  # honesty: allow
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Instrument sync failed: {e}")
+        raise HTTPException(status_code=503, detail=f"Instrument sync failed: {e}")
 
 
 @router.get("/instruments/status", tags=["instruments"])
