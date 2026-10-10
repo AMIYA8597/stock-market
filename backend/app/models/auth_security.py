@@ -19,8 +19,10 @@ class EmailOTP(Base):
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     purpose: Mapped[str] = mapped_column(String(30), nullable=False)  # "signup" | "password_reset"
     otp_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    attempts: Mapped[int] = mapped_column(Integer, default=0)
-    max_attempts: Mapped[int] = mapped_column(Integer, default=5)
+    # server_default mirrors migration c0698f36e21e; without it `alembic check`
+    # (run in CI) reports drift and wants to drop the DB defaults.
+    attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_attempts: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
