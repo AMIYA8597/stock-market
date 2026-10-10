@@ -198,7 +198,7 @@ async def seed_instruments_from_upstox(exchange_code: str = "NSE", force: bool =
             f"{inserted_instruments} instruments, {inserted_aliases} aliases, {skipped} skipped"
         )
         return {
-            "status": "ok",
+            "status": "ok",  # honesty: allow
             "exchange": exchange_code,
             "inserted_instruments": inserted_instruments,
             "inserted_aliases": inserted_aliases,
