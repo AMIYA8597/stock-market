@@ -205,6 +205,7 @@ class _CORSWrapper:
     _ORIGIN_RE = _re.compile(
         r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
         r"|^https://neuroquant[a-z0-9-]*\.vercel\.app$"
+        r"|^https://stock-market[a-z0-9-]*\.vercel\.app$"
     )
 
     def __init__(self, app):
