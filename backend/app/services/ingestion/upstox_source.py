@@ -156,8 +156,11 @@ _INTERVAL_MAP: dict[Interval, tuple[str, str]] = {
     "1m": ("minutes", "1"),
     "5m": ("minutes", "5"),
     "15m": ("minutes", "15"),
+    "30m": ("minutes", "30"),
     "1h": ("hours", "1"),
     "1d": ("days", "1"),
+    "1w": ("weeks", "1"),
+    "1mo": ("months", "1"),
 }
 
 
