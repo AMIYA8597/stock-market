@@ -24,15 +24,25 @@ class HMMGarchSignal(BaseModel):
     vol_forecast_21d: float
 
 
+class CorrelatedAsset(BaseModel):
+    ticker: str
+    correlation: float
+
+
 class GNNSignal(BaseModel):
     spillover_risk: float
     embedding_norm: float
-    top_correlated_assets: list[str]
+    top_correlated_assets: list[CorrelatedAsset]
+
+
+class AttentionPeak(BaseModel):
+    date: str
+    weight: float
 
 
 class LSTMAttnSignal(BaseModel):
     raw_signal: float
-    attention_peaks: list[dict[str, float]]
+    attention_peaks: list[AttentionPeak]
 
 
 class XGBoostSignal(BaseModel):
