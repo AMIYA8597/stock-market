@@ -268,6 +268,7 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                 )
                 db.add(user)
                 await db.commit()
+                await db.refresh(user)
             except Exception:
                 await db.rollback()
                 # Local insert failed — roll back Supabase too so no orphan is created.
