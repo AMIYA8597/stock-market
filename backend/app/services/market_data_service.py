@@ -40,6 +40,9 @@ class HistoryList(list):
 
 def safe_float(val, fallback=0.0) -> float:
     try:
+        import pandas as pd
+        if isinstance(val, pd.Series):
+            val = val.iloc[0] if len(val) > 0 else fallback
         f = float(val)
         if math.isnan(f) or math.isinf(f):
             return fallback
@@ -398,6 +401,10 @@ class MarketDataService:
             )
             if df.empty:
                 return []
+            # yfinance ≥0.2.x returns MultiIndex columns like ("Open", "RELIANCE.NS")
+            # Flatten to single level so row["Open"] works
+            if isinstance(df.columns, __import__("pandas").MultiIndex):
+                df.columns = df.columns.get_level_values(0)
             bars = []
             for ts, row in df.iterrows():
                 bars.append({
