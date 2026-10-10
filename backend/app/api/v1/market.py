@@ -122,10 +122,9 @@ async def get_quote(
                 source="canonical_db",
             )
 
-    # Fallback: DB has no data for this symbol — fetch live from yfinance
-    from app.services.market_data_service import MarketDataService
+    # Fallback: DB has no data — use the full provider chain (Upstox → yfinance → IndianStockAPI)
     try:
-        q = await MarketDataService.fetch_live_yfinance_quote(symbol)
+        q = await MarketDataService.get_quote(symbol)
         if not q or q.get("price", 0) == 0:
             raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}")
         return QuoteResponse(
@@ -135,20 +134,20 @@ async def get_quote(
             change=Decimal(str(q.get("change", 0))),
             change_pct=Decimal(str(q.get("change_pct", 0))),
             volume=Decimal(str(q.get("volume", 0))),
-            market_cap=None,
+            market_cap=Decimal(str(q.get("market_cap", 0))) if q.get("market_cap") else None,
             pe_ratio=None,
-            week_52_high=None,
-            week_52_low=None,
+            week_52_high=Decimal(str(q.get("week_52_high", 0))) if q.get("week_52_high") else None,
+            week_52_low=Decimal(str(q.get("week_52_low", 0))) if q.get("week_52_low") else None,
             regime=None,
             signal=None,
             timestamp=datetime.now(UTC),
             data_freshness_seconds=0,
-            source="yfinance",
+            source=q.get("source", "live"),
         )
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning("yfinance fallback failed for %s: %s", symbol, exc)
+        logger.warning("Live quote failed for %s: %s", symbol, exc)
         raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}") from exc
 
 _INTERVAL_DEFAULT_PERIOD = {
@@ -201,17 +200,21 @@ async def get_history(
             ]
             return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
 
-    # Fallback: DB has no data — fetch from yfinance
+    # Fallback: DB has no data — try full provider chain (Upstox → yfinance)
     try:
         norm = MarketDataService._normalize_symbol(symbol)
-        raw = await MarketDataService.get_ohlcv(norm, effective_period, interval)
+        raw = await MarketDataService.get_history(norm, interval, effective_period)
         if not raw:
             raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}")
+
+        def _to_ts(t) -> int:
+            if isinstance(t, (int, float)):
+                return int(t)
+            return int(datetime.fromisoformat(str(t).replace("Z", "+00:00")).timestamp())
+
         bars = [
             OHLCVBar(
-                time=int(r["time"]) if isinstance(r["time"], (int, float)) else int(
-                    datetime.fromisoformat(str(r["time"]).replace("Z", "+00:00")).timestamp()
-                ),
+                time=_to_ts(r.get("time") or r.get("timestamp")),
                 open=float(r.get("open", 0)),
                 high=float(r.get("high", 0)),
                 low=float(r.get("low", 0)),
@@ -220,11 +223,12 @@ async def get_history(
             )
             for r in raw
         ]
-        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="yfinance")
+        source = getattr(raw, "source", "live")
+        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source=source)
     except HTTPException:
         raise
     except Exception as exc:
-        logger.warning("yfinance history fallback failed for %s: %s", symbol, exc)
+        logger.warning("History fallback failed for %s: %s", symbol, exc)
         raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}") from exc
 
 @router.get("/indices", response_model=IndicesResponse)
