@@ -301,7 +301,7 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
         await ensure_personal_organization(db, user)
     except Exception as exc:
         logger.error(f"ensure_personal_organization failed: {type(exc).__name__}: {exc}")
-        raise HTTPException(status_code=500, detail=f"[DEBUG ensure_org] {type(exc).__name__}: {exc}") from exc
+        raise HTTPException(status_code=500, detail="Registration failed while setting up your account. Please try again.") from exc
 
     # If SendGrid is not configured, skip OTP and auto-verify the account.
     if not settings.SENDGRID_API_KEY:
@@ -310,7 +310,7 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             await db.commit()
         except Exception as exc:
             logger.error(f"email_verified commit failed: {type(exc).__name__}: {exc}")
-            raise HTTPException(status_code=500, detail=f"[DEBUG commit] {type(exc).__name__}: {exc}") from exc
+            raise HTTPException(status_code=500, detail="Registration failed while finalizing your account. Please try again.") from exc
         async with httpx.AsyncClient() as client:
             confirm_status = None
             try:
