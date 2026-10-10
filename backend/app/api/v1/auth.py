@@ -186,7 +186,14 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
     except PasswordPolicyError as exc:
         raise _password_policy_error(exc) from exc
 
-    existing = await db.execute(select(User).where(User.email == email))
+    try:
+        existing = await db.execute(select(User).where(User.email == email))
+    except Exception as exc:
+        logger.error(f"register: DB query failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily unavailable. Please try again in a moment.",
+        ) from exc
     if existing.scalars().first():
         raise HTTPException(
             status_code=409,
@@ -234,16 +241,24 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             except httpx.HTTPError as e:
                 raise HTTPException(status_code=502, detail="Could not reach the auth service") from e
 
-            data = resp.json()
+            try:
+                data = resp.json()
+            except Exception as exc:
+                logger.error(f"register: Supabase signup response not JSON: {exc}, body={resp.text[:200]}")
+                raise HTTPException(status_code=502, detail="Auth service returned unexpected response") from exc
             logger.info("supabase_signup_response status=%s body=%s", resp.status_code, data)
 
             # Supabase GoTrue signup responses:
             # - New user: {user: {id: "...", identities: [...], ...}}
             # - Existing confirmed user: {user: {id: "...", identities: [], ...}} or {user: null}
             # - Existing unconfirmed: returns the user again (re-sends confirmation)
-            user_obj = data if isinstance(data, dict) and "id" in data else (data.get("user") or {})
-            auth_id = user_obj.get("id")
-            identities = user_obj.get("identities")
+            try:
+                user_obj = data if isinstance(data, dict) and "id" in data else (data.get("user") or {})
+                auth_id = user_obj.get("id")
+                identities = user_obj.get("identities")
+            except Exception as exc:
+                logger.error(f"register: Supabase response parse failed: {exc}, data={str(data)[:200]}")
+                raise HTTPException(status_code=502, detail="Auth service returned unexpected response format") from exc
 
             if not auth_id:
                 # Supabase still returned user:null despite orphan cleanup — the
@@ -325,8 +340,11 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                     status_code=401,
                     detail=f"Account created but login failed (confirm_status={confirm_status}). Please log in manually.",
                 ) from exc
-        await db.refresh(user)
-        await reset_failed_login(db, user)
+        try:
+            await db.refresh(user)
+            await reset_failed_login(db, user)
+        except Exception as exc:
+            logger.warning(f"register: reset_failed_login non-fatal failure: {exc}")
         return TokenResponse(
             access_token=data["access_token"],
             refresh_token=data.get("refresh_token"),
@@ -446,7 +464,14 @@ async def login(payload: AuthLogin, request: Request, db: AsyncSession = Depends
     email = payload.email.strip().lower()
     await check_rate_limit(f"login:{_client_ip(request)}", requests=20, window=60)
 
-    result = await db.execute(select(User).where(User.email == email))
+    try:
+        result = await db.execute(select(User).where(User.email == email))
+    except Exception as exc:
+        logger.error(f"login: DB query failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(
+            status_code=503,
+            detail="Service temporarily unavailable. Please try again in a moment.",
+        ) from exc
     user = result.scalars().first()
     if not user:
         raise HTTPException(status_code=404, detail="Account not found. Please register your account first.")
