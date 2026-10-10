@@ -171,34 +171,44 @@ async def get_history(
     _period_days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
     start_time = datetime.now(UTC) - timedelta(days=_period_days.get(effective_period, 365))
 
-    result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
-    instrument = result.scalars().first()
-
-    if instrument:
-        result = await db.execute(
-            select(OHLCV)
-            .where(
-                (OHLCV.instrument_id == instrument.id) &
-                (OHLCV.interval == interval) &
-                (OHLCV.timestamp >= start_time)
-            )
-            .order_by(OHLCV.timestamp.asc())
-        )
-        bars_data = result.scalars().all()
-
-        if bars_data:
-            bars = [
-                OHLCVBar(
-                    time=int(b.timestamp.timestamp()),
-                    open=float(b.open or 0.0),
-                    high=float(b.high or 0.0),
-                    low=float(b.low or 0.0),
-                    close=float(b.close or 0.0),
-                    volume=float(b.volume or 0.0),
+    # A DB hiccup (Cloud Run cold start, pooler reset) must not turn into a
+    # 500: skip the canonical-DB read and fall through to the provider chain.
+    bars_data: list[OHLCV] = []
+    try:
+        result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+        instrument = result.scalars().first()
+        if instrument:
+            result = await db.execute(
+                select(OHLCV)
+                .where(
+                    (OHLCV.instrument_id == instrument.id) &
+                    (OHLCV.interval == interval) &
+                    (OHLCV.timestamp >= start_time)
                 )
-                for b in bars_data
-            ]
-            return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
+                .order_by(OHLCV.timestamp.asc())
+            )
+            bars_data = list(result.scalars().all())
+    except Exception as exc:
+        logger.warning("History DB lookup failed for %s, using providers: %s", symbol, exc)
+        bars_data = []
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+    if bars_data:
+        bars = [
+            OHLCVBar(
+                time=int(b.timestamp.timestamp()),
+                open=float(b.open or 0.0),
+                high=float(b.high or 0.0),
+                low=float(b.low or 0.0),
+                close=float(b.close or 0.0),
+                volume=float(b.volume or 0.0),
+            )
+            for b in bars_data
+        ]
+        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
 
     # Fallback: DB has no data — try full provider chain (Upstox → yfinance)
     try:
