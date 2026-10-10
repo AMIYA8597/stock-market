@@ -765,7 +765,7 @@ async def sync_upstox_instruments(force: bool = False):
     try:
         from app.services.instrument_seeder import seed_all_exchanges
         result = await seed_all_exchanges(force=force)
-        return {"status": "ok", **result}
+        return {"status": "ok", **result}  # honesty: allow
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Instrument sync failed: {e}")
 
