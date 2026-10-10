@@ -217,11 +217,12 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
             await _supabase_delete_user(orphan_auth_id)
 
         async with httpx.AsyncClient() as client:
+            _anon_key = settings.SUPABASE_ANON_KEY or settings.SUPABASE_SECRET_KEY
             try:
                 resp = await client.post(
                     f"{settings.SUPABASE_URL}/auth/v1/signup",
                     json={"email": email, "password": payload.password},
-                    headers={"apikey": settings.SUPABASE_SECRET_KEY},
+                    headers={"apikey": _anon_key},
                 )
                 resp.raise_for_status()
             except httpx.HTTPStatusError as e:
@@ -314,7 +315,7 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                 resp = await client.post(
                     f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
                     json={"email": email, "password": payload.password},
-                    headers={"apikey": settings.SUPABASE_SECRET_KEY},
+                    headers={"apikey": _anon_key},
                 )
                 logger.info(f"Supabase token status={resp.status_code} body={resp.text[:300]}")
                 resp.raise_for_status()
@@ -397,7 +398,7 @@ async def verify_signup_otp(payload: VerifySignupOTP, request: Request, db: Asyn
             resp = await client.post(
                 f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
                 json={"email": email, "password": payload.password},
-                headers={"apikey": settings.SUPABASE_SECRET_KEY},
+                headers={"apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SECRET_KEY},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -482,7 +483,7 @@ async def login(payload: AuthLogin, request: Request, db: AsyncSession = Depends
             resp = await client.post(
                 f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=password",
                 json={"email": email, "password": payload.password},
-                headers={"apikey": settings.SUPABASE_SECRET_KEY},
+                headers={"apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SECRET_KEY},
             )
             resp.raise_for_status()
             data = resp.json()
@@ -522,7 +523,7 @@ async def refresh(payload: AuthRefresh, db: AsyncSession = Depends(get_db)):
             resp = await client.post(
                 f"{settings.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token",
                 json={"refresh_token": payload.refresh_token},
-                headers={"apikey": settings.SUPABASE_SECRET_KEY},
+                headers={"apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SECRET_KEY},
             )
             resp.raise_for_status()
             data = resp.json()

@@ -48,7 +48,17 @@ export default function RegisterPage() {
 
     setSubmitting(true);
     try {
-      await authApi.register({ email, password, full_name: fullName });
+      const result = await authApi.register({ email, password, full_name: fullName });
+      if (result && 'access_token' in result) {
+        // No-OTP path: backend auto-verified and returned tokens directly
+        const supabase = createClient();
+        await supabase.auth.setSession({
+          access_token: result.access_token,
+          refresh_token: result.refresh_token ?? '',
+        });
+        window.location.href = '/en/dashboard';
+        return;
+      }
       setStep('otp');
     } catch (err) {
       const details = extractErrorDetails(err);
