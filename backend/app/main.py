@@ -219,6 +219,11 @@ class _CORSWrapper:
         # Proxy unknown attrs (e.g. dependency_overrides, middleware_stack,
         # router) to the inner FastAPI app so test fixtures work without
         # needing to import _inner_app directly.
+        # __getattr__ only runs when normal lookup fails. If `app` itself is
+        # missing (copy/pickle, or access before __init__ finishes), reading
+        # self.app here would re-enter __getattr__ forever -> RecursionError.
+        if name == "app":
+            raise AttributeError(name)
         return getattr(self.app, name)
 
     def _allowed(self, origin: str) -> bool:
