@@ -556,7 +556,32 @@ class MarketDataService:
         if upstox_bars:
             return upstox_bars
 
-        return await MarketDataService._yfinance_history(symbol, interval, period)
+        # Try Stooq for daily data — works on cloud IPs unlike yfinance
+        if interval in ("1d",):
+            try:
+                from app.services.ingestion.stooq_source import StooqProvider
+                from datetime import UTC, timedelta
+                stooq = StooqProvider()
+                days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}.get(period, 365)
+                start = datetime.now(UTC) - timedelta(days=days)
+                end = datetime.now(UTC)
+                stooq_bars = await stooq.get_ohlcv(symbol, "1d", start, end)
+                if stooq_bars:
+                    return HistoryList(
+                        [{"time": b.time.isoformat(), "timestamp": b.time.isoformat(),
+                          "open": b.open, "high": b.high, "low": b.low,
+                          "close": b.close, "volume": b.volume}
+                         for b in stooq_bars],
+                        source="stooq"
+                    )
+            except Exception as _stooq_err:
+                logger.debug(f"Stooq history failed for {symbol}: {_stooq_err}")
+
+        try:
+            return await MarketDataService._yfinance_history(symbol, interval, period)
+        except BaseException as _yf_err:
+            logger.debug(f"yfinance history failed for {symbol}: {_yf_err}")
+            return []
 
     @classmethod
     async def get_intraday_candles(cls, symbol: str, interval: str) -> list[dict]:
