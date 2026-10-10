@@ -281,15 +281,24 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                     detail="Registration failed due to a server error. Please try again.",
                 ) from None
 
-    await ensure_personal_organization(db, user)
+    try:
+        await ensure_personal_organization(db, user)
+    except Exception as exc:
+        logger.error(f"ensure_personal_organization failed: {type(exc).__name__}: {exc}")
+        raise HTTPException(status_code=500, detail=f"[DEBUG ensure_org] {type(exc).__name__}: {exc}") from exc
 
     # If SendGrid is not configured, skip OTP and auto-verify the account.
     if not settings.SENDGRID_API_KEY:
-        user.email_verified = True
-        await db.commit()
+        try:
+            user.email_verified = True
+            await db.commit()
+        except Exception as exc:
+            logger.error(f"email_verified commit failed: {type(exc).__name__}: {exc}")
+            raise HTTPException(status_code=500, detail=f"[DEBUG commit] {type(exc).__name__}: {exc}") from exc
         async with httpx.AsyncClient() as client:
+            confirm_status = None
             try:
-                await client.put(
+                confirm_resp = await client.put(
                     f"{settings.SUPABASE_URL}/auth/v1/admin/users/{_auth_id}",
                     json={"email_confirm": True},
                     headers={
@@ -297,6 +306,8 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                         "Authorization": f"Bearer {settings.SUPABASE_SECRET_KEY}",
                     },
                 )
+                confirm_status = confirm_resp.status_code
+                logger.info(f"Supabase confirm status={confirm_status} body={confirm_resp.text[:200]}")
             except Exception as exc:
                 logger.warning(f"Failed to confirm Supabase email for {_user_id}: {exc}")
             try:
@@ -305,12 +316,13 @@ async def register(payload: AuthRegister, request: Request, db: AsyncSession = D
                     json={"email": email, "password": payload.password},
                     headers={"apikey": settings.SUPABASE_SECRET_KEY},
                 )
+                logger.info(f"Supabase token status={resp.status_code} body={resp.text[:300]}")
                 resp.raise_for_status()
                 data = resp.json()
             except Exception as exc:
                 raise HTTPException(
                     status_code=401,
-                    detail="Account created. Please log in manually.",
+                    detail=f"Account created but login failed (confirm_status={confirm_status}). Please log in manually.",
                 ) from exc
         await db.refresh(user)
         await reset_failed_login(db, user)
