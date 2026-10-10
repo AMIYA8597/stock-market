@@ -77,71 +77,84 @@ export function DashboardOverview(): JSX.Element {
 
   const {
     data: pnl,
-    isLoading: isLoadingPnl,
+    isPending: isPendingPnl,
+    isError: isErrorPnl,
   } = useQuery({
     queryKey: ["paper-trade", "pnl"],
     queryFn: () => paperTradingApi.getPnl() as Promise<PaperPnl>,
+    retry: 1,
+    staleTime: 30_000,
   });
 
   const {
     data: positions,
-    isLoading: isLoadingPositions,
+    isPending: isPendingPositions,
+    isError: isErrorPositions,
   } = useQuery({
     queryKey: ["paper-trade", "positions"],
     queryFn: () => paperTradingApi.getPositions() as Promise<PositionRow[]>,
+    retry: 1,
+    staleTime: 30_000,
   });
 
   const {
     data: portfolios,
-    isLoading: isLoadingPortfolios,
+    isPending: isPendingPortfolios,
+    isError: isErrorPortfolios,
   } = useQuery({
     queryKey: ["portfolios"],
     queryFn: () => portfolioApi.list(),
+    retry: 1,
+    staleTime: 30_000,
   });
 
   const portfolio = portfolios?.[0] ?? null;
 
   const {
     data: riskMetrics,
-    isLoading: isLoadingRisk,
+    isPending: isPendingRisk,
   } = useQuery({
     queryKey: ["risk", portfolio?.id],
     queryFn: () => portfolioApi.getRisk(portfolio!.id),
     enabled: Boolean(portfolio?.id),
+    retry: 1,
   });
 
   const {
     data: performance,
-    isLoading: isLoadingPerformance,
+    isPending: isPendingPerformance,
   } = useQuery({
     queryKey: ["performance", portfolio?.id],
     queryFn: () => portfolioApi.getPerformance(),
     enabled: Boolean(portfolio?.id),
+    retry: 1,
   });
 
   const {
     data: alertsHistory,
-    isLoading: isLoadingAlerts,
+    isPending: isPendingAlerts,
+    isError: isErrorAlerts,
   } = useQuery({
     queryKey: ["alerts", "history"],
     queryFn: () => alertsApi.getHistory(6),
+    retry: 1,
+    staleTime: 30_000,
   });
 
   const {
     data: signal,
-    isLoading: isLoadingSignal,
+    isPending: isPendingSignal,
   } = useSignalQuery("NIFTY50");
 
-  // risk-metrics/performance queries are disabled until a portfolio id is known;
-  // a disabled query never leaves "pending" state, so only wait on them once enabled,
-  // otherwise the whole dashboard would hang forever whenever there's no portfolio yet.
+  // Only block render while queries are actively fetching (not errored).
+  // Errored queries resolve immediately so the dashboard never hangs forever.
   const isLoading =
-    isLoadingPnl ||
-    isLoadingPositions ||
-    isLoadingPortfolios ||
-    (Boolean(portfolio?.id) && (isLoadingRisk || isLoadingPerformance)) ||
-    isLoadingAlerts ||
-    isLoadingSignal;
+    (isPendingPnl && !isErrorPnl) ||
+    (isPendingPositions && !isErrorPositions) ||
+    (isPendingPortfolios && !isErrorPortfolios) ||
+    (Boolean(portfolio?.id) && (isPendingRisk || isPendingPerformance)) ||
+    (isPendingAlerts && !isErrorAlerts) ||
+    isPendingSignal;
 
   // Global blocking error removed to allow graceful degradation of individual widgets
 
