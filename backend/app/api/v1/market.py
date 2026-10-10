@@ -755,16 +755,17 @@ async def get_patterns(symbol: str):
 
 
 @router.post("/instruments/sync-upstox", tags=["instruments"])
-async def sync_upstox_instruments():
-    """Trigger Upstox NSE instrument master sync.
+async def sync_upstox_instruments(force: bool = False):
+    """Trigger Upstox NSE+BSE instrument master seed.
 
-    Downloads instrument keys from Upstox's public instrument file and
-    populates InstrumentAlias rows so UpstoxSource can resolve symbols.
+    Downloads instrument keys from Upstox's public CSV and upserts all
+    EQ/INDEX rows into Exchange, Instrument, and InstrumentAlias tables.
+    Pass ?force=true to re-seed even if already done this session.
     """
     try:
-        from app.tasks.upstox_instrument_tasks import _sync_upstox_instruments_async
-        result = await _sync_upstox_instruments_async(create_missing=True)
-        return {"status": "ok", **result}  # honesty: allow
+        from app.services.instrument_seeder import seed_all_exchanges
+        result = await seed_all_exchanges(force=force)
+        return {"status": "ok", **result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Instrument sync failed: {e}")
 
