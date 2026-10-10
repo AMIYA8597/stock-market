@@ -81,6 +81,7 @@ jobs:
             --image ${{ env.IMAGE }}:${{ github.sha }} \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
+            --allow-unauthenticated \
             --quiet
 
       - name: Print Service URL
