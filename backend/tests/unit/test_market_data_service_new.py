@@ -187,11 +187,18 @@ async def test_get_history_db_success():
 
 @pytest.mark.asyncio
 async def test_get_history_instrument_not_found():
-    # When DB has no instrument, service falls through to Upstox→yfinance.
-    # In tests yfinance is mocked to raise RuntimeError ("Network offline").
-    with _mock_db_ctx([_empty_result()]):
-        with pytest.raises(RuntimeError):
-            await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
+    # When the DB has no instrument, get_history falls through
+    # Upstox -> Stooq -> yfinance. When every provider fails it returns an
+    # empty list (the /market/history route maps that to a 404) rather than
+    # raising. (yfinance is mocked by conftest to raise "Network offline".)
+    with _mock_db_ctx([_empty_result()]), patch.object(
+        MarketDataService, "_upstox_history", AsyncMock(return_value=None)
+    ), patch(
+        "app.services.ingestion.stooq_source.StooqProvider.get_ohlcv",
+        AsyncMock(side_effect=RuntimeError("Network offline (mocked stooq)")),
+    ):
+        result = await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
+    assert result == []
 
 @pytest.mark.asyncio
 async def test_get_intraday_candles_success():

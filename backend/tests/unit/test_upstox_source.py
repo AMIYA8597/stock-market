@@ -106,7 +106,9 @@ async def test_get_quote_propagates_unmapped_symbol():
 async def test_get_ohlcv_rejects_unsupported_interval():
     provider = UpstoxSource(token="fake-token")
     with pytest.raises(DataUnavailableError):
-        await provider.get_ohlcv("RELIANCE", "1w", datetime(2024, 1, 1), datetime(2024, 1, 31))  # type: ignore[arg-type]
+        # "1w" and "1mo" are supported since the v3 historical-candle API was
+        # adopted (see _INTERVAL_MAP), so use an interval Upstox has no mapping for.
+        await provider.get_ohlcv("RELIANCE", "4h", datetime(2024, 1, 1), datetime(2024, 1, 31))  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio

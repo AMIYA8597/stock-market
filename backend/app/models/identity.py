@@ -21,7 +21,8 @@ class User(Base):
     # password storage/hashing entirely; this column stays NULL for those
     # rows rather than duplicating a second copy of the credential.
     password_hash: Mapped[str | None] = mapped_column(String(255))
-    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    # server_default mirrors migration c0698f36e21e (keeps `alembic check` clean).
+    failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
