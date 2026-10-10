@@ -1,5 +1,6 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocale } from 'next-intl';
 import { createClient } from '@/lib/supabase/client';
 import { authApi, ApiError } from '@/lib/api-client';
 import { Link } from '@/i18n/navigation';
@@ -7,6 +8,7 @@ import { Link } from '@/i18n/navigation';
 type Step = 'email' | 'password' | 'unverified';
 
 export default function LoginPage() {
+  const locale = useLocale();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -14,6 +16,20 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [info, setInfo] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Arriving from /register (?registered=1&email=...): the account already
+  // exists, so skip the email lookup and go straight to the password step.
+  // Read from window.location rather than useSearchParams() so this page
+  // doesn't need a Suspense boundary to build statically.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const registeredEmail = params.get('email');
+    if (params.get('registered') === '1' && registeredEmail) {
+      setEmail(registeredEmail);
+      setInfo('Account created. Please sign in.');
+      setStep('password');
+    }
+  }, []);
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,7 +65,8 @@ export default function LoginPage() {
     // wherever we were headed before login.
     const nextCookie = document.cookie.split('; ').find(c => c.startsWith('nq_next='));
     const nextPath = nextCookie ? decodeURIComponent(nextCookie.split('=')[1] ?? '/dashboard') : '/dashboard';
-    window.location.href = nextPath;
+    // nq_next holds a locale-less path (see middleware.ts); keep the user's locale.
+    window.location.href = `/${locale}${nextPath.startsWith('/') ? nextPath : '/dashboard'}`;
   };
 
   const handlePasswordSubmit = async (e: React.FormEvent) => {
@@ -131,6 +148,7 @@ export default function LoginPage() {
         <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4 w-80">
           <h1 className="text-2xl font-bold">Sign In</h1>
           <p className="text-sm text-[var(--nq-text-secondary)]">{email}</p>
+          {info && <p className="text-green-500 text-sm">{info}</p>}
           {error && <p className="text-red-500 text-sm">{error}</p>}
           <input
             type="password"
