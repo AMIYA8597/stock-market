@@ -27,9 +27,6 @@ export interface ProfileLevels {
 
 export function toUtcTimestamp(value: string): UTCTimestamp {
   const ts = Math.floor(new Date(value).getTime() / 1000) as UTCTimestamp;
-  if (isNaN(ts)) {
-    console.log(`[HOP 6 toUtcTimestamp] NaN for value=${value}`);
-  }
   return ts;
 }
 

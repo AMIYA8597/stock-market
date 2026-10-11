@@ -14,11 +14,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from research.strategies.base import Strategy, StrategySignal, TradeDirection
+from research.strategies.base import StrategySignal, TradeDirection
 from research.strategies.ema_cross_vwap_adx import EMACrossVWAPADXStrategy
 from research.strategies.ema_retest import EMARetestStrategy
 from research.strategies.registry import get_strategy, list_strategies
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 

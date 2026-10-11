@@ -582,11 +582,15 @@ export function StockLiveContractContent({ symbol }: StockLiveContractContentPro
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded border border-[var(--nq-border)] p-2">
                   <p className="text-[var(--nq-text-secondary)]">Buy Prob</p>
-                  <p className="font-semibold font-mono mt-0.5">{(Number(signal?.prob_buy ?? 0.5) * 100).toFixed(1)}%</p>
+                  <p className="font-semibold font-mono mt-0.5">
+                    {signal?.prob_buy != null ? `${(Number(signal.prob_buy) * 100).toFixed(1)}%` : "—"}
+                  </p>
                 </div>
                 <div className="rounded border border-[var(--nq-border)] p-2">
                   <p className="text-[var(--nq-text-secondary)]">Sell Prob</p>
-                  <p className="font-semibold font-mono mt-0.5">{(Number(signal?.prob_sell ?? 0.5) * 100).toFixed(1)}%</p>
+                  <p className="font-semibold font-mono mt-0.5">
+                    {signal?.prob_sell != null ? `${(Number(signal.prob_sell) * 100).toFixed(1)}%` : "—"}
+                  </p>
                 </div>
                 <div className="rounded border border-[var(--nq-border)] p-2">
                   <p className="text-[var(--nq-text-secondary)]">5D Target</p>

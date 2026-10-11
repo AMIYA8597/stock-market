@@ -128,7 +128,9 @@ jobs:
         # --help text and exited 1 instead of type-checking anything.
         run: pnpm --filter @neuroquant/web run type-check
       - name: Test Symbols
-        run: pnpm --filter web exec vitest run src/lib/symbols.test.ts
+        run: pnpm --filter @neuroquant/web exec vitest run src/lib/symbols.test.ts
+      - name: Test Safety Guard Rails
+        run: pnpm --filter @neuroquant/web exec vitest run src/tests/safety.test.ts
       - name: Build
         run: pnpm build
 

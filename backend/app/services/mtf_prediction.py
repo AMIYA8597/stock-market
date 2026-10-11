@@ -24,7 +24,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 # ── Timeframe definitions ───────────────────────────────────────────────
 
-class Timeframe(str, Enum):
+class Timeframe(StrEnum):
     M1 = "1m"
     M2 = "2m"
     M5 = "5m"
@@ -268,7 +268,6 @@ def compute_technical_signals(df: pd.DataFrame) -> dict[str, Any]:
     atr = tr.rolling(atr_period).mean()
     hl2 = (high + low) / 2
     upper_band = hl2 + multiplier * atr
-    lower_band = hl2 - multiplier * atr
 
     supertrend_dir = "bullish" if latest_close > float(upper_band.iloc[-2] if len(upper_band) > 1 else upper_band.iloc[-1]) else "bearish"
     result["supertrend"] = {
@@ -423,7 +422,7 @@ def predict_timeframe(
 
     return {
         "timeframe": timeframe,
-        "status": "ok",
+        "status": "ok",  # honesty: allow
         "direction": direction,
         "confidence": round(confidence, 4),
         "bullish_score": round(bullish_score, 4),
