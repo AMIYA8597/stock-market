@@ -88,39 +88,48 @@ async def get_quote(
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
 
-    # Try DB first
-    result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
-    instrument = result.scalars().first()
+    # Try DB first — wrapped in try/except so a DB hiccup (cold start, pooler
+    # reset, missing table) falls through to the live provider chain instead
+    # of returning a 500.
+    try:
+        result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+        instrument = result.scalars().first()
 
-    if instrument:
-        result = await db.execute(
-            select(QuoteSnapshot)
-            .where(QuoteSnapshot.instrument_id == instrument.id)
-            .order_by(QuoteSnapshot.observed_at.desc())
-            .limit(1)
-        )
-        quote = result.scalars().first()
-
-        if quote:
-            price_val = float(quote.price or 0.0)
-            change_pct = float(quote.change_pct or 0.0)
-            return QuoteResponse(
-                ticker=symbol,
-                name=instrument.display_name or symbol,
-                price=Decimal(str(price_val)),
-                change=Decimal(str(quote.change or 0.0)),
-                change_pct=Decimal(str(change_pct)),
-                volume=Decimal(str(quote.volume or 0.0)),
-                market_cap=None,
-                pe_ratio=None,
-                week_52_high=None,
-                week_52_low=None,
-                regime=None,
-                signal=None,
-                timestamp=quote.observed_at,
-                data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
-                source="canonical_db",
+        if instrument:
+            result = await db.execute(
+                select(QuoteSnapshot)
+                .where(QuoteSnapshot.instrument_id == instrument.id)
+                .order_by(QuoteSnapshot.observed_at.desc())
+                .limit(1)
             )
+            quote = result.scalars().first()
+
+            if quote:
+                price_val = float(quote.price or 0.0)
+                change_pct = float(quote.change_pct or 0.0)
+                return QuoteResponse(
+                    ticker=symbol,
+                    name=instrument.display_name or symbol,
+                    price=Decimal(str(price_val)),
+                    change=Decimal(str(quote.change or 0.0)),
+                    change_pct=Decimal(str(change_pct)),
+                    volume=Decimal(str(quote.volume or 0.0)),
+                    market_cap=None,
+                    pe_ratio=None,
+                    week_52_high=None,
+                    week_52_low=None,
+                    regime=None,
+                    signal=None,
+                    timestamp=quote.observed_at,
+                    data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
+                    source="canonical_db",
+                )
+    except Exception as exc:
+        logger.warning("Quote DB lookup failed for %s, falling through to providers: %s", symbol, exc)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
     # Fallback: DB has no data — use the full provider chain (Upstox → yfinance → IndianStockAPI)
     try:

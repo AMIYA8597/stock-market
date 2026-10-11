@@ -142,7 +142,19 @@ def verify_supabase_token(token: str) -> dict[str, Any]:
             from app.core.test_state import TEST_JWT_SECRET
             secret = TEST_JWT_SECRET
         if not secret:
-            raise HTTPException(status_code=500, detail="SUPABASE_JWT_SECRET not configured")
+            # JWKS verification didn't match (no kid in token, or JWKS
+            # unavailable) and no HS256 fallback is configured. Rather than a
+            # 500 (server misconfiguration), return 401 — the token simply
+            # could not be verified with the available methods.
+            logger.warning(
+                "JWT has no JWKS kid match and SUPABASE_JWT_SECRET is not configured — "
+                "token cannot be verified. Set SUPABASE_JWT_SECRET for HS256 fallback."
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication credentials could not be verified",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         payload = jwt.decode(
             token,
