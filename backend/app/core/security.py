@@ -92,6 +92,10 @@ def _fetch_jwks() -> dict[str, Any] | None:
     JWKS endpoint at {SUPABASE_URL}/auth/v1/.well-known/jwks.json. Legacy projects
     still on the shared HS256 secret have no such endpoint; callers must fall back
     to verify_supabase_token's HS256 path in that case.
+
+    Uses a synchronous httpx call — safe because this is called from the sync
+    verify_supabase_token(), and the result is cached after the first success so
+    subsequent calls return instantly without blocking the async event loop.
     """
     if _jwks_cache.get("keys"):
         return _jwks_cache
