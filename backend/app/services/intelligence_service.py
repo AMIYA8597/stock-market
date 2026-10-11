@@ -233,7 +233,18 @@ class IntelligenceService:
         )
 
     async def get_bulk_signals(self, symbols: list[str]) -> list[SignalResponse]:
-        return await asyncio.gather(*(self.get_signal(symbol) for symbol in symbols))
+        # Limit concurrency to avoid overwhelming Cloud Run with heavy ML
+        # predictions running in parallel. Each get_signal() can run
+        # get_full_prediction() which fetches 2 years of OHLCV data and runs
+        # multiple ML models — doing 50 of those simultaneously exhausts
+        # memory and CPU, causing 502/503 errors.
+        sem = asyncio.Semaphore(3)
+
+        async def _throttled(symbol: str) -> SignalResponse:
+            async with sem:
+                return await self.get_signal(symbol)
+
+        return list(await asyncio.gather(*(_throttled(s) for s in symbols)))
 
     async def get_signal_history(self, symbol: str, model: str, days: int) -> list[SignalHistoryPoint]:
         try:

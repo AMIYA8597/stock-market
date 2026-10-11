@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,6 +10,8 @@ from app.core.dependencies import require_role
 from app.core.security import RequestContext
 from app.database.connection import get_db
 from app.models.alerts import Alert, AlertEvent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 
@@ -130,13 +133,17 @@ async def alert_history(
     if not ctx.organization_id:
         raise HTTPException(status_code=403, detail="Organization required")
 
-    result = await db.execute(
-        select(AlertEvent, Alert)
-        .join(Alert, AlertEvent.alert_id == Alert.id)
-        .where(AlertEvent.organization_id == uuid.UUID(ctx.organization_id))
-        .order_by(AlertEvent.created_at.desc())
-        .limit(limit)
-    )
+    try:
+        result = await db.execute(
+            select(AlertEvent, Alert)
+            .join(Alert, AlertEvent.alert_id == Alert.id)
+            .where(AlertEvent.organization_id == uuid.UUID(ctx.organization_id))
+            .order_by(AlertEvent.created_at.desc())
+            .limit(limit)
+        )
+    except Exception as exc:
+        logger.warning("Alert history DB query failed: %s", exc)
+        return {"events": [], "total": 0}
     items = []
     for event, alert in result.all():
         data = event.event_data if isinstance(event.event_data, dict) else {}
