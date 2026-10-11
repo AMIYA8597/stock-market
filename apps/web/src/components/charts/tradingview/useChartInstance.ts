@@ -20,8 +20,6 @@ export function useChartInstance({
     const element = containerRef.current;
     if (!element) return;
 
-    console.log(`[HOP 7 useChartInstance] element w=${element.clientWidth}, h=${element.clientHeight}, height=${height}`);
-
     const chartInstance = createChart(element, {
       autoSize: true,
       ...(height ? { height } : {}),

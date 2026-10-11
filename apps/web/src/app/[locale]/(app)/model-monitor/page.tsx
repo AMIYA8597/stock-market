@@ -141,13 +141,14 @@ function ModelMonitorPage(): JSX.Element {
     });
   }, [accuracy, drift]);
 
-  const ensembleStability = useMemo(() => {
+  const ensembleStability = useMemo<number | null>(() => {
     if (weightColumns.length < 2) {
-      return 0.85;
+      return null;
     }
 
     const values = weightColumns.map((w) => w.tft);
     const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    if (mean === 0) return 0;
     const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
     const stdDev = Math.sqrt(variance);
     const cv = stdDev / mean;
@@ -215,16 +216,42 @@ function ModelMonitorPage(): JSX.Element {
             <p className="text-xs text-[var(--nq-text-secondary)]">Weight variance normalized coefficient</p>
           </div>
           <div className="text-right">
-            <div className="text-lg font-semibold">{(ensembleStability * 100).toFixed(1)}%</div>
-            <div className={`text-xs font-medium ${ensembleStability > 0.75 ? "text-[var(--nq-accent-green)]" : ensembleStability > 0.5 ? "text-[var(--nq-accent-amber)]" : "text-[var(--nq-accent-red)]"}`}>
-              {ensembleStability > 0.75 ? "Stable" : ensembleStability > 0.5 ? "Moderate" : "Volatile"}
+            <div className="text-lg font-semibold">
+              {ensembleStability !== null ? `${(ensembleStability * 100).toFixed(1)}%` : "—"}
+            </div>
+            <div
+              className={`text-xs font-medium ${
+                ensembleStability === null
+                  ? "text-[var(--nq-text-secondary)]"
+                  : ensembleStability > 0.75
+                  ? "text-[var(--nq-accent-green)]"
+                  : ensembleStability > 0.5
+                  ? "text-[var(--nq-accent-amber)]"
+                  : "text-[var(--nq-accent-red)]"
+              }`}
+            >
+              {ensembleStability === null
+                ? "Insufficient Data"
+                : ensembleStability > 0.75
+                ? "Stable"
+                : ensembleStability > 0.5
+                ? "Moderate"
+                : "Volatile"}
             </div>
           </div>
         </div>
         <div className="mt-3 h-2 rounded-full bg-[rgba(255,255,255,0.05)]">
           <div
-            className={`h-full rounded-full transition-all duration-500 ${ensembleStability > 0.75 ? "bg-[var(--nq-accent-green)]" : ensembleStability > 0.5 ? "bg-[var(--nq-accent-amber)]" : "bg-[var(--nq-accent-red)]"}`}
-            style={{ width: `${ensembleStability * 100}%` }}
+            className={`h-full rounded-full transition-all duration-500 ${
+              ensembleStability !== null && ensembleStability > 0.75
+                ? "bg-[var(--nq-accent-green)]"
+                : ensembleStability !== null && ensembleStability > 0.5
+                ? "bg-[var(--nq-accent-amber)]"
+                : ensembleStability !== null
+                ? "bg-[var(--nq-accent-red)]"
+                : "bg-transparent"
+            }`}
+            style={{ width: `${(ensembleStability ?? 0) * 100}%` }}
           />
         </div>
       </div>

@@ -39,7 +39,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
   }
 
   // 1. Confidence Gauge Math
-  const confidenceVal = Number(signal.ensemble.confidence ?? 0.50);
+  const confidenceVal = Number(signal.ensemble.confidence ?? 0);
   const direction = signal.ensemble.direction ?? "NEUTRAL";
   const radius = 34;
   const circumference = 2 * Math.PI * radius;
@@ -157,7 +157,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
               <div className="relative h-2 w-full bg-[rgba(255,255,255,0.03)] rounded-full overflow-hidden border border-[var(--nq-border)]">
                 <div
                   className="h-full bg-[var(--nq-accent-green)] transition-all duration-500"
-                  style={{ width: `${(regime.bull_prob ?? 0.5) * 100}%` }}
+                  style={{ width: `${(regime.bull_prob ?? 0) * 100}%` }}
                 />
               </div>
             </div>
@@ -281,7 +281,7 @@ export default function SignalsTab({ signal, forecast }: SignalsTabProps): JSX.E
                   if (name === "technical") return (d.score as number) ?? 0;
                   if (name === "pattern") return (d.pattern_score as number) ?? 0;
                   if (name === "momentum") return (d.momentum_score as number) ?? 0;
-                  if (name === "regime") return (d.bull_prob as number) ?? 0.5;
+                  if (name === "regime") return (d.bull_prob as number) ?? 0;
                   if (name === "xgboost") return (d.xgb_score as number) ?? 0;
                   return 0;
                 };

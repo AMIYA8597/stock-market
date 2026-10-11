@@ -456,10 +456,6 @@ export function LightweightCandlestickChart({
     const closes = bars.map((bar) => bar.close);
     const times = bars.map((bar) => toUtcTimestamp(bar.timestamp));
 
-    console.log(
-      `[HOP 8 setData] chartStyle=${chartStyle}, bars in=${bars.length}, first=${bars[0]?.timestamp}, last=${bars[bars.length - 1]?.timestamp}`,
-    );
-
     // Prepare calculations for indicators
     const candleData: Candle[] = bars.map((b) => ({
       time: toUtcTimestamp(b.timestamp),
