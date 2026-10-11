@@ -1,4 +1,25 @@
 import { defineConfig, devices } from '@playwright/test';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+
+// Load .env.local so NEXT_PUBLIC_* vars are available in the test-runner process.
+// In CI these are already in the environment; the try/catch silently ignores the
+// missing file so nothing breaks.
+try {
+  const raw = readFileSync(resolve(__dirname, '.env.local'), 'utf-8');
+  for (const rawLine of raw.split('\n')) {
+    // trim() strips CRLF (\r) on Windows and leading/trailing whitespace
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const eq = line.indexOf('=');
+    if (eq < 1) continue;
+    const key = line.slice(0, eq);
+    const val = line.slice(eq + 1).replace(/^["']|["']$/g, '');
+    if (/^[A-Z_][A-Z_0-9]*$/.test(key) && !process.env[key]) {
+      process.env[key] = val;
+    }
+  }
+} catch { /* .env.local absent in CI — env vars come from GitHub Secrets */ }
 
 export default defineConfig({
   testDir: './e2e',
