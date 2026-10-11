@@ -55,6 +55,7 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@neuroquant/config": "workspace:*",
     "@neuroquant/types": "workspace:*",
     "@playwright/test": "^1.63.0",
