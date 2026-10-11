@@ -64,7 +64,7 @@ For every route under apps/web/src/app/[locale]:
  /market/global-context)  8 security/authz (every endpoint: anonymous, other user, owner, admin)
  9 data quality (prices/candles match source, not stale, IST timestamps, no fabricated values)
  10 resilience (backend down, empty data, 401/403/404/429/503 shown clearly, never a blank page).
-- [ ] Fix apps/web/src/tests/safety.test.ts (its regex is broken) and add it to CI.
+- [x] Fix apps/web/src/tests/safety.test.ts (its regex is broken) and add it to CI.
 - [ ] docs/QA_MATRIX.md: route x test type = pass/fail + evidence; fix every failure.
 
 GATE 3: QA matrix all pass; production has 0 console errors and 0 5xx on every route;
