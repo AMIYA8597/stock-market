@@ -22,7 +22,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-class TradeDirection(str, enum.Enum):
+class TradeDirection(enum.StrEnum):
     LONG = "LONG"
     SHORT = "SHORT"
 
@@ -138,10 +138,10 @@ class Strategy(ABC):
         """Clear internal state between runs."""
         self._state.clear()
 
-    def on_fill(self, bar_index: int, fill_price: float, direction: TradeDirection) -> None:
+    def on_fill(self, bar_index: int, fill_price: float, direction: TradeDirection) -> None:  # noqa: B027
         """Called by the engine when an order is filled — update internal state."""
 
-    def on_exit(self, bar_index: int, exit_price: float, result: str) -> None:
+    def on_exit(self, bar_index: int, exit_price: float, result: str) -> None:  # noqa: B027
         """Called by the engine when a position is closed."""
 
     def compute_indicators(self, df: pd.DataFrame) -> pd.DataFrame:

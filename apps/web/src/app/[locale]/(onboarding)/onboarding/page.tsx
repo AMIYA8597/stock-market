@@ -77,7 +77,6 @@ export default function OnboardingPage() {
   };
 
   const handleFinish = async () => {
-    console.log('Saving onboarding data to backend...', formData);
     await onboardingApi.completeOnboarding(formData);
     
     // Clear session storage upon successful completion

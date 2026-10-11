@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from app.services.mtf_prediction import (
     Timeframe,
@@ -22,7 +21,6 @@ from app.services.mtf_prediction import (
     detect_candlestick_patterns,
     predict_timeframe,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 

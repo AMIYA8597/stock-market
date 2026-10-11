@@ -681,20 +681,6 @@ export const tradingApi = {
     return fetchApi("/trading/mode");
   },
 
-  placeOrder(order: {
-    symbol: string;
-    side: string;
-    quantity: number;
-    order_type: string;
-    limit_price?: number;
-    product?: string;
-  }): Promise<unknown> {
-    return fetchApi("/trading/order", {
-      method: "POST",
-      body: JSON.stringify(order),
-    });
-  },
-
   triggerKillSwitch(): Promise<unknown> {
     return fetchApi("/trading/kill-switch", {
       method: "POST",

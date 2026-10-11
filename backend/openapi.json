@@ -3054,7 +3054,7 @@
           "backtest"
         ],
         "summary": "Get Backtest Strategies",
-        "description": "List available backtest strategies with descriptions and parameters.",
+        "description": "List available backtest strategies \u2014 both legacy metadata and real strategy plugins.",
         "operationId": "get_backtest_strategies_api_v1_backtest_strategies_get",
         "responses": {
           "200": {
@@ -4645,6 +4645,71 @@
             "schema": {
               "type": "string",
               "title": "Symbol"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/predictions/mtf/{symbol}": {
+      "get": {
+        "tags": [
+          "predictions"
+        ],
+        "summary": "Get Mtf Prediction Endpoint",
+        "description": "Multi-timeframe prediction across 1m to 1D.\n\nCombines candlestick pattern recognition, technical indicator signals,\nand trend classification across all requested timeframes.\n\nQuery param ``timeframes``: comma-separated list (e.g. \"5m,15m,1h,1D\").\nOmit for all timeframes.\n\nNOTE: Predictions use rule-based heuristics.  The ``data_source`` field\nin each response object indicates this.  ML-model-backed predictions\nwill be enabled after model training (Phase 7).",
+        "operationId": "get_mtf_prediction_endpoint_api_v1_predictions_mtf__symbol__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "symbol",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Symbol"
+            }
+          },
+          {
+            "name": "timeframes",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Timeframes"
             }
           }
         ],

@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { tradingApi } from "@/lib/api-client";
-import { useTradingStore } from "@/stores/tradingStore";
 
 export const TRADING_QUERY_KEY = ["trading"] as const;
 export const TRADING_AUDIT_LOG_KEY = [...TRADING_QUERY_KEY, "audit-log"] as const;
@@ -8,16 +7,9 @@ export const TRADING_MODE_KEY = [...TRADING_QUERY_KEY, "mode"] as const;
 export const BROKER_STATUS_KEY = [...TRADING_QUERY_KEY, "broker-status"] as const;
 
 export function useTradingModeQuery() {
-  const setTradingModeStore = useTradingStore((state) => state.setTradingMode);
-  
   return useQuery({
     queryKey: TRADING_MODE_KEY,
-    queryFn: async () => {
-      const res = await tradingApi.getMode();
-      // Synchronize Zustand client state with server state
-      setTradingModeStore(res.mode.toUpperCase() as "PAPER" | "LIVE");
-      return res;
-    },
+    queryFn: () => tradingApi.getMode(),
   });
 }
 

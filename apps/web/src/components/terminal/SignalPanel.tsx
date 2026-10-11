@@ -896,55 +896,6 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
           )}
         </div>
       </div>
-
-      {showConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded border border-[#FF3B5C] bg-[var(--nq-bg-card)] p-4 shadow-[0_0_24px_rgba(255,59,92,0.2)]">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-[#FF3B5C] flex items-center gap-1.5">
-              ⚠️ Warning: Live Order Confirmation
-            </h3>
-            <p className="mt-2 text-xs text-[var(--nq-text-secondary)] leading-relaxed">
-              You are about to place a <strong>LIVE</strong> order with real capital. Please review the ticket details below carefully:
-            </p>
-            <div className="my-3 rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.015)] p-2.5 font-mono text-[11px] space-y-1 text-[var(--nq-text-secondary)]">
-              <div>Side: <span className={side === "BUY" ? "text-[#00E676]" : "text-[#FF3B5C]"}>{side}</span></div>
-              <div>Symbol: <span className="text-[var(--nq-text-primary)]">{signal?.symbol}</span></div>
-              <div>Quantity: <span className="text-[var(--nq-text-primary)]">{quantity}</span></div>
-              <div>Price: <span className="text-[var(--nq-text-primary)]">INR {price}</span></div>
-              <div className="border-t border-[rgba(255,255,255,0.05)] pt-1 mt-1 font-bold text-[var(--nq-text-primary)]">
-                Notional: INR {notional.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-              </div>
-            </div>
-            <label className="block text-[10px] font-bold uppercase text-[var(--nq-text-secondary)]">
-              Type the confirmation phrase <span className="text-[var(--nq-text-primary)] font-mono">&quot;{expectedPhrase}&quot;</span>:
-              <input
-                type="text"
-                value={typedPhrase}
-                onChange={(e) => setTypedPhrase(e.target.value)}
-                placeholder={expectedPhrase}
-                className="mt-1 w-full rounded border border-[#FF3B5C]/50 bg-black/20 px-2.5 py-1.5 font-mono text-xs text-[var(--nq-text-primary)] outline-none focus:border-[#FF3B5C]"
-              />
-            </label>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(false)}
-                className="rounded border border-[var(--nq-border)] px-3 py-2 text-xs font-semibold text-[var(--nq-text-secondary)] hover:bg-[rgba(255,255,255,0.05)]"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={typedPhrase !== expectedPhrase}
-                onClick={executePlaceOrder}
-                className="rounded bg-[#FF3B5C] px-3 py-2 text-xs font-bold text-white shadow-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#d50000]"
-              >
-                Confirm Live Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
