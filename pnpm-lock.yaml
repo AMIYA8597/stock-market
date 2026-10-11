@@ -31,7 +31,7 @@ importers:
         version: 5.2.9
       '@hookform/resolvers':
         specifier: ^3.9.0
-        version: 3.10.0(react-hook-form@7.71.2)
+        version: 3.10.0(react-hook-form@7.89.0)
       '@neuroquant/ui':
         specifier: workspace:^
         version: link:../../packages/ui
@@ -120,8 +120,8 @@ importers:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
       react-hook-form:
-        specifier: ^7.53.0
-        version: 7.71.2(react@18.3.1)
+        specifier: ^7.89.0
+        version: 7.89.0(@types/react@18.3.28)(react@18.3.1)
       react-markdown:
         specifier: ^9.0.1
         version: 9.1.0(@types/react@18.3.28)(react@18.3.1)
@@ -755,12 +755,12 @@ packages:
       '@formatjs/fast-memoize': 3.1.7
     dev: false
 
-  /@hookform/resolvers@3.10.0(react-hook-form@7.71.2):
+  /@hookform/resolvers@3.10.0(react-hook-form@7.89.0):
     resolution: {integrity: sha512-79Dv+3mDF7i+2ajj7SkypSKHhl1cbln1OGavqrsF7p6mbUv11xpqpacPsGDCTRvCSjEEIez2ef1NveSVL3b0Ag==}
     peerDependencies:
       react-hook-form: ^7.0.0
     dependencies:
-      react-hook-form: 7.71.2(react@18.3.1)
+      react-hook-form: 7.89.0(@types/react@18.3.28)(react@18.3.1)
     dev: false
 
   /@humanwhocodes/config-array@0.13.0:
@@ -6703,12 +6703,17 @@ packages:
       react: 18.3.1
       scheduler: 0.23.2
 
-  /react-hook-form@7.71.2(react@18.3.1):
-    resolution: {integrity: sha512-1CHvcDYzuRUNOflt4MOq3ZM46AronNJtQ1S7tnX6YN4y72qhgiUItpacZUAQ0TyWYci3yz1X+rXaSxiuEm86PA==}
+  /react-hook-form@7.89.0(@types/react@18.3.28)(react@18.3.1):
+    resolution: {integrity: sha512-vKcoCfy8RKZDrhSdqsRFp0uEOdS1AhLjOL6hR7Wmfzg1akNxEhaPf5WORx8SgEQPVXakdDyDkqQp+KNxVnnPHg==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
+      '@types/react': '*'
       react: ^16.8.0 || ^17 || ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
     dependencies:
+      '@types/react': 18.3.28
       react: 18.3.1
     dev: false
 
