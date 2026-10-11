@@ -40,21 +40,31 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm --filter @neuroquant/web exec playwright install --with-deps chromium
 
+      # If smoke credentials are not yet configured, emit a notice and skip
+      # gracefully instead of failing the workflow.
+      - name: Check smoke credentials
+        id: check_creds
+        run: |
+          if [ -z "$SMOKE_TEST_EMAIL" ] || [ -z "$SMOKE_TEST_PASSWORD" ]; then
+            echo "::notice::SMOKE_TEST_EMAIL or SMOKE_TEST_PASSWORD not set. Skipping smoke tests."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
+
       - name: Run smoke tests
+        if: steps.check_creds.outputs.skip == 'false'
         env:
           SMOKE_TARGET_URL: ${{ github.event.inputs.target_url || 'https://neuroquant-sm.vercel.app' }}
           SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
           SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
-          # Supabase credentials for the smoke test account's project
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_API_URL: ${{ secrets.SMOKE_API_URL }}
-          NEXT_PUBLIC_WS_URL: ${{ secrets.SMOKE_WS_URL }}
-          NEXT_PUBLIC_RAZORPAY_KEY_ID: ${{ secrets.NEXT_PUBLIC_RAZORPAY_KEY_ID }}
-        run: pnpm --filter @neuroquant/web exec playwright test e2e/smoke.spec.ts
+        run: pnpm --filter @neuroquant/web exec playwright test --config playwright.smoke.config.ts
 
       - name: Upload smoke report
-        if: always()
+        if: always() && steps.check_creds.outputs.skip == 'false'
         uses: actions/upload-artifact@v4
         with:
           name: smoke-report
