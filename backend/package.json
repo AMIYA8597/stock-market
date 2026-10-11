@@ -1,0 +1,13 @@
+{
+  "name": "@neuroquant/backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NeuroQuant Backend FastAPI application",
+  "scripts": {
+    "dev": "uv run uvicorn app.main:app --reload --port 8000",
+    "lint": "uv run ruff check .",
+    "typecheck": "uv run mypy app/",
+    "type-check": "uv run mypy app/",
+    "test": "uv run pytest tests/"
+  }
+}
