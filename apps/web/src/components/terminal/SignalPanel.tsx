@@ -5,7 +5,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { SimpleDonutChart, type DonutSlice } from "@/components/charts";
 import { useOrderHistory } from "@/hooks/use-order-history";
 import { usePriceFeed } from "@/hooks/usePriceFeed";
-import { marketApi, tradingApi, predictionsApi } from "@/lib/api-client";
+import { marketApi, paperTradingApi, predictionsApi } from "@/lib/api-client";
 import { useTradingStore } from "@/stores/tradingStore";
 import { safeFormat } from "@/lib/formatters";
 import type { SignalResponse } from "@/types/intelligence";
@@ -37,11 +37,9 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
   const [quoteLoading, setQuoteLoading] = useState<boolean>(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const { orders, addOrder, clearOrders } = useOrderHistory();
-  const { tradingMode, setTradingMode } = useTradingStore();
+  const { tradingMode } = useTradingStore();
   const { data: auditLogsData, refetch: fetchAuditLogs } = useAuditLogsQuery();
   const auditLogs = auditLogsData?.logs ?? [];
-  const [showConfirmModal, setShowConfirmModal] = useState<boolean>(false);
-  const [typedPhrase, setTypedPhrase] = useState<string>("");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [accuracyMetrics, setAccuracyMetrics] = useState<any>(null);
   const [predictionError, setPredictionError] = useState<boolean>(false);
@@ -283,10 +281,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
     [confidence, direction, quote, quoteError, quoteLoading, signal]
   );
 
-  const expectedPhrase = `${side} ${signal?.symbol ? signal.symbol.split(".")[0]?.toUpperCase() : "STOCK"} ${quantity}`;
-
   const executePlaceOrder = async (): Promise<void> => {
-    setShowConfirmModal(false);
     setSubmitting(true);
     try {
       const activePrice = orderType === "MARKET" 
@@ -299,12 +294,11 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         quantity: Number(quantity),
         order_type: orderType,
         limit_price: activePrice,
-        product: "I",
       };
 
-      await tradingApi.placeOrder(payload);
+      await paperTradingApi.submitOrder(payload);
       addOrder();
-      setTradeSuccess(`${payload.side} ${payload.symbol} placed successfully.`);
+      setTradeSuccess(`${payload.side} ${payload.symbol} placed in paper account.`);
       void fetchAuditLogs();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to place order.";
@@ -349,12 +343,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
       return;
     }
 
-    if (tradingMode === "LIVE") {
-      setTypedPhrase("");
-      setShowConfirmModal(true);
-    } else {
-      void executePlaceOrder();
-    }
+    void executePlaceOrder();
   };
 
   const notional = useMemo(() => {
@@ -514,7 +503,7 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
             ["pattern", `Patterns: ${(signal?.models?.pattern?.patterns_detected ?? []).join(", ") || "None"} | Bullish: ${signal?.models?.pattern?.bullish_count ?? 0} | Bearish: ${signal?.models?.pattern?.bearish_count ?? 0}`],
             ["momentum", `5d Return: ${safeFormat(Number(signal?.models?.momentum?.ret_5d ?? 0) * 100, 2)}% | Dist 52w High: ${safeFormat(Number(signal?.models?.momentum?.dist_52w_high ?? 0) * 100, 2)}%`],
             ["regime", `Regime: ${signal?.models?.regime?.regime ?? "SIDEWAYS"} | Bull Prob: ${safeFormat(Number(signal?.models?.regime?.bull_prob ?? 0) * 100, 1)}% | HMM: ${signal?.models?.regime?.hmm_used ? "Yes" : "No"}`],
-            ["xgboost", `P-up: ${safeFormat(Number(signal?.models?.xgboost?.xgb_confidence ?? 0.5) * 100, 1)}% | Train: ${signal?.models?.xgboost?.train_samples ?? 0} | Top Feature: ${signal?.models?.xgboost?.top_features?.[0]?.name ?? "None"}`],
+            ["xgboost", `P-up: ${signal?.models?.xgboost?.xgb_confidence != null ? `${safeFormat(Number(signal.models.xgboost.xgb_confidence) * 100, 1)}%` : "N/A"} | Train: ${signal?.models?.xgboost?.train_samples ?? 0} | Top Feature: ${signal?.models?.xgboost?.top_features?.[0]?.name ?? "None"}`],
           ] as const).map(([key, summary]) => (
             <div key={key} className="rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.005)]">
               <button
@@ -670,42 +659,9 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
         
         <div className="mb-2.5 flex items-center justify-between rounded border border-[var(--nq-border)] bg-[rgba(255,255,255,0.02)] p-2">
           <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--nq-text-secondary)]">Trading Session</span>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await setTradingMode("PAPER");
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : "Failed to toggle to PAPER mode.");
-                }
-              }}
-              className={`rounded px-2.5 py-1 text-[9px] font-bold uppercase transition ${
-                tradingMode === "PAPER"
-                  ? "bg-[rgba(0,212,245,0.18)] text-[var(--accent-cyan)] border border-[var(--accent-cyan)]"
-                  : "border border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
-              }`}
-            >
-              Paper
-            </button>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  await setTradingMode("LIVE");
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : "Failed to toggle to LIVE mode.");
-                }
-              }}
-              className={`rounded px-2.5 py-1 text-[9px] font-bold uppercase transition ${
-                tradingMode === "LIVE"
-                  ? "bg-[rgba(255,59,92,0.18)] text-[#FF3B5C] border border-[#FF3B5C] animate-pulse"
-                  : "border border-[var(--nq-border)] text-[var(--nq-text-secondary)] hover:border-[var(--nq-border-hover)]"
-              }`}
-            >
-              Live
-            </button>
-          </div>
+          <span className="rounded border border-[var(--nq-accent-cyan)] bg-[rgba(0,212,245,0.15)] px-2.5 py-1 text-[9px] font-bold uppercase text-[var(--nq-accent-cyan)] font-mono">
+            Paper (Simulated)
+          </span>
         </div>
 
         <form className="space-y-2" onSubmit={submitOrder}>
