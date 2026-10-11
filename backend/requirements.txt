@@ -1,9 +1,9 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 -r requirements-core.txt
 
-torch==2.3.1+cpu
-torchvision==0.18.1+cpu
-torchaudio==2.3.1+cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+torchaudio==2.11.0+cpu
 pytorch-lightning>=2.2.0
 torch-geometric>=2.4.0
 transformers>=5.14.1
