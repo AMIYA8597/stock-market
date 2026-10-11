@@ -161,6 +161,52 @@ async def get_prediction_history(symbol: str, db: AsyncSession = Depends(get_db)
     }
 
 
+@router.get("/mtf/{symbol}")
+async def get_mtf_prediction_endpoint(
+    symbol: str,
+    timeframes: str | None = None,
+    _rate_limit: None = Depends(get_rate_limiter(requests=5, window=60)),
+):
+    """Multi-timeframe prediction across 1m to 1D.
+
+    Combines candlestick pattern recognition, technical indicator signals,
+    and trend classification across all requested timeframes.
+
+    Query param ``timeframes``: comma-separated list (e.g. "5m,15m,1h,1D").
+    Omit for all timeframes.
+
+    NOTE: Predictions use rule-based heuristics.  The ``data_source`` field
+    in each response object indicates this.  ML-model-backed predictions
+    will be enabled after model training (Phase 7).
+    """
+    from app.services.mtf_prediction import Timeframe, get_mtf_prediction
+
+    norm_symbol = MarketDataService._normalize_symbol(symbol)
+
+    tf_list = None
+    if timeframes:
+        tf_list = [t.strip() for t in timeframes.split(",")]
+        valid = {tf.value for tf in Timeframe}
+        invalid = [t for t in tf_list if t not in valid]
+        if invalid:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid timeframes: {invalid}. Valid: {sorted(valid)}",
+            )
+
+    try:
+        result = await get_mtf_prediction(norm_symbol, tf_list)
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=ErrorResponse.create(
+                code="MTF_PREDICTION_FAILED",
+                message=f"Multi-timeframe prediction unavailable for {symbol}: {str(e)[:200]}",
+            ).dict(),
+        )
+
+
 @router.get("/model-inventory")
 async def model_inventory():
     """Return honest inventory of all ML models and their training status."""
