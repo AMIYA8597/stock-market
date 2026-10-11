@@ -42,6 +42,10 @@
       "outputs": [],
       "cache": true
     },
+    "typecheck": {
+      "outputs": [],
+      "cache": true
+    },
     "test": {
       "outputs": ["coverage/**"],
       "dependsOn": ["^build"],
