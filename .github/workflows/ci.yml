@@ -133,3 +133,59 @@ jobs:
         run: pnpm --filter web exec vitest run src/lib/symbols.test.ts
       - name: Build
         run: pnpm build
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, web]
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python / backend ───────────────────────────────────────────────
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install backend dependencies
+        run: cd backend && uv sync --frozen --all-extras
+
+      # ── Node / frontend ────────────────────────────────────────────────
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 8
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+      - name: Install frontend dependencies
+        run: pnpm install
+
+      # ── Playwright browsers ────────────────────────────────────────────
+      - name: Install Playwright browsers
+        run: pnpm --filter @neuroquant/web exec playwright install --with-deps chromium
+
+      # ── Run E2E ────────────────────────────────────────────────────────
+      - name: Run Playwright E2E tests
+        env:
+          # Backend starts against SQLite so no Postgres service is needed
+          DATABASE_URL: "sqlite+aiosqlite:///./e2e_test.db"
+          ENVIRONMENT: test
+          NEXT_PUBLIC_API_URL: "http://localhost:8000/api/v1"
+          NEXT_PUBLIC_WS_URL: "ws://localhost:8000/ws"
+          # Supabase is not needed — auth flows are mocked with page.route()
+          NEXT_PUBLIC_SUPABASE_URL: "https://placeholder.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "placeholder"
+          NEXT_PUBLIC_RAZORPAY_KEY_ID: "rzp_test_placeholder"
+        run: pnpm --filter @neuroquant/web exec playwright test
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7
