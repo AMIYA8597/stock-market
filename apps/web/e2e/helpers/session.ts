@@ -22,6 +22,7 @@
  */
 
 import type { BrowserContext, Page } from '@playwright/test';
+import { createChunks, stringToBase64URL } from '@supabase/ssr';
 
 // ── Cookie name ───────────────────────────────────────────────────────────
 // @supabase/supabase-js derives the storage key as:
@@ -118,23 +119,20 @@ function bufferToBase64URL(buf: Buffer): string {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
-function stringToBase64URL(str: string): string {
-  return bufferToBase64URL(Buffer.from(str, 'utf-8'));
-}
-
 // ── Cookie builder ────────────────────────────────────────────────────────
 
 /**
- * Returns `{ name, value }` for the Supabase session cookie that
- * @supabase/ssr's createServerClient reads in the Next.js middleware.
+ * Returns `{ name, value }[]` for the Supabase session cookie(s) that
+ * @supabase/ssr's createServerClient reads in the Next.js middleware,
+ * handling chunking according to MAX_CHUNK_SIZE.
  *
  * @param overrides   Optional partial session overrides (e.g. access_token)
  * @param cookieName  Override the cookie name (default: derived from env)
  */
-export function buildSessionCookie(
+export function buildSessionCookies(
   overrides: Partial<FakeSession> = {},
   cookieName = getCookieNameSync(),
-): { name: string; value: string } {
+): Array<{ name: string; value: string }> {
   const now = Math.floor(Date.now() / 1000);
   const expiresIn = 3600;
   const session: FakeSession = {
@@ -150,13 +148,24 @@ export function buildSessionCookie(
   const json = JSON.stringify(session);
   const encoded = 'base64-' + stringToBase64URL(json);
 
-  return { name: cookieName, value: encoded };
+  return createChunks(cookieName, encoded);
+}
+
+/**
+ * Returns `{ name, value }` for the primary Supabase session cookie.
+ */
+export function buildSessionCookie(
+  overrides: Partial<FakeSession> = {},
+  cookieName = getCookieNameSync(),
+): { name: string; value: string } {
+  const cookies = buildSessionCookies(overrides, cookieName);
+  return cookies[0] ?? { name: cookieName, value: '' };
 }
 
 // ── Public helpers ────────────────────────────────────────────────────────
 
 /**
- * Injects a fake Supabase session cookie into the browser context so that
+ * Injects fake Supabase session cookie(s) into the browser context so that
  * the Next.js middleware treats the visitor as authenticated.
  *
  * Pass `page` when available (e.g. inside route handlers) to derive the
@@ -172,17 +181,17 @@ export async function injectSession(
   page?: Page,
 ): Promise<void> {
   const cookieName = page ? await getCookieName(page) : getCookieNameSync();
-  const cookie = buildSessionCookie(overrides, cookieName);
-  await context.addCookies([
-    {
-      name: cookie.name,
-      value: cookie.value,
+  const cookies = buildSessionCookies(overrides, cookieName);
+  await context.addCookies(
+    cookies.map((c) => ({
+      name: c.name,
+      value: c.value,
       domain: 'localhost',
       path: '/',
       sameSite: 'Lax',
       httpOnly: false,
-    },
-  ]);
+    })),
+  );
 }
 
 /**
@@ -194,7 +203,7 @@ export async function injectSession(
  */
 export async function mockSupabaseUser(page: Page, user: Partial<FakeUser> = {}): Promise<void> {
   const fakeUser = { ...FAKE_USER, ...user };
-  await page.route(/\/auth\/v1\/user/, (route) =>
+  await page.route('**/auth/v1/user', (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

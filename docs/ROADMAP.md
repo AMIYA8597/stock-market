@@ -18,24 +18,24 @@ Verified failures: 6 of 12 Playwright tests fail.
   `playwright test e2e/smoke.spec.ts` finds 0 tests, and the default config starts local webServers.
 
 Tasks:
-- [ ] Read register/page.tsx, login/page.tsx, middleware.ts and the onboarding page first.
-- [ ] apps/web/e2e/helpers/session.ts: build the session cookie exactly as the installed @supabase/ssr
+- [x] Read register/page.tsx, login/page.tsx, middleware.ts and the onboarding page first.
+- [x] apps/web/e2e/helpers/session.ts: build the session cookie exactly as the installed @supabase/ssr
     stores it (name sb-<project-ref>-auth-token from NEXT_PUBLIC_SUPABASE_URL; encoding and chunking
     as implemented in node_modules/@supabase/ssr; read it, don't guess) with an unsigned JWT,
     exp = now + 1h; plus page.route('**/auth/v1/user') returning a fake user so setSession() works offline.
-- [ ] Rewrite auth.spec.ts: register token path -> /en/dashboard; register login_required ->
+- [x] Rewrite auth.spec.ts: register token path -> /en/dashboard; register login_required ->
     /en/login?registered=1 with "Account created. Please sign in." on the password step;
     register OTP path -> "Verify Your Email" -> verify -> /en/dashboard; password mismatch and weak
     password errors; login two-step happy path; unknown email -> "Account not found";
     wrong password -> "Incorrect password."; 403 -> verify step; 429 -> lockout message;
     protected route while logged out -> /en/login.
-- [ ] Fix onboarding.spec.ts with the same helper.
-- [ ] apps/web/playwright.smoke.config.ts (testMatch smoke.spec.ts, baseURL from SMOKE_TARGET_URL,
+- [x] Fix onboarding.spec.ts with the same helper.
+- [x] apps/web/playwright.smoke.config.ts (testMatch smoke.spec.ts, baseURL from SMOKE_TARGET_URL,
     no webServer, retries 1). smoke.yml uses it, needs only SMOKE_TEST_EMAIL / SMOKE_TEST_PASSWORD,
     and exits 0 with a ::notice when they are missing. Remove SMOKE_API_URL, SMOKE_WS_URL and the
     NEXT_PUBLIC_* env from smoke.yml and docs/ENVIRONMENTS.md. Smoke spec uses the real two-step login.
-- [ ] Untrack apps/web/playwright-report/ and apps/web/test-results/ (.gitignore + git rm -r --cached).
-- [ ] Run the whole E2E suite locally with CI's env and --retries=0: 100% green. Run the smoke config
+- [x] Untrack apps/web/playwright-report/ and apps/web/test-results/ (.gitignore + git rm -r --cached).
+- [x] Run the whole E2E suite locally with CI's env and --retries=0: 100% green. Run the smoke config
     with --list: exactly 2 tests. Paste both outputs.
 
 GATE 1: PR #27 all checks green and merged; smoke workflow skips cleanly until I add its secrets.
