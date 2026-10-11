@@ -70,6 +70,37 @@ async def lifespan(app: FastAPI):
         from app.tasks import retraining_trigger as _retraining_trigger_tasks  # noqa: F401
     except Exception as exc:
         logger.warning("scheduled_task_registration_deferred", error=str(exc))
+    # Heal missing columns that migration c0698f36e21e may not have applied
+    # (deploy workflow uses continue-on-error: true for migrations). Without
+    # these columns, every authenticated request crashes because SQLAlchemy's
+    # User model references them in every SELECT.
+    try:
+        from sqlalchemy import text as _text
+
+        async with async_session_factory() as _heal_session:
+            _conn = await _heal_session.connection()
+            for _col, _typ, _default in [
+                ("password_hash", "VARCHAR(255)", None),
+                ("failed_login_attempts", "INTEGER NOT NULL DEFAULT 0", "0"),
+                ("locked_until", "TIMESTAMPTZ", None),
+            ]:
+                _check = await _conn.execute(
+                    _text(
+                        "SELECT 1 FROM information_schema.columns "
+                        "WHERE table_name='users' AND column_name=:col"
+                    ),
+                    {"col": _col},
+                )
+                if _check.fetchone() is None:
+                    _ddl = f"ALTER TABLE users ADD COLUMN {_col} {_typ}"
+                    if _default is not None:
+                        _ddl += f" DEFAULT {_default}"
+                    await _conn.execute(_text(_ddl))
+                    logger.warning(f"healed_missing_column table=users column={_col}")
+            await _heal_session.commit()
+    except Exception as _heal_exc:
+        logger.warning(f"column_heal_check non-fatal: {_heal_exc}")
+
     background_tasks = await startup_events()
     # Seed instrument master data (NSE + BSE) if DB is nearly empty.
     # Runs as a background task so startup is never blocked.
