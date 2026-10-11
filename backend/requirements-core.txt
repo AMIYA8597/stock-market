@@ -66,7 +66,7 @@ sendgrid==6.12.5
 pytest==9.1.1
 pytest-asyncio==1.4.0
 trio==0.34.0
-httpx==0.26.0
+httpx==0.28.1
 
 # Utilities
 python-dotenv>=1.2.2
