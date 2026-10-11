@@ -41,18 +41,18 @@ Tasks:
 GATE 1: PR #27 all checks green and merged; smoke workflow skips cleanly until I add its secrets.
 
 ## PHASE 2 — Monorepo and repo hygiene
-- [ ] It is already a pnpm + turbo monorepo. Add the backend to it without moving the folder
+- [x] It is already a pnpm + turbo monorepo. Add the backend to it without moving the folder
     (Cloud Run deploy and the Dockerfile depend on backend/): backend/package.json scripts
     (dev, lint, typecheck, test) wrapping uv; turbo pipelines so `pnpm dev` starts API + web
     and `pnpm lint`, `pnpm typecheck`, `pnpm test` run everything.
-- [ ] docker-compose.dev.yml provides Postgres + Redis; one documented command starts the whole stack
+- [x] docker-compose.dev.yml provides Postgres + Redis; one documented command starts the whole stack
     locally; LOCAL_SETUP.md updated and tested from a fresh clone.
-- [ ] Clean the root and backend/: one-off scripts (fix_*.py, append_*.py, patch_e2e.py, clean_junk.py,
+- [x] Clean the root and backend/: one-off scripts (fix_*.py, append_*.py, patch_e2e.py, clean_junk.py,
     test_login.js, generate_i18n.py, backend fix_*.py, rewrite_detect_regime.py), out*.txt, test_out.txt,
     duplicate audit/report markdowns -> delete or move to archive/ AFTER grepping that nothing uses them.
-- [ ] Dependabot (pip, npm, github-actions), CODEOWNERS, PR template; list the exact GitHub
+- [x] Dependabot (pip, npm, github-actions), CODEOWNERS, PR template; list the exact GitHub
     branch-protection settings for main (required checks) for me to click.
-- [ ] Bump GitHub Actions off deprecated Node 20 versions.
+- [x] Bump GitHub Actions off deprecated Node 20 versions.
 
 GATE 2: fresh clone -> documented commands -> app runs locally on the local DB; all checks green.
 

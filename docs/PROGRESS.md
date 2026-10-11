@@ -32,3 +32,34 @@
 - **Next step**:
   - Phase 2: Monorepo and repo hygiene (turborepo pipelines for backend wrapping uv, docker-compose.dev.yml, repo cleanup of root/backend scripts, Dependabot, CODEOWNERS, PR template, Node 20 bumps).
 
+## Session: 2026-10-11 (cont.)
+- **Date**: 2026-10-11
+- **Phase**: Phase 2 — Monorepo and repo hygiene (GATE 2 REACHED)
+- **Branch / PR**: `phase/2-monorepo-hygiene`
+- **What changed**:
+  - Added `backend/package.json` with scripts wrapping `uv run` (dev, lint, typecheck, test).
+  - Added `backend` to `pnpm-workspace.yaml`; added `typecheck` turbo pipeline in `turbo.json`.
+  - Added `typecheck` script alias to `apps/web`, `packages/types`, `packages/ui` package.json files.
+  - Root `package.json`: added `typecheck` and updated `test` to use turbo.
+  - Deleted 27 one-off scripts from root and backend (fix_*.py, append_*.py, patch_e2e.py, etc.).
+  - Moved 17 stale markdown reports + PHASE_REPORTS/ to `archive/`.
+  - Rewrote `LOCAL_SETUP.md` for pnpm + uv + docker-compose workflow.
+  - Added `.github/CODEOWNERS`, `.github/dependabot.yml`, `.github/pull_request_template.md`.
+  - Bumped GitHub Actions: setup-uv v2→v4, pnpm/action-setup v3→v4, google-github-actions/auth v2→v3, setup-gcloud v2→v3.
+- **Commands run + result summary**:
+  - `uv run ruff check .` -> All checks passed
+  - `uv run mypy app/` -> Success: no issues found in 172 source files
+  - `uv run pytest tests/` -> all passed
+  - `pnpm --filter @neuroquant/web run type-check` -> 0 errors
+  - `pnpm build` -> 5 successful, 5 total
+  - `python scripts/honesty_guard.py` -> Honesty Guard Passed!
+  - `pnpm typecheck` -> 4 packages, all passed (17.8s)
+  - `pnpm dev` -> starts backend :8000 + web :3000
+  - `alembic check` -> skipped (Docker not running locally; CI tests this)
+- **Open issues**:
+  - Docker Desktop not running locally, so `alembic check` was not run. CI will cover this.
+  - `safety.test.ts` regex failure is pre-existing (Phase 3 fix).
+- **Next step**:
+  - User to configure GitHub branch-protection on main (see PR description for recommended settings).
+  - Phase 3: Every page, 10 kinds of testing.
+
