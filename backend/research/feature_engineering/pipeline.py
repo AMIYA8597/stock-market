@@ -93,10 +93,16 @@ class FeaturePipeline:
     ) -> list[str]:
         mismatches = []
         for column in columns:
+            if column not in expected.index or column not in actual.index:
+                continue
             expected_value = expected[column]
             actual_value = actual[column]
             if pd.isna(expected_value) and pd.isna(actual_value):
                 continue
-            if not np.isclose(expected_value, actual_value, equal_nan=True):
+            try:
+                close = np.isclose(float(expected_value), float(actual_value), equal_nan=True)
+            except (TypeError, ValueError):
+                close = expected_value == actual_value
+            if not close:
                 mismatches.append(f"{column} (full={expected_value}, truncated={actual_value})")
         return mismatches

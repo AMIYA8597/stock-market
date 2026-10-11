@@ -378,7 +378,7 @@ def main() -> None:
 
         from research.feature_engineering.api import build_features
 
-        featured_df = build_features(df, mode="research")
+        featured_df = build_features(df, mode="backtest")
         target = build_target(featured_df)
 
         valid_mask = target.notna()
@@ -395,6 +395,15 @@ def main() -> None:
         ]
 
         x_all = featured_df[features].copy()
+        # Drop columns that are >30% NaN (e.g. regime_label before HMM is trained)
+        nan_frac = x_all.isna().mean()
+        usable = nan_frac[nan_frac <= 0.3].index.tolist()
+        dropped = set(features) - set(usable)
+        if dropped:
+            logger.info("Dropping %d high-NaN columns: %s", len(dropped), sorted(dropped)[:10])
+        features = usable
+        x_all = x_all[features]
+
         y_all = target.copy()
         rets = featured_df["close"].pct_change().shift(-1).loc[x_all.index]
 
