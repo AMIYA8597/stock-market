@@ -10,6 +10,7 @@
   "scripts": {
     "build": "tsc",
     "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
