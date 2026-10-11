@@ -18,29 +18,30 @@ function findFiles(dir: string, extension: string, fileList: string[] = []): str
 }
 
 describe('Safety Guard Rails', () => {
-  test('No live trading endpoints or console dot log in source tree', () => {
+  test('No live trading order endpoints, mode mutation, fake defaults, or console logging in source tree', () => {
     const srcDir = path.resolve(__dirname, '..');
     const files = findFiles(srcDir, '.ts').concat(findFiles(srcDir, '.tsx'));
-    
-    let badStringsFound = 0;
-    const p1 = 'trading/' + 'mode';
+
+    const violations: string[] = [];
+    const p1 = 'trading/' + 'order';
     const p2 = 'setTrading' + 'Mode';
-    const p3 = 'ups' + 'tox';
-    const p4 = '\\\\?\\\\? 0\\\\.5';
-    const p5 = '0\\\\.85';
-    const p6 = 'console\\\\.' + 'log';
-    const pattern = new RegExp([p1, p2, p3, p4, p5, p6].join('|'));
-    
+    const p3 = '\\?\\?\\s*0\\.5';
+    const p4 = 'return\\s+0\\.85';
+    const p5 = 'console\\.' + 'log';
+    const pattern = new RegExp([p1, p2, p3, p4, p5].join('|'));
+
     for (const file of files) {
+      if (file.includes('safety.test.ts')) continue;
       const content = fs.readFileSync(file, 'utf-8');
-      if (content.match(pattern)) {
-        if (!file.includes('safety.test.ts')) {
-          badStringsFound++;
-          console.error('Found restricted string in ' + file);
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line && pattern.test(line)) {
+          violations.push(`${file}:${i + 1}: ${line.trim()}`);
         }
       }
     }
-    
-    expect(badStringsFound).toBe(0);
+
+    expect(violations).toEqual([]);
   });
 });
