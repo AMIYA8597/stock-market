@@ -163,3 +163,7 @@ backend/datasets/
 *.parquet
 !tests/fixtures/**/*.parquet
 artifacts/
+
+# ── Playwright output ──────────────────────────────────────────────────────
+apps/web/playwright-report/
+apps/web/test-results/
