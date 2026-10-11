@@ -42,7 +42,7 @@ dependencies = [
     "numpy>=1.26.3,<2.3.0",
     "pandas>=2.1.4,<3.0.0",
     "pandas-ta",
-    "scipy>=1.11.4,<1.15.0",
+    "scipy>=1.11.4,<1.19.0",
     "scikit-learn>=1.6.0,<1.8.0",
     "torch>=2.2.0",
     "pytorch-lightning>=2.2.0",
