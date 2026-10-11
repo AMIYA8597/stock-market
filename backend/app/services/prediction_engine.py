@@ -102,6 +102,44 @@ def get_sentiment_pipeline():
     return _SENTIMENT_PIPELINE
 
 
+def _build_model_versions(ensemble: dict[str, Any]) -> dict[str, Any]:
+    versions: dict[str, Any] = {}
+    for m_name in ("xgboost", "lstm_attention", "tft", "hmm_garch", "gnn"):
+        m_status = ensemble.get("model_statuses", {}).get(m_name, "unknown")
+        versions[m_name] = {"status": m_status}
+    return versions
+
+
+def _load_artifact_metadata(symbol: str) -> dict[str, Any]:
+    import glob as glob_mod
+
+    artifact_dir = Path(__file__).parent.parent.parent / "data" / "artifacts"
+    pattern = str(artifact_dir / f"*_{symbol.replace('.', '_')}_*.json")
+    reports = sorted(glob_mod.glob(pattern), reverse=True)
+    if reports:
+        try:
+            with open(reports[0]) as f:
+                data = json.load(f)
+            if isinstance(data, list) and data:
+                data = data[0]
+            return {
+                "training_date": data.get("training_date", "not measured"),
+                "walk_forward_metrics": {
+                    "mean_accuracy": data.get("mean_accuracy"),
+                    "ci_accuracy": [
+                        data.get("ci_accuracy_lower"),
+                        data.get("ci_accuracy_upper"),
+                    ],
+                    "mean_sharpe": data.get("mean_sharpe"),
+                    "mean_max_drawdown": data.get("mean_max_drawdown"),
+                    "governance_status": data.get("governance_status"),
+                },
+            }
+        except Exception:
+            pass
+    return {"training_date": "not measured", "walk_forward_metrics": None}
+
+
 def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
     if len(df) < 60:
         raise ValueError("Insufficient data for HMM-GARCH regime detection.")
@@ -1146,6 +1184,9 @@ async def get_full_prediction(
         "is_computed": True,
         "message": reasoning_msg,
         "model_version": model_version or "latest",
+        "model_versions": _build_model_versions(ensemble),
+        "data_source": "yfinance",
+        **_load_artifact_metadata(symbol),
     }
 
 
