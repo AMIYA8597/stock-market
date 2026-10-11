@@ -252,31 +252,38 @@ async def get_history(
 
 @router.get("/indices", response_model=IndicesResponse)
 async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
-    result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
-    instruments = result.scalars().all()
+    try:
+        result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
+        instruments = result.scalars().all()
+    except Exception as exc:
+        logger.warning("DB query for indices failed, using live fallback: %s", exc)
+        instruments = []
 
     indices: list[IndexData] = []
     for inst in instruments:
-        q_res = await db.execute(
-            select(QuoteSnapshot)
-            .where(QuoteSnapshot.instrument_id == inst.id)
-            .order_by(QuoteSnapshot.observed_at.desc())
-            .limit(1)
-        )
-        quote = q_res.scalars().first()
-        if not quote:
-            continue
-        indices.append(
-            IndexData(
-                name=inst.display_name or inst.canonical_symbol,
-                ticker=inst.canonical_symbol,
-                value=Decimal(str(quote.price or 0)),
-                change=Decimal(str(quote.change or 0)),
-                change_pct=Decimal(str(quote.change_pct or 0)),
-                regime_state=await _latest_regime_label(db, inst.id),
-                timestamp=quote.observed_at,
+        try:
+            q_res = await db.execute(
+                select(QuoteSnapshot)
+                .where(QuoteSnapshot.instrument_id == inst.id)
+                .order_by(QuoteSnapshot.observed_at.desc())
+                .limit(1)
             )
-        )
+            quote = q_res.scalars().first()
+            if not quote:
+                continue
+            indices.append(
+                IndexData(
+                    name=inst.display_name or inst.canonical_symbol,
+                    ticker=inst.canonical_symbol,
+                    value=Decimal(str(quote.price or 0)),
+                    change=Decimal(str(quote.change or 0)),
+                    change_pct=Decimal(str(quote.change_pct or 0)),
+                    regime_state=await _latest_regime_label(db, inst.id),
+                    timestamp=quote.observed_at,
+                )
+            )
+        except Exception as exc:
+            logger.warning("Failed to fetch quote for index %s: %s", inst.canonical_symbol, exc)
 
     # Fallback: if DB has no indices, fetch from yfinance
     if not indices:
@@ -628,8 +635,12 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
     No global-index ingestion pipeline exists in this codebase yet, so this
     returns an explicit unavailable status rather than fabricating index levels.
     """
-    result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
-    instruments = result.scalars().all()
+    try:
+        result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
+        instruments = result.scalars().all()
+    except Exception as exc:
+        logger.warning("DB query for global-context instruments failed: %s", exc)
+        instruments = []
     if not instruments:
         # Fallback: fetch indices from yfinance
         from app.services.market_data_service import MarketDataService
@@ -650,23 +661,26 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
 
     context = []
     for inst in instruments:
-        q_res = await db.execute(
-            select(QuoteSnapshot)
-            .where(QuoteSnapshot.instrument_id == inst.id)
-            .order_by(QuoteSnapshot.observed_at.desc())
-            .limit(1)
-        )
-        quote = q_res.scalars().first()
-        if quote:
-            context.append(
-                {
-                    "ticker": inst.canonical_symbol,
-                    "name": inst.display_name or inst.canonical_symbol,
-                    "value": float(quote.price or 0),
-                    "change_pct": float(quote.change_pct or 0),
-                    "as_of": quote.observed_at.isoformat(),
-                }
+        try:
+            q_res = await db.execute(
+                select(QuoteSnapshot)
+                .where(QuoteSnapshot.instrument_id == inst.id)
+                .order_by(QuoteSnapshot.observed_at.desc())
+                .limit(1)
             )
+            quote = q_res.scalars().first()
+            if quote:
+                context.append(
+                    {
+                        "ticker": inst.canonical_symbol,
+                        "name": inst.display_name or inst.canonical_symbol,
+                        "value": float(quote.price or 0),
+                        "change_pct": float(quote.change_pct or 0),
+                        "as_of": quote.observed_at.isoformat(),
+                    }
+                )
+        except Exception as exc:
+            logger.warning("Failed to fetch quote for global-context index %s: %s", inst.canonical_symbol, exc)
     return {"status": "ok" if context else "unavailable", "indices": context}  # honesty: allow (conditional on real fetched quotes above)
 
 
