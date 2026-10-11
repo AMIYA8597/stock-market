@@ -57,7 +57,7 @@ scipy>=1.12.0,<1.15.0
 statsmodels>=0.14.1,<0.15.0
 
 # Reporting
-reportlab==4.0.9
+reportlab==5.0.1
 
 # Email
 sendgrid==6.11.0
