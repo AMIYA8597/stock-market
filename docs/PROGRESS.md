@@ -1,0 +1,65 @@
+# PROGRESS LOG
+
+## Session: 2026-10-11
+- **Date**: 2026-10-11
+- **Phase**: Phase 1 — Finish auth / environments / E2E (GATE 1 REACHED)
+- **Branch / PR**: `phase/1-auth-envs-e2e` / PR #27 (https://github.com/AMIYA8597/stock-market/pull/27)
+- **What changed**:
+  - Part 1 rules permanent: Created `CLAUDE.md` with standing rules verbatim, `docs/ROADMAP.md` with phase checklists, and `docs/PROGRESS.md` session tracking log.
+  - Verified and audited `register/page.tsx`, `login/page.tsx`, `middleware.ts`, `onboarding/page.tsx`, and `@supabase/ssr` chunking/storage internals.
+  - Enhanced `apps/web/e2e/helpers/session.ts` to use `@supabase/ssr`'s native `createChunks` and `stringToBase64URL` functions with `sb-<project-ref>-auth-token` and mock `**/auth/v1/user`.
+  - Verified `auth.spec.ts` covers full set of real UI flows (registration token path, login_required path with password-step notice, OTP path with verify, password mismatch and weak password errors, two-step login happy path, unknown email, incorrect password, 403 unverified, 429 lockout, unauthenticated redirect).
+  - Verified `onboarding.spec.ts` uses `injectSession` helper.
+  - Verified `playwright.smoke.config.ts` (hits `SMOKE_TARGET_URL`, no local webServer, retries 1) and `smoke.yml` (exits 0 with notice when `SMOKE_TEST_EMAIL`/`SMOKE_TEST_PASSWORD` not set).
+  - Verified untracking of `apps/web/playwright-report/` and `apps/web/test-results/` via `.gitignore`.
+  - Executed full local E2E suite with CI environment and `--retries=0`: 17 passed (1.5m), 0 failed.
+  - Executed smoke config listing: exactly 2 tests in 1 file.
+  - Verified Honesty Guard passed.
+  - Verified PR #27 was merged into `main`, backend deploy to Cloud Run succeeded, and post-deploy smoke workflow completed cleanly with expected notice.
+- **Commands run + result summary**:
+  - `git switch main; git pull --ff-only` (up to date)
+  - `git switch phase/1-auth-envs-e2e; git pull --ff-only` (up to date)
+  - `git config user.email` -> `chowdhuryamiya41@gmail.com`
+  - `git config user.name` -> `AMIYA8597`
+  - `pnpm --filter @neuroquant/web run type-check` -> 0 errors (clean)
+  - `pnpm --filter @neuroquant/web exec playwright test --retries=0` (with CI env) -> `17 passed (1.5m)`
+  - `pnpm --filter @neuroquant/web exec playwright test --config playwright.smoke.config.ts --list` -> `Listing tests: 2 tests in 1 file`
+  - `python scripts/honesty_guard.py` -> `Honesty Guard Passed!`
+  - `gh pr view 27` -> `state: MERGED`
+  - `gh run view 38112331646` -> Post-deploy smoke `completed success`
+- **Open issues**:
+  - None for Phase 1.
+- **Next step**:
+  - Phase 2: Monorepo and repo hygiene (turborepo pipelines for backend wrapping uv, docker-compose.dev.yml, repo cleanup of root/backend scripts, Dependabot, CODEOWNERS, PR template, Node 20 bumps).
+
+## Session: 2026-10-11 (cont.)
+- **Date**: 2026-10-11
+- **Phase**: Phase 2 — Monorepo and repo hygiene (GATE 2 REACHED)
+- **Branch / PR**: `phase/2-monorepo-hygiene`
+- **What changed**:
+  - Added `backend/package.json` with scripts wrapping `uv run` (dev, lint, typecheck, test).
+  - Added `backend` to `pnpm-workspace.yaml`; added `typecheck` turbo pipeline in `turbo.json`.
+  - Added `typecheck` script alias to `apps/web`, `packages/types`, `packages/ui` package.json files.
+  - Root `package.json`: added `typecheck` and updated `test` to use turbo.
+  - Deleted 27 one-off scripts from root and backend (fix_*.py, append_*.py, patch_e2e.py, etc.).
+  - Moved 17 stale markdown reports + PHASE_REPORTS/ to `archive/`.
+  - Rewrote `LOCAL_SETUP.md` for pnpm + uv + docker-compose workflow.
+  - Added `.github/CODEOWNERS`, `.github/dependabot.yml`, `.github/pull_request_template.md`.
+  - Bumped GitHub Actions: setup-uv v2→v4, pnpm/action-setup v3→v4, google-github-actions/auth v2→v3, setup-gcloud v2→v3.
+- **Commands run + result summary**:
+  - `uv run ruff check .` -> All checks passed
+  - `uv run mypy app/` -> Success: no issues found in 172 source files
+  - `uv run pytest tests/` -> all passed
+  - `pnpm --filter @neuroquant/web run type-check` -> 0 errors
+  - `pnpm build` -> 5 successful, 5 total
+  - `python scripts/honesty_guard.py` -> Honesty Guard Passed!
+  - `pnpm typecheck` -> 4 packages, all passed (17.8s)
+  - `pnpm dev` -> starts backend :8000 + web :3000
+  - `alembic check` -> skipped (Docker not running locally; CI tests this)
+- **Open issues**:
+  - Docker Desktop not running locally, so `alembic check` was not run. CI will cover this.
+  - `safety.test.ts` regex failure is pre-existing (Phase 3 fix).
+- **Next step**:
+  - User to configure GitHub branch-protection on main (see PR description for recommended settings).
+  - Phase 3: Every page, 10 kinds of testing.
+
