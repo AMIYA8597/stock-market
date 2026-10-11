@@ -1,8 +1,12 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.schemas.errors import ErrorCode, ErrorDetail, ErrorResponse
+
+logger = logging.getLogger(__name__)
 
 
 def _error_code_for_status(status_code: int) -> ErrorCode:
@@ -58,6 +62,13 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.error(
+        "Unhandled exception on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=True,
+    )
     payload = ErrorResponse.create(
         code=ErrorCode.INTERNAL_SERVER_ERROR,
         message="An internal server error occurred.",

@@ -98,6 +98,7 @@ jobs:
           CR_SUPABASE_ANON_KEY: ${{ secrets.CLOUDRUN_SUPABASE_ANON_KEY }}
           CR_RAZORPAY_KEY_ID: ${{ secrets.CLOUDRUN_RAZORPAY_KEY_ID }}
           CR_RAZORPAY_KEY_SECRET: ${{ secrets.CLOUDRUN_RAZORPAY_KEY_SECRET }}
+          CR_SUPABASE_JWT_SECRET: ${{ secrets.CLOUDRUN_SUPABASE_JWT_SECRET }}
         run: |
           python3 - << 'PYEOF'
           import os, sys
@@ -109,6 +110,7 @@ jobs:
               "SUPABASE_ANON_KEY":   os.environ.get("CR_SUPABASE_ANON_KEY", ""),
               "RAZORPAY_KEY_ID":     os.environ.get("CR_RAZORPAY_KEY_ID", ""),
               "RAZORPAY_KEY_SECRET": os.environ.get("CR_RAZORPAY_KEY_SECRET", ""),
+              "SUPABASE_JWT_SECRET": os.environ.get("CR_SUPABASE_JWT_SECRET", ""),
               "ENVIRONMENT":         "production",
               "BACKEND_CORS_ORIGINS": "https://neuroquant-sm.vercel.app,http://localhost:3000",
           }

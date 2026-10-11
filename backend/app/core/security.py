@@ -199,13 +199,23 @@ async def get_current_context(
 
     # 2. Supabase JWT Auth
     if token:
-        payload = verify_supabase_token(token)
+        try:
+            payload = verify_supabase_token(token)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error("JWT verification crashed: %s", exc, exc_info=True)
+            raise HTTPException(status_code=401, detail="Authentication failed") from exc
         sub = payload.get("sub")
         if not sub:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
         # In a real flow, we map `sub` (auth_id) to our internal User
-        result = await db.execute(select(User).where(User.auth_id == sub))
+        try:
+            result = await db.execute(select(User).where(User.auth_id == sub))
+        except Exception as exc:
+            logger.error("DB query for user by auth_id failed: %s", exc, exc_info=True)
+            raise HTTPException(status_code=500, detail="Database error during authentication") from exc
         user = result.scalars().first()
         if not user:
             # A valid Supabase-signed token proves this account is real and
@@ -254,7 +264,19 @@ async def get_current_context(
 
         # Self-healing: also covers accounts created before this org-
         # provisioning existed, not just ones JIT-provisioned just above.
-        await ensure_personal_organization(db, user)
+        try:
+            await ensure_personal_organization(db, user)
+        except HTTPException:
+            raise
+        except Exception as exc:
+            logger.error(
+                "ensure_personal_organization failed for user %s: %s",
+                user.id, exc, exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to provision user organization",
+            ) from exc
 
         # Resolve organization
         org_id = request.headers.get("X-Organization-ID")
