@@ -19,7 +19,7 @@ import numpy as np
 import pandas as pd
 
 from research.backtesting.cost_model import compute_indian_costs
-from research.strategies.base import Strategy, StrategySignal, TradeDirection
+from research.strategies.base import Strategy, TradeDirection
 
 logger = logging.getLogger(__name__)
 

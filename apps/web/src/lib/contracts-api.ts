@@ -494,7 +494,7 @@ export const contractsApi = {
         change_pct: Number(item.change_pct ?? item.change_percent ?? 0),
         volume: Number(item.volume ?? 0),
         signal_direction: (item.signal_direction ?? "NEUTRAL") as MarketMover["signal_direction"],
-        confidence: Number(item.signal_confidence ?? item.confidence ?? 0.5),
+        confidence: Number(item.signal_confidence ?? item.confidence ?? 0),
       }));
     });
   },
