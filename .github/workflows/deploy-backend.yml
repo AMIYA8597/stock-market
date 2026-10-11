@@ -115,11 +115,18 @@ jobs:
               "BACKEND_CORS_ORIGINS": "https://neuroquant-sm.vercel.app,http://localhost:3000",
           }
 
-          # Check if any critical vars are missing
-          missing = [k for k, v in env_vars.items() if not v and k not in ("ENVIRONMENT", "BACKEND_CORS_ORIGINS")]
+          # Check if any critical vars are missing.  SUPABASE_JWT_SECRET is
+          # optional because current Supabase projects use JWKS (asymmetric)
+          # verification by default; the HS256 fallback is only for legacy
+          # projects.
+          optional_vars = {"ENVIRONMENT", "BACKEND_CORS_ORIGINS", "SUPABASE_JWT_SECRET"}
+          missing = [k for k, v in env_vars.items() if not v and k not in optional_vars]
           if missing:
-              print(f"⚠️  Missing secrets (will not set env vars): {missing}")
+              print(f"⚠️  Missing critical secrets (will not set env vars): {missing}")
               sys.exit(0)
+          missing_optional = [k for k, v in env_vars.items() if not v and k in optional_vars - {"ENVIRONMENT", "BACKEND_CORS_ORIGINS"}]
+          if missing_optional:
+              print(f"ℹ️  Optional secrets not set (JWKS is primary): {missing_optional}")
 
           # Write Cloud Run YAML env vars file
           # Values are YAML-quoted with | (literal block) to handle any special chars

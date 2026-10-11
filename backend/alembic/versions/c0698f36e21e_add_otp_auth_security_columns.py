@@ -18,13 +18,29 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def upgrade() -> None:
-    op.add_column('users', sa.Column('password_hash', sa.String(length=255), nullable=True))
-    op.add_column(
-        'users',
-        sa.Column('failed_login_attempts', sa.Integer(), nullable=False, server_default='0'),
+def _column_exists(table: str, column: str) -> bool:
+    """Check if a column already exists (idempotent migration guard)."""
+    conn = op.get_bind()
+    result = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_name = :table AND column_name = :column"
+        ),
+        {"table": table, "column": column},
     )
-    op.add_column('users', sa.Column('locked_until', sa.DateTime(timezone=True), nullable=True))
+    return result.fetchone() is not None
+
+
+def upgrade() -> None:
+    if not _column_exists('users', 'password_hash'):
+        op.add_column('users', sa.Column('password_hash', sa.String(length=255), nullable=True))
+    if not _column_exists('users', 'failed_login_attempts'):
+        op.add_column(
+            'users',
+            sa.Column('failed_login_attempts', sa.Integer(), nullable=False, server_default='0'),
+        )
+    if not _column_exists('users', 'locked_until'):
+        op.add_column('users', sa.Column('locked_until', sa.DateTime(timezone=True), nullable=True))
 
     # `email_verified` has existed since the initial schema but was never
     # enforced anywhere - every row today is False purely because nothing
@@ -35,6 +51,17 @@ def upgrade() -> None:
     # /auth/register flow (which now explicitly sets False and requires an
     # OTP) start out unverified.
     op.execute("UPDATE users SET email_verified = true WHERE email_verified = false")
+
+    # Check if email_otps already exists before creating
+    conn = op.get_bind()
+    table_check = conn.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_name = 'email_otps'"
+        )
+    )
+    if table_check.fetchone() is not None:
+        return  # Table already exists, nothing more to do
 
     op.create_table(
         'email_otps',
