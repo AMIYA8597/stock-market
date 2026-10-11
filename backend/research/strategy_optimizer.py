@@ -71,7 +71,11 @@ def run_ema_cross_vwap_adx_backtest(
     data["ema_slow"] = ta.ema(data["close"], length=ema_slow)
     adx_df = ta.adx(data["high"], data["low"], data["close"], length=14)
     data["adx"] = adx_df["ADX_14"]
-    data["vwap"] = (data["close"] * data["volume"]).cumsum() / data["volume"].cumsum()
+    # Daily-resetting VWAP for intraday data
+    date_groups = data.index.date
+    typical = (data["high"] + data["low"] + data["close"]) / 3
+    data["vwap"] = (typical * data["volume"]).groupby(date_groups).cumsum() / data["volume"].groupby(date_groups).cumsum()
+    data["atr"] = ta.atr(data["high"], data["low"], data["close"], length=14)
     data = data.dropna()
 
     trades: list[float] = []
@@ -87,7 +91,7 @@ def run_ema_cross_vwap_adx_backtest(
                     and row["adx"] > adx_threshold):
                 position = 1
                 entry_price = row["close"]
-                atr = data.loc[:_i, "close"].diff().abs().rolling(14).mean().iloc[-1]
+                atr = row["atr"]
                 stop_loss = entry_price - 1.5 * atr
                 take_profit = entry_price + reward_risk * 1.5 * atr
             elif (row["ema_fast"] < row["ema_slow"]
@@ -95,7 +99,7 @@ def run_ema_cross_vwap_adx_backtest(
                   and row["adx"] > adx_threshold):
                 position = -1
                 entry_price = row["close"]
-                atr = data.loc[:_i, "close"].diff().abs().rolling(14).mean().iloc[-1]
+                atr = row["atr"]
                 stop_loss = entry_price + 1.5 * atr
                 take_profit = entry_price - reward_risk * 1.5 * atr
         elif position == 1:
