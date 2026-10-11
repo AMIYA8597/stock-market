@@ -27,6 +27,7 @@ celery_app = Celery(
         "app.tasks.regime_tasks",
         "app.tasks.retraining_trigger",
         "app.tasks.sentiment_tasks",
+        "app.tasks.prediction_tasks",
     ],
 )
 
@@ -56,6 +57,9 @@ celery_app.conf.update(
             "task": "check_drift_for_watchlist",
             "schedule": 86400.0,  # Every day — walk-forward PSI/KS drift check, retrains only if drift exceeds threshold
         },
+        "run-predictions-every-5-min": {
+            "task": "run_periodic_predictions",
+            "schedule": 300.0,  # Every 5 minutes — task itself checks market hours
+        },
     },
 )
-
