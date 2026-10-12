@@ -83,8 +83,32 @@ async def get_signal(symbol: str):
                 message="Invalid symbol.",
             ).dict(),
         )
+    import asyncio
+
     try:
-        return await intelligence_service.get_signal(symbol)
+        return await asyncio.wait_for(
+            intelligence_service.get_signal(symbol),
+            timeout=10.0,
+        )
+    except TimeoutError:
+        logger.warning("get_signal timed out for %s, returning fallback", symbol)
+        from datetime import UTC, datetime
+
+        from app.schemas.intelligence import EnsembleSignal, RegimeDetails, SignalResponse
+
+        return SignalResponse(
+            is_fallback=True,
+            symbol=symbol.upper(),
+            timestamp=datetime.now(UTC),
+            ensemble=EnsembleSignal(signal="NEUTRAL", confidence=0.5, direction="NEUTRAL", kelly_fraction=0.0),
+            models={},
+            model_weights={},
+            regime=RegimeDetails(
+                state="SIDEWAYS",
+                probs={"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34, "CRISIS": 0.0},
+                transition_probs={"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "CRISIS": 0.25},
+            ),
+        )
     except Exception as exc:
         logger.error("get_signal failed for %s: %s: %s", symbol, type(exc).__name__, exc)
         raise HTTPException(

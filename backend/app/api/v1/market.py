@@ -285,13 +285,15 @@ async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
         except Exception as exc:
             logger.warning("Failed to fetch quote for index %s: %s", inst.canonical_symbol, exc)
 
-    # Fallback: if DB has no indices, fetch from yfinance
+    # Fallback: if DB has no indices, fetch from yfinance with timeout
     if not indices:
+        import asyncio
+
         from app.services.market_data_service import MarketDataService
         yf_indices = MarketDataService.NSE_INDICES
         for yf_sym, name in yf_indices:
             try:
-                q = await MarketDataService._yfinance_quote(yf_sym)
+                q = await asyncio.wait_for(MarketDataService._yfinance_quote(yf_sym), timeout=5.0)
                 if q and q.get("price", 0) > 0:
                     indices.append(IndexData(
                         name=name, ticker=yf_sym,
@@ -642,12 +644,14 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
         logger.warning("DB query for global-context instruments failed: %s", exc)
         instruments = []
     if not instruments:
-        # Fallback: fetch indices from yfinance
+        # Fallback: fetch indices from yfinance with per-symbol timeout
+        import asyncio
+
         from app.services.market_data_service import MarketDataService
         context = []
         for yf_sym, name in MarketDataService.NSE_INDICES[:6]:
             try:
-                q = await MarketDataService.get_quote(yf_sym)
+                q = await asyncio.wait_for(MarketDataService.get_quote(yf_sym), timeout=5.0)
                 if q and q.get("price", 0) > 0:
                     context.append({
                         "ticker": yf_sym, "name": name,

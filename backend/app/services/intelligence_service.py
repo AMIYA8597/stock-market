@@ -239,10 +239,35 @@ class IntelligenceService:
         # multiple ML models — doing 50 of those simultaneously exhausts
         # memory and CPU, causing 502/503 errors.
         sem = asyncio.Semaphore(3)
+        _PER_SYMBOL_TIMEOUT = 10  # seconds per symbol before fallback
 
         async def _throttled(symbol: str) -> SignalResponse:
             async with sem:
-                return await self.get_signal(symbol)
+                try:
+                    return await asyncio.wait_for(
+                        self.get_signal(symbol),
+                        timeout=_PER_SYMBOL_TIMEOUT,
+                    )
+                except (TimeoutError, Exception) as exc:
+                    logger.warning("Bulk signal for %s failed/timed out: %s", symbol, exc)
+                    return SignalResponse(
+                        is_fallback=True,
+                        symbol=symbol.upper(),
+                        timestamp=datetime.now(UTC),
+                        ensemble=EnsembleSignal(
+                            signal="NEUTRAL",
+                            confidence=0.5,
+                            direction="NEUTRAL",
+                            kelly_fraction=0.0,
+                        ),
+                        models={},
+                        model_weights={},
+                        regime=RegimeDetails(
+                            state="SIDEWAYS",
+                            probs={"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34, "CRISIS": 0.0},
+                            transition_probs={"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "CRISIS": 0.25},
+                        ),
+                    )
 
         return list(await asyncio.gather(*(_throttled(s) for s in symbols)))
 

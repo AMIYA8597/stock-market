@@ -228,7 +228,7 @@ export const useTerminalData = (): TerminalDataState => {
     }
     const id = setInterval(() => {
       void refreshAll(true);
-    }, 60_000);
+    }, 120_000);
 
     return () => {
       clearInterval(id);
