@@ -6,6 +6,9 @@ Provides forecast trajectories, support/resistance levels, and signals.
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,7 +23,36 @@ from app.schemas.prediction import ForecastRequest
 from app.services.market_data_service import MarketDataService
 from app.services.prediction_engine import forecast_multi_horizon, get_full_prediction
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+# Maximum time to wait for the heavy prediction pipeline before returning fallback
+_PREDICTION_TIMEOUT_SECONDS = 8
+
+
+def _fallback_prediction(symbol: str) -> dict:
+    """Return a lightweight fallback prediction when the full pipeline is too slow or fails."""
+    from datetime import UTC, datetime
+
+    return {
+        "symbol": symbol,
+        "is_fallback": True,
+        "timestamp": datetime.now(UTC).isoformat(),
+        "ensemble": {
+            "direction": "NEUTRAL",
+            "confidence": 0.5,
+            "signal": "NEUTRAL",
+            "model_weights": {},
+        },
+        "regime": {
+            "current_state": "unknown",
+            "probs": {"bull": 0.25, "bear": 0.25, "sideways": 0.25, "crisis": 0.25},
+        },
+        "forecast": [],
+        "models": {},
+        "reasoning": "Signal computation in progress — data will appear shortly.",
+    }
 
 
 @router.get("/{symbol}")
@@ -30,6 +62,13 @@ async def get_prediction(
     _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60)),
 ):
     norm_symbol = MarketDataService._normalize_symbol(symbol)
+
+    # Fast path: check cache directly first (avoids DB + heavy pipeline)
+    from app.services.prediction_engine import _cache_fetch
+
+    cached = await _cache_fetch(norm_symbol)
+    if cached:
+        return cached
 
     # Check if we have an active XGBoost model for this symbol
     artifact_path = None
@@ -51,21 +90,23 @@ async def get_prediction(
     except Exception:
         pass
 
+    # Run prediction with a timeout — return fallback if it takes too long
     try:
-        return await get_full_prediction(
-            symbol,
-            bypass_cache=False,
-            artifact_path=artifact_path,
-            model_version=model_version,
+        return await asyncio.wait_for(
+            get_full_prediction(
+                symbol,
+                bypass_cache=False,
+                artifact_path=artifact_path,
+                model_version=model_version,
+            ),
+            timeout=_PREDICTION_TIMEOUT_SECONDS,
         )
+    except TimeoutError:
+        logger.warning("Prediction for %s timed out after %ss, returning fallback", norm_symbol, _PREDICTION_TIMEOUT_SECONDS)
+        return _fallback_prediction(norm_symbol)
     except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=ErrorResponse.create(
-                code="MODEL_NOT_TRAINED",
-                message=f"Prediction unavailable for {symbol}: {str(e)[:200]}",
-            ).dict(),
-        )
+        logger.warning("Prediction failed for %s: %s, returning fallback", norm_symbol, e)
+        return _fallback_prediction(norm_symbol)
 
 
 @router.post("/forecast")

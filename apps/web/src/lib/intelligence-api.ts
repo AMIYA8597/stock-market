@@ -255,18 +255,41 @@ export const intelligenceApi = {
   },
 
   async getBulkSignals(symbols: string[]): Promise<SignalResponse[]> {
-    const CONCURRENCY = 5;
-    const all: SignalResponse[] = [];
-    for (let i = 0; i < symbols.length; i += CONCURRENCY) {
-      const batch = symbols.slice(i, i + CONCURRENCY);
-      const results = await Promise.allSettled(batch.map(fetchSignalWithFallback));
-      for (const res of results) {
-        if (res.status === "fulfilled") {
-          all.push(normalizeSignalResponse(res.value));
+    if (symbols.length === 0) return [];
+    const authHeaders = await getAuthHeaders();
+    // Use the bulk endpoint instead of firing 50 individual requests
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(
+        `${API_URL}/signals/bulk?symbols=${encodeURIComponent(symbols.join(","))}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+          headers: { ...authHeaders },
+        },
+      ).finally(() => clearTimeout(timeoutId));
+      const raw = await parseJson<UnknownRecord>(response);
+      // The bulk endpoint returns { signals: [...] } or an array directly
+      const signalArray = Array.isArray(raw) ? raw : Array.isArray((raw as any).signals) ? (raw as any).signals : [];
+      return signalArray.map((s: UnknownRecord) => normalizeSignalResponse(s));
+    } catch (err) {
+      console.warn("Bulk signals endpoint failed, falling back to individual calls:", err);
+      // Fallback: fetch individually with limited concurrency
+      const CONCURRENCY = 5;
+      const all: SignalResponse[] = [];
+      for (let i = 0; i < symbols.length; i += CONCURRENCY) {
+        const batch = symbols.slice(i, i + CONCURRENCY);
+        const results = await Promise.allSettled(batch.map(fetchSignalWithFallback));
+        for (const res of results) {
+          if (res.status === "fulfilled") {
+            all.push(normalizeSignalResponse(res.value));
+          }
         }
       }
+      return all;
     }
-    return all;
   },
 
   async getForecast(symbol: string, horizons: number[] = [1, 5, 10, 15, 20, 25, 30]): Promise<ForecastResponse> {
