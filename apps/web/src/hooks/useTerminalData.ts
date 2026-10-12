@@ -48,6 +48,7 @@ export const useTerminalData = (): TerminalDataState => {
   const [error, setError] = useState<string | null>(null);
   const initializedRef = useRef<boolean>(false);
   const symbolsRef = useRef<string[]>([]);
+  const refreshAllRef = useRef<(background?: boolean, sourceSymbols?: string[]) => Promise<void>>();
   const { signals: liveSignals, status: signalStreamStatus } = useSignalFeed(symbols);
 
   const loadSymbols = useCallback(async (): Promise<string[]> => {
@@ -102,24 +103,31 @@ export const useTerminalData = (): TerminalDataState => {
 
       symbolsRef.current = symbolsToLoad;
       setSymbols(symbolsToLoad);
-      initializedRef.current = true;
-      setLoading(false);
-      setRefreshing(false);
 
-      const [bulkResult, singleResult] = await Promise.allSettled([
-        intelligenceApi.getBulkSignals(symbolsToLoad),
-        intelligenceApi.getSignal(targetSymbol),
-      ]);
+      try {
+        const [bulkResult, singleResult] = await Promise.allSettled([
+          intelligenceApi.getBulkSignals(symbolsToLoad),
+          intelligenceApi.getSignal(targetSymbol),
+        ]);
 
-      const bulk = bulkResult.status === "fulfilled" ? bulkResult.value : [];
-      const single = singleResult.status === "fulfilled" ? singleResult.value : null;
+        const bulk = bulkResult.status === "fulfilled" ? bulkResult.value : [];
+        const single = singleResult.status === "fulfilled" ? singleResult.value : null;
 
-      if (singleResult.status === "rejected") {
-        console.warn("Failed to fetch selected signal (model likely not trained yet):", singleResult.reason);
+        if (singleResult.status === "rejected") {
+          console.warn("Failed to fetch selected signal (model likely not trained yet):", singleResult.reason);
+        }
+
+        setWatchlistSignals(bulk);
+        setSelectedSignal(single);
+
+        if (bulk.length === 0 && bulkResult.status === "rejected") {
+          setError("Signal feed unavailable — showing watchlist symbols without live data.");
+        }
+      } finally {
+        initializedRef.current = true;
+        setLoading(false);
+        setRefreshing(false);
       }
-
-      setWatchlistSignals(bulk);
-      setSelectedSignal(single);
     },
     [loadSymbols, selectedSymbol]
   );
@@ -151,6 +159,9 @@ export const useTerminalData = (): TerminalDataState => {
     [selectedSymbol]
   );
 
+  // Keep a stable ref so the init effect doesn't re-fire when selectedSymbol changes
+  refreshAllRef.current = refreshAll;
+
   const refresh = useCallback(async (): Promise<void> => {
     await refreshAll(true);
   }, [refreshAll]);
@@ -162,13 +173,14 @@ export const useTerminalData = (): TerminalDataState => {
       if (!mounted) {
         return;
       }
-      await refreshAll(false, loaded);
+      await refreshAllRef.current?.(false, loaded);
     })();
 
     return () => {
       mounted = false;
     };
-  }, [loadSymbols, refreshAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadSymbols]);
 
   useEffect(() => {
     if (!initializedRef.current || !selectedSymbol) {

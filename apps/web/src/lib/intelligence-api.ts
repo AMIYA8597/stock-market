@@ -238,11 +238,14 @@ async function fetchSignalWithFallback(symbol: string): Promise<UnknownRecord> {
     }).finally(() => clearTimeout(timeoutId));
     return await parseJson<UnknownRecord>(response);
   } catch {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
     const response = await fetch(`${API_URL}/signals/${encodeURIComponent(symbol)}`, {
       method: "GET",
       cache: "no-store",
+      signal: controller.signal,
       headers: { ...authHeaders },
-    });
+    }).finally(() => clearTimeout(timeoutId));
     const raw = await parseJson<UnknownRecord>(response);
     return adaptTechnicalSignalToRaw(raw);
   }
