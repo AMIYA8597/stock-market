@@ -1,12 +1,13 @@
 """News and Sentiment endpoints router (GET /news/*)."""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.connection import get_db
 from app.models.instrument import Instrument
 from app.models.sentiment import NewsSentiment
+from app.services.market_data_service import MarketDataService
 
 router = APIRouter(prefix="/news", tags=["news"])
 
@@ -15,13 +16,20 @@ router = APIRouter(prefix="/news", tags=["news"])
 async def get_news_for_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
     """Get scraped news and sentiment for a specific symbol."""
     clean_symbol = symbol.split(".")[0].upper()
-    inst_res = await db.execute(
-        select(Instrument).where(Instrument.canonical_symbol.startswith(clean_symbol))
-    )
-    instrument = inst_res.scalars().first()
+    norm_symbol = MarketDataService._normalize_symbol(symbol)
+    try:
+        inst_res = await db.execute(
+            select(Instrument).where(
+                (Instrument.canonical_symbol == norm_symbol)
+                | (Instrument.canonical_symbol.startswith(clean_symbol))
+            )
+        )
+        instrument = inst_res.scalars().first()
+    except Exception:
+        instrument = None
 
     if not instrument:
-        raise HTTPException(status_code=404, detail=f"Instrument {symbol} not found")
+        return {"symbol": symbol, "daily_mean": 0.0, "articles": []}
 
     news_res = await db.execute(
         select(NewsSentiment)

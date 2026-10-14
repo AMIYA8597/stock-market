@@ -24,6 +24,7 @@ from datetime import UTC, datetime
 from celery import shared_task
 from sqlalchemy import func, select
 
+from app.core.config import get_settings
 from app.database.connection import async_session_factory
 from app.models.autotrade import AutoTradeSetting
 from app.models.paper_trading import PaperPosition
@@ -88,7 +89,10 @@ async def _scan_one_user(setting: AutoTradeSetting) -> dict:
 
             if not side or confidence_pct < float(setting.min_confidence):
                 skipped.append(
-                    {"symbol": symbol, "reason": f"direction={direction} confidence={confidence_pct:.1f}%"}
+                    {
+                        "symbol": symbol,
+                        "reason": f"direction={direction} confidence={confidence_pct:.1f}%",
+                    }
                 )
                 continue
 
@@ -116,6 +120,26 @@ async def _scan_one_user(setting: AutoTradeSetting) -> dict:
                 else:
                     wallet = await PaperTradingService.get_or_create_wallet(db, user_id)
                     quote = await MarketDataService.get_quote(symbol)
+                    raw_timestamp = quote.get("timestamp")
+                    if not isinstance(raw_timestamp, str):
+                        skipped.append({"symbol": symbol, "reason": "quote timestamp unavailable"})
+                        continue
+                    try:
+                        quote_timestamp = datetime.fromisoformat(raw_timestamp)
+                    except ValueError:
+                        skipped.append({"symbol": symbol, "reason": "quote timestamp invalid"})
+                        continue
+                    if quote_timestamp.tzinfo is None:
+                        quote_timestamp = quote_timestamp.replace(tzinfo=UTC)
+                    quote_age = (datetime.now(UTC) - quote_timestamp).total_seconds()
+                    if quote_age < 0 or quote_age > get_settings().AUTOTRADE_MAX_QUOTE_AGE_SECONDS:
+                        skipped.append(
+                            {
+                                "symbol": symbol,
+                                "reason": f"quote stale or out of order ({quote_age:.1f}s)",
+                            }
+                        )
+                        continue
                     price = float(quote["price"])
                     if price <= 0:
                         skipped.append({"symbol": symbol, "reason": "invalid quote price"})
@@ -134,7 +158,9 @@ async def _scan_one_user(setting: AutoTradeSetting) -> dict:
                     quantity=quantity,
                     order_type="MARKET",
                 )
-                placed.append({"symbol": symbol, "side": side, "quantity": quantity, "result": result})
+                placed.append(
+                    {"symbol": symbol, "side": side, "quantity": quantity, "result": result}
+                )
                 if side == "BUY":
                     open_positions += 1
                 logger.info(f"[AUTOTRADE] user={user_id} {side} {quantity} {symbol}")

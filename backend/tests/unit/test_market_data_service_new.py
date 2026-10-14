@@ -30,6 +30,7 @@ def mock_redis():
     mock.setex = AsyncMock()
     return mock
 
+
 @pytest.fixture(autouse=True)
 def reset_mds_state():
     MarketDataService._session = None
@@ -39,11 +40,13 @@ def reset_mds_state():
     MarketDataService._nse_bucket.tokens = MarketDataService._nse_bucket.capacity
     yield
 
+
 def test_safe_float():
     assert safe_float("123.45") == 123.45
-    assert safe_float(float('nan')) == 0.0
-    assert safe_float(float('inf')) == 0.0
+    assert safe_float(float("nan")) == 0.0
+    assert safe_float(float("inf")) == 0.0
     assert safe_float("invalid", 1.0) == 1.0
+
 
 @pytest.mark.asyncio
 async def test_token_bucket():
@@ -53,16 +56,19 @@ async def test_token_bucket():
     await asyncio.sleep(0.02)
     await bucket.consume(1.0)
 
+
 @pytest.mark.asyncio
 async def test_throttle_methods():
     await MarketDataService._throttle_yfinance("RELIANCE")
     await MarketDataService._throttle_nse()
+
 
 def test_get_session():
     session1 = MarketDataService.get_session()
     session2 = MarketDataService.get_session()
     assert session1 is session2
     assert "User-Agent" in session1.headers
+
 
 @pytest.mark.asyncio
 async def test_health_ok():
@@ -73,12 +79,14 @@ async def test_health_ok():
         res2 = await MarketDataService.health()
         assert res2 == {"status": "ok"}
 
+
 @pytest.mark.asyncio
 async def test_health_fail():
     with patch("yfinance.download") as mock_yf:
         mock_yf.side_effect = Exception("error")
         res = await MarketDataService.health()
         assert res == {"status": "unhealthy"}
+
 
 def test_normalize_symbol():
     assert MarketDataService._normalize_symbol("NIFTY50") == "^NSEI"
@@ -92,12 +100,16 @@ def test_normalize_symbol():
     assert MarketDataService._normalize_symbol("USDINR=X") == "USDINR=X"
     assert MarketDataService._normalize_symbol("CL=F") == "CL=F"
 
+
 @pytest.mark.asyncio
 async def test_get_batch_quotes():
-    with patch.object(MarketDataService, "get_quote", side_effect=[{"price": 100}, Exception("error")]):
+    with patch.object(
+        MarketDataService, "get_quote", side_effect=[{"price": 100}, Exception("error")]
+    ):
         res = await MarketDataService.get_batch_quotes(["RELIANCE", "INVALID"])
         assert res["RELIANCE"] == {"price": 100}
         assert res["INVALID"] is None
+
 
 def _mock_db_ctx(execute_results):
     """Patch app.database.connection.async_session_factory so that
@@ -109,9 +121,7 @@ def _mock_db_ctx(execute_results):
     mock_cm = AsyncMock()
     mock_cm.__aenter__.return_value = mock_session
     mock_cm.__aexit__.return_value = False
-    return patch(
-        "app.database.connection.async_session_factory", return_value=mock_cm
-    )
+    return patch("app.database.connection.async_session_factory", return_value=mock_cm)
 
 
 def _instrument_result(instrument_id):
@@ -191,14 +201,17 @@ async def test_get_history_instrument_not_found():
     # Upstox -> Stooq -> yfinance. When every provider fails it returns an
     # empty list (the /market/history route maps that to a 404) rather than
     # raising. (yfinance is mocked by conftest to raise "Network offline".)
-    with _mock_db_ctx([_empty_result()]), patch.object(
-        MarketDataService, "_upstox_history", AsyncMock(return_value=None)
-    ), patch(
-        "app.services.ingestion.stooq_source.StooqProvider.get_ohlcv",
-        AsyncMock(side_effect=RuntimeError("Network offline (mocked stooq)")),
+    with (
+        _mock_db_ctx([_empty_result()]),
+        patch.object(MarketDataService, "_upstox_history", AsyncMock(return_value=None)),
+        patch(
+            "app.services.ingestion.stooq_source.StooqProvider.get_ohlcv",
+            AsyncMock(side_effect=RuntimeError("Network offline (mocked stooq)")),
+        ),
     ):
         result = await MarketDataService.get_history("NOSUCHSYMBOL", "1d", "5d")
     assert result == []
+
 
 @pytest.mark.asyncio
 async def test_get_intraday_candles_success():
@@ -207,19 +220,26 @@ async def test_get_intraday_candles_success():
         assert len(res) == 1
         assert res[0]["close"] == 100
 
+
 @pytest.mark.asyncio
 async def test_get_intraday_candles_fallback():
     with patch.object(MarketDataService, "get_history", side_effect=Exception("error")):
-        with patch.object(MarketDataService, "get_quote", return_value={"price": 100, "volume": 10}):
+        with patch.object(
+            MarketDataService, "get_quote", return_value={"price": 100, "volume": 10}
+        ):
             res = await MarketDataService.get_intraday_candles("RELIANCE", "1m")
             assert len(res) == 1
             assert res[0]["close"] == 100
 
+
 @pytest.mark.asyncio
 async def test_get_indices():
-    with patch.object(MarketDataService, "get_quote", return_value={"price": 100, "change": 1, "change_pct": 1.0}):
+    with patch.object(
+        MarketDataService, "get_quote", return_value={"price": 100, "change": 1, "change_pct": 1.0}
+    ):
         res = await MarketDataService.get_indices()
         assert len(res) == len(MarketDataService.NSE_INDICES)
+
 
 @pytest.mark.asyncio
 async def test_get_ticker_info():
@@ -230,6 +250,7 @@ async def test_get_ticker_info():
         res = await MarketDataService.get_ticker_info("RELIANCE")
         assert res["trailingPE"] == 20
 
+
 @pytest.mark.asyncio
 async def test_get_ticker_history_df():
     with patch("yfinance.Ticker") as mock_ticker_cls:
@@ -239,6 +260,7 @@ async def test_get_ticker_history_df():
         res = await MarketDataService.get_ticker_history_df("RELIANCE", "1d", "1d")
         assert not res.empty
 
+
 @pytest.mark.asyncio
 async def test_download_raw():
     with patch("yfinance.download") as mock_yf:
@@ -246,11 +268,13 @@ async def test_download_raw():
         res = await MarketDataService.download_raw("RELIANCE", "2023-01-01", "2023-01-02", "1d")
         assert not res.empty
 
+
 @pytest.mark.asyncio
 async def test_get_live_quote_success():
     with patch.object(MarketDataService, "get_quote", return_value={"price": 100}):
         res = await MarketDataService.get_live_quote("RELIANCE")
         assert res["price"] == 100
+
 
 @pytest.mark.asyncio
 async def test_get_live_quote_cache_fallback(mock_redis):
@@ -260,28 +284,34 @@ async def test_get_live_quote_cache_fallback(mock_redis):
             res = await MarketDataService.get_live_quote("RELIANCE")
             assert res["price"] == 200
 
+
 @pytest.mark.asyncio
 async def test_get_live_quote_fail(mock_redis):
     with patch.object(MarketDataService, "get_quote", side_effect=Exception("error")):
         with patch("app.database.redis_client.get_redis_client", return_value=mock_redis):
             mock_redis.get.return_value = None
             from fastapi import HTTPException
+
             with pytest.raises(HTTPException):
                 await MarketDataService.get_live_quote("RELIANCE")
 
+
 def test_get_ohlcv_sync():
     with patch("yfinance.Ticker") as mock_t:
-        mock_t.return_value.history.return_value = pd.DataFrame({
-            "Date": [pd.Timestamp("2023-01-01")],
-            "Open": [100.0],
-            "High": [110.0],
-            "Low": [90.0],
-            "Close": [105.0],
-            "Volume": [1000]
-        })
+        mock_t.return_value.history.return_value = pd.DataFrame(
+            {
+                "Date": [pd.Timestamp("2023-01-01")],
+                "Open": [100.0],
+                "High": [110.0],
+                "Low": [90.0],
+                "Close": [105.0],
+                "Volume": [1000],
+            }
+        )
         res = MarketDataService._fetch_ohlcv_sync("RELIANCE", "1d", "1d")
         assert len(res) == 1
         assert res[0]["close"] == 105.0
+
 
 @pytest.mark.asyncio
 async def test_get_ohlcv():
@@ -289,12 +319,27 @@ async def test_get_ohlcv():
         res = await MarketDataService.get_ohlcv("RELIANCE", "1d", "1d")
         assert len(res) == 1
 
+
 @pytest.mark.asyncio
 async def test_get_ohlcv_fallback():
     with patch.object(MarketDataService, "_fetch_ohlcv_sync", side_effect=Exception("error")):
-        with patch.object(MarketDataService, "get_history", return_value=[{"time": "2023-01-01T00:00:00", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1}]):
+        with patch.object(
+            MarketDataService,
+            "get_history",
+            return_value=[
+                {
+                    "time": "2023-01-01T00:00:00",
+                    "open": 1,
+                    "high": 1,
+                    "low": 1,
+                    "close": 1,
+                    "volume": 1,
+                }
+            ],
+        ):
             res = await MarketDataService.get_ohlcv("RELIANCE", "1d", "1d")
             assert len(res) == 1
+
 
 def teardown_module(module):
     from app.services import market_data_service
@@ -304,8 +349,8 @@ def teardown_module(module):
         mock_get_ticker_history_df,
         mock_get_ticker_info,
     )
+
     market_data_service.MarketDataService.get_quote = mock_get_quote
     market_data_service.MarketDataService.get_history = mock_get_history
     market_data_service.MarketDataService.get_ticker_history_df = mock_get_ticker_history_df
     market_data_service.MarketDataService.get_ticker_info = mock_get_ticker_info
-

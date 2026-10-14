@@ -54,13 +54,15 @@ function initGlobalListener() {
     const confidence = typeof payload.confidence === "number" ? payload.confidence : 0;
     const signalScore = typeof payload.signal === "number" ? payload.signal : 0;
 
+    if (typeof raw.ts !== "string") return;
+
     const alert: SignalAlert = {
       type: raw.type as SignalAlert["type"],
       symbol: raw.symbol,
       direction,
       signal_score: signalScore,
       confidence,
-      timestamp: raw.ts ?? new Date().toISOString(),
+      timestamp: raw.ts,
       message: `${direction.replace(/_/g, " ")} signal on ${raw.symbol} (confidence ${(confidence * 100).toFixed(0)}%)`,
     };
 

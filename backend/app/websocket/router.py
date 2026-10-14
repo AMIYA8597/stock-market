@@ -23,8 +23,6 @@ from app.websocket.connection_manager import get_connection_manager
 router = APIRouter(prefix="/ws")
 
 
-
-
 # Removed dead ws_portfolio_feed route (unused)
 # @router.websocket("/portfolio")
 # async def ws_portfolio_feed(websocket: WebSocket):
@@ -41,6 +39,7 @@ router = APIRouter(prefix="/ws")
 @router.websocket("/prices")
 async def ws_prices(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
+
     user_id = await authenticate_ws(websocket, ticket)
     if not user_id:
         return
@@ -158,6 +157,7 @@ async def ws_prices(websocket: WebSocket, ticket: str = ""):
 @router.websocket("/signals")
 async def ws_signals(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
+
     user_id = await authenticate_ws(websocket, ticket)
     if not user_id:
         return
@@ -190,6 +190,7 @@ async def ws_signals(websocket: WebSocket, ticket: str = ""):
 
             for symbol in sorted(subscribed_symbols):
                 from app.database.redis_client import cache_get, cache_set, get_redis
+
                 redis = await get_redis()
                 result = await cache_get(redis, f"ws:signal:{symbol}")
                 if not result:
@@ -197,9 +198,14 @@ async def ws_signals(websocket: WebSocket, ticket: str = ""):
                         result = await get_full_prediction(symbol)
                         if result and result.get("is_computed", False):
                             from datetime import timedelta
-                            await cache_set(redis, f"ws:signal:{symbol}", result, ttl=timedelta(seconds=60))
+
+                            await cache_set(
+                                redis, f"ws:signal:{symbol}", result, ttl=timedelta(seconds=60)
+                            )
                     except Exception as e:
-                        logger.debug("ws_signals_prediction_error symbol=%s error=%s", symbol, str(e))
+                        logger.debug(
+                            "ws_signals_prediction_error symbol=%s error=%s", symbol, str(e)
+                        )
                         result = None
 
                 if not result or not result.get("is_computed", False):
@@ -239,6 +245,7 @@ async def ws_signals(websocket: WebSocket, ticket: str = ""):
 @router.websocket("/alerts")
 async def ws_alerts(websocket: WebSocket, ticket: str = ""):
     from app.websocket.ws_auth import authenticate_ws
+
     user_id = await authenticate_ws(websocket, ticket)
     if not user_id:
         return
@@ -265,6 +272,7 @@ async def ws_backtest_progress(websocket: WebSocket, ticket: str):
     from app.database.connection import async_session_factory
     from app.models.backtest import BacktestJob
     from app.websocket.ws_auth import authenticate_ws
+
     user_id_str = await authenticate_ws(websocket, ticket)
     if not user_id_str:
         return
@@ -289,7 +297,7 @@ async def ws_backtest_progress(websocket: WebSocket, ticket: str):
                             async with async_session_factory() as session:
                                 stmt = select(BacktestJob).where(
                                     BacktestJob.id == job_uuid,
-                                    BacktestJob.user_id == UUID(user_id_str)
+                                    BacktestJob.user_id == UUID(user_id_str),
                                 )
                                 res = await session.execute(stmt)
                                 job = res.scalar_one_or_none()
@@ -348,71 +356,140 @@ async def ws_backtest_progress(websocket: WebSocket, ticket: str):
         await manager.disconnect(websocket)
 
 
-
-
 @router.websocket("/stream")
 async def ws_stream(websocket: WebSocket, ticket: str = ""):
-    from app.api.v1.websocket_url import _WS_TICKETS
-    user_id = _WS_TICKETS.pop(ticket, None)
+    import json
+    import time
+
+    from app.database.redis_client import cache_get, get_redis_client
+    from app.services.prediction_engine import _cache_fetch
+    from app.websocket.ws_auth import authenticate_ws
+
+    user_id = await authenticate_ws(websocket, ticket, allow_anonymous=True)
     if not user_id:
-        await websocket.close(code=1008)
         return
 
+    redis = await get_redis_client()
     manager = get_connection_manager()
     await manager.connect(websocket)
 
-    # Subscribe to personal alerts by default
-    await manager.subscribe(websocket, f"alerts:{user_id}")
+    # Subscribe to personal alerts when authenticated
+    if user_id != "anonymous":
+        await manager.subscribe(websocket, f"alerts:{user_id}")
     await manager.subscribe(websocket, "signals:alerts")
 
     # Track subscriptions for this unified connection
-    subscribed_symbols: set[str] = set()
+    subscribed_price_symbols: set[str] = set()
+    subscribed_signal_symbols: set[str] = set()
+    last_signal_sent_at: dict[str, float] = {}
+    pubsub = redis.pubsub()
+    await pubsub.subscribe("prices.ticks")
+
+    async def forward_price_ticks() -> None:
+        try:
+            async for message in pubsub.listen():
+                if message.get("type") != "message":
+                    continue
+                raw = message.get("data")
+                payload = json.loads(raw) if isinstance(raw, str) else raw
+                symbol = str(payload.get("symbol", "")).upper().split(".")[0]
+                all_subscribed = {
+                    item.split(".")[0]
+                    for item in (subscribed_price_symbols | subscribed_signal_symbols)
+                }
+                if symbol and symbol in all_subscribed:
+                    await manager.send_personal(websocket, payload)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug("ws_stream_price_forward_error error=%s", str(exc))
+
+    async def send_initial_quotes(symbols: list[str]) -> None:
+        try:
+            quotes = await MarketDataService.get_batch_quotes(symbols[:25])
+            for sym, q in quotes.items():
+                if q and q.get("price") is not None:
+                    await manager.send_personal(
+                        websocket,
+                        {
+                            "type": "tick",
+                            "symbol": q.get("symbol", sym),
+                            "payload": {
+                                "price": float(q["price"]),
+                                "change": float(q.get("change", 0.0)),
+                                "change_pct": float(q.get("change_pct", 0.0)),
+                            },
+                            "ts": datetime.now(UTC).isoformat(),
+                            "source": q.get("source", "live"),
+                        },
+                    )
+        except Exception as exc:
+            logger.debug("ws_stream_initial_quotes_error error=%s", str(exc))
+
+    price_task = asyncio.create_task(forward_price_ticks())
+    bg_tasks: set[asyncio.Task] = set()
 
     try:
         while True:
             try:
-                payload = await asyncio.wait_for(websocket.receive_json(), timeout=1.0)
+                payload = await asyncio.wait_for(websocket.receive_json(), timeout=2.0)
                 action = str(payload.get("action", "")).lower()
                 channel = str(payload.get("channel", "")).lower()
-                symbols = [str(s).upper() for s in payload.get("symbols", [])]
+                symbols = [str(s).upper().strip() for s in payload.get("symbols", []) if s]
 
                 if action == "subscribe":
-                    if channel == "prices":
-                        for symbol in symbols:
+                    if channel in ("prices", ""):
+                        new_price_syms = [s for s in symbols if s not in subscribed_price_symbols]
+                        for symbol in new_price_syms:
+                            subscribed_price_symbols.add(symbol)
                             await manager.subscribe(websocket, f"prices:{symbol}")
+                            try:
+                                count = await redis.hincrby("active_symbol_counts", symbol, 1)
+                                if count == 1:
+                                    await redis.sadd("active_symbols", symbol)
+                            except Exception:
+                                pass
+                        if new_price_syms:
+                            t = asyncio.create_task(send_initial_quotes(new_price_syms))
+                            bg_tasks.add(t)
+                            t.add_done_callback(bg_tasks.discard)
                     if channel in ("signals", ""):
-                        subscribed_symbols.update(symbols)
+                        subscribed_signal_symbols.update(symbols)
                 elif action == "unsubscribe":
-                    if channel == "prices":
+                    if channel in ("prices", ""):
                         for symbol in symbols:
-                            await manager.unsubscribe(websocket, f"prices:{symbol}")
+                            if symbol in subscribed_price_symbols:
+                                subscribed_price_symbols.remove(symbol)
+                                await manager.unsubscribe(websocket, f"prices:{symbol}")
+                                try:
+                                    count = await redis.hincrby("active_symbol_counts", symbol, -1)
+                                    if count <= 0:
+                                        await redis.srem("active_symbols", symbol)
+                                        await redis.hdel("active_symbol_counts", symbol)
+                                except Exception:
+                                    pass
                     if channel in ("signals", ""):
-                        subscribed_symbols.difference_update(symbols)
+                        subscribed_signal_symbols.difference_update(symbols)
             except TimeoutError:
                 pass
+            except WebSocketDisconnect:
+                break
             except Exception:
                 pass
 
-            # Stream signals for subscribed symbols
-            if subscribed_symbols:
-                for symbol in sorted(subscribed_symbols):
-                    from app.database.redis_client import cache_get, cache_set, get_redis
-                    redis = await get_redis()
-                    result = await cache_get(redis, f"ws:signal:{symbol}")
+            # Stream cached signals for subscribed symbols (throttled to every 15s per symbol)
+            if subscribed_signal_symbols:
+                now_mono = time.monotonic()
+                for symbol in sorted(subscribed_signal_symbols):
+                    if now_mono - last_signal_sent_at.get(symbol, 0.0) < 15.0:
+                        continue
+                    result = await _cache_fetch(symbol)
                     if not result:
-                        try:
-                            from app.services.prediction_engine import get_full_prediction
-                            result = await get_full_prediction(symbol)
-                            if result and result.get("is_computed", False):
-                                from datetime import timedelta
-                                await cache_set(redis, f"ws:signal:{symbol}", result, ttl=timedelta(seconds=60))
-                        except Exception as e:
-                            logger.debug("ws_signals_prediction_error symbol=%s error=%s", symbol, str(e))
-                            result = None
-
+                        result = await cache_get(redis, f"ws:signal:{symbol}")
                     if not result or not result.get("is_computed", False):
                         continue
 
+                    last_signal_sent_at[symbol] = now_mono
                     ens = result.get("ensemble", {})
                     direction = ens.get("direction", "NEUTRAL")
                     signal_score = ens.get("raw_ensemble", 0.0)
@@ -439,4 +516,20 @@ async def ws_stream(websocket: WebSocket, ticket: str = ""):
     except WebSocketDisconnect:
         pass
     finally:
+        price_task.cancel()
+        for t in list(bg_tasks):
+            t.cancel()
+        try:
+            for sym in list(subscribed_price_symbols):
+                count = await redis.hincrby("active_symbol_counts", sym, -1)
+                if count <= 0:
+                    await redis.srem("active_symbols", sym)
+                    await redis.hdel("active_symbol_counts", sym)
+        except Exception:
+            pass
+        try:
+            await pubsub.unsubscribe("prices.ticks")
+            await pubsub.close()
+        except Exception:
+            pass
         await manager.disconnect(websocket)

@@ -194,6 +194,7 @@ def detect_regime(df: pd.DataFrame) -> dict[str, Any]:
         logger.error(f"Real HMM-GARCH solver failed: {e}")
         raise ValueError(f"Regime detection failed: {e}")
 
+
 # ---------------------------------------------------------------------------
 # Layer 6 – Ensemble Combiner
 # ---------------------------------------------------------------------------
@@ -319,12 +320,19 @@ def build_ensemble_signal_sync(
     try:
         regime_info = detect_regime(df)
     except Exception as _regime_exc:
-        logger.warning("HMM regime detection failed for %s: %s — using heuristic fallback", symbol, _regime_exc)
+        logger.warning(
+            "HMM regime detection failed for %s: %s — using heuristic fallback", symbol, _regime_exc
+        )
         regime_info = {
-            "regime": "SIDEWAYS", "bull_prob": 0.33, "bear_prob": 0.33,
-            "regime_confidence": 0.33, "hmm_used": False,
-            "conditional_vol": 0.015, "vol_forecast_5d": 0.015,
-            "vol_forecast_21d": 0.05, "regime_variance": 0.0,
+            "regime": "SIDEWAYS",
+            "bull_prob": 0.33,
+            "bear_prob": 0.33,
+            "regime_confidence": 0.33,
+            "hmm_used": False,
+            "conditional_vol": 0.015,
+            "vol_forecast_5d": 0.015,
+            "vol_forecast_21d": 0.05,
+            "regime_variance": 0.0,
             "transition_matrix": None,
         }
     regime_state = 0
@@ -503,16 +511,26 @@ def build_ensemble_signal_sync(
 
         index_slice = None
         if _INDEX_DATA_CACHE is not None and not _INDEX_DATA_CACHE.empty:
-            start_date = df.index.min()
-            end_date = df.index.max()
-            index_slice = _INDEX_DATA_CACHE.loc[start_date:end_date]
+            if isinstance(df.index, pd.DatetimeIndex):
+                start_date = df.index.min()
+                end_date = df.index.max()
+                index_slice = _INDEX_DATA_CACHE.loc[start_date:end_date]
+            elif "time" in df.columns:
+                times = pd.to_datetime(df["time"]).dt.tz_localize(None)
+                start_date = times.min()
+                end_date = times.max()
+                index_slice = _INDEX_DATA_CACHE.loc[start_date:end_date]
+            else:
+                index_slice = _INDEX_DATA_CACHE.tail(len(df))
 
         gnn_analyzer = ContagionRiskAnalyzer()
         gnn_res = gnn_analyzer.compute_risk_factors(df, index_df=index_slice)
         gnn_score = float(gnn_res["raw_signal"])
         gnn_confidence = float(1.0 - gnn_res["contagion_score"])
         gnn_top_correlated = [{"ticker": "^NSEI", "correlation": float(gnn_res["corr_to_index"])}]
-        gnn_status = "heuristic"  # ContagionRiskAnalyzer is a formula-based substitute, not a trained GNN
+        gnn_status = (
+            "heuristic"  # ContagionRiskAnalyzer is a formula-based substitute, not a trained GNN
+        )
     except Exception as e:
         logger.warning(f"Failed to compute GNN contagion risk for {symbol}: {e}")
 
@@ -545,12 +563,13 @@ def build_ensemble_signal_sync(
 
     # 3. Dynamic Weight Management and Ensemble Combining
     # METALEARNER ENSEMBLE COMBINING
-    tech_score = 0.0 # TechnicalSignalEngine is eradicated
+    tech_score = 0.0  # TechnicalSignalEngine is eradicated
 
     # FinBERT sentiment
     sentiment_score = 0.0
     try:
         from app.services.sentiment_analyzer import FinBERTSentimentAnalyzer
+
         analyzer = FinBERTSentimentAnalyzer()
         if getattr(analyzer, "_initialized", False) or getattr(analyzer, "vader", None):
             headlines = analyzer.scrape_google_news(f"{symbol} stock India")
@@ -565,6 +584,7 @@ def build_ensemble_signal_sync(
     meta_learner_coefficients: dict[str, float] | None = None
     try:
         from research.models.ensemble.meta_learner import EnsembleMetaLearner
+
         meta_learner = EnsembleMetaLearner.load()
         if meta_learner and getattr(meta_learner, "lr_model", None) is not None:
             # Requires OOF predictions: XGB, LSTM, TFT, HMM, etc.
@@ -574,7 +594,7 @@ def build_ensemble_signal_sync(
                 model_signals.get("tft", 0.0),
                 model_signals.get("hmm_garch", 0.0),
                 model_signals.get("gnn", 0.0),
-                sentiment_score
+                sentiment_score,
             ]
             prob_up = meta_learner.predict_proba(scores)
             raw_ensemble = float((prob_up - 0.5) * 2.0)
@@ -586,7 +606,9 @@ def build_ensemble_signal_sync(
         logger.info(f"Ensemble fusion using fallback fixed-weight formula for {symbol}: {e}")
         # Fallback if meta-learner is untrained/missing: fixed-weight formula on the
         # signals that are actually populated (technical scoring was removed, see tech_score above).
-        fused_score = (0.7 * ml_score) + (0.3 * (model_signals.get("tft") or 0.0)) + (0.1 * sentiment_score)
+        fused_score = (
+            (0.7 * ml_score) + (0.3 * (model_signals.get("tft") or 0.0)) + (0.1 * sentiment_score)
+        )
 
         regime = regime_info.get("regime", "NEUTRAL")
         if regime in ("BEAR", "CRISIS") and fused_score > 0:
@@ -616,9 +638,7 @@ def build_ensemble_signal_sync(
         raise ValueError("No active signals to form an ensemble. Model generation failed.")
 
     if used_meta_learner and meta_learner_coefficients:
-        masked_weights = [
-            float(meta_learner_coefficients.get(m, 0.0)) for m in model_names
-        ]
+        masked_weights = [float(meta_learner_coefficients.get(m, 0.0)) for m in model_names]
     else:
         # Mirrors the fixed-weight fallback formula above (0.7 xgboost / 0.3 tft);
         # not a fake constant, it reflects which signals actually fed raw_ensemble.
@@ -776,26 +796,15 @@ def build_ensemble_signal_sync(
 
 def forecast_prices(df: pd.DataFrame, horizons: list[int]) -> list[dict[str, Any]]:
     closes = df["close"].values[-90:]  # Use last 90 days
-    forecast_method = "lstm_scratch"  # Trains from scratch each call (15 epochs) — not a pre-trained model
+    forecast_method = "exponential_smoothing"
     try:
-        from app.services.ml_engine.lstm_forecaster import deep_learning_forecast
-        pred_mean, pred_ci = deep_learning_forecast(closes, max(horizons))
-    except Exception as e:
-        logger.warning(f"LSTM price forecast failed: {e}. Falling back to ExponentialSmoothing.")
-        forecast_method = "exponential_smoothing"
-        # Fallback: simple exponential smoothing trend
-        try:
-            model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
-            result = model.fit()
-            pred_mean = result.forecast(max(horizons))
-            ci_width = df["close"].std() * np.sqrt(np.arange(1, max(horizons) + 1)) * 0.5
-            pred_ci = np.column_stack([pred_mean - ci_width, pred_mean + ci_width])
-        except Exception as ee:
-            logger.error(f"HoltWinters forecast fallback failed: {ee}")
-            forecast_method = "flat_projection"
-            current_close = float(df["close"].iloc[-1])
-            pred_mean = np.full(max(horizons), current_close)
-            pred_ci = np.column_stack([pred_mean * 0.97, pred_mean * 1.03])
+        pred_mean, pred_ci = _fit_and_forecast(closes, max(horizons))
+    except Exception as ee:
+        logger.error(f"Price forecast fallback failed: {ee}")
+        forecast_method = "flat_projection"
+        current_close = float(df["close"].iloc[-1])
+        pred_mean = np.full(max(horizons), current_close)
+        pred_ci = np.column_stack([pred_mean * 0.97, pred_mean * 1.03])
 
     current = float(df["close"].iloc[-1])
     output = []
@@ -847,25 +856,20 @@ HORIZON_SPECS: dict[str, dict[str, Any]] = {
 
 
 def _fit_and_forecast(closes: np.ndarray, steps: int) -> tuple[np.ndarray, np.ndarray]:
-    """Shared Deep Learning (LSTM) fit used by every horizon group."""
+    """Fast damped Holt-Winters ExponentialSmoothing fit used across horizon groups."""
     try:
-        from app.services.ml_engine.lstm_forecaster import deep_learning_forecast
-        return deep_learning_forecast(closes, steps)
-    except Exception as e:
-        logger.warning(f"LSTM Deep Learning forecast failed: {e}. Falling back to ExponentialSmoothing.")
-        try:
-            model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
-            result = model.fit()
-            pred_mean = result.forecast(steps)
-            ci_width = np.std(closes) * np.sqrt(np.arange(1, steps + 1)) * 0.5
-            pred_ci = np.column_stack([pred_mean - ci_width, pred_mean + ci_width])
-            return pred_mean, pred_ci
-        except Exception as ee:
-            logger.error(f"ExponentialSmoothing fallback also failed: {ee}")
-            current = float(closes[-1])
-            pred_mean = np.full(steps, current)
-            pred_ci = np.column_stack([pred_mean * 0.97, pred_mean * 1.03])
-            return pred_mean, pred_ci
+        model = ExponentialSmoothing(closes, trend="add", damped_trend=True)
+        result = model.fit()
+        pred_mean = np.asarray(result.forecast(steps), dtype=float)
+        ci_width = float(np.std(closes)) * np.sqrt(np.arange(1, steps + 1)) * 0.5
+        pred_ci = np.column_stack([pred_mean - ci_width, pred_mean + ci_width])
+        return pred_mean, pred_ci
+    except Exception as ee:
+        logger.error(f"ExponentialSmoothing forecast fallback failed: {ee}")
+        current = float(closes[-1])
+        pred_mean = np.full(steps, current)
+        pred_ci = np.column_stack([pred_mean * 0.97, pred_mean * 1.03])
+        return pred_mean, pred_ci
 
 
 async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict[str, Any]:
@@ -964,8 +968,6 @@ async def get_full_prediction(
 
     import pandas as pd
 
-
-
     end_date = datetime.now(UTC)
     start_date = end_date - timedelta(days=2 * 365)  # 2 years
 
@@ -979,24 +981,40 @@ async def get_full_prediction(
         from app.models.market import OHLCV, Instrument
 
         async with async_session_factory() as session:
-            inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
-            if inst:
-                bars = (await session.execute(
-                    select(OHLCV)
-                    .where(
-                        (OHLCV.instrument_id == inst.id) &
-                        (OHLCV.interval == '1d') &
-                        (OHLCV.timestamp >= start_date) &
-                        (OHLCV.timestamp <= end_date)
+            inst = (
+                (
+                    await session.execute(
+                        select(Instrument).where(Instrument.canonical_symbol == symbol)
                     )
-                    .order_by(OHLCV.timestamp.asc())
-                )).scalars().all()
+                )
+                .scalars()
+                .first()
+            )
+            if inst:
+                bars = (
+                    (
+                        await session.execute(
+                            select(OHLCV)
+                            .where(
+                                (OHLCV.instrument_id == inst.id)
+                                & (OHLCV.interval == "1d")
+                                & (OHLCV.timestamp >= start_date)
+                                & (OHLCV.timestamp <= end_date)
+                            )
+                            .order_by(OHLCV.timestamp.asc())
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
 
                 if bars and len(bars) >= 60:
                     df = pd.DataFrame(
                         [
                             {
-                                "time": b.timestamp.replace(tzinfo=None) if b.timestamp.tzinfo else b.timestamp,
+                                "time": b.timestamp.replace(tzinfo=None)
+                                if b.timestamp.tzinfo
+                                else b.timestamp,
                                 "open": float(b.open),
                                 "high": float(b.high),
                                 "low": float(b.low),
@@ -1009,7 +1027,7 @@ async def get_full_prediction(
     except Exception as e:
         logger.warning(f"DB fetch for prediction data failed for {symbol}: {e}")
 
-    # Fallback to yfinance via MarketDataService
+    # Fallback to MarketDataService.get_history (Upstox / Yahoo Finance)
     if df is None or len(df) < 60:
         try:
             yf_bars = await MarketDataService.get_history(symbol, interval="1d", period="2y")
@@ -1020,6 +1038,7 @@ async def get_full_prediction(
                     if isinstance(ts, str):
                         try:
                             from dateutil.parser import parse as dt_parse
+
                             ts_dt = dt_parse(ts).replace(tzinfo=None)
                         except Exception:
                             ts_dt = datetime.now(UTC).replace(tzinfo=None)
@@ -1027,14 +1046,16 @@ async def get_full_prediction(
                         ts_dt = datetime.utcfromtimestamp(ts)
                     else:
                         ts_dt = datetime.now(UTC).replace(tzinfo=None)
-                    rows.append({
-                        "time": ts_dt,
-                        "open": float(b.get("open", 0)),
-                        "high": float(b.get("high", 0)),
-                        "low": float(b.get("low", 0)),
-                        "close": float(b.get("close", 0)),
-                        "volume": float(b.get("volume", 0)),
-                    })
+                    rows.append(
+                        {
+                            "time": ts_dt,
+                            "open": float(b.get("open", 0)),
+                            "high": float(b.get("high", 0)),
+                            "low": float(b.get("low", 0)),
+                            "close": float(b.get("close", 0)),
+                            "volume": float(b.get("volume", 0)),
+                        }
+                    )
                 df = pd.DataFrame(rows)
         except Exception as e:
             logger.error(f"yfinance fallback for prediction data failed for {symbol}: {e}")
@@ -1047,6 +1068,7 @@ async def get_full_prediction(
     # -------------------------------------------------------------
     import sys
     from pathlib import Path
+
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     from research.feature_engineering.api import build_features
 
@@ -1132,6 +1154,7 @@ async def get_full_prediction(
     try:
         from research.models.xgboost_model.classifier import FeatureMismatchError
     except ImportError:
+
         class FeatureMismatchError(Exception):  # type: ignore[misc]
             missing_features: list = []
 
@@ -1146,7 +1169,8 @@ async def get_full_prediction(
 
     forecast = forecast_prices(df, horizons=[1, 3, 5, 10, 21])
 
-    # Generate plain-language reasoning via LLM Engine
+    # Generate deterministic evidence-based reasoning on the critical signal path
+    # (keeps external LLM latency and quota failures out of live signal serving)
     reasons = []
     try:
         from app.services.llm_reasoning_engine import LLMReasoningEngine
@@ -1156,18 +1180,14 @@ async def get_full_prediction(
             "MACD": float(df["MACD"].iloc[-1]) if "MACD" in df.columns else 0.0,
             "Trend": ensemble.get("regime", {}).get("regime", "UNKNOWN"),
         }
-
-        # Run the LLM reasoning asynchronously
         evidence_pack = {
             "symbol": symbol,
             "signal": ensemble.get("direction", "HOLD"),
             "confidence": float(ensemble.get("confidence", 0.0)),
             "technicals": technicals_dict,
-            "sentiment": "Neutral"
+            "sentiment": "Neutral",
         }
-        llm_reason = await LLMReasoningEngine.generate_reasoning(evidence_pack=evidence_pack)
-        if llm_reason:
-            reasons = [llm_reason]
+        reasons = [LLMReasoningEngine._heuristic_fallback(evidence_pack)]
     except Exception as re_err:
         logger.warning(f"Failed to generate plain-language reasoning message: {re_err}")
 
@@ -1189,7 +1209,6 @@ async def get_full_prediction(
         **_load_artifact_metadata(symbol),
     }
 
-
     try:
         from sqlalchemy import select
 
@@ -1199,28 +1218,49 @@ async def get_full_prediction(
         from app.models.research import ModelExplanation, Prediction
 
         async with async_session_factory() as session:
-            inst = (await session.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))).scalars().first()
+            inst = (
+                (
+                    await session.execute(
+                        select(Instrument).where(Instrument.canonical_symbol == symbol)
+                    )
+                )
+                .scalars()
+                .first()
+            )
             if inst:
-                active_model = (await session.execute(
-                    select(ModelArtifact)
-                    .where(ModelArtifact.symbol_id == inst.id, ModelArtifact.is_active.is_(True))
-                    .order_by(ModelArtifact.created_at.desc())
-                )).scalars().first()
+                active_model = (
+                    (
+                        await session.execute(
+                            select(ModelArtifact)
+                            .where(
+                                ModelArtifact.symbol_id == inst.id,
+                                ModelArtifact.is_active.is_(True),
+                            )
+                            .order_by(ModelArtifact.created_at.desc())
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
 
                 if active_model:
                     import json
+
                     pred = Prediction(
                         model_id=active_model.id,
                         instrument_id=inst.id,
                         prediction_timestamp=datetime.now(UTC),
-                        predicted_value=json.dumps(result)
+                        predicted_value=json.dumps(result),
                     )
                     session.add(pred)
                     await session.flush()
 
                     expl = ModelExplanation(
                         prediction_id=pred.id,
-                        explanation_data={"reasoning": reasoning_msg, "features": ensemble.get("top_features", [])}
+                        explanation_data={
+                            "reasoning": reasoning_msg,
+                            "features": ensemble.get("top_features", []),
+                        },
                     )
                     session.add(expl)
                     await session.commit()
@@ -1229,6 +1269,3 @@ async def get_full_prediction(
 
     await _cache_store(symbol, result)
     return result
-
-
-

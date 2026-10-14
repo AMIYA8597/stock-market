@@ -66,8 +66,14 @@ Copy `backend/.env.local.example` → `backend/.env` to use the docker-compose s
 
 | Variable | Default | Local | GitHub Secrets | Cloud Run | Required |
 |----------|---------|-------|----------------|-----------|----------|
-| `REDIS_URL` | `redis://localhost:6379/0` | set in `.env` | `REDIS_URL` | ✅ | ⚙️ |
+| `REDIS_URL` | `redis://localhost:6379/0` | set in `.env` | `CLOUDRUN_REDIS_URL` | ✅ managed Redis required | ✅ production |
 | `REDIS_MAX_CONNECTIONS` | `50` | — | — | — | ⚙️ |
+
+Cloud Run must use a shared managed Redis endpoint (for example Memorystore
+through a VPC connector or a TLS-enabled external Redis service). The
+in-memory fallback is development-only: it cannot fan out live prices or
+coordinate rate limits across Cloud Run instances, so `/readiness` returns
+`503` in production until Redis is reachable.
 
 ### Celery
 
@@ -295,3 +301,16 @@ pnpm --filter @neuroquant/web run dev
    CI if you forget step 2.
 4. Add the secret to GitHub Secrets, Cloud Run env, and/or Vercel env as
    appropriate per the table above.
+## Trading execution safety
+
+All environments must use:
+
+```text
+PAPER_TRADING_ONLY=true
+LIVE_ORDER_EXECUTION_ENABLED=false
+AUTOTRADE_MAX_QUOTE_AGE_SECONDS=120
+```
+
+The backend rejects any other trading mode and fails startup if the live-order
+gate is enabled. AIML signals and scheduled auto-trading may therefore create
+paper orders only; no broker order-placement path is enabled.

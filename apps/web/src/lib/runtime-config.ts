@@ -52,12 +52,27 @@ export function getWsBaseUrl(): string {
     return trimTrailingSlash(explicitWsUrl).replace(/\/ws\/?$/i, "");
   }
 
-  const apiBase = getApiBaseUrl();
-  if (apiBase.startsWith("https://")) {
-    return `wss://${apiBase.slice("https://".length)}`;
+  // Raw API base before relative proxy substitution
+  const rawApiBase = normalizeHttpBaseUrl(
+    process.env.NEXT_PUBLIC_API_URL,
+    typeof window !== "undefined" && !isLocalHostname(window.location.hostname)
+      ? "https://neuroquant-api-6g57r5groa-el.a.run.app"
+      : "http://localhost:8000"
+  );
+
+  if (rawApiBase.startsWith("https://")) {
+    return `wss://${rawApiBase.slice("https://".length)}`;
   }
-  if (apiBase.startsWith("http://")) {
-    return `ws://${apiBase.slice("http://".length)}`;
+  if (rawApiBase.startsWith("http://")) {
+    return `ws://${rawApiBase.slice("http://".length)}`;
   }
-  return apiBase;
+
+  if (typeof window !== "undefined") {
+    if (!isLocalHostname(window.location.hostname)) {
+      return "wss://neuroquant-api-6g57r5groa-el.a.run.app";
+    }
+    return "ws://localhost:8000";
+  }
+
+  return rawApiBase;
 }

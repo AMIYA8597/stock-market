@@ -110,7 +110,7 @@ class RealtimeManager {
       
       const activeSymbols = Array.from(this.symbolRefs.keys());
       if (activeSymbols.length > 0) {
-        this.ws?.send(JSON.stringify({ action: "subscribe", symbols: activeSymbols }));
+        this.ws?.send(JSON.stringify({ action: "subscribe", channel: "prices", symbols: activeSymbols }));
       }
     };
 
@@ -156,7 +156,7 @@ class RealtimeManager {
     }
     
     if (changed && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action: "subscribe", symbols: addedSymbols }));
+      this.ws.send(JSON.stringify({ action: "subscribe", channel: "prices", symbols: addedSymbols }));
     }
     
     if (this.symbolRefs.size > 0 && !this.ws) {
@@ -184,7 +184,7 @@ class RealtimeManager {
     }
     
     if (changed && this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ action: "unsubscribe", symbols: removedSymbols }));
+      this.ws.send(JSON.stringify({ action: "unsubscribe", channel: "prices", symbols: removedSymbols }));
     }
   }
 

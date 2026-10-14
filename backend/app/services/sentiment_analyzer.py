@@ -76,8 +76,6 @@ class FinBERTSentimentAnalyzer:
             # explicit failure rather than receive a fabricated score.
             raise RuntimeError(f"Canonical sentiment analyzer FinBERT failed to load: {e}") from e
 
-
-
     def analyze_sentiment_batch(self, texts: list[str]) -> list[dict[str, float]]:
         if not texts:
             return []
@@ -113,36 +111,6 @@ class FinBERTSentimentAnalyzer:
             logger.error(f"Sentiment inference failed: {e}")
             raise RuntimeError(f"Canonical sentiment inference failed: {e}")
 
-        try:
-            import torch
-
-            # Process in batches of 32 to avoid OOM even on CPU
-            batch_size = 32
-            results = []
-
-            for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i : i + batch_size]
-                inputs = self.tokenizer(
-                    batch_texts, return_tensors="pt", truncation=True, padding=True, max_length=512
-                )
-                with torch.no_grad():
-                    outputs = self.model(**inputs)
-                    probs = torch.softmax(outputs.logits, dim=-1).tolist()
-
-                for p in probs:
-                    # FinBERT labels: 0: positive, 1: negative, 2: neutral
-                    results.append(
-                        {
-                            "positive": float(p[0]),
-                            "negative": float(p[1]),
-                            "neutral": float(p[2]),
-                        }
-                    )
-            return results
-        except Exception as e:
-            logger.error(f"Sentiment inference failed: {e}. Falling back to VADER.")
-            return [self._vader_fallback(t) for t in texts]
-
     def analyze_sentiment(self, text: str) -> dict[str, float]:
         return self.analyze_sentiment_batch([text])[0]
 
@@ -177,11 +145,11 @@ class FinBERTSentimentAnalyzer:
         for source_name, url in feeds:
             try:
                 req = urllib.request.Request(url, headers=headers)
-                with urllib.request.urlopen(req, timeout=10) as response:
+                with urllib.request.urlopen(req, timeout=5) as response:
                     xml_data = response.read()
 
                 root = ET.fromstring(xml_data)  # nosec B314
-                for item in root.findall(".//item"):
+                for item in root.findall(".//item")[:25]:
                     title = item.find("title")
                     pub_date = item.find("pubDate")
                     link = item.find("link")
@@ -233,11 +201,11 @@ class FinBERTSentimentAnalyzer:
         succeeded = False
         try:
             req = urllib.request.Request(url, headers=headers)
-            with urllib.request.urlopen(req, timeout=10) as response:
+            with urllib.request.urlopen(req, timeout=5) as response:
                 xml_data = response.read()
 
             root = ET.fromstring(xml_data)  # nosec B314
-            for item in root.findall(".//item"):
+            for item in root.findall(".//item")[:25]:
                 title = item.find("title")
                 pub_date = item.find("pubDate")
                 link = item.find("link")
@@ -249,12 +217,11 @@ class FinBERTSentimentAnalyzer:
 
                     date_str = pub_date.text if pub_date is not None else ""
                     link_str = link.text if link is not None else ""
-                    resolved_url = self._resolve_google_news_url(link_str)
                     headlines.append(
                         {
                             "text": text,
                             "date": date_str,
-                            "url": resolved_url,
+                            "url": link_str,
                             "source": "Google News",
                         }
                     )

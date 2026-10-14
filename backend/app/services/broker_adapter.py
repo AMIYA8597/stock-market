@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.services.paper_trading import PaperTradingService
 from app.services.upstox_service import UpstoxService
 
@@ -20,6 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 class BrokerAdapter:
+    @staticmethod
+    def _assert_paper_mode() -> None:
+        """Keep every execution call fail-closed, even outside the API path."""
+        settings = get_settings()
+        if not settings.PAPER_TRADING_ONLY or settings.LIVE_ORDER_EXECUTION_ENABLED:
+            raise RuntimeError("Live order execution is disabled; only paper trading is supported.")
+
     @staticmethod
     async def place_order(
         db: AsyncSession,
@@ -39,6 +47,7 @@ class BrokerAdapter:
         side = side.upper().strip()
         order_type = order_type.upper().strip()
         product = product.upper().strip()
+        BrokerAdapter._assert_paper_mode()
 
         # Execute simulated transaction in Paper trading database
         UpstoxService.log_audit(
@@ -59,9 +68,7 @@ class BrokerAdapter:
             # Fetch order detail
             order_id = str(order.id) if hasattr(order, "id") else "PAPER_ORDER_ID"
             status = str(order.status) if hasattr(order, "status") else "FILLED"
-            price_filled = (
-                float(order.price) if hasattr(order, "price") else (limit_price or 0.0)
-            )
+            price_filled = float(order.price) if hasattr(order, "price") else (limit_price or 0.0)
 
             UpstoxService.log_audit(
                 f"[PAPER ORDER EXECUTED] ID={order_id} Instrument={symbol} Side={side} Status={status} FillPrice={price_filled}"
@@ -75,6 +82,7 @@ class BrokerAdapter:
                 "quantity": quantity,
                 "order_type": order_type,
                 "price": price_filled,
+                "execution_mode": "paper",
                 "message": "Paper order processed successfully.",
             }
         except Exception as e:
@@ -88,6 +96,7 @@ class BrokerAdapter:
         order_id: str, symbol: str, user_id: str | None = None
     ) -> dict[str, Any]:
         """Cancels an order."""
+        BrokerAdapter._assert_paper_mode()
         UpstoxService.log_audit(f"[PAPER ORDER CANCEL REQUEST] ID={order_id}")
         # In paper trading, canceling is handled by deleting/updating the order state
         try:
@@ -106,9 +115,7 @@ class BrokerAdapter:
                 stmt = stmt.values(status="CANCELLED")
                 res = await session.execute(stmt)
                 if res.rowcount == 0:
-                    raise ValueError(
-                        "Order not found or you do not have permission to cancel it."
-                    )
+                    raise ValueError("Order not found or you do not have permission to cancel it.")
                 await session.commit()
             UpstoxService.log_audit(f"[PAPER ORDER CANCELLED] ID={order_id}")
             return {"order_id": order_id, "status": "CANCELLED"}

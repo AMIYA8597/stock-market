@@ -81,25 +81,50 @@ async def send_otp_email(to_email: str, code: str, purpose: str) -> None:
 
     import logging
 
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail
-
     subject = OTP_SUBJECTS.get(purpose, "Your NeuroQuant verification code")
     body = _render_otp_body(purpose, code, settings.OTP_EXPIRE_MINUTES)
-    message = Mail(
-        from_email=settings.SENDGRID_FROM_EMAIL,
-        to_emails=to_email,
-        subject=subject,
-        plain_text_content=body,
-    )
-    try:
-        import asyncio
+    from_email = settings.SENDGRID_FROM_EMAIL
+    if not from_email or from_email.endswith(".local"):
+        from_email = "neuroquant990@gmail.com"
 
-        client = SendGridAPIClient(settings.SENDGRID_API_KEY)
-        await asyncio.to_thread(client.send, message)
+    try:
+        try:
+            import asyncio
+
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail
+
+            message = Mail(
+                from_email=from_email,
+                to_emails=to_email,
+                subject=subject,
+                plain_text_content=body,
+            )
+            client = SendGridAPIClient(settings.SENDGRID_API_KEY)
+            await asyncio.to_thread(client.send, message)
+        except ModuleNotFoundError:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10.0) as http_client:
+                resp = await http_client.post(
+                    "https://api.sendgrid.com/v3/mail/send",
+                    headers={
+                        "Authorization": f"Bearer {settings.SENDGRID_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "personalizations": [{"to": [{"email": to_email}]}],
+                        "from": {"email": from_email, "name": "NeuroQuant"},
+                        "subject": subject,
+                        "content": [{"type": "text/plain", "value": body}],
+                    },
+                )
+                resp.raise_for_status()
     except Exception as exc:
         # Never include `code` in this log line.
-        logging.getLogger(__name__).error(f"SendGrid OTP delivery failed for purpose={purpose}: {exc}")
+        logging.getLogger(__name__).error(
+            f"SendGrid OTP delivery failed for purpose={purpose}: {exc}"
+        )
         raise EmailDeliveryError("Failed to send verification email") from exc
 
 

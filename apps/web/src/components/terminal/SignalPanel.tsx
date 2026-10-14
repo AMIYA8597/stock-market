@@ -168,10 +168,6 @@ export default function SignalPanel({ signal }: SignalPanelProps): JSX.Element {
 
   useEffect(() => {
     void fetchAuditLogs();
-    const interval = setInterval(() => {
-      void fetchAuditLogs();
-    }, 5000);
-    return () => clearInterval(interval);
   }, [fetchAuditLogs]);
 
   useEffect(() => {

@@ -69,14 +69,20 @@ async def readiness_check():
     try:
         redis = await get_redis()
         redis_ok = bool(await redis.ping())
+        from app.database.redis_client import InMemoryCache
+
+        if get_settings().is_production and isinstance(redis, InMemoryCache):
+            redis_ok = False
     except Exception:
         redis_ok = False
 
     dependencies["database"] = "up" if db_ok else "down"
     dependencies["redis"] = "up" if redis_ok else "down"
 
-    # Overall is ready if primary SQLite is UP
-    overall = "ready" if db_ok else "not_ready"
+    # Production requires a shared Redis instance for rate limiting, pub/sub,
+    # and live-data fan-out. An in-memory fallback is not safe across Cloud Run
+    # instances and must not be reported as ready.
+    overall = "ready" if db_ok and (redis_ok or not get_settings().is_production) else "not_ready"
     payload = {
         "status": overall,
         "dependencies": dependencies,
@@ -107,7 +113,10 @@ async def system_audit():
 
     pkl_files = list(MODEL_DIR.glob("**/*.pkl")) + list(ARTIFACT_DIR.glob("**/*.pkl"))
 
-    upstox_configured = bool(getattr(settings, "UPSTOX_ENABLED", False) and getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None))
+    upstox_configured = bool(
+        getattr(settings, "UPSTOX_ENABLED", False)
+        and getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None)
+    )
 
     db_instruments = 0
     upstox_aliases = 0
@@ -116,9 +125,16 @@ async def system_audit():
 
         from app.database.connection import async_session_factory
         from app.models.market import Instrument, InstrumentAlias
+
         async with async_session_factory() as db:
             db_instruments = (await db.execute(select(func.count(Instrument.id)))).scalar() or 0
-            upstox_aliases = (await db.execute(select(func.count(InstrumentAlias.id)).where(InstrumentAlias.provider == "upstox"))).scalar() or 0
+            upstox_aliases = (
+                await db.execute(
+                    select(func.count(InstrumentAlias.id)).where(
+                        InstrumentAlias.provider == "upstox"
+                    )
+                )
+            ).scalar() or 0
     except Exception:
         pass
 

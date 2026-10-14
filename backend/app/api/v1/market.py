@@ -74,25 +74,84 @@ async def _latest_signal_direction(db: AsyncSession, instrument_id) -> str:
         return "bearish"
     return "neutral"
 
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/market", tags=["market"])
+
+
+@router.get("/quotes", response_model=dict[str, QuoteResponse])
+async def get_quotes_batch(
+    symbols: str = Query(..., description="Comma-separated list of symbols (max 100)"),
+    _rate_limit: None = Depends(get_rate_limiter(requests=120, window=60)),
+) -> dict[str, QuoteResponse]:
+    raw_list = [s.strip() for s in symbols.split(",") if s.strip()][:100]
+    if not raw_list:
+        raise HTTPException(status_code=400, detail="symbols parameter is required.")
+
+    batch = await MarketDataService.get_batch_quotes(raw_list)
+    out: dict[str, QuoteResponse] = {}
+    for sym in raw_list:
+        q = batch.get(sym)
+        if not q or q.get("price", 0) <= 0:
+            continue
+        raw_timestamp = q.get("timestamp")
+        try:
+            quote_timestamp = (
+                datetime.fromisoformat(raw_timestamp)
+                if isinstance(raw_timestamp, str)
+                else raw_timestamp
+            )
+            if quote_timestamp is None:
+                raise ValueError("quote timestamp missing")
+            if quote_timestamp.tzinfo is None:
+                quote_timestamp = quote_timestamp.replace(tzinfo=UTC)
+            freshness_seconds = max(0, int((datetime.now(UTC) - quote_timestamp).total_seconds()))
+        except (TypeError, ValueError):
+            logger.warning("Quote %s returned an invalid timestamp", sym)
+            continue
+        out[sym] = QuoteResponse(
+            ticker=sym,
+            name=q.get("name") or sym,
+            price=Decimal(str(q.get("price", 0))),
+            change=Decimal(str(q.get("change", 0))),
+            change_pct=Decimal(str(q.get("change_pct", 0))),
+            volume=Decimal(str(q.get("volume", 0))),
+            market_cap=Decimal(str(q.get("market_cap", 0))) if q.get("market_cap") else None,
+            pe_ratio=None,
+            week_52_high=Decimal(str(q.get("week_52_high", 0))) if q.get("week_52_high") else None,
+            week_52_low=Decimal(str(q.get("week_52_low", 0))) if q.get("week_52_low") else None,
+            regime=None,
+            signal=None,
+            timestamp=quote_timestamp,
+            data_freshness_seconds=freshness_seconds,
+            source=q.get("source", "unknown"),
+        )
+    return out
+
 
 @router.get("/quote/{symbol}", response_model=QuoteResponse)
 @router.get("/quotes/{symbol}", response_model=QuoteResponse, include_in_schema=False)
 async def get_quote(
     symbol: str,
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60))
+    _rate_limit: None = Depends(get_rate_limiter(requests=300, window=60)),
 ) -> QuoteResponse:
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
+
+    from app.core.test_state import is_test_mode
+
+    norm_sym = MarketDataService._normalize_symbol(symbol)
+    stale_response: QuoteResponse | None = None
 
     # Try DB first — wrapped in try/except so a DB hiccup (cold start, pooler
     # reset, missing table) falls through to the live provider chain instead
     # of returning a 500.
     try:
-        result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+        result = await db.execute(
+            select(Instrument).where(Instrument.canonical_symbol.in_([symbol.upper(), norm_sym]))
+        )
         instrument = result.scalars().first()
 
         if instrument:
@@ -104,10 +163,11 @@ async def get_quote(
             )
             quote = result.scalars().first()
 
-            if quote:
+            if quote and float(quote.price or 0.0) > 0:
                 price_val = float(quote.price or 0.0)
                 change_pct = float(quote.change_pct or 0.0)
-                return QuoteResponse(
+                age_sec = max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds()))
+                db_resp = QuoteResponse(
                     ticker=symbol,
                     name=instrument.display_name or symbol,
                     price=Decimal(str(price_val)),
@@ -121,20 +181,27 @@ async def get_quote(
                     regime=None,
                     signal=None,
                     timestamp=quote.observed_at,
-                    data_freshness_seconds=max(0, int((datetime.now(UTC) - quote.observed_at).total_seconds())),
+                    data_freshness_seconds=age_sec,
                     source="canonical_db",
                 )
+                if is_test_mode() or age_sec <= 900:
+                    return db_resp
+                stale_response = db_resp
     except Exception as exc:
-        logger.warning("Quote DB lookup failed for %s, falling through to providers: %s", symbol, exc)
+        logger.warning(
+            "Quote DB lookup failed for %s, falling through to providers: %s", symbol, exc
+        )
         try:
             await db.rollback()
         except Exception:
             pass
 
-    # Fallback: DB has no data — use the full provider chain (Upstox → yfinance → IndianStockAPI)
+    # Fallback: DB has no fresh data — use the full provider chain (Upstox → yfinance → IndianStockAPI)
     try:
         q = await MarketDataService.get_quote(symbol)
         if not q or q.get("price", 0) == 0:
+            if stale_response is not None:
+                return stale_response
             raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}")
         return QuoteResponse(
             ticker=symbol,
@@ -156,13 +223,30 @@ async def get_quote(
     except HTTPException:
         raise
     except Exception as exc:
+        if stale_response is not None:
+            return stale_response
         logger.warning("Live quote failed for %s: %s", symbol, exc)
-        raise HTTPException(status_code=404, detail=f"No quote data available for {symbol}") from exc
+        raise HTTPException(
+            status_code=404, detail=f"No quote data available for {symbol}"
+        ) from exc
+
 
 _INTERVAL_DEFAULT_PERIOD = {
-    "1m": "5d", "3m": "5d", "5m": "5d", "10m": "5d", "15m": "5d", "30m": "5d", "45m": "5d",
-    "1h": "5d", "2h": "5d", "4h": "5d", "1d": "1y", "1w": "2y", "1mo": "max",
+    "1m": "5d",
+    "3m": "5d",
+    "5m": "5d",
+    "10m": "5d",
+    "15m": "5d",
+    "30m": "5d",
+    "45m": "5d",
+    "1h": "5d",
+    "2h": "5d",
+    "4h": "5d",
+    "1d": "1y",
+    "1w": "2y",
+    "1mo": "max",
 }
+
 
 @router.get("/history/{symbol}", response_model=HistoryResponse)
 async def get_history(
@@ -170,29 +254,42 @@ async def get_history(
     interval: str = Query("1d", pattern="^(1m|3m|5m|10m|15m|30m|45m|1h|2h|4h|1d|1w|1mo)$"),
     period: str | None = Query(None, pattern="^(1d|5d|1mo|3mo|6mo|1y|2y|5y|max)$"),
     db: AsyncSession = Depends(get_db),
-    _rate_limit: None = Depends(get_rate_limiter(requests=10, window=60)),
+    _rate_limit: None = Depends(get_rate_limiter(requests=120, window=60)),
 ) -> HistoryResponse:
     if not symbol.strip():
         raise HTTPException(status_code=400, detail="symbol is required.")
 
+    norm = MarketDataService._normalize_symbol(symbol)
     effective_period: str = period or _INTERVAL_DEFAULT_PERIOD.get(interval, "1mo")
     # Derive start_time from effective_period for DB OHLCV query
-    _period_days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
+    _period_days = {
+        "1d": 1,
+        "5d": 5,
+        "1mo": 30,
+        "3mo": 90,
+        "6mo": 180,
+        "1y": 365,
+        "2y": 730,
+        "5y": 1825,
+        "max": 3650,
+    }
     start_time = datetime.now(UTC) - timedelta(days=_period_days.get(effective_period, 365))
 
     # A DB hiccup (Cloud Run cold start, pooler reset) must not turn into a
     # 500: skip the canonical-DB read and fall through to the provider chain.
     bars_data: list[OHLCV] = []
     try:
-        result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == symbol))
+        result = await db.execute(
+            select(Instrument).where(Instrument.canonical_symbol.in_([symbol.upper(), norm]))
+        )
         instrument = result.scalars().first()
         if instrument:
             result = await db.execute(
                 select(OHLCV)
                 .where(
-                    (OHLCV.instrument_id == instrument.id) &
-                    (OHLCV.interval == interval) &
-                    (OHLCV.timestamp >= start_time)
+                    (OHLCV.instrument_id == instrument.id)
+                    & (OHLCV.interval == interval)
+                    & (OHLCV.timestamp >= start_time)
                 )
                 .order_by(OHLCV.timestamp.asc())
             )
@@ -217,14 +314,17 @@ async def get_history(
             )
             for b in bars_data
         ]
-        return HistoryResponse(symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db")
+        return HistoryResponse(
+            symbol=symbol.upper(), interval=interval, bars=bars, source="canonical_db"
+        )
 
-    # Fallback: DB has no data — try full provider chain (Upstox → yfinance)
+    # Fallback: DB has no data — try full provider chain (Upstox → Stooq → yfinance)
     try:
-        norm = MarketDataService._normalize_symbol(symbol)
         raw = await MarketDataService.get_history(norm, interval, effective_period)
         if not raw:
-            raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}")
+            raise HTTPException(
+                status_code=404, detail=f"No historical data available for {symbol}"
+            )
 
         def _to_ts(t) -> int:
             if isinstance(t, (int, float)):
@@ -248,63 +348,74 @@ async def get_history(
         raise
     except Exception as exc:
         logger.warning("History fallback failed for %s: %s", symbol, exc)
-        raise HTTPException(status_code=404, detail=f"No historical data available for {symbol}") from exc
+        raise HTTPException(
+            status_code=404, detail=f"No historical data available for {symbol}"
+        ) from exc
+
 
 @router.get("/indices", response_model=IndicesResponse)
 async def get_indices(db: AsyncSession = Depends(get_db)) -> IndicesResponse:
+    indices: list[IndexData] = []
     try:
-        result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
-        instruments = result.scalars().all()
+        latest_quote_sub = (
+            select(
+                QuoteSnapshot.instrument_id,
+                QuoteSnapshot.price,
+                QuoteSnapshot.change,
+                QuoteSnapshot.change_pct,
+                QuoteSnapshot.observed_at,
+            )
+            .distinct(QuoteSnapshot.instrument_id)
+            .order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.observed_at.desc())
+            .subquery()
+        )
+        stmt = (
+            select(Instrument, latest_quote_sub)
+            .join(latest_quote_sub, latest_quote_sub.c.instrument_id == Instrument.id)
+            .where(Instrument.asset_class == "INDEX", Instrument.is_active)
+        )
+        rows = (await db.execute(stmt)).all()
+        for r in rows:
+            inst = r.Instrument
+            if r.observed_at and (datetime.now(UTC) - r.observed_at) <= timedelta(minutes=15):
+                indices.append(
+                    IndexData(
+                        name=inst.display_name or inst.canonical_symbol,
+                        ticker=inst.canonical_symbol,
+                        value=Decimal(str(r.price or 0)),
+                        change=Decimal(str(r.change or 0)),
+                        change_pct=Decimal(str(r.change_pct or 0)),
+                        regime_state="unknown",
+                        timestamp=r.observed_at,
+                    )
+                )
     except Exception as exc:
         logger.warning("DB query for indices failed, using live fallback: %s", exc)
-        instruments = []
-
-    indices: list[IndexData] = []
-    for inst in instruments:
         try:
-            q_res = await db.execute(
-                select(QuoteSnapshot)
-                .where(QuoteSnapshot.instrument_id == inst.id)
-                .order_by(QuoteSnapshot.observed_at.desc())
-                .limit(1)
-            )
-            quote = q_res.scalars().first()
-            if not quote:
-                continue
-            indices.append(
-                IndexData(
-                    name=inst.display_name or inst.canonical_symbol,
-                    ticker=inst.canonical_symbol,
-                    value=Decimal(str(quote.price or 0)),
-                    change=Decimal(str(quote.change or 0)),
-                    change_pct=Decimal(str(quote.change_pct or 0)),
-                    regime_state=await _latest_regime_label(db, inst.id),
-                    timestamp=quote.observed_at,
-                )
-            )
-        except Exception as exc:
-            logger.warning("Failed to fetch quote for index %s: %s", inst.canonical_symbol, exc)
+            await db.rollback()
+        except Exception:
+            pass
 
-    # Fallback: if DB has no indices, fetch from yfinance with timeout
+    # Fallback: if DB has no fresh indices, batch-fetch concurrently via MarketDataService
     if not indices:
-        import asyncio
-
-        from app.services.market_data_service import MarketDataService
         yf_indices = MarketDataService.NSE_INDICES
+        syms = [sym for sym, _ in yf_indices]
+        batch = await MarketDataService.get_batch_quotes(syms)
+        now_utc = datetime.now(UTC)
         for yf_sym, name in yf_indices:
-            try:
-                q = await asyncio.wait_for(MarketDataService._yfinance_quote(yf_sym), timeout=5.0)
-                if q and q.get("price", 0) > 0:
-                    indices.append(IndexData(
-                        name=name, ticker=yf_sym,
+            q = batch.get(yf_sym)
+            if q and q.get("price", 0) > 0:
+                indices.append(
+                    IndexData(
+                        name=name,
+                        ticker=yf_sym,
                         value=Decimal(str(q["price"])),
                         change=Decimal(str(q.get("change", 0))),
                         change_pct=Decimal(str(q.get("change_pct", 0))),
                         regime_state="unknown",
-                        timestamp=datetime.now(UTC),
-                    ))
-            except Exception:
-                pass
+                        timestamp=now_utc,
+                    )
+                )
 
     return IndicesResponse(indices=indices)
 
@@ -315,85 +426,84 @@ async def get_movers(
     type: str = Query("gainers", pattern="^(gainers|losers|volume|momentum)$"),
     db: AsyncSession = Depends(get_db),
 ) -> MoversResponse:
-    exch_res = await db.execute(select(Exchange).where(Exchange.code == exchange))
-    exch = exch_res.scalars().first()
-    if not exch:
-        return MoversResponse(assets=[], exchange=exchange, type=type, generated_at=datetime.now(UTC))
-
-    latest_quote_per_instrument = (
-        select(
-            QuoteSnapshot.instrument_id,
-            QuoteSnapshot.price,
-            QuoteSnapshot.change,
-            QuoteSnapshot.change_pct,
-            QuoteSnapshot.volume,
-        )
-        .distinct(QuoteSnapshot.instrument_id)
-        .order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.observed_at.desc())
-        .subquery()
-    )
-
-    order_col = {
-        "gainers": latest_quote_per_instrument.c.change_pct.desc(),
-        "losers": latest_quote_per_instrument.c.change_pct.asc(),
-        "volume": latest_quote_per_instrument.c.volume.desc(),
-        "momentum": latest_quote_per_instrument.c.change_pct.desc(),
-    }[type]
-
-    stmt = (
-        select(Instrument, latest_quote_per_instrument)
-        .join(latest_quote_per_instrument, latest_quote_per_instrument.c.instrument_id == Instrument.id)
-        .where(Instrument.exchange_id == exch.id, Instrument.is_active)
-        .order_by(order_col)
-        .limit(25)
-    )
-    rows = (await db.execute(stmt)).all()
-
-    assets = []
-    for r in rows:
-        inst = r.Instrument
-        assets.append(
-            MoverData(
-                ticker=inst.canonical_symbol,
-                name=inst.display_name or inst.canonical_symbol,
-                exchange=exchange,
-                price=Decimal(str(r.price or 0)),
-                change_pct=Decimal(str(r.change_pct or 0)),
-                volume=Decimal(str(r.volume or 0)),
-                signal_direction=await _latest_signal_direction(db, inst.id),
-                signal_confidence=0.5,
-                rank=len(assets) + 1,
+    assets: list[MoverData] = []
+    try:
+        exch_res = await db.execute(select(Exchange).where(Exchange.code == exchange))
+        exch = exch_res.scalars().first()
+        if exch:
+            latest_quote_per_instrument = (
+                select(
+                    QuoteSnapshot.instrument_id,
+                    QuoteSnapshot.price,
+                    QuoteSnapshot.change,
+                    QuoteSnapshot.change_pct,
+                    QuoteSnapshot.volume,
+                )
+                .distinct(QuoteSnapshot.instrument_id)
+                .order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.observed_at.desc())
+                .subquery()
             )
-        )
 
-    # Fallback: if DB has no movers, fetch all Nifty50 stocks from yfinance
+            order_col = {
+                "gainers": latest_quote_per_instrument.c.change_pct.desc(),
+                "losers": latest_quote_per_instrument.c.change_pct.asc(),
+                "volume": latest_quote_per_instrument.c.volume.desc(),
+                "momentum": latest_quote_per_instrument.c.change_pct.desc(),
+            }[type]
+
+            stmt = (
+                select(Instrument, latest_quote_per_instrument)
+                .join(
+                    latest_quote_per_instrument,
+                    latest_quote_per_instrument.c.instrument_id == Instrument.id,
+                )
+                .where(Instrument.exchange_id == exch.id, Instrument.is_active)
+                .order_by(order_col)
+                .limit(25)
+            )
+            rows = (await db.execute(stmt)).all()
+            for r in rows:
+                inst = r.Instrument
+                assets.append(
+                    MoverData(
+                        ticker=inst.canonical_symbol,
+                        name=inst.display_name or inst.canonical_symbol,
+                        exchange=exchange,
+                        price=Decimal(str(r.price or 0)),
+                        change_pct=Decimal(str(r.change_pct or 0)),
+                        volume=Decimal(str(r.volume or 0)),
+                        signal_direction="neutral",
+                        signal_confidence=0.5,
+                        rank=len(assets) + 1,
+                    )
+                )
+    except Exception as exc:
+        logger.warning("DB movers lookup failed, using live fallback: %s", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+    # Fallback: if DB has no movers, batch-fetch Nifty50 stocks via MarketDataService
     if not assets:
-        import asyncio
-
-        from app.services.market_data_service import MarketDataService
-
-        async def _fetch_quote(sym: str):
-            try:
-                return await MarketDataService.get_quote(sym)
-            except Exception:
-                return None
-
-        # Fetch all 50 in parallel batches of 10 to respect rate limits
         all_symbols = list(MarketDataService.NSE_NIFTY50)
-        for batch_start in range(0, len(all_symbols), 10):
-            batch = all_symbols[batch_start:batch_start + 10]
-            results = await asyncio.gather(*[_fetch_quote(s) for s in batch], return_exceptions=True)
-            for sym, q in zip(batch, results, strict=False):
-                if isinstance(q, dict) and q.get("price", 0) > 0:
-                    assets.append(MoverData(
-                        ticker=sym, name=q.get("name", sym), exchange=exchange,
+        batch_quotes = await MarketDataService.get_batch_quotes(all_symbols)
+        for sym in all_symbols:
+            q = batch_quotes.get(sym)
+            if isinstance(q, dict) and q.get("price", 0) > 0:
+                assets.append(
+                    MoverData(
+                        ticker=sym,
+                        name=q.get("name", sym),
+                        exchange=exchange,
                         price=Decimal(str(q["price"])),
                         change_pct=Decimal(str(q.get("change_pct", 0))),
                         volume=Decimal(str(q.get("volume", 0))),
                         signal_direction="neutral",
                         signal_confidence=0.0,
                         rank=len(assets) + 1,
-                    ))
+                    )
+                )
 
         if type == "losers":
             assets.sort(key=lambda a: float(a.change_pct))
@@ -401,11 +511,13 @@ async def get_movers(
             assets.sort(key=lambda a: float(a.volume), reverse=True)
         elif type == "gainers" or type == "momentum":
             assets.sort(key=lambda a: float(a.change_pct), reverse=True)
-        # Re-rank after sorting
+        assets = assets[:25]
         for i, a in enumerate(assets):
             a.rank = i + 1
 
-    return MoversResponse(assets=assets, exchange=exchange, type=type, generated_at=datetime.now(UTC))
+    return MoversResponse(
+        assets=assets, exchange=exchange, type=type, generated_at=datetime.now(UTC)
+    )
 
 
 @router.get("/heatmap", response_model=HeatmapResponse)
@@ -414,51 +526,62 @@ async def get_heatmap(
     metric: str = Query("return_1d", pattern="^(return_1d|return_5d|volume_surge)$"),
     db: AsyncSession = Depends(get_db),
 ) -> HeatmapResponse:
-    exch_res = await db.execute(select(Exchange).where(Exchange.code == exchange))
-    exch = exch_res.scalars().first()
-    if not exch:
-        return HeatmapResponse(exchange=exchange, metric=metric, sectors={}, generated_at=datetime.now(UTC))
-
-    result = await db.execute(
-        select(Instrument).where(Instrument.exchange_id == exch.id, Instrument.is_active)
-    )
-    instruments = result.scalars().all()
-
     sectors: dict[str, list[SectorNode]] = {}
-    for inst in instruments:
-        q_res = await db.execute(
-            select(QuoteSnapshot)
-            .where(QuoteSnapshot.instrument_id == inst.id)
-            .order_by(QuoteSnapshot.observed_at.desc())
-            .limit(1)
-        )
-        quote = q_res.scalars().first()
-        if not quote:
-            continue
-        # No GICS-style sector classification is stored on Instrument yet; group
-        # by market_segment (a real, non-fabricated field) rather than inventing
-        # sector names.
-        segment = inst.market_segment or "UNCLASSIFIED"
-        metric_value = quote.change_pct if metric != "volume_surge" else quote.volume
-        sectors.setdefault(segment, []).append(
-            SectorNode(
-                ticker=inst.canonical_symbol,
-                name=inst.display_name or inst.canonical_symbol,
-                value=Decimal(str(quote.price or 0)),
-                metric_value=Decimal(str(metric_value or 0)),
+    try:
+        exch_res = await db.execute(select(Exchange).where(Exchange.code == exchange))
+        exch = exch_res.scalars().first()
+        if exch:
+            latest_quote_sub = (
+                select(
+                    QuoteSnapshot.instrument_id,
+                    QuoteSnapshot.price,
+                    QuoteSnapshot.change_pct,
+                    QuoteSnapshot.volume,
+                )
+                .distinct(QuoteSnapshot.instrument_id)
+                .order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.observed_at.desc())
+                .subquery()
             )
-        )
+            stmt = (
+                select(Instrument, latest_quote_sub)
+                .join(latest_quote_sub, latest_quote_sub.c.instrument_id == Instrument.id)
+                .where(Instrument.exchange_id == exch.id, Instrument.is_active)
+            )
+            rows = (await db.execute(stmt)).all()
+            for r in rows:
+                inst = r.Instrument
+                segment = inst.market_segment or "UNCLASSIFIED"
+                metric_value = r.change_pct if metric != "volume_surge" else r.volume
+                sectors.setdefault(segment, []).append(
+                    SectorNode(
+                        ticker=inst.canonical_symbol,
+                        name=inst.display_name or inst.canonical_symbol,
+                        value=Decimal(str(r.price or 0)),
+                        metric_value=Decimal(str(metric_value or 0)),
+                    )
+                )
+    except Exception as exc:
+        logger.warning("DB heatmap lookup failed, using live fallback: %s", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
-    # Fallback: if DB has no instruments, build heatmap from Nifty50 yfinance data
+    # Fallback: if DB has no quote snapshots, build heatmap from Nifty50 batch quotes
     if not sectors:
-        import asyncio
-
-        from app.services.market_data_service import MarketDataService
-
         sector_map = {
             "Energy": ["RELIANCE", "ONGC", "BPCL", "IOC", "GAIL"],
             "IT": ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM"],
-            "Financials": ["HDFCBANK", "ICICIBANK", "SBIN", "AXISBANK", "KOTAKBANK", "BAJFINANCE", "BAJAJFINSV", "INDUSINDBK"],
+            "Financials": [
+                "HDFCBANK",
+                "ICICIBANK",
+                "SBIN",
+                "AXISBANK",
+                "KOTAKBANK",
+                "BAJFINANCE",
+                "BAJAJFINSV",
+                "INDUSINDBK",
+            ],
             "Consumer": ["HINDUNILVR", "ITC", "NESTLEIND", "BRITANNIA", "TATACONSUM", "TITAN"],
             "Pharma": ["SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB"],
             "Auto": ["MARUTI", "TATAMOTORS", "M&M", "BAJAJ-AUTO", "HEROMOTOCO", "EICHERMOT"],
@@ -471,30 +594,27 @@ async def get_heatmap(
             "Others": ["ASIANPAINT", "TRENT"],
         }
 
-        async def _fetch_for_heatmap(sym: str):
-            try:
-                q = await MarketDataService.get_quote(sym)
-                return sym, q
-            except Exception:
-                return sym, None
-
         all_syms = [s for syms in sector_map.values() for s in syms]
-        for batch_start in range(0, len(all_syms), 10):
-            batch = all_syms[batch_start:batch_start + 10]
-            results = await asyncio.gather(*[_fetch_for_heatmap(s) for s in batch], return_exceptions=True)
-            for r in results:
-                if isinstance(r, tuple):
-                    sym, q = r
-                    if q and q.get("price", 0) > 0:
-                        for sector_name, sector_syms in sector_map.items():
-                            if sym in sector_syms:
-                                metric_value = q.get("change_pct", 0) if metric != "volume_surge" else q.get("volume", 0)
-                                sectors.setdefault(sector_name, []).append(
-                                    SectorNode(ticker=sym, name=sym, value=Decimal(str(q["price"])), metric_value=Decimal(str(metric_value)))
-                                )
-                                break
+        batch_quotes = await MarketDataService.get_batch_quotes(all_syms)
+        for sector_name, sector_syms in sector_map.items():
+            for sym in sector_syms:
+                q = batch_quotes.get(sym)
+                if q and q.get("price", 0) > 0:
+                    metric_value = (
+                        q.get("change_pct", 0) if metric != "volume_surge" else q.get("volume", 0)
+                    )
+                    sectors.setdefault(sector_name, []).append(
+                        SectorNode(
+                            ticker=sym,
+                            name=sym,
+                            value=Decimal(str(q["price"])),
+                            metric_value=Decimal(str(metric_value)),
+                        )
+                    )
 
-    return HeatmapResponse(exchange=exchange, metric=metric, sectors=sectors, generated_at=datetime.now(UTC))
+    return HeatmapResponse(
+        exchange=exchange, metric=metric, sectors=sectors, generated_at=datetime.now(UTC)
+    )
 
 
 @router.get("/search", response_model=SearchResponse)
@@ -502,29 +622,34 @@ async def search_symbols(
     q: str = Query(..., min_length=2, max_length=50),
     db: AsyncSession = Depends(get_db),
 ) -> SearchResponse:
-    pattern = f"%{q.strip()}%"
-    result = await db.execute(
-        select(Instrument)
-        .where(
-            Instrument.is_active,
-            (Instrument.canonical_symbol.ilike(pattern)) | (Instrument.display_name.ilike(pattern)),
-        )
-        .limit(20)
-    )
-    instruments = result.scalars().all()
-
     results = []
-    for inst in instruments:
-        exch_res = await db.execute(select(Exchange).where(Exchange.id == inst.exchange_id))
-        exch = exch_res.scalars().first()
-        results.append(
-            SearchResult(
-                ticker=inst.canonical_symbol,
-                name=inst.display_name or inst.canonical_symbol,
-                exchange=exch.code if exch else "UNKNOWN",
-                asset_type=inst.asset_class or "EQUITY",
+    try:
+        pattern = f"%{q.strip()}%"
+        stmt = (
+            select(Instrument, Exchange.code)
+            .outerjoin(Exchange, Exchange.id == Instrument.exchange_id)
+            .where(
+                Instrument.is_active,
+                (Instrument.canonical_symbol.ilike(pattern))
+                | (Instrument.display_name.ilike(pattern)),
             )
+            .limit(20)
         )
+        rows = (await db.execute(stmt)).all()
+        for inst, exch_code in rows:
+            results.append(
+                SearchResult(
+                    ticker=inst.canonical_symbol,
+                    name=inst.display_name or inst.canonical_symbol,
+                    exchange=exch_code or "NSE",
+                    asset_type=inst.asset_class or "EQUITY",
+                )
+            )
+    except Exception:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
     # Fallback: search the static universe list when DB is empty
     if not results:
@@ -549,25 +674,58 @@ async def get_economic_calendar() -> EconomicCalendarResponse:
 
 
 _NSE_STATIC_UNIVERSE = [
-    ("RELIANCE", "Reliance Industries"), ("TCS", "Tata Consultancy Services"),
-    ("HDFCBANK", "HDFC Bank"), ("INFY", "Infosys"), ("ICICIBANK", "ICICI Bank"),
-    ("HINDUNILVR", "Hindustan Unilever"), ("SBIN", "State Bank of India"),
-    ("BHARTIARTL", "Bharti Airtel"), ("ITC", "ITC Limited"), ("KOTAKBANK", "Kotak Mahindra Bank"),
-    ("LT", "Larsen & Toubro"), ("AXISBANK", "Axis Bank"), ("ASIANPAINT", "Asian Paints"),
-    ("MARUTI", "Maruti Suzuki"), ("WIPRO", "Wipro"), ("HCLTECH", "HCL Technologies"),
-    ("ULTRACEMCO", "UltraTech Cement"), ("NESTLEIND", "Nestle India"), ("BAJFINANCE", "Bajaj Finance"),
-    ("TITAN", "Titan Company"), ("SUNPHARMA", "Sun Pharmaceutical"), ("TECHM", "Tech Mahindra"),
-    ("POWERGRID", "Power Grid Corporation"), ("NTPC", "NTPC Limited"), ("ONGC", "ONGC"),
-    ("ADANIPORTS", "Adani Ports"), ("COALINDIA", "Coal India"), ("DIVISLAB", "Divi's Laboratories"),
-    ("DRREDDY", "Dr. Reddy's Laboratories"), ("CIPLA", "Cipla"), ("EICHERMOT", "Eicher Motors"),
-    ("GRASIM", "Grasim Industries"), ("HEROMOTOCO", "Hero MotoCorp"), ("HINDALCO", "Hindalco"),
-    ("INDUSINDBK", "IndusInd Bank"), ("JSWSTEEL", "JSW Steel"), ("M&M", "Mahindra & Mahindra"),
-    ("TATAMOTORS", "Tata Motors"), ("TATASTEEL", "Tata Steel"), ("BAJAJFINSV", "Bajaj Finserv"),
-    ("BPCL", "Bharat Petroleum"), ("BRITANNIA", "Britannia Industries"), ("HDFCLIFE", "HDFC Life"),
-    ("SBILIFE", "SBI Life Insurance"), ("TATACONSUM", "Tata Consumer Products"),
-    ("UPL", "UPL Limited"), ("VEDL", "Vedanta"), ("APOLLOHOSP", "Apollo Hospitals"),
-    ("ADANIENT", "Adani Enterprises"), ("BAJAJ-AUTO", "Bajaj Auto"),
+    ("RELIANCE", "Reliance Industries"),
+    ("TCS", "Tata Consultancy Services"),
+    ("HDFCBANK", "HDFC Bank"),
+    ("INFY", "Infosys"),
+    ("ICICIBANK", "ICICI Bank"),
+    ("HINDUNILVR", "Hindustan Unilever"),
+    ("SBIN", "State Bank of India"),
+    ("BHARTIARTL", "Bharti Airtel"),
+    ("ITC", "ITC Limited"),
+    ("KOTAKBANK", "Kotak Mahindra Bank"),
+    ("LT", "Larsen & Toubro"),
+    ("AXISBANK", "Axis Bank"),
+    ("ASIANPAINT", "Asian Paints"),
+    ("MARUTI", "Maruti Suzuki"),
+    ("WIPRO", "Wipro"),
+    ("HCLTECH", "HCL Technologies"),
+    ("ULTRACEMCO", "UltraTech Cement"),
+    ("NESTLEIND", "Nestle India"),
+    ("BAJFINANCE", "Bajaj Finance"),
+    ("TITAN", "Titan Company"),
+    ("SUNPHARMA", "Sun Pharmaceutical"),
+    ("TECHM", "Tech Mahindra"),
+    ("POWERGRID", "Power Grid Corporation"),
+    ("NTPC", "NTPC Limited"),
+    ("ONGC", "ONGC"),
+    ("ADANIPORTS", "Adani Ports"),
+    ("COALINDIA", "Coal India"),
+    ("DIVISLAB", "Divi's Laboratories"),
+    ("DRREDDY", "Dr. Reddy's Laboratories"),
+    ("CIPLA", "Cipla"),
+    ("EICHERMOT", "Eicher Motors"),
+    ("GRASIM", "Grasim Industries"),
+    ("HEROMOTOCO", "Hero MotoCorp"),
+    ("HINDALCO", "Hindalco"),
+    ("INDUSINDBK", "IndusInd Bank"),
+    ("JSWSTEEL", "JSW Steel"),
+    ("M&M", "Mahindra & Mahindra"),
+    ("TATAMOTORS", "Tata Motors"),
+    ("TATASTEEL", "Tata Steel"),
+    ("BAJAJFINSV", "Bajaj Finserv"),
+    ("BPCL", "Bharat Petroleum"),
+    ("BRITANNIA", "Britannia Industries"),
+    ("HDFCLIFE", "HDFC Life"),
+    ("SBILIFE", "SBI Life Insurance"),
+    ("TATACONSUM", "Tata Consumer Products"),
+    ("UPL", "UPL Limited"),
+    ("VEDL", "Vedanta"),
+    ("APOLLOHOSP", "Apollo Hospitals"),
+    ("ADANIENT", "Adani Enterprises"),
+    ("BAJAJ-AUTO", "Bajaj Auto"),
 ]
+
 
 @router.get("/universe", response_model=UniverseResponse)
 async def get_market_universe(
@@ -575,33 +733,37 @@ async def get_market_universe(
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> UniverseResponse:
-    result = await db.execute(
-        select(Instrument)
-        .where(Instrument.is_active, Instrument.is_tradable)
-        .order_by(Instrument.canonical_symbol.asc())
-        .offset(offset)
-        .limit(limit)
-    )
-    instruments = result.scalars().all()
-
     infos = []
-    for inst in instruments:
-        exch_res = await db.execute(select(Exchange).where(Exchange.id == inst.exchange_id))
-        exch = exch_res.scalars().first()
-        alias_res = await db.execute(
-            select(InstrumentAlias).where(
-                InstrumentAlias.instrument_id == inst.id, InstrumentAlias.provider == "yfinance"
+    try:
+        stmt = (
+            select(Instrument, Exchange.code, InstrumentAlias.provider_symbol)
+            .outerjoin(Exchange, Exchange.id == Instrument.exchange_id)
+            .outerjoin(
+                InstrumentAlias,
+                (InstrumentAlias.instrument_id == Instrument.id)
+                & (InstrumentAlias.provider == "yfinance"),
             )
+            .where(Instrument.is_active, Instrument.is_tradable)
+            .order_by(Instrument.canonical_symbol.asc())
+            .offset(offset)
+            .limit(limit)
         )
-        alias = alias_res.scalars().first()
-        infos.append(
-            InstrumentInfo(
-                symbol=inst.canonical_symbol,
-                displayName=inst.display_name or inst.canonical_symbol,
-                exchange=exch.code if exch else "UNKNOWN",
-                yfinanceTicker=alias.provider_symbol if alias else inst.canonical_symbol,
+        rows = (await db.execute(stmt)).all()
+        for inst, exch_code, yf_alias in rows:
+            infos.append(
+                InstrumentInfo(
+                    symbol=inst.canonical_symbol,
+                    displayName=inst.display_name or inst.canonical_symbol,
+                    exchange=exch_code or "NSE",
+                    yfinanceTicker=yf_alias or inst.canonical_symbol,
+                )
             )
-        )
+    except Exception as exc:
+        logger.warning("DB universe query failed, using static NSE universe: %s", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
     # Fallback: if DB has no instruments, return the well-known NSE universe
     if not infos:
@@ -632,60 +794,64 @@ async def get_providers_health() -> dict:
 
 @router.get("/global-context")
 async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
-    """Cross-market context (global indices, VIX, FX) for the terminal's macro widget.
-
-    No global-index ingestion pipeline exists in this codebase yet, so this
-    returns an explicit unavailable status rather than fabricating index levels.
-    """
-    try:
-        result = await db.execute(select(Instrument).where(Instrument.asset_class == "INDEX", Instrument.is_active))
-        instruments = result.scalars().all()
-    except Exception as exc:
-        logger.warning("DB query for global-context instruments failed: %s", exc)
-        instruments = []
-    if not instruments:
-        # Fallback: fetch indices from yfinance with per-symbol timeout
-        import asyncio
-
-        from app.services.market_data_service import MarketDataService
-        context = []
-        for yf_sym, name in MarketDataService.NSE_INDICES[:6]:
-            try:
-                q = await asyncio.wait_for(MarketDataService.get_quote(yf_sym), timeout=5.0)
-                if q and q.get("price", 0) > 0:
-                    context.append({
-                        "ticker": yf_sym, "name": name,
-                        "value": float(q["price"]),
-                        "change_pct": float(q.get("change_pct", 0)),
-                        "as_of": q.get("timestamp", datetime.now(UTC).isoformat()),
-                    })
-            except Exception:
-                pass
-        return {"status": "ok" if context else "unavailable", "indices": context}  # honesty: allow
-
+    """Cross-market context (global indices, VIX, FX) for the terminal's macro widget."""
     context = []
-    for inst in instruments:
-        try:
-            q_res = await db.execute(
-                select(QuoteSnapshot)
-                .where(QuoteSnapshot.instrument_id == inst.id)
-                .order_by(QuoteSnapshot.observed_at.desc())
-                .limit(1)
+    try:
+        latest_quote_sub = (
+            select(
+                QuoteSnapshot.instrument_id,
+                QuoteSnapshot.price,
+                QuoteSnapshot.change_pct,
+                QuoteSnapshot.observed_at,
             )
-            quote = q_res.scalars().first()
-            if quote:
+            .distinct(QuoteSnapshot.instrument_id)
+            .order_by(QuoteSnapshot.instrument_id, QuoteSnapshot.observed_at.desc())
+            .subquery()
+        )
+        stmt = (
+            select(Instrument, latest_quote_sub)
+            .join(latest_quote_sub, latest_quote_sub.c.instrument_id == Instrument.id)
+            .where(Instrument.asset_class == "INDEX", Instrument.is_active)
+        )
+        rows = (await db.execute(stmt)).all()
+        for r in rows:
+            inst = r.Instrument
+            if r.observed_at and (datetime.now(UTC) - r.observed_at) <= timedelta(minutes=15):
                 context.append(
                     {
                         "ticker": inst.canonical_symbol,
                         "name": inst.display_name or inst.canonical_symbol,
-                        "value": float(quote.price or 0),
-                        "change_pct": float(quote.change_pct or 0),
-                        "as_of": quote.observed_at.isoformat(),
+                        "value": float(r.price or 0),
+                        "change_pct": float(r.change_pct or 0),
+                        "as_of": r.observed_at.isoformat(),
                     }
                 )
-        except Exception as exc:
-            logger.warning("Failed to fetch quote for global-context index %s: %s", inst.canonical_symbol, exc)
-    return {"status": "ok" if context else "unavailable", "indices": context}  # honesty: allow (conditional on real fetched quotes above)
+    except Exception as exc:
+        logger.warning("DB query for global-context instruments failed: %s", exc)
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+    if not context:
+        top_indices = MarketDataService.NSE_INDICES[:6]
+        batch = await MarketDataService.get_batch_quotes([sym for sym, _ in top_indices])
+        for yf_sym, name in top_indices:
+            q = batch.get(yf_sym)
+            if q and q.get("price", 0) > 0:
+                context.append(
+                    {
+                        "ticker": yf_sym,
+                        "name": name,
+                        "value": float(q["price"]),
+                        "change_pct": float(q.get("change_pct", 0)),
+                        "as_of": q.get("timestamp", datetime.now(UTC).isoformat()),
+                    }
+                )
+    return {
+        "status": "ok" if context else "unavailable",  # honesty: allow (conditional on real fetched quotes above)
+        "indices": context,
+    }
 
 
 @router.get("/zones/{symbol}", tags=["zones"])
@@ -715,14 +881,22 @@ async def get_zones(symbol: str):
         recent_highs = sorted(highs[-w:], reverse=True)
         support = sum(recent_lows[:3]) / min(3, len(recent_lows))
         resistance = sum(recent_highs[:3]) / min(3, len(recent_highs))
-        zones.append({
-            "type": "support", "level": round(support, 2),
-            "strength": round(0.5 + 0.3 * (w / 120), 2), "window": window_label,
-        })
-        zones.append({
-            "type": "resistance", "level": round(resistance, 2),
-            "strength": round(0.5 + 0.3 * (w / 120), 2), "window": window_label,
-        })
+        zones.append(
+            {
+                "type": "support",
+                "level": round(support, 2),
+                "strength": round(0.5 + 0.3 * (w / 120), 2),
+                "window": window_label,
+            }
+        )
+        zones.append(
+            {
+                "type": "resistance",
+                "level": round(resistance, 2),
+                "strength": round(0.5 + 0.3 * (w / 120), 2),
+                "window": window_label,
+            }
+        )
 
     return {"symbol": symbol, "last_price": round(last_price, 2), "zones": zones}
 
@@ -743,7 +917,11 @@ async def get_patterns(symbol: str):
         hist = []
 
     if not hist or len(hist) < 20:
-        return {"symbol": symbol, "patterns": [], "message": "Insufficient history for pattern detection"}
+        return {
+            "symbol": symbol,
+            "patterns": [],
+            "message": "Insufficient history for pattern detection",
+        }
 
     closes = [float(h["close"]) for h in hist]
     opens = [float(h["open"]) for h in hist]
@@ -757,7 +935,11 @@ async def get_patterns(symbol: str):
     _prev = closes[-2] if n > 1 else last
 
     # Doji
-    if n > 1 and abs(opens[-1] - closes[-1]) < (highs[-1] - lows[-1]) * 0.1 and (highs[-1] - lows[-1]) > 0:
+    if (
+        n > 1
+        and abs(opens[-1] - closes[-1]) < (highs[-1] - lows[-1]) * 0.1
+        and (highs[-1] - lows[-1]) > 0
+    ):
         patterns.append({"name": "Doji", "type": "neutral", "confidence": 0.7, "index": n - 1})
 
     # Hammer
@@ -766,16 +948,22 @@ async def get_patterns(symbol: str):
         lower_shadow = min(opens[-1], closes[-1]) - lows[-1]
         upper_shadow = highs[-1] - max(opens[-1], closes[-1])
         if lower_shadow > body * 2 and upper_shadow < body * 0.5 and body > 0:
-            patterns.append({"name": "Hammer", "type": "bullish", "confidence": 0.65, "index": n - 1})
+            patterns.append(
+                {"name": "Hammer", "type": "bullish", "confidence": 0.65, "index": n - 1}
+            )
 
     # Engulfing
     if n > 2:
         prev_body = closes[-2] - opens[-2]
         curr_body = closes[-1] - opens[-1]
         if prev_body < 0 and curr_body > 0 and curr_body > abs(prev_body):
-            patterns.append({"name": "Bullish Engulfing", "type": "bullish", "confidence": 0.72, "index": n - 1})
+            patterns.append(
+                {"name": "Bullish Engulfing", "type": "bullish", "confidence": 0.72, "index": n - 1}
+            )
         elif prev_body > 0 and curr_body < 0 and abs(curr_body) > prev_body:
-            patterns.append({"name": "Bearish Engulfing", "type": "bearish", "confidence": 0.72, "index": n - 1})
+            patterns.append(
+                {"name": "Bearish Engulfing", "type": "bearish", "confidence": 0.72, "index": n - 1}
+            )
 
     # Support/Resistance zones
     recent_lows = sorted(lows[-20:])[:3]
@@ -801,6 +989,7 @@ async def sync_upstox_instruments(force: bool = False):
     """
     try:
         from app.services.instrument_seeder import seed_all_exchanges
+
         result = await seed_all_exchanges(force=force)
         return {"status": "ok", **result}  # honesty: allow
     except Exception as e:
@@ -811,9 +1000,11 @@ async def sync_upstox_instruments(force: bool = False):
 async def instruments_status(db: AsyncSession = Depends(get_db)):
     """Check how many instruments and Upstox aliases exist."""
     total_instruments = (await db.execute(select(Instrument))).scalars().all()
-    upstox_aliases = (await db.execute(
-        select(InstrumentAlias).where(InstrumentAlias.provider == "upstox")
-    )).scalars().all()
+    upstox_aliases = (
+        (await db.execute(select(InstrumentAlias).where(InstrumentAlias.provider == "upstox")))
+        .scalars()
+        .all()
+    )
     return {
         "total_instruments": len(total_instruments),
         "upstox_aliases": len(upstox_aliases),

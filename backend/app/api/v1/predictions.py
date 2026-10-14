@@ -31,28 +31,16 @@ router = APIRouter()
 _PREDICTION_TIMEOUT_SECONDS = 8
 
 
-def _fallback_prediction(symbol: str) -> dict:
-    """Return a lightweight fallback prediction when the full pipeline is too slow or fails."""
-    from datetime import UTC, datetime
-
-    return {
-        "symbol": symbol,
-        "is_fallback": True,
-        "timestamp": datetime.now(UTC).isoformat(),
-        "ensemble": {
-            "direction": "NEUTRAL",
-            "confidence": 0.5,
-            "signal": "NEUTRAL",
-            "model_weights": {},
-        },
-        "regime": {
-            "current_state": "unknown",
-            "probs": {"bull": 0.25, "bear": 0.25, "sideways": 0.25, "crisis": 0.25},
-        },
-        "forecast": [],
-        "models": {},
-        "reasoning": "Signal computation in progress — data will appear shortly.",
-    }
+def _prediction_unavailable(symbol: str, reason: str) -> HTTPException:
+    """Build an explicit unavailable response instead of inventing a prediction."""
+    return HTTPException(
+        status_code=503,
+        detail=ErrorResponse.create(
+            code="MODEL_UNAVAILABLE",
+            message=f"Prediction unavailable for {symbol}: {reason}",
+            retryable=True,
+        ).dict(),
+    )
 
 
 @router.get("/{symbol}")
@@ -102,11 +90,15 @@ async def get_prediction(
             timeout=_PREDICTION_TIMEOUT_SECONDS,
         )
     except TimeoutError:
-        logger.warning("Prediction for %s timed out after %ss, returning fallback", norm_symbol, _PREDICTION_TIMEOUT_SECONDS)
-        return _fallback_prediction(norm_symbol)
+        logger.warning(
+            "Prediction for %s timed out after %ss",
+            norm_symbol,
+            _PREDICTION_TIMEOUT_SECONDS,
+        )
+        raise _prediction_unavailable(norm_symbol, "inference timed out")
     except Exception as e:
-        logger.warning("Prediction failed for %s: %s, returning fallback", norm_symbol, e)
-        return _fallback_prediction(norm_symbol)
+        logger.warning("Prediction failed for %s: %s", norm_symbol, e)
+        raise _prediction_unavailable(norm_symbol, "inference failed") from e
 
 
 @router.post("/forecast")

@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(Path(__file__).resolve().parents[2] / ".env"),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
@@ -57,11 +57,23 @@ class Settings(BaseSettings):
         default="NeuroQuant", description="Application name for logs and metrics"
     )
     API_V1_PREFIX: str = Field(default="/api/v1", description="Base path for all API v1 endpoints")
+    PAPER_TRADING_ONLY: bool = Field(
+        default=True,
+        description="Execution mode constraint. Production currently supports paper trading only.",
+    )
+    LIVE_ORDER_EXECUTION_ENABLED: bool = Field(
+        default=False,
+        description="Reserved live-order gate. Must remain false until explicitly approved.",
+    )
 
     # ─── Database ─────────────────────────────────────────────────
     DATABASE_URL: str = Field(
         default="",
         description="Runtime DB URL for API (role nq_api)",
+    )
+    DIRECT_URL: str = Field(
+        default="",
+        description="Direct or session-mode DB URL for migrations and ORM tooling",
     )
     MIGRATIONS_DATABASE_URL: str = Field(
         default="", description="DB URL for Alembic migrations (role nq_migrator)"
@@ -73,12 +85,8 @@ class Settings(BaseSettings):
         default="session", description="Connection pool mode: 'session' or 'transaction'"
     )
     DB_POOL_SIZE: int = Field(default=5, description="SQLAlchemy connection pool size")
-    DB_MAX_OVERFLOW: int = Field(
-        default=2, description="Maximum connections to overflow"
-    )
-    DB_POOL_RECYCLE: int = Field(
-        default=1800, description="Recycle connections after N seconds"
-    )
+    DB_MAX_OVERFLOW: int = Field(default=2, description="Maximum connections to overflow")
+    DB_POOL_RECYCLE: int = Field(default=1800, description="Recycle connections after N seconds")
     DB_SSL_REQUIRED: bool = Field(default=True, description="Require SSL for DB connection")
 
     # ─── Redis ────────────────────────────────────────────────────────────
@@ -89,18 +97,21 @@ class Settings(BaseSettings):
     REDIS_MAX_CONNECTIONS: int = Field(default=50, description="Maximum Redis connection pool size")
 
     # ─── Supabase / Authentication ────────────────────────────────────────
-    SUPABASE_URL: str = Field(
-        default="", description="Supabase project URL"
-    )
+    SUPABASE_URL: str = Field(default="", description="Supabase project URL")
     SUPABASE_JWT_SECRET: str = Field(
         default="", description="Supabase JWT secret for token verification"
     )
     SUPABASE_SECRET_KEY: str = Field(
         default="", description="Supabase service role secret key (use with caution)"
     )
+    SUPABASE_SERVICE_ROLE_KEY: str = Field(default="", description="Supabase service role JWT key")
     SUPABASE_ANON_KEY: str = Field(
         default="", description="Supabase anon/publishable key for public auth endpoints"
     )
+    SUPABASE_PUBLISHABLE_KEY: str = Field(default="", description="Supabase publishable key")
+    SUPABASE_JWKS_URL: str = Field(default="", description="Supabase JWKS endpoint URL")
+    SUPABASE_PROJECT_ID: str = Field(default="", description="Supabase project reference ID")
+    SUPABASE_REGION: str = Field(default="", description="Supabase project region")
     # Note: local RSA JWT keys have been deprecated in favor of Supabase JWTs
     TOKEN_BLACKLIST_ENABLED: bool = Field(
         default=True, description="Enable JWT token blacklist on logout"
@@ -271,7 +282,7 @@ class Settings(BaseSettings):
         default="", description="SendGrid API key for email notifications"
     )
     SENDGRID_FROM_EMAIL: str = Field(
-        default="alerts@neuroquant.local", description="From address for SendGrid emails"
+        default="neuroquant990@gmail.com", description="From address for SendGrid emails"
     )
     ALERT_EMAIL_ENABLED: bool = Field(default=False, description="Enable email alerts")
 
@@ -315,6 +326,11 @@ class Settings(BaseSettings):
     )
     LIVE_DATA_ALPHA_VANTAGE_RATE_LIMIT: int = Field(
         default=5, description="Requests per minute for Alpha Vantage"
+    )
+    AUTOTRADE_MAX_QUOTE_AGE_SECONDS: int = Field(
+        default=120,
+        ge=1,
+        description="Maximum quote age allowed before an automatic paper order is rejected",
     )
 
     # ─── Feature Engineering ──────────────────────────────────────────────
@@ -451,13 +467,40 @@ class Settings(BaseSettings):
         default=20, description="Number of symbols per batch request to yfinance."
     )
 
-
     @model_validator(mode="after")
     def validate_database_user(self) -> Settings:
         if self.ENVIRONMENT != "test":
             if "postgres:" in self.DATABASE_URL.lower():
                 if self.ENVIRONMENT == "production":
-                    raise ValueError("Cannot run as postgres superuser in production. Use nq_api role.")
+                    raise ValueError(
+                        "Cannot run as postgres superuser in production. Use nq_api role."
+                    )
+        return self
+
+    @model_validator(mode="after")
+    def validate_execution_guard(self) -> Settings:
+        if not self.PAPER_TRADING_ONLY:
+            raise ValueError("Only paper trading is supported; PAPER_TRADING_ONLY must be true.")
+        if self.LIVE_ORDER_EXECUTION_ENABLED:
+            raise ValueError(
+                "Live order execution is disabled. LIVE_ORDER_EXECUTION_ENABLED must remain false."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def populate_supabase_keys(self) -> Settings:
+        if not self.SUPABASE_SECRET_KEY and self.SUPABASE_SERVICE_ROLE_KEY:
+            self.SUPABASE_SECRET_KEY = self.SUPABASE_SERVICE_ROLE_KEY
+        if not self.SUPABASE_ANON_KEY and self.SUPABASE_PUBLISHABLE_KEY:
+            self.SUPABASE_ANON_KEY = self.SUPABASE_PUBLISHABLE_KEY
+        if self.SUPABASE_URL and not self.SUPABASE_JWKS_URL:
+            self.SUPABASE_JWKS_URL = (
+                self.SUPABASE_URL.rstrip("/") + "/auth/v1/.well-known/jwks.json"
+            )
+        if self.SENDGRID_API_KEY and (
+            not self.SENDGRID_FROM_EMAIL or self.SENDGRID_FROM_EMAIL.endswith(".local")
+        ):
+            self.SENDGRID_FROM_EMAIL = "neuroquant990@gmail.com"
         return self
 
     @model_validator(mode="after")
@@ -483,6 +526,13 @@ class Settings(BaseSettings):
                     or "changeme" in val_lower
                     or "your_" in val_lower
                     or "replace_me" in val_lower
+                    or (
+                        key == "REDIS_URL"
+                        and (
+                            val_lower.startswith("redis://localhost")
+                            or val_lower.startswith("redis://127.0.0.1")
+                        )
+                    )
                 ):
                     raise ValueError(
                         f"Missing or insecure value for required production key: {key}"
@@ -499,13 +549,10 @@ class Settings(BaseSettings):
         """Check if running in development environment."""
         return self.ENVIRONMENT == "development"
 
-
-
     @property
     def model_checkpoint_path(self) -> Path:
         """Get Path object for model checkpoint directory."""
         return Path(self.MODEL_CHECKPOINT_DIR)
-
 
 
 # ─── Singleton Getter ──────────────────────────────────────────────────────

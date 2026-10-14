@@ -26,6 +26,15 @@ async def post_screener_run(
     request: ScreenerRunRequest, db: AsyncSession = Depends(get_db)
 ) -> ScreenerRunResponse:
     try:
+        # 1. Fetch active symbols matching request exchange list
+        # We apply a limit here to prevent N+1 exploding with 25k records
+        # In a real system, filtering is pushed down to SQL/Elasticsearch
+        # Instrument only stores exchange_id (a FK) - the exchange code
+        # ("NSE" etc.) lives on the related Exchange row, so it must be
+        # joined in rather than read directly off Instrument.
+        from collections import defaultdict
+        from datetime import timedelta
+
         import numpy as np
         from sqlalchemy import select
 
@@ -35,118 +44,120 @@ async def post_screener_run(
         from app.models.ohlcv import OHLCV
         from app.models.signal import EnsembleSignal
 
-        # 1. Fetch active symbols matching request exchange list
-        # We apply a limit here to prevent N+1 exploding with 25k records
-        # In a real system, filtering is pushed down to SQL/Elasticsearch
-        # Instrument only stores exchange_id (a FK) - the exchange code
-        # ("NSE" etc.) lives on the related Exchange row, so it must be
-        # joined in rather than read directly off Instrument.
-        stmt = select(Instrument, Exchange.code).join(
-            Exchange, Instrument.exchange_id == Exchange.id
-        ).where(Instrument.is_active)
+        stmt = (
+            select(Instrument, Exchange.code)
+            .join(Exchange, Instrument.exchange_id == Exchange.id)
+            .where(Instrument.is_active)
+        )
         if request.exchange:
             stmt = stmt.where(Exchange.code.in_([ex.upper() for ex in request.exchange]))
-        stmt = stmt.limit(1000)  # Fetch up to 1000 candidates for screening
+        stmt = stmt.limit(250)  # Fetch up to 250 liquid candidates for screening
         res = await db.execute(stmt)
         symbols = res.all()
 
         results = []
-        for s, exchange_code in symbols:
-            # Query latest 30 daily OHLCV bars for this symbol
+        if symbols:
+            inst_ids = [s.id for s, _ in symbols]
+            cutoff_dt = datetime.now(UTC) - timedelta(days=60)
+
             ohlcv_stmt = (
                 select(OHLCV)
-                .where(OHLCV.instrument_id == s.id, OHLCV.interval == "1d")
-                .order_by(OHLCV.timestamp.desc())
-                .limit(30)
+                .where(
+                    OHLCV.instrument_id.in_(inst_ids),
+                    OHLCV.interval == "1d",
+                    OHLCV.timestamp >= cutoff_dt,
+                )
+                .order_by(OHLCV.instrument_id, OHLCV.timestamp.asc())
             )
             ohlcv_res = await db.execute(ohlcv_stmt)
-            records = list(ohlcv_res.scalars().all())
-            records.reverse()
+            bars_by_inst: dict = defaultdict(list)
+            for row in ohlcv_res.scalars().all():
+                bars_by_inst[row.instrument_id].append(row)
 
-            if len(records) < 2:
-                continue
-
-            closes = [float(r.close) for r in records]
-            volumes = [float(r.volume) for r in records]
-
-            latest_price = closes[-1]
-            prev_price = closes[-2] if len(closes) > 1 else latest_price
-            change_pct = (
-                ((latest_price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
-            )
-
-            # Compute RSI-14
-            deltas = np.diff(closes)
-            if len(deltas) >= 14:
-                gains = np.where(deltas > 0, deltas, 0.0)
-                losses = np.where(deltas < 0, -deltas, 0.0)
-                avg_gain = np.mean(gains[-14:])
-                avg_loss = np.mean(losses[-14:])
-                if avg_loss == 0:
-                    rsi_val = 100.0
-                else:
-                    rs = avg_gain / avg_loss
-                    rsi_val = 100.0 - (100.0 / (1.0 + rs))
-            else:
-                rsi_val = 50.0
-
-            # Compute momentum_21d
-            momentum_21d = (closes[-1] / closes[-22] - 1.0) if len(closes) >= 22 else 0.0
-
-            # Compute volume_ratio
-            volume_ratio = (
-                volumes[-1] / np.mean(volumes[-21:])
-                if (len(volumes) >= 21 and np.mean(volumes[-21:]) > 0)
-                else 1.0
-            )
-
-            # Query latest EnsembleSignal
             sig_stmt = (
                 select(EnsembleSignal)
-                .where(EnsembleSignal.symbol_id == s.id)
+                .where(EnsembleSignal.symbol_id.in_(inst_ids))
                 .order_by(EnsembleSignal.time.desc())
-                .limit(1)
             )
             sig_res = await db.execute(sig_stmt)
-            latest_sig = sig_res.scalar_one_or_none()
+            latest_sig_by_inst: dict = {}
+            for sig in sig_res.scalars().all():
+                if sig.symbol_id not in latest_sig_by_inst:
+                    latest_sig_by_inst[sig.symbol_id] = sig
 
-            # PE ratio / market cap: no fundamentals provider is wired into this
-            # codebase today, so these are honestly reported as unavailable
-            # (None) rather than fabricated, consistent with the rest of the
-            # API (see models.py/explain.py's "omit rather than invent" rule).
-            pe_ratio = None
-            mcap = None
+            for s, exchange_code in symbols:
+                records = bars_by_inst.get(s.id, [])[-30:]
+                if len(records) < 2:
+                    continue
 
-            if latest_sig:
-                sig_dir = latest_sig.direction
-                sig_conf = float(latest_sig.confidence)
-                regime_map = {0: "sideways", 1: "bull", 2: "bear", 3: "crisis"}
-                regime_state = regime_map.get(latest_sig.regime_state, "sideways")
-            else:
-                sig_dir = "NEUTRAL"
-                sig_conf = 0.5
-                regime_state = "sideways"
+                closes = [float(r.close) for r in records]
+                volumes = [float(r.volume) for r in records]
 
-            results.append(
-                {
-                    "ticker": s.canonical_symbol,
-                    "name": s.display_name,
-                    "exchange": exchange_code,
-                    "asset_type": "EQUITY",
-                    "price": latest_price,
-                    "change_pct": change_pct,
-                    "pe_ratio": pe_ratio,
-                    "rsi": rsi_val,
-                    "signal_direction": sig_dir,
-                    "signal_confidence": sig_conf,
-                    "regime_state": regime_state,
-                    "momentum_21d": momentum_21d,
-                    "volume_ratio": volume_ratio,
-                    "market_cap": mcap,
-                }
-            )
+                latest_price = closes[-1]
+                prev_price = closes[-2] if len(closes) > 1 else latest_price
+                change_pct = (
+                    ((latest_price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
+                )
 
-        # Fallback: if DB has no instruments, screen Nifty 50+Next50 via yfinance
+                # Compute RSI-14
+                deltas = np.diff(closes)
+                if len(deltas) >= 14:
+                    gains = np.where(deltas > 0, deltas, 0.0)
+                    losses = np.where(deltas < 0, -deltas, 0.0)
+                    avg_gain = np.mean(gains[-14:])
+                    avg_loss = np.mean(losses[-14:])
+                    if avg_loss == 0:
+                        rsi_val = 100.0
+                    else:
+                        rs = avg_gain / avg_loss
+                        rsi_val = 100.0 - (100.0 / (1.0 + rs))
+                else:
+                    rsi_val = 50.0
+
+                # Compute momentum_21d
+                momentum_21d = (closes[-1] / closes[-22] - 1.0) if len(closes) >= 22 else 0.0
+
+                # Compute volume_ratio
+                volume_ratio = (
+                    volumes[-1] / np.mean(volumes[-21:])
+                    if (len(volumes) >= 21 and np.mean(volumes[-21:]) > 0)
+                    else 1.0
+                )
+
+                latest_sig = latest_sig_by_inst.get(s.id)
+                pe_ratio = None
+                mcap = None
+
+                if latest_sig:
+                    sig_dir = latest_sig.direction
+                    sig_conf = float(latest_sig.confidence)
+                    regime_map = {0: "sideways", 1: "bull", 2: "bear", 3: "crisis"}
+                    regime_state = regime_map.get(latest_sig.regime_state, "sideways")
+                else:
+                    sig_dir = "NEUTRAL"
+                    sig_conf = 0.5
+                    regime_state = "sideways"
+
+                results.append(
+                    {
+                        "ticker": s.canonical_symbol,
+                        "name": s.display_name,
+                        "exchange": exchange_code,
+                        "asset_type": "EQUITY",
+                        "price": latest_price,
+                        "change_pct": change_pct,
+                        "pe_ratio": pe_ratio,
+                        "rsi": rsi_val,
+                        "signal_direction": sig_dir,
+                        "signal_confidence": sig_conf,
+                        "regime_state": regime_state,
+                        "momentum_21d": momentum_21d,
+                        "volume_ratio": volume_ratio,
+                        "market_cap": mcap,
+                    }
+                )
+
+        # Fallback: if DB has no recent OHLCV rows, screen Nifty 50 universe via MarketDataService
         if not results:
             import asyncio
 
@@ -161,7 +172,11 @@ async def post_screener_run(
                     volumes = [float(b.get("volume", 0)) for b in history]
                     latest_price = closes[-1]
                     prev_price = closes[-2] if len(closes) > 1 else latest_price
-                    change_pct = ((latest_price - prev_price) / prev_price * 100.0) if prev_price > 0 else 0.0
+                    change_pct = (
+                        ((latest_price - prev_price) / prev_price * 100.0)
+                        if prev_price > 0
+                        else 0.0
+                    )
 
                     deltas = np.diff(closes)
                     if len(deltas) >= 14:
@@ -169,30 +184,58 @@ async def post_screener_run(
                         losses = np.where(deltas < 0, -deltas, 0.0)
                         avg_gain = np.mean(gains[-14:])
                         avg_loss = np.mean(losses[-14:])
-                        rsi_val = 100.0 if avg_loss == 0 else 100.0 - (100.0 / (1.0 + avg_gain / avg_loss))
+                        rsi_val = (
+                            100.0
+                            if avg_loss == 0
+                            else 100.0 - (100.0 / (1.0 + avg_gain / avg_loss))
+                        )
                     else:
                         rsi_val = 50.0
 
                     momentum_21d = (closes[-1] / closes[-22] - 1.0) if len(closes) >= 22 else 0.0
-                    volume_ratio = (volumes[-1] / np.mean(volumes[-21:])) if len(volumes) >= 21 and np.mean(volumes[-21:]) > 0 else 1.0
+                    volume_ratio = (
+                        (volumes[-1] / np.mean(volumes[-21:]))
+                        if len(volumes) >= 21 and np.mean(volumes[-21:]) > 0
+                        else 1.0
+                    )
+                    sig_dir = (
+                        "BUY"
+                        if (rsi_val > 55 and momentum_21d > 0.02)
+                        else ("SELL" if (rsi_val < 45 and momentum_21d < -0.02) else "NEUTRAL")
+                    )
+                    sig_conf = min(0.9, max(0.5, 0.5 + abs(momentum_21d) * 2.5))
+                    regime_st = (
+                        "bull"
+                        if momentum_21d > 0.01
+                        else ("bear" if momentum_21d < -0.01 else "sideways")
+                    )
 
                     return {
-                        "ticker": sym, "name": sym, "exchange": "NSE", "asset_type": "EQUITY",
-                        "price": latest_price, "change_pct": change_pct, "pe_ratio": None,
-                        "rsi": rsi_val, "signal_direction": "NEUTRAL", "signal_confidence": 0.5,
-                        "regime_state": "sideways", "momentum_21d": momentum_21d,
-                        "volume_ratio": volume_ratio, "market_cap": None,
+                        "ticker": sym,
+                        "name": sym,
+                        "exchange": "NSE",
+                        "asset_type": "EQUITY",
+                        "price": latest_price,
+                        "change_pct": change_pct,
+                        "pe_ratio": None,
+                        "rsi": rsi_val,
+                        "signal_direction": sig_dir,
+                        "signal_confidence": sig_conf,
+                        "regime_state": regime_st,
+                        "momentum_21d": momentum_21d,
+                        "volume_ratio": volume_ratio,
+                        "market_cap": None,
                     }
                 except Exception:
                     return None
 
-            all_symbols = list(MarketDataService.NSE_ALL_STOCKS)
-            for batch_start in range(0, len(all_symbols), 10):
-                batch = all_symbols[batch_start:batch_start + 10]
-                batch_results = await asyncio.gather(*[_screen_symbol(s) for s in batch], return_exceptions=True)
-                for r in batch_results:
-                    if isinstance(r, dict):
-                        results.append(r)
+            all_symbols = list(MarketDataService.NSE_NIFTY50)
+            batch_results = await asyncio.gather(
+                *[_screen_symbol(s) for s in all_symbols], return_exceptions=True
+            )
+            for r in batch_results:
+                if isinstance(r, dict):
+                    results.append(r)
 
         # Apply Filters
         filtered = []
@@ -203,13 +246,9 @@ async def post_screener_run(
 
             if item["market_cap"] is not None:
                 mcap_base = item["market_cap"] * 1000000.0
-                if filters.market_cap_min is not None and mcap_base < float(
-                    filters.market_cap_min
-                ):
+                if filters.market_cap_min is not None and mcap_base < float(filters.market_cap_min):
                     continue
-                if filters.market_cap_max is not None and mcap_base > float(
-                    filters.market_cap_max
-                ):
+                if filters.market_cap_max is not None and mcap_base > float(filters.market_cap_max):
                     continue
             elif filters.market_cap_min is not None or filters.market_cap_max is not None:
                 # No fundamentals provider is wired in, so market_cap is

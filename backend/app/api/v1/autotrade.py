@@ -32,6 +32,7 @@ class AutoTradeSettingRequest(BaseModel):
 
 
 class AutoTradeSettingResponse(BaseModel):
+    execution_mode: str = "paper"
     enabled: bool
     watchlist_id: int
     max_open_positions: int
@@ -43,6 +44,7 @@ class AutoTradeSettingResponse(BaseModel):
 
 def _to_response(setting: AutoTradeSetting) -> AutoTradeSettingResponse:
     return AutoTradeSettingResponse(
+        execution_mode="paper",
         enabled=setting.enabled,
         watchlist_id=setting.watchlist_id,
         max_open_positions=setting.max_open_positions,

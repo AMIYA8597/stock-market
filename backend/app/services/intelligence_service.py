@@ -53,9 +53,6 @@ REGIME_STATES = ["BULL", "BEAR", "SIDEWAYS", "CRISIS"]
 MODELS = ["tft", "hmm_garch", "gnn", "lstm_attn", "xgboost", "ensemble"]
 
 
-
-
-
 @dataclass(frozen=True)
 class IntelligenceService:
     def _direction(self, score: float) -> str:
@@ -183,7 +180,13 @@ class IntelligenceService:
 
         raw_weights = ens.get("model_weights", {})
         if not raw_weights or not isinstance(raw_weights, dict):
-            raw_weights = {"tft": 0.20, "hmm_garch": 0.20, "gnn": 0.20, "lstm_attn": 0.20, "xgboost": 0.20}
+            raw_weights = {
+                "tft": 0.20,
+                "hmm_garch": 0.20,
+                "gnn": 0.20,
+                "lstm_attn": 0.20,
+                "xgboost": 0.20,
+            }
         model_weights = self._normalize_weights(raw_weights)
 
         bull_prob = reg_sub.get("bull_prob", 0.33)
@@ -238,8 +241,8 @@ class IntelligenceService:
         # get_full_prediction() which fetches 2 years of OHLCV data and runs
         # multiple ML models — doing 50 of those simultaneously exhausts
         # memory and CPU, causing 502/503 errors.
-        sem = asyncio.Semaphore(3)
-        _PER_SYMBOL_TIMEOUT = 10  # seconds per symbol before fallback
+        sem = asyncio.Semaphore(6)
+        _PER_SYMBOL_TIMEOUT = 8  # seconds per symbol before fallback
 
         async def _throttled(symbol: str) -> SignalResponse:
             async with sem:
@@ -265,30 +268,26 @@ class IntelligenceService:
                         regime=RegimeDetails(
                             state="SIDEWAYS",
                             probs={"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34, "CRISIS": 0.0},
-                            transition_probs={"BULL": 0.25, "BEAR": 0.25, "SIDEWAYS": 0.25, "CRISIS": 0.25},
+                            transition_probs={
+                                "BULL": 0.25,
+                                "BEAR": 0.25,
+                                "SIDEWAYS": 0.25,
+                                "CRISIS": 0.25,
+                            },
                         ),
                     )
 
         return list(await asyncio.gather(*(_throttled(s) for s in symbols)))
 
-    async def get_signal_history(self, symbol: str, model: str, days: int) -> list[SignalHistoryPoint]:
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
+    async def get_signal_history(
+        self, symbol: str, model: str, days: int
+    ) -> list[SignalHistoryPoint]:
         try:
             hist_days = days + 10
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{hist_days}d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{hist_days}d"))
+            bars = await asyncio.wait_for(
+                MarketDataService.get_history(symbol, "1d", f"{hist_days}d"),
+                timeout=10.0,
+            )
         except Exception:
             bars = []
 
@@ -323,22 +322,9 @@ class IntelligenceService:
                 )
         return points
 
-    async def get_regime_current(self) -> RegimeCurrentResponse:
-        symbol = "^NSEI"
+    async def get_regime_current(self, symbol: str = "^NSEI") -> RegimeCurrentResponse:
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
+            pred = await asyncio.wait_for(get_full_prediction(symbol), timeout=15.0)
         except Exception:
             pred = {}
 
@@ -346,14 +332,24 @@ class IntelligenceService:
         reg_sub = ens.get("regime", {})
         state = reg_sub.get("regime", "SIDEWAYS")
         probs = reg_sub.get("probs", {"BULL": 0.33, "BEAR": 0.33, "SIDEWAYS": 0.34})
+        if "probs" not in reg_sub and ("bull_prob" in reg_sub or "bear_prob" in reg_sub):
+            bp = float(reg_sub.get("bull_prob", 0.33))
+            brp = float(reg_sub.get("bear_prob", 0.33))
+            probs = {
+                "BULL": round(bp, 4),
+                "BEAR": round(brp, 4),
+                "SIDEWAYS": round(max(0.0, 1.0 - bp - brp), 4),
+                "CRISIS": 0.0,
+            }
 
-        history = await self.get_regime_history(days=90)
+        history = await self.get_regime_history(days=90, symbol=symbol)
         t_matrix = [[0.25] * 4 for _ in range(4)]
         days_in_state = 1
         last_transition_date = date.today()
 
         if len(history) >= 2:
             from collections import defaultdict
+
             transitions: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
             for i in range(1, len(history)):
                 transitions[history[i - 1].state][history[i].state] += 1
@@ -366,7 +362,9 @@ class IntelligenceService:
             for j in range(len(history) - 1, -1, -1):
                 if history[j].state == state:
                     days_in_state = len(history) - j
-                    last_transition_date = history[j].time if isinstance(history[j].time, date) else date.today()
+                    last_transition_date = (
+                        history[j].time if isinstance(history[j].time, date) else date.today()
+                    )
                 else:
                     break
             if days_in_state > len(history):
@@ -375,7 +373,7 @@ class IntelligenceService:
         vol_1d = (
             math.sqrt(reg_sub.get("regime_variance", 0.01))
             if "regime_variance" in reg_sub
-            else 0.013
+            else float(reg_sub.get("conditional_vol", 0.013))
         )
         return RegimeCurrentResponse(
             state=state,
@@ -388,24 +386,14 @@ class IntelligenceService:
             last_transition_date=last_transition_date,
         )
 
-    async def get_regime_history(self, days: int) -> list[RegimeHistoryPoint]:
-        symbol = "^NSEI"
+    async def get_regime_history(
+        self, days: int, symbol: str = "^NSEI"
+    ) -> list[RegimeHistoryPoint]:
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", f"{days + 30}d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", f"{days + 30}d"))
+            bars = await asyncio.wait_for(
+                MarketDataService.get_history(symbol, "1d", f"{days + 30}d"),
+                timeout=10.0,
+            )
         except Exception:
             bars = []
 
@@ -479,6 +467,7 @@ class IntelligenceService:
             return []
 
         from collections import defaultdict
+
         _state_days: dict[str, list[float]] = defaultdict(list)
         state_vols: dict[str, list[float]] = defaultdict(list)
         durations: dict[str, list[int]] = defaultdict(list)
@@ -507,28 +496,26 @@ class IntelligenceService:
             vols = state_vols.get(state, [0.0])
             avg_vol = sum(vols) / max(len(vols), 1)
             freq = count / total_points
-            avg_ret = {"BULL": avg_vol * 0.1, "BEAR": -avg_vol * 0.1, "SIDEWAYS": 0.0, "CRISIS": -avg_vol * 0.15}.get(state, 0.0)
-            results.append(RegimeStatisticsItem(
-                state=state, avg_duration=round(avg_dur, 1), avg_return=round(avg_ret, 5),
-                avg_vol=round(avg_vol, 5), freq=round(freq, 3),
-            ))
+            avg_ret = {
+                "BULL": avg_vol * 0.1,
+                "BEAR": -avg_vol * 0.1,
+                "SIDEWAYS": 0.0,
+                "CRISIS": -avg_vol * 0.15,
+            }.get(state, 0.0)
+            results.append(
+                RegimeStatisticsItem(
+                    state=state,
+                    avg_duration=round(avg_dur, 1),
+                    avg_return=round(avg_ret, 5),
+                    avg_vol=round(avg_vol, 5),
+                    freq=round(freq, 3),
+                )
+            )
         return results
 
     async def get_shap(self, symbol: str) -> ExplainShapResponse:
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
+            pred = await asyncio.wait_for(get_full_prediction(symbol), timeout=15.0)
         except Exception:
             pred = {}
 
@@ -564,24 +551,12 @@ class IntelligenceService:
     async def get_attention(self, symbol: str, model: str) -> ExplainAttentionResponse:
         model_name = "tft" if model not in {"tft", "lstm_attn"} else model
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
+            pred = await asyncio.wait_for(get_full_prediction(symbol), timeout=15.0)
         except Exception as e:
             logger.warning(f"Failed to fetch prediction for attention: {e}")
             pred = {}
 
-        lstm_data = pred.get("lstm_attn", {})
+        lstm_data = pred.get("lstm_attn") or pred.get("ensemble", {}).get("lstm_attn", {})
         attn_peaks = lstm_data.get("attention_peaks", [])
 
         if not attn_peaks:
@@ -619,19 +594,7 @@ class IntelligenceService:
         self, symbol: str, payload: CounterfactualRequest
     ) -> list[CounterfactualResponse]:
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, get_full_prediction(symbol))
-                    pred = future.result(timeout=15)
-            else:
-                pred = asyncio.run(get_full_prediction(symbol))
+            pred = await asyncio.wait_for(get_full_prediction(symbol), timeout=15.0)
         except Exception:
             pred = {}
 
@@ -660,16 +623,10 @@ class IntelligenceService:
             from app.services.market_data_service import MarketDataService
             from research.feature_engineering.pipeline import FeaturePipeline
 
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(
-                        asyncio.run, MarketDataService.get_history(symbol, "1d", "60d")
-                    )
-                    bars = future.result(timeout=10)
-            else:
-                bars = asyncio.run(MarketDataService.get_history(symbol, "1d", "60d"))
+            bars = await asyncio.wait_for(
+                MarketDataService.get_history(symbol, "1d", "60d"),
+                timeout=10.0,
+            )
 
             if len(bars) < 60:
                 return rows
@@ -702,7 +659,9 @@ class IntelligenceService:
             # For tree models, we can use a linear proxy or just perturb and predict directly.
             # We will perturb the top 2 features iteratively
             # Get SHAP to find top features
-            xgb_top_features = pred.get("xgboost", {}).get("top_features", [])
+            xgb_top_features = (
+                pred.get("xgboost") or pred.get("ensemble", {}).get("xgboost", {})
+            ).get("top_features", [])
             if not xgb_top_features:
                 return rows
 
@@ -768,22 +727,30 @@ class IntelligenceService:
         from sqlalchemy import text
 
         from app.database.connection import async_session_factory
+
         rows = []
         try:
             async with async_session_factory() as session:
-                res = await session.execute(text("SELECT model_family, metrics_json FROM model_registry WHERE status = 'active'"))
+                res = await session.execute(
+                    text(
+                        "SELECT model_family, metrics_json FROM model_registry WHERE status = 'active'"
+                    )
+                )
                 for row in res.fetchall():
                     metrics = row.metrics_json or {}
-                    rows.append(ModelAccuracyItem(
-                        model=row.model_family,
-                        precision=metrics.get('precision', 0.0),
-                        recall=metrics.get('recall', 0.0),
-                        directional_accuracy=metrics.get('accuracy', 0.0),
-                        p50_rmse=metrics.get('p50_rmse', 0.0),
-                        winkler_coverage_score=metrics.get('winkler_coverage_score', 0.0),
-                    ))
+                    rows.append(
+                        ModelAccuracyItem(
+                            model=row.model_family,
+                            precision=metrics.get("precision", 0.0),
+                            recall=metrics.get("recall", 0.0),
+                            directional_accuracy=metrics.get("accuracy", 0.0),
+                            p50_rmse=metrics.get("p50_rmse", 0.0),
+                            winkler_coverage_score=metrics.get("winkler_coverage_score", 0.0),
+                        )
+                    )
         except Exception as e:
             import logging
+
             logging.getLogger(__name__).warning(f"Failed to load model accuracy from postgres: {e}")
         return rows
 
@@ -823,27 +790,11 @@ class IntelligenceService:
         ]
 
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-
-            async def fetch_all():
-                tasks = [
-                    MarketDataService.get_history(sym[0], "1d", f"{window_days + 5}d")
-                    for sym in symbols
-                ]
-                return await asyncio.gather(*tasks)
-
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, fetch_all())
-                    all_hist = future.result(timeout=20)
-            else:
-                all_hist = asyncio.run(fetch_all())
+            tasks = [
+                MarketDataService.get_history(sym[0], "1d", f"{window_days + 5}d")
+                for sym in symbols
+            ]
+            all_hist = await asyncio.wait_for(asyncio.gather(*tasks), timeout=20.0)
         except Exception:
             all_hist = [[] for _ in symbols]
 
@@ -917,30 +868,16 @@ class IntelligenceService:
             top_correlates=top_correlates,
         )
 
-    async def get_factor_exposure(self, symbol: str, window_days: int = 126) -> FactorExposureResponse:
+    async def get_factor_exposure(
+        self, symbol: str, window_days: int = 126
+    ) -> FactorExposureResponse:
         ticker = symbol.upper()
         market_symbol = "^NSEI"
 
         try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            loop = None
-
-        try:
-
-            async def fetch_both():
-                t1 = MarketDataService.get_history(ticker, "1d", f"{window_days + 5}d")
-                t2 = MarketDataService.get_history(market_symbol, "1d", f"{window_days + 5}d")
-                return await asyncio.gather(t1, t2)
-
-            if loop and loop.is_running():
-                import concurrent.futures
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(asyncio.run, fetch_both())
-                    hist_sym, hist_mkt = future.result(timeout=15)
-            else:
-                hist_sym, hist_mkt = asyncio.run(fetch_both())
+            t1 = MarketDataService.get_history(ticker, "1d", f"{window_days + 5}d")
+            t2 = MarketDataService.get_history(market_symbol, "1d", f"{window_days + 5}d")
+            hist_sym, hist_mkt = await asyncio.wait_for(asyncio.gather(t1, t2), timeout=15.0)
         except Exception:
             hist_sym, hist_mkt = [], []
 
@@ -990,8 +927,12 @@ class IntelligenceService:
 
         residual_vol = tracking_error / math.sqrt(252.0) if tracking_error > 0 else 0.0
         computed_factors = [e for e in exposures if abs(e.beta) > 0.001]
-        total_beta_sq = sum(e.beta ** 2 for e in computed_factors)
-        factor_concentration = total_beta_sq / (total_beta_sq + residual_vol ** 2) if (total_beta_sq + residual_vol ** 2) > 0 else 0.0
+        total_beta_sq = sum(e.beta**2 for e in computed_factors)
+        factor_concentration = (
+            total_beta_sq / (total_beta_sq + residual_vol**2)
+            if (total_beta_sq + residual_vol**2) > 0
+            else 0.0
+        )
 
         metrics = {
             "alpha_annualized": round(alpha * 252.0, 4),
@@ -1007,5 +948,6 @@ class IntelligenceService:
             exposures=exposures,
             metrics=metrics,
         )
+
 
 intelligence_service = IntelligenceService()
