@@ -19,7 +19,8 @@ settings = get_settings()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login", auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
-async def ensure_personal_organization(db: AsyncSession, user: User) -> None:
+
+async def ensure_personal_organization(db: AsyncSession, user: User) -> OrgMember:
     """Give a user a personal Organization + membership if they have none.
 
     Most endpoints (alerts history, billing, etc.) are organization-scoped
@@ -38,7 +39,7 @@ async def ensure_personal_organization(db: AsyncSession, user: User) -> None:
         if membership.role != membership.role.upper():
             membership.role = membership.role.upper()
             await db.commit()
-        return
+        return membership
     org = Organization(
         name=user.full_name or user.email.split("@")[0],
         slug=f"user-{user.id.hex}",
@@ -52,8 +53,12 @@ async def ensure_personal_organization(db: AsyncSession, user: User) -> None:
     # and made every require_role() check 403 regardless of the org/
     # membership actually existing. Matches the convention already used in
     # organizations.py's own owner-membership creation.
-    db.add(OrgMember(organization_id=org.id, user_id=user.id, role="OWNER", status="active"))
+    new_membership = OrgMember(
+        organization_id=org.id, user_id=user.id, role="OWNER", status="active"
+    )
+    db.add(new_membership)
     await db.commit()
+    return new_membership
 
 
 class RequestContext:
@@ -69,6 +74,7 @@ class RequestContext:
         entitlements: dict | None = None,
         auth_method: str = "anonymous",
         request_id: str | None = None,
+        user: User | None = None,
     ):
         self.user_id = user_id
         self.organization_id = organization_id
@@ -80,9 +86,21 @@ class RequestContext:
         self.entitlements = entitlements or {}
         self.auth_method = auth_method
         self.request_id = request_id
+        self.user = user
 
 
 _jwks_cache: dict[str, Any] = {}
+# Short-lived burst cache for verified JWT auth context in production:
+# maps (sub, org_header) -> (monotonic_ts, user_id, org_id, membership_id, org_role, status, email_verified)
+_auth_ctx_cache: dict[
+    tuple[str, str], tuple[float, str, str | None, str | None, str | None, str, bool]
+] = {}
+_AUTH_CTX_TTL_SECONDS = 15.0
+
+
+def invalidate_auth_context_cache() -> None:
+    """Clear the short-lived auth context cache after user/org mutations."""
+    _auth_ctx_cache.clear()
 
 
 def _fetch_jwks() -> dict[str, Any] | None:
@@ -144,6 +162,7 @@ def verify_supabase_token(token: str) -> dict[str, Any]:
         secret = settings.SUPABASE_JWT_SECRET
         if is_test_mode() and not secret:
             from app.core.test_state import TEST_JWT_SECRET
+
             secret = TEST_JWT_SECRET
         if not secret:
             # JWKS verification didn't match (no kid in token, or JWKS
@@ -180,7 +199,7 @@ async def get_current_context(
     request: Request,
     token: Annotated[str | None, Depends(oauth2_scheme)],
     api_key: Annotated[str | None, Depends(api_key_header)],
-    db: Annotated[AsyncSession, Depends(get_db)]
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RequestContext:
     """Resolve current context from token or API key."""
     req_id = getattr(request.state, "request_id", None)
@@ -201,14 +220,13 @@ async def get_current_context(
             user_id=str(api_key_record.created_by_id) if api_key_record.created_by_id else None,
             organization_id=str(api_key_record.organization_id),
             auth_method="API_KEY",
-            request_id=req_id
+            request_id=req_id,
         )
 
         # Set RLS context for the transaction
         if ctx.user_id:
             await db.execute(
-                text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
-                {"uid": ctx.user_id}
+                text("SELECT set_config('request.jwt.claim.sub', :uid, true)"), {"uid": ctx.user_id}
             )
 
         return ctx
@@ -226,12 +244,42 @@ async def get_current_context(
         if not sub:
             raise HTTPException(status_code=401, detail="Invalid token payload")
 
+        import time
+
+        from app.core.test_state import is_test_mode
+
+        org_header = request.headers.get("X-Organization-ID") or ""
+        cache_key = (str(sub), org_header)
+        now = time.monotonic()
+
+        if not is_test_mode():
+            cached = _auth_ctx_cache.get(cache_key)
+            if cached and (now - cached[0]) < _AUTH_CTX_TTL_SECONDS:
+                _, c_uid, c_org_id, c_mem_id, c_role, c_status, c_verified = cached
+                if c_status != "active":
+                    raise HTTPException(status_code=403, detail="User account suspended")
+                if not c_verified and not request.url.path.rstrip("/").endswith("/auth/me"):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Please verify your email before continuing. Check your inbox for the verification code.",
+                    )
+                return RequestContext(
+                    user_id=c_uid,
+                    organization_id=c_org_id,
+                    membership_id=c_mem_id,
+                    organization_role=c_role,
+                    auth_method="SUPABASE_JWT",
+                    request_id=req_id,
+                )
+
         # In a real flow, we map `sub` (auth_id) to our internal User
         try:
             result = await db.execute(select(User).where(User.auth_id == sub))
         except Exception as exc:
             logger.error("DB query for user by auth_id failed: %s", exc, exc_info=True)
-            raise HTTPException(status_code=500, detail="Database error during authentication") from exc
+            raise HTTPException(
+                status_code=500, detail="Database error during authentication"
+            ) from exc
         user = result.scalars().first()
         if not user:
             # A valid Supabase-signed token proves this account is real and
@@ -281,13 +329,15 @@ async def get_current_context(
         # Self-healing: also covers accounts created before this org-
         # provisioning existed, not just ones JIT-provisioned just above.
         try:
-            await ensure_personal_organization(db, user)
+            default_membership = await ensure_personal_organization(db, user)
         except HTTPException:
             raise
         except Exception as exc:
             logger.error(
                 "ensure_personal_organization failed for user %s: %s",
-                user.id, exc, exc_info=True,
+                user.id,
+                exc,
+                exc_info=True,
             )
             raise HTTPException(
                 status_code=500,
@@ -299,23 +349,37 @@ async def get_current_context(
 
         membership = None
         if org_id:
-            res = await db.execute(select(OrgMember).where(
-                OrgMember.user_id == user.id,
-                OrgMember.organization_id == org_id,
-                OrgMember.status == "active"
-            ))
-            membership = res.scalars().first()
+            if (
+                default_membership
+                and str(default_membership.organization_id) == org_id
+                and default_membership.status == "active"
+            ):
+                membership = default_membership
+            else:
+                res = await db.execute(
+                    select(OrgMember).where(
+                        OrgMember.user_id == user.id,
+                        OrgMember.organization_id == org_id,
+                        OrgMember.status == "active",
+                    )
+                )
+                membership = res.scalars().first()
             if not membership:
                 raise HTTPException(status_code=403, detail="Not a member of this organization")
         else:
-            # Get default organization
-            res = await db.execute(select(OrgMember).where(
-                OrgMember.user_id == user.id,
-                OrgMember.status == "active"
-            ).limit(1))
-            membership = res.scalars().first()
-            if membership:
+            # Reuse membership returned by ensure_personal_organization if active
+            if default_membership and default_membership.status == "active":
+                membership = default_membership
                 org_id = str(membership.organization_id)
+            else:
+                res = await db.execute(
+                    select(OrgMember)
+                    .where(OrgMember.user_id == user.id, OrgMember.status == "active")
+                    .limit(1)
+                )
+                membership = res.scalars().first()
+                if membership:
+                    org_id = str(membership.organization_id)
 
         ctx = RequestContext(
             user_id=str(user.id),
@@ -323,14 +387,25 @@ async def get_current_context(
             membership_id=str(membership.id) if membership else None,
             organization_role=membership.role if membership else None,
             auth_method="SUPABASE_JWT",
-            request_id=req_id
+            request_id=req_id,
+            user=user,
         )
+
+        if not is_test_mode() and user.email_verified and user.status == "active":
+            _auth_ctx_cache[cache_key] = (
+                now,
+                ctx.user_id,
+                ctx.organization_id,
+                ctx.membership_id,
+                ctx.organization_role,
+                user.status,
+                bool(user.email_verified),
+            )
 
         # Set RLS context for the transaction
         if ctx.user_id:
             await db.execute(
-                text("SELECT set_config('request.jwt.claim.sub', :uid, true)"),
-                {"uid": ctx.user_id}
+                text("SELECT set_config('request.jwt.claim.sub', :uid, true)"), {"uid": ctx.user_id}
             )
 
         return ctx
@@ -358,6 +433,7 @@ def _get_fernet_cipher():
         return None
     try:
         from cryptography.fernet import Fernet
+
         _fernet_cipher = Fernet(settings.FIELD_ENCRYPTION_KEY.encode())
     except ImportError:
         if settings.ENCRYPTION_ENABLED:

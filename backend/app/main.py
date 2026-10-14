@@ -79,25 +79,29 @@ async def lifespan(app: FastAPI):
 
         async with async_session_factory() as _heal_session:
             _conn = await _heal_session.connection()
+            _existing_res = await _conn.execute(
+                _text(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_name='users' AND column_name IN "
+                    "('password_hash', 'failed_login_attempts', 'locked_until')"
+                )
+            )
+            _existing_cols = {row[0] for row in _existing_res.fetchall()}
+            _altered = False
             for _col, _typ, _default in [
                 ("password_hash", "VARCHAR(255)", None),
                 ("failed_login_attempts", "INTEGER NOT NULL DEFAULT 0", "0"),
                 ("locked_until", "TIMESTAMPTZ", None),
             ]:
-                _check = await _conn.execute(
-                    _text(
-                        "SELECT 1 FROM information_schema.columns "
-                        "WHERE table_name='users' AND column_name=:col"
-                    ),
-                    {"col": _col},
-                )
-                if _check.fetchone() is None:
+                if _col not in _existing_cols:
                     _ddl = f"ALTER TABLE users ADD COLUMN {_col} {_typ}"
                     if _default is not None:
                         _ddl += f" DEFAULT {_default}"
                     await _conn.execute(_text(_ddl))
+                    _altered = True
                     logger.warning(f"healed_missing_column table=users column={_col}")
-            await _heal_session.commit()
+            if _altered:
+                await _heal_session.commit()
     except Exception as _heal_exc:
         logger.warning(f"column_heal_check non-fatal: {_heal_exc}")
 
@@ -105,8 +109,10 @@ async def lifespan(app: FastAPI):
     # Seed instrument master data (NSE + BSE) if DB is nearly empty.
     # Runs as a background task so startup is never blocked.
     import asyncio as _asyncio
+
     try:
         from app.services.instrument_seeder import ensure_seeded
+
         _asyncio.get_event_loop().create_task(ensure_seeded())
     except Exception as _seed_exc:
         logger.warning(f"instrument_seeder import failed (non-fatal): {_seed_exc}")
@@ -175,6 +181,7 @@ def create_app() -> FastAPI:
     # Health check endpoint. Provider diagnostics are intentionally excluded:
     # this endpoint must remain cheap and must not make external market calls.
     from app.core.schema import schema_guard
+
     @_app.get("/health")
     async def health_check():
         start_time = time.time()

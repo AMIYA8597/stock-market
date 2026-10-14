@@ -15,7 +15,6 @@ from redis.asyncio import Redis
 from app.database.connection import async_session_factory
 from app.services.market_data_service import MarketDataService
 from app.services.paper_trading import PaperTradingService
-from app.services.prediction_engine import get_full_prediction
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +24,7 @@ import time
 def is_market_hours() -> bool:
     """Check if Indian stock market is open (9:15 AM - 3:30 PM IST, Mon-Fri)."""
     from datetime import datetime, timedelta, timezone
+
     IST = timezone(timedelta(hours=5, minutes=30))
     now = datetime.now(IST)
     if now.weekday() >= 5:
@@ -192,10 +192,12 @@ async def run_price_ticker(redis: Redis) -> None:
                             f"Error checking limit orders for {normalized_symbol}: {order_err}"
                         )
 
-                    # 4. Generate live ML signals on tick
+                    # 4. Emit cached ML signals on tick (do not run heavy uncached ML training inside ticker loop)
                     if not skip_heavy_calcs:
                         try:
-                            pred = await get_full_prediction(normalized_symbol, bypass_cache=False)
+                            from app.services.prediction_engine import _cache_fetch
+
+                            pred = await _cache_fetch(normalized_symbol)
                             if pred and pred.get("is_computed", False):
                                 ens = pred.get("ensemble", {})
 
@@ -223,7 +225,7 @@ async def run_price_ticker(redis: Redis) -> None:
                                 await redis.publish("prices.ticks", json.dumps(signal_msg))
                         except Exception as sig_err:
                             logger.warning(
-                                f"Failed to compute live signal for tick {normalized_symbol}: {sig_err}"
+                                f"Failed to emit cached signal for tick {normalized_symbol}: {sig_err}"
                             )
                 except Exception as e:
                     logger.debug(f"Ticker processing failed for symbol={sym}: {e}")

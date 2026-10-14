@@ -7,8 +7,8 @@ from loguru import logger
 
 
 class LLMProvider(Protocol):
-    async def generate_text(self, prompt: str) -> str:
-        ...
+    async def generate_text(self, prompt: str) -> str: ...
+
 
 class GeminiProvider:
     def __init__(self, key: str, model: str):
@@ -21,11 +21,12 @@ class GeminiProvider:
                 f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent",
                 json={"contents": [{"parts": [{"text": prompt}]}]},
                 headers={"x-goog-api-key": self.key},
-                timeout=10.0
+                timeout=5.0,
             )
             resp.raise_for_status()
             data = resp.json()
             return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+
 
 class GroqProvider:
     def __init__(self, key: str, model: str):
@@ -39,15 +40,14 @@ class GroqProvider:
                 json={
                     "model": self.model,
                     "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.0
+                    "temperature": 0.0,
                 },
                 headers={"Authorization": f"Bearer {self.key}"},
-                timeout=10.0
+                timeout=5.0,
             )
             resp.raise_for_status()
             data = resp.json()
             return data["choices"][0]["message"]["content"].strip()
-
 
 
 class OllamaProvider:
@@ -59,16 +59,13 @@ class OllamaProvider:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
                 f"{self.host}/api/generate",
-                json={
-                    "model": self.model,
-                    "prompt": prompt,
-                    "stream": False
-                },
-                timeout=20.0
+                json={"model": self.model, "prompt": prompt, "stream": False},
+                timeout=10.0,
             )
             resp.raise_for_status()
             data = resp.json()
             return data["response"].strip()
+
 
 class LLMReasoningEngine:
     @staticmethod
@@ -76,11 +73,11 @@ class LLMReasoningEngine:
         # Prefer Groq, then Gemini, then fallback
         groq_key = os.getenv("GROQ_API_KEY")
         if groq_key:
-            return GroqProvider(groq_key, os.getenv("GROQ_MODEL", "llama3-8b-8192"))
+            return GroqProvider(groq_key, os.getenv("GROQ_MODEL", "llama-3.1-8b-instant"))
 
         gemini_key = os.getenv("GEMINI_API_KEY")
         if gemini_key:
-            return GeminiProvider(gemini_key, os.getenv("GEMINI_MODEL", "gemini-1.5-flash"))
+            return GeminiProvider(gemini_key, os.getenv("GEMINI_MODEL", "gemini-2.0-flash"))
 
         ollama_host = os.getenv("OLLAMA_HOST")
         if ollama_host:
@@ -89,9 +86,7 @@ class LLMReasoningEngine:
         return None
 
     @staticmethod
-    async def generate_reasoning(
-        evidence_pack: dict[str, Any]
-    ) -> str:
+    async def generate_reasoning(evidence_pack: dict[str, Any]) -> str:
         prompt = f"""
         You are an institutional quantitative trading AI.
         Generate a strictly concise, 1-sentence reasoning for the following signal based ONLY on the evidence pack.
@@ -112,18 +107,17 @@ class LLMReasoningEngine:
             logger.error(f"LLM Reasoning failed: {e}")
             return LLMReasoningEngine._heuristic_fallback(evidence_pack)
 
-
     @staticmethod
     def _validate_numeric_claims(text: str, evidence: dict) -> str:
-        '''Enforces V2-25: LLM NEVER OWNS THE NUMBERS.'''
+        """Enforces V2-25: LLM NEVER OWNS THE NUMBERS."""
         import re
 
         # Extract all numbers from the text
-        numbers = re.findall(r'-?\d+\.?\d*', text)
+        numbers = re.findall(r"-?\d+\.?\d*", text)
 
         # Extract all numbers from the evidence
         evidence_str = str(evidence)
-        evidence_numbers = re.findall(r'-?\d+\.?\d*', evidence_str)
+        evidence_numbers = re.findall(r"-?\d+\.?\d*", evidence_str)
 
         # Check if any number in the text is NOT in the evidence
         for num_str in numbers:

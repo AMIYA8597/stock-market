@@ -32,7 +32,8 @@ function initGlobalListener() {
       !raw.symbol ||
       typeof payload.signal !== "number" ||
       typeof payload.confidence !== "number" ||
-      typeof payload.direction !== "string"
+      typeof payload.direction !== "string" ||
+      typeof raw.ts !== "string"
     ) {
       return;
     }
@@ -43,7 +44,7 @@ function initGlobalListener() {
       signal: payload.signal,
       confidence: payload.confidence,
       direction: payload.direction as LiveSignalTick["direction"],
-      timestamp: raw.ts ?? new Date().toISOString(),
+      timestamp: raw.ts,
     });
 
     subscribers.forEach((cb) => cb());

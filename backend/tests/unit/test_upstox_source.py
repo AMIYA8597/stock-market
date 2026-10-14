@@ -78,10 +78,13 @@ async def test_get_quote_parses_ohlc_response():
             }
         },
     }
-    with patch(
-        "app.services.ingestion.upstox_source._resolve_instrument_key",
-        AsyncMock(return_value="NSE_EQ|INE002A01018"),
-    ), patch.object(provider, "_get", AsyncMock(return_value=fake_response)):
+    with (
+        patch(
+            "app.services.ingestion.upstox_source._resolve_instrument_key",
+            AsyncMock(return_value="NSE_EQ|INE002A01018"),
+        ),
+        patch.object(provider, "_get", AsyncMock(return_value=fake_response)),
+    ):
         quote = await provider.get_quote("RELIANCE")
 
     assert quote.symbol == "RELIANCE"
@@ -123,10 +126,13 @@ async def test_get_ohlcv_parses_and_sorts_candles():
             ]
         },
     }
-    with patch(
-        "app.services.ingestion.upstox_source._resolve_instrument_key",
-        AsyncMock(return_value="NSE_EQ|INE002A01018"),
-    ), patch.object(provider, "_get", AsyncMock(return_value=fake_response)):
+    with (
+        patch(
+            "app.services.ingestion.upstox_source._resolve_instrument_key",
+            AsyncMock(return_value="NSE_EQ|INE002A01018"),
+        ),
+        patch.object(provider, "_get", AsyncMock(return_value=fake_response)),
+    ):
         bars = await provider.get_ohlcv(
             "RELIANCE", "1d", datetime(2024, 1, 1, tzinfo=UTC), datetime(2024, 1, 2, tzinfo=UTC)
         )

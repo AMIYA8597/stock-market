@@ -108,7 +108,11 @@ async def post_backtest_run(
     # organization, so every non-paying user got a 403.
     _rate_limit: None = Depends(get_rate_limiter(requests=2, window=60)),
 ) -> BacktestRunResponse:
-    user_id_str = str(current_user.get("sub")) if isinstance(current_user, dict) else str(getattr(current_user, "user_id", getattr(current_user, "id", None)))
+    user_id_str = (
+        str(current_user.get("sub"))
+        if isinstance(current_user, dict)
+        else str(getattr(current_user, "user_id", getattr(current_user, "id", None)))
+    )
 
     job_id = uuid4()
     new_job = BacktestJob(
@@ -125,8 +129,15 @@ async def post_backtest_run(
     db.add(new_job)
     await db.commit()
 
-    # Trigger Celery task
-    run_backtest_job_task.delay(str(job_id))
+    # Trigger Celery task, or run as background async task if Celery broker is unreachable
+    try:
+        run_backtest_job_task.delay(str(job_id))
+    except Exception:
+        import asyncio
+
+        from app.tasks.backtest_tasks import run_backtest_async
+
+        asyncio.create_task(run_backtest_async(str(job_id)))
 
     days = max((request.date_to - request.date_from).days, 1)
     estimate = min(3600, 30 + len(request.universe) * days // 20)
@@ -167,8 +178,9 @@ async def get_backtest_status(
         job_id=str(job.id),
         status=job.status,
         progress_pct=progress_pct,
-        error_message=job.error_message
+        error_message=job.error_message,
     )
+
 
 @router.get("/results/{job_id}", response_model=BacktestResultsResponse)
 async def get_backtest_results(
@@ -234,5 +246,5 @@ async def get_backtest_results(
         trade_log=[TradeLogEntry(**tr) for tr in results.get("trade_log", [])],
         monte_carlo=None,
         statistical_tests=None,
-        walk_forward=None
+        walk_forward=None,
     )

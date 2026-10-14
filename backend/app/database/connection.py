@@ -60,20 +60,29 @@ def _get_engine_kwargs() -> dict:
             # fails with CERTIFICATE_VERIFY_FAILED against it.
             connect_args["ssl"] = "require"
 
-        is_supabase_pooler = "pooler.supabase.com" in settings.DATABASE_URL or ":6543" in settings.DATABASE_URL
+        is_supabase_pooler = (
+            "pooler.supabase.com" in settings.DATABASE_URL or ":6543" in settings.DATABASE_URL
+        )
         if settings.DB_POOL_MODE == "transaction" or is_supabase_pooler:
             connect_args["statement_cache_size"] = 0
             connect_args["prepared_statement_cache_size"] = 0
+
+        if settings.DB_POOL_MODE == "transaction":
             kwargs["poolclass"] = NullPool
         else:
-            kwargs["pool_size"] = settings.DB_POOL_SIZE
-            kwargs["max_overflow"] = settings.DB_MAX_OVERFLOW
+            kwargs["pool_size"] = getattr(settings, "DB_POOL_SIZE", 5)
+            kwargs["max_overflow"] = getattr(settings, "DB_MAX_OVERFLOW", 5)
             kwargs["pool_pre_ping"] = True
-            kwargs["pool_recycle"] = settings.DB_POOL_RECYCLE
+            kwargs["pool_recycle"] = (
+                min(getattr(settings, "DB_POOL_RECYCLE", 300), 300)
+                if is_supabase_pooler
+                else getattr(settings, "DB_POOL_RECYCLE", 1800)
+            )
 
         kwargs["connect_args"] = connect_args
 
     return kwargs
+
 
 engine = create_async_engine(
     # `create_async_engine` only builds the Engine object here; it does not
@@ -95,6 +104,7 @@ from sqlalchemy.ext.compiler import compiles
 @compiles(JSONB, "sqlite")
 def compile_jsonb_sqlite(type_, compiler, **kw):
     return "JSON"
+
 
 logger.debug(
     "database_engine_created",
@@ -122,8 +132,9 @@ NAMING_CONVENTION = {
     "uq": "uq_%(table_name)s_%(column_0_name)s",
     "ck": "ck_%(table_name)s_%(constraint_name)s",
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s"
+    "pk": "pk_%(table_name)s",
 }
+
 
 class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
@@ -161,15 +172,27 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     Raises:
         Exception: Propagates any database errors.
     """
+    from contextlib import suppress
+
     async with async_session_factory() as session:
         try:
             yield session
-            await session.commit()
+            if session.in_transaction():
+                if session.new or session.dirty or session.deleted:
+                    await session.commit()
+                else:
+                    try:
+                        await session.commit()
+                    except Exception:
+                        with suppress(Exception):
+                            await session.rollback()
         except Exception:
-            await session.rollback()
+            with suppress(Exception):
+                await session.rollback()
             raise
         finally:
-            await session.close()
+            with suppress(Exception):
+                await session.close()
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

@@ -10,7 +10,8 @@ from app.services.intelligence_service import IntelligenceService
 def service():
     return IntelligenceService()
 
-@patch('app.services.intelligence_service.get_full_prediction', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.get_full_prediction", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_signal_success(mock_gfp, service):
     mock_gfp.return_value = {
@@ -21,18 +22,31 @@ async def test_get_signal_success(mock_gfp, service):
             "direction": "BUY",
             "kelly": 0.1,
             "momentum": {"vol_21d": 0.02},
-            "regime": {"regime_variance": 0.015, "regime": "BULL", "bull_prob": 0.6, "bear_prob": 0.2},
-            "xgboost": {"xgb_score": 0.4, "top_features": []}
+            "regime": {
+                "regime_variance": 0.015,
+                "regime": "BULL",
+                "bull_prob": 0.6,
+                "bear_prob": 0.2,
+            },
+            "xgboost": {"xgb_score": 0.4, "top_features": []},
         },
-        "forecast": [{"horizon_days": 1, "predicted_price": 105, "prediction_low": 102, "prediction_high": 108}],
-        "current_price": 100.0
+        "forecast": [
+            {
+                "horizon_days": 1,
+                "predicted_price": 105,
+                "prediction_low": 102,
+                "prediction_high": 108,
+            }
+        ],
+        "current_price": 100.0,
     }
     res = await service.get_signal("AAPL")
     assert res.symbol == "AAPL"
     assert res.ensemble.signal in ["BUY", "STRONG_BUY", "NEUTRAL"]
     assert res.ensemble.direction == "BUY"
 
-@patch('app.services.intelligence_service.get_full_prediction', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.get_full_prediction", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_signal_fallback(mock_gfp, service):
     mock_gfp.return_value = {"is_computed": False}
@@ -40,22 +54,25 @@ async def test_get_signal_fallback(mock_gfp, service):
     assert res.is_fallback is True
     assert res.ensemble.signal == "NEUTRAL"
 
-@patch('app.services.intelligence_service.get_full_prediction', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.get_full_prediction", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_signal_exception(mock_gfp, service):
     mock_gfp.side_effect = Exception("error")
     res = await service.get_signal("AAPL")
     assert res.is_fallback is True
 
+
 @pytest.mark.asyncio
 async def test_get_bulk_signals(service):
-    with patch('app.services.intelligence_service.IntelligenceService.get_signal') as mock_gs:
+    with patch("app.services.intelligence_service.IntelligenceService.get_signal") as mock_gs:
         mock_gs.return_value = MagicMock()
         res = await service.get_bulk_signals(["AAPL", "GOOG"])
         assert len(res) == 2
         assert mock_gs.call_count == 2
 
-@patch('app.services.intelligence_service.MarketDataService.get_history', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.MarketDataService.get_history", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_signal_history(mock_history, service):
     mock_history.return_value = [
@@ -67,14 +84,16 @@ async def test_get_signal_history(mock_history, service):
     assert len(res) == 2
     assert res[0].model == "tft"
 
-@patch('app.services.intelligence_service.MarketDataService.get_history', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.MarketDataService.get_history", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_signal_history_exception(mock_history, service):
     mock_history.side_effect = Exception("error")
     res = await service.get_signal_history("AAPL", "tft", 2)
     assert len(res) == 2
 
-@patch('app.services.intelligence_service.get_full_prediction', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.get_full_prediction", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_regime_current(mock_gfp, service):
     mock_gfp.return_value = {
@@ -82,14 +101,15 @@ async def test_get_regime_current(mock_gfp, service):
             "regime": {
                 "regime": "BULL",
                 "probs": {"BULL": 0.8, "BEAR": 0.1, "SIDEWAYS": 0.1},
-                "regime_variance": 0.02
+                "regime_variance": 0.02,
             }
         }
     }
     res = await service.get_regime_current()
     assert res.state == "BULL"
 
-@patch('app.services.intelligence_service.MarketDataService.get_history', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.MarketDataService.get_history", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_regime_history(mock_history, service):
     mock_history.return_value = [
@@ -100,38 +120,38 @@ async def test_get_regime_history(mock_history, service):
     res = await service.get_regime_history(2)
     assert len(res) == 2
 
+
 @pytest.mark.asyncio
 async def test_get_regime_statistics(service):
     res = await service.get_regime_statistics()
     assert len(res) >= 0
 
-@patch('app.services.intelligence_service.get_full_prediction', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.get_full_prediction", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_shap(mock_gfp, service):
     mock_gfp.return_value = {
-        "ensemble": {
-            "xgboost": {
-                "top_features": [{"name": "feat1", "shap_value": 0.5}]
-            }
-        }
+        "ensemble": {"xgboost": {"top_features": [{"name": "feat1", "shap_value": 0.5}]}}
     }
     res = await service.get_shap("AAPL")
     assert len(res.feature_contributions) == 1
     assert res.feature_contributions[0].name == "feat1"
 
-@patch('app.services.intelligence_service.get_full_prediction', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.get_full_prediction", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_attention(mock_gfp, service):
     mock_gfp.return_value = {
         "lstm_attn": {
             "attention_peaks": [
                 {"date": "2024-01-01", "weight": 0.8},
-                {"date": "2024-01-02", "weight": 0.2}
+                {"date": "2024-01-02", "weight": 0.2},
             ]
         }
     }
     res = await service.get_attention("AAPL", "lstm_attn")
     assert len(res.mean_weights) == 2
+
 
 @pytest.mark.asyncio
 async def test_get_counterfactuals(service):
@@ -140,7 +160,8 @@ async def test_get_counterfactuals(service):
     res = await service.get_counterfactuals("AAPL", req)
     assert isinstance(res, list)
 
-@patch('app.database.connection.async_session_factory')
+
+@patch("app.database.connection.async_session_factory")
 @pytest.mark.asyncio
 async def test_get_model_accuracy(mock_session_factory, service):
     """Regression test: get_model_accuracy() actually queries via
@@ -185,11 +206,13 @@ async def test_get_ensemble_weights_history(service):
     res = await service.get_ensemble_weights_history(5)
     assert res == []
 
+
 @pytest.mark.asyncio
 async def test_get_economic_calendar(service):
     assert await service.get_economic_calendar() == []
 
-@patch('app.services.intelligence_service.MarketDataService.get_history', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.MarketDataService.get_history", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_correlation_graph(mock_history, service):
     mock_history.return_value = [
@@ -200,7 +223,8 @@ async def test_get_correlation_graph(mock_history, service):
     res = await service.get_correlation_graph()
     assert res is not None
 
-@patch('app.services.intelligence_service.MarketDataService.get_history', new_callable=AsyncMock)
+
+@patch("app.services.intelligence_service.MarketDataService.get_history", new_callable=AsyncMock)
 @pytest.mark.asyncio
 async def test_get_factor_exposure(mock_history, service):
     mock_history.return_value = [

@@ -46,15 +46,28 @@ export class ApiError extends Error {
   }
 }
 
+let _cachedSessionToken: { token: string | undefined; expiresAt: number } = { token: undefined, expiresAt: 0 };
+
 export async function fetchApi<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<T> {
   const url = `${API_BASE}${API_PREFIX}${path}`;
   
-  const supabase = createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  let token: string | undefined;
+  const now = Date.now();
+  if (_cachedSessionToken.token && now < _cachedSessionToken.expiresAt) {
+    token = _cachedSessionToken.token;
+  } else {
+    try {
+      const supabase = createClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token;
+      _cachedSessionToken = { token, expiresAt: now + 10_000 };
+    } catch {
+      token = undefined;
+    }
+  }
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -65,10 +78,29 @@ export async function fetchApi<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  const abortFromCaller = () => controller.abort();
+  options.signal?.addEventListener("abort", abortFromCaller, { once: true });
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new ApiError(408, "Request Timeout", {
+        detail: `The request to ${path} timed out after 15 seconds`,
+      });
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+    options.signal?.removeEventListener("abort", abortFromCaller);
+  }
 
   if (!response.ok) {
     const body = await response.json().catch(() => null);
@@ -349,6 +381,17 @@ export const marketApi = {
   },
 
   async getQuotes(symbols: string[]): Promise<Quote[]> {
+    if (!symbols.length) return [];
+    try {
+      const res = await fetchApi<{ quotes: UnknownRecord[] }>(
+        `/market/quotes?symbols=${encodeURIComponent(symbols.join(","))}`
+      );
+      if (Array.isArray(res?.quotes)) {
+        return res.quotes.map(mapQuote);
+      }
+    } catch {
+      // Fallback to individual fetches if batch query fails
+    }
     const settled = await Promise.allSettled(
       symbols.map((symbol) => marketApi.getQuote(symbol))
     );

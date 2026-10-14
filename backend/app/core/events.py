@@ -27,6 +27,17 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
+def _redact_url(url: str | None) -> str:
+    """Redact credentials from a database or Redis connection URL before logging."""
+    if not url:
+        return "not_configured"
+    if "@" in url:
+        scheme_part = url.split("://", 1)[0] + "://" if "://" in url else ""
+        host_part = url.split("@", 1)[1]
+        return f"{scheme_part}***@{host_part}"
+    return url
+
+
 async def startup_events() -> dict[str, Any]:
     """Initialize background tasks and services on startup.
 
@@ -80,7 +91,7 @@ async def startup_events() -> dict[str, Any]:
             logger.info(
                 "startup_redis_success",
                 ping_result=ping_result,
-                redis_url=settings.REDIS_URL,
+                redis_url=_redact_url(settings.REDIS_URL),
             )
             services["redis"] = redis_client
         except Exception as e:
@@ -95,7 +106,7 @@ async def startup_events() -> dict[str, Any]:
             # Test database connection
             async with engine.begin() as conn:
                 await conn.execute(text("SELECT 1") if hasattr(conn, "execute") else "SELECT 1")
-            logger.info("startup_database_success", database_url=settings.DATABASE_URL)
+            logger.info("startup_database_success", database_url=_redact_url(settings.DATABASE_URL))
 
             # Schema guard is called dynamically by the schema middleware, but we can also do a quick check here.
         except Exception as e:
@@ -201,6 +212,7 @@ async def startup_events() -> dict[str, Any]:
 
         logger.info("startup_complete", services_initialized=list(services.keys()))
         from app.core.websocket_manager import ws_manager
+
         await ws_manager.startup()
         return services
 

@@ -2057,6 +2057,54 @@
         }
       }
     },
+    "/api/v1/market/quotes": {
+      "get": {
+        "tags": [
+          "market"
+        ],
+        "summary": "Get Quotes Batch",
+        "operationId": "get_quotes_batch_api_v1_market_quotes_get",
+        "parameters": [
+          {
+            "name": "symbols",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "Comma-separated list of symbols (max 100)",
+              "title": "Symbols"
+            },
+            "description": "Comma-separated list of symbols (max 100)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/QuoteResponse"
+                  },
+                  "title": "Response Get Quotes Batch Api V1 Market Quotes Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/market/quote/{symbol}": {
       "get": {
         "tags": [
@@ -2471,7 +2519,7 @@
           "market"
         ],
         "summary": "Get Global Context",
-        "description": "Cross-market context (global indices, VIX, FX) for the terminal's macro widget.\n\nNo global-index ingestion pipeline exists in this codebase yet, so this\nreturns an explicit unavailable status rather than fabricating index levels.",
+        "description": "Cross-market context (global indices, VIX, FX) for the terminal's macro widget.",
         "operationId": "get_global_context_api_v1_market_global_context_get",
         "responses": {
           "200": {
@@ -5409,6 +5457,11 @@
       },
       "AutoTradeSettingResponse": {
         "properties": {
+          "execution_mode": {
+            "type": "string",
+            "title": "Execution Mode",
+            "default": "paper"
+          },
           "enabled": {
             "type": "boolean",
             "title": "Enabled"

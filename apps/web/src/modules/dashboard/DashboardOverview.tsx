@@ -149,12 +149,9 @@ export function DashboardOverview(): JSX.Element {
   // Only block render while queries are actively fetching (not errored).
   // Errored queries resolve immediately so the dashboard never hangs forever.
   const isLoading =
-    (isPendingPnl && !isErrorPnl) ||
-    (isPendingPositions && !isErrorPositions) ||
-    (isPendingPortfolios && !isErrorPortfolios) ||
-    (Boolean(portfolio?.id) && (isPendingRisk || isPendingPerformance)) ||
-    (isPendingAlerts && !isErrorAlerts) ||
-    isPendingSignal;
+    (isPendingPnl && !isErrorPnl) &&
+    (isPendingPositions && !isErrorPositions) &&
+    (isPendingPortfolios && !isErrorPortfolios);
 
   // Global blocking error removed to allow graceful degradation of individual widgets
 

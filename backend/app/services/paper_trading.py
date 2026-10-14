@@ -56,6 +56,12 @@ class PaperTradingService:
         res = await db.execute(stmt)
         positions = res.scalars().all()
 
+        if len(positions) > 1:
+            try:
+                await MarketDataService.get_batch_quotes([p.symbol for p in positions])
+            except Exception:
+                pass
+
         results = []
         for pos in positions:
             symbol = pos.symbol
@@ -202,9 +208,13 @@ class PaperTradingService:
         if not signal_relation or signal_relation == "AUTO":
             signal_relation = "INDEPENDENT"
             try:
+                import asyncio
+
                 from app.services.prediction_engine import get_full_prediction
 
-                pred = await get_full_prediction(sym, bypass_cache=False)
+                pred = await asyncio.wait_for(
+                    get_full_prediction(sym, bypass_cache=False), timeout=1.5
+                )
                 if pred and pred.get("is_computed", False):
                     ens = pred.get("ensemble", {})
                     direction = ens.get("direction", "NEUTRAL")
@@ -373,7 +383,7 @@ class PaperTradingService:
                 amount=entry_amount,
                 currency="INR",
                 reference_type="PAPER_ORDER",
-                reference_id=str(new_order.id)
+                reference_id=str(new_order.id),
             )
             db.add(ledger_entry)
 
@@ -526,10 +536,9 @@ class PaperTradingService:
                     amount=entry_amount,
                     currency="INR",
                     reference_type="PAPER_ORDER",
-                    reference_id=str(order.id)
+                    reference_id=str(order.id),
                 )
                 db.add(ledger_entry)
-
 
         if filled_count > 0:
             await db.commit()

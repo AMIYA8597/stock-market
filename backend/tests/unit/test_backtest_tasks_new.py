@@ -18,6 +18,7 @@ def mock_job():
     job.initial_capital = 100000.0
     return job
 
+
 @pytest.fixture
 def mock_db_session():
     mock_session = AsyncMock()
@@ -26,10 +27,14 @@ def mock_db_session():
     mock_db.__aexit__.return_value = False
     return mock_db, mock_session
 
+
 @pytest.fixture
 def mock_ws_manager():
-    with patch("app.tasks.backtest_tasks.ws_manager.broadcast", new_callable=AsyncMock) as mock_broadcast:
+    with patch(
+        "app.tasks.backtest_tasks.ws_manager.broadcast", new_callable=AsyncMock
+    ) as mock_broadcast:
         yield mock_broadcast
+
 
 def make_bar(ts, price=100.0):
     bar = MagicMock()
@@ -70,9 +75,12 @@ def mock_ohlcv_result_empty():
     res.scalars.return_value.all.return_value = []
     return res
 
+
 @pytest.mark.asyncio
 @patch("app.tasks.backtest_tasks.async_session_factory")
-async def test_run_backtest_async_job_not_found(mock_session_factory, mock_db_session, mock_ws_manager):
+async def test_run_backtest_async_job_not_found(
+    mock_session_factory, mock_db_session, mock_ws_manager
+):
     mock_db, mock_session = mock_db_session
     mock_session_factory.return_value = mock_db
 
@@ -86,11 +94,16 @@ async def test_run_backtest_async_job_not_found(mock_session_factory, mock_db_se
     mock_session.execute.assert_called_once()
     mock_ws_manager.assert_not_called()
 
+
 @pytest.mark.asyncio
 @patch("app.tasks.backtest_tasks.async_session_factory")
 async def test_run_backtest_async_not_enough_data(
-    mock_session_factory, mock_db_session, mock_ws_manager, mock_job,
-    mock_instrument_result, mock_ohlcv_result_empty,
+    mock_session_factory,
+    mock_db_session,
+    mock_ws_manager,
+    mock_job,
+    mock_instrument_result,
+    mock_ohlcv_result_empty,
 ):
     mock_db, mock_session = mock_db_session
     mock_session_factory.return_value = mock_db
@@ -112,14 +125,24 @@ async def test_run_backtest_async_not_enough_data(
     assert mock_job.status == "FAILED"
     mock_ws_manager.assert_called_with(
         "signals:backtest-progress",
-        {"job_id": job_id, "status": "FAILED", "progress": 100, "error": "Not enough historical data for AAPL."}
+        {
+            "job_id": job_id,
+            "status": "FAILED",
+            "progress": 100,
+            "error": "Not enough historical data for AAPL.",
+        },
     )
+
 
 @pytest.mark.asyncio
 @patch("app.tasks.backtest_tasks.async_session_factory")
 async def test_run_backtest_async_success(
-    mock_session_factory, mock_db_session, mock_ws_manager, mock_job,
-    mock_instrument_result, mock_ohlcv_result_5_bars,
+    mock_session_factory,
+    mock_db_session,
+    mock_ws_manager,
+    mock_job,
+    mock_instrument_result,
+    mock_ohlcv_result_5_bars,
 ):
     mock_db, mock_session = mock_db_session
     mock_session_factory.return_value = mock_db
@@ -156,7 +179,7 @@ async def test_run_backtest_async_success(
         mock_result.trades_log = [
             {"date": "2022-01-02", "side": "BUY", "qty": 10, "price": 100.0},
             {"date": "2022-01-03", "side": "SELL", "qty": -20, "price": 101.0},
-            {"date": "2022-01-04", "side": "BUY", "qty": 0, "price": 100.0}
+            {"date": "2022-01-04", "side": "BUY", "qty": 0, "price": 100.0},
         ]
 
         mock_backtester_inst.run.return_value = mock_result
@@ -170,16 +193,21 @@ async def test_run_backtest_async_success(
 
         mock_ws_manager.assert_called_with(
             "signals:backtest-progress",
-            {"job_id": job_id, "status": "DONE", "progress": 100, "metrics": mock_job.results["metrics"]}
+            {
+                "job_id": job_id,
+                "status": "DONE",
+                "progress": 100,
+                "metrics": mock_job.results["metrics"],
+            },
         )
 
         progress_cb = mock_backtester_inst.run.call_args[1]["progress_callback"]
         progress_cb(50)
         await asyncio.sleep(0)
         mock_ws_manager.assert_any_call(
-            "signals:backtest-progress",
-            {"job_id": job_id, "status": "RUNNING", "progress": 50}
+            "signals:backtest-progress", {"job_id": job_id, "status": "RUNNING", "progress": 50}
         )
+
 
 @patch("app.tasks.backtest_tasks.asyncio.get_running_loop")
 @patch("app.tasks.backtest_tasks.asyncio.run")
@@ -189,6 +217,7 @@ def test_run_backtest_job_task_no_loop(mock_run, mock_get_loop):
     run_backtest_job_task("job-id")
     mock_run.assert_called_once()
     assert mock_run.call_args[0][0].__name__ == "run_backtest_async"
+
 
 @patch("app.tasks.backtest_tasks.asyncio.get_running_loop")
 @patch("concurrent.futures.ThreadPoolExecutor")

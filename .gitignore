@@ -99,6 +99,8 @@ scratch/
 unused_backup/
 archive/
 *.tmp
+*.bak
+*.backup
 prompt.txt
 new-prompt.txt
 new-prompt.md

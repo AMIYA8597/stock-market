@@ -41,6 +41,7 @@ class HistoryList(list):
 def safe_float(val, fallback=0.0) -> float:
     try:
         import pandas as pd
+
         if isinstance(val, pd.Series):
             val = val.iloc[0] if len(val) > 0 else fallback
         f = float(val)
@@ -90,6 +91,8 @@ class MarketDataService:
     _nse_bucket = TokenBucket(rate=5.0, capacity=10.0)
 
     _in_memory_ticker_history_df_cache: dict = {}
+    _quote_cache: dict[str, tuple[float, dict]] = {}
+    _history_cache: dict[str, tuple[float, list[dict]]] = {}
 
     @classmethod
     async def _throttle_yfinance(cls, symbol: str) -> None:
@@ -118,11 +121,6 @@ class MarketDataService:
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
             )
-            # Default urllib3 pool (10 connections) is far smaller than the
-            # concurrent yfinance/NSE fetches this app fires for a full
-            # watchlist — it was silently discarding excess connections and
-            # contributing to request pileup under load ("Connection pool is
-            # full, discarding connection" in the logs).
             adapter = HTTPAdapter(pool_connections=50, pool_maxsize=50)
             cls._session.mount("https://", adapter)
             cls._session.mount("http://", adapter)
@@ -138,27 +136,46 @@ class MarketDataService:
         if cls._health_cache is not None and (now - cls._health_cache_at) < 60:
             return cls._health_cache
 
-        def _probe() -> bool:
-            try:
-                session = cls.get_session()
-                df = yf.download(
-                    "^NSEI",
-                    period="1d",
-                    interval="1d",
-                    progress=False,
-                    threads=False,
-                    session=session,
-                )
-                return not df.empty
-            except Exception:
-                return False
-
+        ok = False
         try:
-            ok = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=5.0)
+            from app.core.config import get_settings, is_test_mode
+
+            if not is_test_mode():
+                settings = get_settings()
+                if getattr(settings, "UPSTOX_ENABLED", False) and getattr(
+                    settings, "UPSTOX_ANALYTICS_TOKEN", None
+                ):
+                    q = await asyncio.wait_for(cls._upstox_quote("RELIANCE"), timeout=5.0)
+                    if q and q.get("price", 0) > 0:
+                        ok = True
         except Exception:
             ok = False
 
-        result = {"status": "ok" if ok else "unhealthy"}  # honesty: allow (conditional on a real probe above)
+        if not ok:
+
+            def _probe() -> bool:
+                try:
+                    session = cls.get_session()
+                    df = yf.download(
+                        "^NSEI",
+                        period="1d",
+                        interval="1d",
+                        progress=False,
+                        threads=False,
+                        session=session,
+                    )
+                    return not df.empty
+                except Exception:
+                    return False
+
+            try:
+                ok = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=5.0)
+            except Exception:
+                ok = False
+
+        result = {
+            "status": "ok" if ok else "unhealthy",  # honesty: allow (conditional on a real probe above)
+        }
         cls._health_cache = result
         cls._health_cache_at = now
         return result
@@ -215,13 +232,61 @@ class MarketDataService:
 
     @staticmethod
     async def get_batch_quotes(symbols: list[str]) -> dict[str, dict]:
-        """Fetch quotes for multiple symbols concurrently."""
-        import asyncio
+        """Fetch quotes for multiple symbols concurrently (using Upstox batch API when enabled)."""
+        try:
+            from app.core.config import get_settings, is_test_mode
 
-        tasks = []
-        for sym in symbols:
-            tasks.append(MarketDataService.get_quote(sym))
+            if not is_test_mode() and len(symbols) > 1:
+                settings = get_settings()
+                if getattr(settings, "UPSTOX_ENABLED", False) and getattr(
+                    settings, "UPSTOX_ANALYTICS_TOKEN", None
+                ):
+                    now_mono = time.monotonic()
+                    uncached = [
+                        s
+                        for s in symbols
+                        if MarketDataService._normalize_symbol(s)
+                        not in MarketDataService._quote_cache
+                        or (
+                            now_mono
+                            - MarketDataService._quote_cache[
+                                MarketDataService._normalize_symbol(s)
+                            ][0]
+                        )
+                        >= 10.0
+                    ]
+                    if uncached:
+                        from app.services.ingestion.upstox_source import UpstoxSource
 
+                        source = UpstoxSource()
+                        upstox_quotes = await source.get_batch_quotes(uncached)
+                        for sym, quote in upstox_quotes.items():
+                            norm_sym = MarketDataService._normalize_symbol(sym)
+                            q_dict = {
+                                "symbol": norm_sym,
+                                "price": quote.price,
+                                "open": quote.price,
+                                "high": quote.price,
+                                "low": quote.price,
+                                "volume": int(quote.volume or 0),
+                                "previous_close": quote.price - quote.change
+                                if quote.change
+                                else quote.price,
+                                "change": round(quote.change, 2),
+                                "change_pct": round(quote.change_pct, 2),
+                                "market_cap": 0.0,
+                                "week_52_high": quote.price,
+                                "week_52_low": quote.price,
+                                "source": "upstox",
+                                "timestamp": quote.timestamp.isoformat()
+                                if quote.timestamp
+                                else datetime.now(UTC).isoformat(),
+                            }
+                            MarketDataService._quote_cache[norm_sym] = (now_mono, q_dict)
+        except Exception as e:
+            logger.debug(f"Batch Upstox pre-warm failed: {e}")
+
+        tasks = [MarketDataService.get_quote(sym) for sym in symbols]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         batch_res = {}
@@ -230,7 +295,87 @@ class MarketDataService:
                 batch_res[sym] = None
             else:
                 batch_res[sym] = res
+
+        from app.core.test_state import is_test_mode
+
+        if not is_test_mode():
+            valid_quotes = {k: v for k, v in batch_res.items() if v and isinstance(v, dict)}
+            if valid_quotes:
+                try:
+                    asyncio.create_task(
+                        MarketDataService.persist_quote_snapshots_batch(valid_quotes)
+                    )
+                except Exception:
+                    pass
+
         return batch_res
+
+    @classmethod
+    async def persist_quote_snapshots_batch(cls, quotes: dict[str, dict]) -> None:
+        """Persist canonical QuoteSnapshot records to the database asynchronously."""
+        from datetime import UTC, datetime
+
+        from sqlalchemy import select
+
+        from app.database.connection import async_session_factory
+        from app.models.market import Instrument, QuoteSnapshot
+        from app.websocket.price_ticker import is_market_hours
+
+        if not quotes:
+            return
+
+        try:
+            clean_syms = [cls._normalize_symbol(s) for s in quotes.keys()]
+            async with async_session_factory() as session:
+                stmt = select(Instrument).where(Instrument.canonical_symbol.in_(clean_syms))
+                res = await session.execute(stmt)
+                instruments = {inst.canonical_symbol: inst.id for inst in res.scalars().all()}
+
+                now = datetime.now(UTC)
+                snapshots_to_add = []
+                for s, q in quotes.items():
+                    if not q or not isinstance(q, dict) or q.get("price") is None:
+                        continue
+                    norm_s = cls._normalize_symbol(s)
+                    inst_id = instruments.get(norm_s)
+                    if not inst_id:
+                        continue
+
+                    ts_raw = q.get("timestamp")
+                    prov_ts = None
+                    if ts_raw:
+                        try:
+                            prov_ts = datetime.fromisoformat(str(ts_raw))
+                        except Exception:
+                            prov_ts = now
+
+                    price_val = float(q["price"])
+                    prev_close = float(q.get("previous_close", price_val))
+                    age_seconds = (now - (prov_ts or now)).total_seconds()
+                    freshness = "verified_live" if age_seconds < 120 else "delayed"
+
+                    snapshot = QuoteSnapshot(
+                        instrument_id=inst_id,
+                        observed_at=now,
+                        price=price_val,
+                        previous_close=prev_close,
+                        change=float(q.get("change", 0.0)),
+                        change_pct=float(q.get("change_pct", 0.0)),
+                        volume=int(q.get("volume", 0)),
+                        bid=float(q.get("bid", price_val)),
+                        ask=float(q.get("ask", price_val)),
+                        market_state="open" if is_market_hours() else "closed",
+                        provider=str(q.get("source", "unknown")),
+                        provider_timestamp=prov_ts,
+                        freshness_status=freshness,
+                    )
+                    snapshots_to_add.append(snapshot)
+
+                if snapshots_to_add:
+                    session.add_all(snapshots_to_add)
+                    await session.commit()
+        except Exception as e:
+            logger.debug(f"Failed to persist quote snapshots: {e}")
 
     @classmethod
     async def _yfinance_quote(cls, symbol: str) -> dict:
@@ -244,8 +389,15 @@ class MarketDataService:
             session = cls.get_session()
             ticker = yf.Ticker(yf_sym, session=session)
             info = ticker.info or {}
-            price = safe_float(info.get("currentPrice") or info.get("regularMarketPrice") or info.get("previousClose"), 0.0)
-            prev_close = safe_float(info.get("previousClose") or info.get("regularMarketPreviousClose"), price)
+            price = safe_float(
+                info.get("currentPrice")
+                or info.get("regularMarketPrice")
+                or info.get("previousClose"),
+                0.0,
+            )
+            prev_close = safe_float(
+                info.get("previousClose") or info.get("regularMarketPreviousClose"), price
+            )
             change = price - prev_close if prev_close else 0.0
             change_pct = (change / prev_close * 100) if prev_close else 0.0
             return {
@@ -273,10 +425,14 @@ class MarketDataService:
         """Try Upstox Analytics Token for a live quote. Returns None if unavailable."""
         try:
             from app.core.config import get_settings
+
             settings = get_settings()
-            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None):
+            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(
+                settings, "UPSTOX_ANALYTICS_TOKEN", None
+            ):
                 return None
             from app.services.ingestion.upstox_source import UpstoxSource
+
             source = UpstoxSource()
             quote = await source.get_quote(symbol)
             return {
@@ -293,7 +449,9 @@ class MarketDataService:
                 "week_52_high": quote.price,
                 "week_52_low": quote.price,
                 "source": "upstox",
-                "timestamp": quote.timestamp.isoformat() if quote.timestamp else datetime.now(UTC).isoformat(),
+                "timestamp": quote.timestamp.isoformat()
+                if quote.timestamp
+                else datetime.now(UTC).isoformat(),
             }
         except Exception as e:
             logger.debug(f"Upstox quote failed for {symbol}: {e}")
@@ -304,52 +462,80 @@ class MarketDataService:
         """Try Upstox for historical bars. Returns None if unavailable."""
         try:
             from app.core.config import get_settings
+
             settings = get_settings()
-            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None):
+            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(
+                settings, "UPSTOX_ANALYTICS_TOKEN", None
+            ):
                 return None
             from app.services.ingestion.upstox_source import UpstoxSource
+
             source = UpstoxSource()
-            period_days = {"1d": 30, "5d": 150, "1w": 180, "1mo": 730, "1y": 365, "2y": 730}
+            period_days = {
+                "1d": 30,
+                "5d": 150,
+                "1w": 180,
+                "1mo": 730,
+                "3mo": 90,
+                "6mo": 180,
+                "1y": 365,
+                "2y": 730,
+                "5y": 1825,
+                "max": 3650,
+            }
             days = period_days.get(period, 30)
-            if period.endswith('d') and period[:-1].isdigit():
+            if period.endswith("d") and period[:-1].isdigit():
                 days = int(period[:-1])
-            elif period.endswith('y') and period[:-1].isdigit():
+            elif period.endswith("y") and period[:-1].isdigit():
                 days = int(period[:-1]) * 365
             start = datetime.now(UTC) - timedelta(days=days)
             end = datetime.now(UTC)
-            bars = await source.get_ohlcv(symbol, interval, start, end)
+            bars = await source.get_ohlcv(symbol, interval, start, end)  # type: ignore[arg-type]
             if not bars:
                 return None
-            return [
-                {
-                    "time": b.time.isoformat(),
-                    "timestamp": b.time.isoformat(),
-                    "open": b.open,
-                    "high": b.high,
-                    "low": b.low,
-                    "close": b.close,
-                    "volume": b.volume,
-                    "source": "upstox",
-                }
-                for b in bars
-            ]
+            return HistoryList(
+                [
+                    {
+                        "time": b.time.isoformat(),
+                        "timestamp": b.time.isoformat(),
+                        "open": b.open,
+                        "high": b.high,
+                        "low": b.low,
+                        "close": b.close,
+                        "volume": b.volume,
+                        "source": "upstox",
+                    }
+                    for b in bars
+                ],
+                source="upstox",
+            )
         except Exception as e:
             logger.debug(f"Upstox history failed for {symbol}: {e}")
             return None
 
     @staticmethod
     async def get_quote(symbol: str) -> dict:
-        """Fetch live quote — tries DB → Upstox → yfinance."""
+        """Fetch live quote — tries cache → DB → Upstox → yfinance → IndianStockAPI."""
         from sqlalchemy import select
 
+        from app.core.test_state import is_test_mode
         from app.database.connection import async_session_factory
         from app.models.market import Instrument, QuoteSnapshot
 
         sym = MarketDataService._normalize_symbol(symbol)
+        test_mode = is_test_mode()
 
+        if not test_mode:
+            cached_entry = MarketDataService._quote_cache.get(sym)
+            if cached_entry is not None and (time.monotonic() - cached_entry[0]) < 10.0:
+                return cached_entry[1]
+
+        stale_db_quote: dict | None = None
         try:
             async with async_session_factory() as db:
-                result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
+                result = await db.execute(
+                    select(Instrument).where(Instrument.canonical_symbol == sym)
+                )
                 instrument = result.scalars().first()
                 if instrument:
                     result = await db.execute(
@@ -360,7 +546,7 @@ class MarketDataService:
                     )
                     quote = result.scalars().first()
                     if quote and safe_float(quote.price) > 0:
-                        return {
+                        db_q = {
                             "symbol": sym,
                             "price": float(quote.price),
                             "open": float(quote.price),
@@ -376,17 +562,30 @@ class MarketDataService:
                             "source": "canonical_db",
                             "timestamp": quote.observed_at.isoformat(),
                         }
+                        is_fresh = test_mode or (
+                            quote.observed_at is not None
+                            and (datetime.now(UTC) - quote.observed_at) <= timedelta(minutes=15)
+                        )
+                        if is_fresh:
+                            if not test_mode:
+                                MarketDataService._quote_cache[sym] = (time.monotonic(), db_q)
+                            return db_q
+                        stale_db_quote = db_q
         except Exception as db_err:
             logger.debug(f"DB quote lookup failed for {sym}: {db_err}")
 
         upstox_result = await MarketDataService._upstox_quote(symbol)
         if upstox_result:
+            if not test_mode:
+                MarketDataService._quote_cache[sym] = (time.monotonic(), upstox_result)
             return upstox_result
 
         # Try yfinance (may fail on cloud IPs but worth trying)
         try:
             yf_result = await MarketDataService._yfinance_quote(symbol)
             if yf_result and yf_result.get("price", 0) > 0:
+                if not test_mode:
+                    MarketDataService._quote_cache[sym] = (time.monotonic(), yf_result)
                 return yf_result
         except Exception as yf_err:
             logger.debug(f"yfinance quote failed for {symbol}: {yf_err}")
@@ -394,17 +593,20 @@ class MarketDataService:
         # Final fallback: IndianStockAPI (free, no auth)
         try:
             from app.services.indian_stock_api import IndianStockAPI
+
             india_result = await asyncio.to_thread(IndianStockAPI.fetch_quote, symbol)
             if india_result and india_result.get("price", 0) > 0:
                 sym = MarketDataService._normalize_symbol(symbol)
-                return {
+                ind_q = {
                     "symbol": sym,
                     "price": float(india_result["price"]),
                     "open": float(india_result.get("open", india_result["price"])),
                     "high": float(india_result.get("high", india_result["price"])),
                     "low": float(india_result.get("low", india_result["price"])),
                     "volume": int(india_result.get("volume", 0)),
-                    "previous_close": float(india_result.get("previous_close", india_result["price"])),
+                    "previous_close": float(
+                        india_result.get("previous_close", india_result["price"])
+                    ),
                     "change": float(india_result.get("change", 0)),
                     "change_pct": float(india_result.get("change_pct", 0)),
                     "market_cap": 0.0,
@@ -413,8 +615,14 @@ class MarketDataService:
                     "source": "indian_stock_api",
                     "timestamp": datetime.now(UTC).isoformat(),
                 }
+                if not test_mode:
+                    MarketDataService._quote_cache[sym] = (time.monotonic(), ind_q)
+                return ind_q
         except Exception as e:
             logger.debug(f"IndianStockAPI fallback failed for {symbol}: {e}")
+
+        if stale_db_quote is not None:
+            return stale_db_quote
 
         raise RuntimeError(f"All data sources failed for {symbol}: no quote available")
 
@@ -429,8 +637,12 @@ class MarketDataService:
         def _fetch():
             session = cls.get_session()
             df = yf.download(
-                yf_sym, period=period, interval=interval,
-                progress=False, threads=False, session=session,
+                yf_sym,
+                period=period,
+                interval=interval,
+                progress=False,
+                threads=False,
+                session=session,
             )
             if df.empty:
                 return []
@@ -440,15 +652,17 @@ class MarketDataService:
                 df.columns = df.columns.get_level_values(0)
             bars = []
             for ts, row in df.iterrows():
-                bars.append({
-                    "time": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
-                    "timestamp": ts.isoformat() if hasattr(ts, 'isoformat') else str(ts),
-                    "open": safe_float(row.get("Open")),
-                    "high": safe_float(row.get("High")),
-                    "low": safe_float(row.get("Low")),
-                    "close": safe_float(row.get("Close")),
-                    "volume": safe_float(row.get("Volume")),
-                })
+                bars.append(
+                    {
+                        "time": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                        "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                        "open": safe_float(row.get("Open")),
+                        "high": safe_float(row.get("High")),
+                        "low": safe_float(row.get("Low")),
+                        "close": safe_float(row.get("Close")),
+                        "volume": safe_float(row.get("Volume")),
+                    }
+                )
             return bars
 
         async with cls._semaphore:
@@ -500,37 +714,63 @@ class MarketDataService:
 
     @staticmethod
     async def get_history(symbol: str, interval: str, period: str) -> list[dict]:
-        """Fetch historical bars — tries canonical DB first, falls back to yfinance."""
+        """Fetch historical bars — tries cache → canonical DB → Upstox → Stooq → yfinance."""
         from datetime import UTC, datetime, timedelta
 
         from sqlalchemy import select
 
+        from app.core.test_state import is_test_mode
         from app.database.connection import async_session_factory
         from app.models.market import OHLCV, Instrument
 
         sym = MarketDataService._normalize_symbol(symbol)
+        test_mode = is_test_mode()
+        cache_key = f"{sym}:{interval}:{period}"
 
-        period_days = {"1m": 1, "5m": 5, "15m": 5, "1h": 30, "1d": 30, "5d": 150, "1wk": 180, "1w": 180, "1mo": 730, "3mo": 1825, "6mo": 3650, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}
+        if not test_mode:
+            cached_hist = MarketDataService._history_cache.get(cache_key)
+            if cached_hist is not None and (time.monotonic() - cached_hist[0]) < 60.0:
+                return cached_hist[1]
+
+        period_days = {
+            "1m": 1,
+            "5m": 5,
+            "15m": 5,
+            "1h": 30,
+            "1d": 30,
+            "5d": 150,
+            "1wk": 180,
+            "1w": 180,
+            "1mo": 730,
+            "3mo": 1825,
+            "6mo": 3650,
+            "1y": 365,
+            "2y": 730,
+            "5y": 1825,
+            "max": 3650,
+        }
 
         days = period_days.get(period, 30)
-        if period.endswith('d') and period[:-1].isdigit():
+        if period.endswith("d") and period[:-1].isdigit():
             days = int(period[:-1])
-        elif period.endswith('y') and period[:-1].isdigit():
+        elif period.endswith("y") and period[:-1].isdigit():
             days = int(period[:-1]) * 365
 
         start_time = datetime.now(UTC) - timedelta(days=days)
 
         try:
             async with async_session_factory() as db:
-                result = await db.execute(select(Instrument).where(Instrument.canonical_symbol == sym))
+                result = await db.execute(
+                    select(Instrument).where(Instrument.canonical_symbol == sym)
+                )
                 instrument = result.scalars().first()
                 if instrument:
                     result = await db.execute(
                         select(OHLCV)
                         .where(
-                            (OHLCV.instrument_id == instrument.id) &
-                            (OHLCV.interval == interval) &
-                            (OHLCV.timestamp >= start_time)
+                            (OHLCV.instrument_id == instrument.id)
+                            & (OHLCV.interval == interval)
+                            & (OHLCV.timestamp >= start_time)
                         )
                         .order_by(OHLCV.timestamp.asc())
                     )
@@ -539,21 +779,31 @@ class MarketDataService:
                     if bars_data:
                         bars = []
                         for b in bars_data:
-                            bars.append({
-                                "time": b.timestamp.isoformat(),
-                                "timestamp": b.timestamp.isoformat(),
-                                "open": float(b.open),
-                                "high": float(b.high),
-                                "low": float(b.low),
-                                "close": float(b.close),
-                                "volume": float(b.volume),
-                            })
-                        return HistoryList(bars, source="canonical_db")
+                            bars.append(
+                                {
+                                    "time": b.timestamp.isoformat(),
+                                    "timestamp": b.timestamp.isoformat(),
+                                    "open": float(b.open),
+                                    "high": float(b.high),
+                                    "low": float(b.low),
+                                    "close": float(b.close),
+                                    "volume": float(b.volume),
+                                }
+                            )
+                        hist_res = HistoryList(bars, source="canonical_db")
+                        if not test_mode:
+                            MarketDataService._history_cache[cache_key] = (
+                                time.monotonic(),
+                                hist_res,
+                            )
+                        return hist_res
         except Exception as db_err:
             logger.debug(f"DB history lookup failed for {sym}: {db_err}")
 
         upstox_bars = await MarketDataService._upstox_history(symbol, interval, period)
         if upstox_bars:
+            if not test_mode:
+                MarketDataService._history_cache[cache_key] = (time.monotonic(), upstox_bars)
             return upstox_bars
 
         # Try Stooq for daily data — works on cloud IPs unlike yfinance
@@ -562,24 +812,49 @@ class MarketDataService:
                 from datetime import UTC, timedelta
 
                 from app.services.ingestion.stooq_source import StooqProvider
+
                 stooq = StooqProvider()
-                days = {"1d": 1, "5d": 5, "1mo": 30, "3mo": 90, "6mo": 180, "1y": 365, "2y": 730, "5y": 1825, "max": 3650}.get(period, 365)
+                days = {
+                    "1d": 1,
+                    "5d": 5,
+                    "1mo": 30,
+                    "3mo": 90,
+                    "6mo": 180,
+                    "1y": 365,
+                    "2y": 730,
+                    "5y": 1825,
+                    "max": 3650,
+                }.get(period, 365)
                 start = datetime.now(UTC) - timedelta(days=days)
                 end = datetime.now(UTC)
                 stooq_bars = await stooq.get_ohlcv(symbol, "1d", start, end)
                 if stooq_bars:
-                    return HistoryList(
-                        [{"time": b.time.isoformat(), "timestamp": b.time.isoformat(),
-                          "open": b.open, "high": b.high, "low": b.low,
-                          "close": b.close, "volume": b.volume}
-                         for b in stooq_bars],
-                        source="stooq"
+                    stooq_res = HistoryList(
+                        [
+                            {
+                                "time": b.time.isoformat(),
+                                "timestamp": b.time.isoformat(),
+                                "open": b.open,
+                                "high": b.high,
+                                "low": b.low,
+                                "close": b.close,
+                                "volume": b.volume,
+                            }
+                            for b in stooq_bars
+                        ],
+                        source="stooq",
                     )
+                    if not test_mode:
+                        MarketDataService._history_cache[cache_key] = (time.monotonic(), stooq_res)
+                    return stooq_res
             except Exception as _stooq_err:
                 logger.debug(f"Stooq history failed for {symbol}: {_stooq_err}")
 
         try:
-            return await MarketDataService._yfinance_history(symbol, interval, period)
+            yf_res = await MarketDataService._yfinance_history(symbol, interval, period)
+            if yf_res and not test_mode:
+                MarketDataService._history_cache[cache_key] = (time.monotonic(), yf_res)
+            return yf_res
         except BaseException as _yf_err:
             logger.debug(f"yfinance history failed for {symbol}: {_yf_err}")
             return []
@@ -841,4 +1116,3 @@ class MarketDataService:
                 }
             )
         return bars
-

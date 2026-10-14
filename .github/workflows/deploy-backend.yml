@@ -84,7 +84,7 @@ jobs:
           echo "Running alembic upgrade head against production DB..."
           uv run alembic upgrade head
           echo "✅ Migrations complete"
-        continue-on-error: true  # Don't block deploy if migrations fail
+
 
       - name: Write Cloud Run env vars file
         # Pull each secret into a step-level env var, then write a YAML file
@@ -93,33 +93,74 @@ jobs:
         # quoting issues that caused the previous approach to fail silently.
         env:
           CR_DATABASE_URL: ${{ secrets.CLOUDRUN_DATABASE_URL }}
+          CR_MIGRATIONS_DATABASE_URL: ${{ secrets.CLOUDRUN_MIGRATIONS_DATABASE_URL }}
+          CR_REDIS_URL: ${{ secrets.CLOUDRUN_REDIS_URL }}
           CR_SUPABASE_URL: ${{ secrets.CLOUDRUN_SUPABASE_URL }}
           CR_SUPABASE_SECRET_KEY: ${{ secrets.CLOUDRUN_SUPABASE_SECRET_KEY }}
           CR_SUPABASE_ANON_KEY: ${{ secrets.CLOUDRUN_SUPABASE_ANON_KEY }}
           CR_RAZORPAY_KEY_ID: ${{ secrets.CLOUDRUN_RAZORPAY_KEY_ID }}
           CR_RAZORPAY_KEY_SECRET: ${{ secrets.CLOUDRUN_RAZORPAY_KEY_SECRET }}
           CR_SUPABASE_JWT_SECRET: ${{ secrets.CLOUDRUN_SUPABASE_JWT_SECRET }}
+          CR_SENDGRID_API_KEY: ${{ secrets.CLOUDRUN_SENDGRID_API_KEY }}
+          CR_SENDGRID_FROM_EMAIL: ${{ secrets.CLOUDRUN_SENDGRID_FROM_EMAIL }}
+          CR_UPSTOX_ENABLED: ${{ secrets.CLOUDRUN_UPSTOX_ENABLED }}
+          CR_LIVE_DATA_PROVIDER: ${{ secrets.CLOUDRUN_LIVE_DATA_PROVIDER }}
+          CR_UPSTOX_ANALYTICS_TOKEN: ${{ secrets.CLOUDRUN_UPSTOX_ANALYTICS_TOKEN || secrets.UPSTOX_ANALYTICS_TOKEN }}
+          CR_UPSTOX_CLIENT_ID: ${{ secrets.CLOUDRUN_UPSTOX_CLIENT_ID || secrets.UPSTOX_CLIENT_ID }}
+          CR_UPSTOX_CLIENT_SECRET: ${{ secrets.CLOUDRUN_UPSTOX_CLIENT_SECRET || secrets.UPSTOX_CLIENT_SECRET }}
+          CR_UPSTOX_REDIRECT_URI: ${{ secrets.CLOUDRUN_UPSTOX_REDIRECT_URI || secrets.UPSTOX_REDIRECT_URI }}
+          CR_GROQ_API_KEY: ${{ secrets.CLOUDRUN_GROQ_API_KEY || secrets.GROQ_API_KEY }}
+          CR_GEMINI_API_KEY: ${{ secrets.CLOUDRUN_GEMINI_API_KEY || secrets.GEMINI_API_KEY }}
         run: |
           python3 - << 'PYEOF'
           import os, sys
 
           env_vars = {
-              "DATABASE_URL":        os.environ.get("CR_DATABASE_URL", ""),
-              "SUPABASE_URL":        os.environ.get("CR_SUPABASE_URL", ""),
-              "SUPABASE_SECRET_KEY": os.environ.get("CR_SUPABASE_SECRET_KEY", ""),
-              "SUPABASE_ANON_KEY":   os.environ.get("CR_SUPABASE_ANON_KEY", ""),
-              "RAZORPAY_KEY_ID":     os.environ.get("CR_RAZORPAY_KEY_ID", ""),
-              "RAZORPAY_KEY_SECRET": os.environ.get("CR_RAZORPAY_KEY_SECRET", ""),
-              "SUPABASE_JWT_SECRET": os.environ.get("CR_SUPABASE_JWT_SECRET", ""),
-              "ENVIRONMENT":         "production",
-              "BACKEND_CORS_ORIGINS": "https://neuroquant-sm.vercel.app,http://localhost:3000",
+              "DATABASE_URL":            os.environ.get("CR_DATABASE_URL", ""),
+              "MIGRATIONS_DATABASE_URL": os.environ.get("CR_MIGRATIONS_DATABASE_URL", ""),
+              "REDIS_URL":                os.environ.get("CR_REDIS_URL", ""),
+              "SUPABASE_URL":            os.environ.get("CR_SUPABASE_URL", ""),
+              "SUPABASE_SECRET_KEY":     os.environ.get("CR_SUPABASE_SECRET_KEY", ""),
+              "SUPABASE_ANON_KEY":       os.environ.get("CR_SUPABASE_ANON_KEY", ""),
+              "RAZORPAY_KEY_ID":         os.environ.get("CR_RAZORPAY_KEY_ID", ""),
+              "RAZORPAY_KEY_SECRET":     os.environ.get("CR_RAZORPAY_KEY_SECRET", ""),
+              "SUPABASE_JWT_SECRET":     os.environ.get("CR_SUPABASE_JWT_SECRET", ""),
+              "SENDGRID_API_KEY":        os.environ.get("CR_SENDGRID_API_KEY", ""),
+              "SENDGRID_FROM_EMAIL":     os.environ.get("CR_SENDGRID_FROM_EMAIL", "") or "neuroquant990@gmail.com",
+              "ALERT_EMAIL_ENABLED":     "true" if os.environ.get("CR_SENDGRID_API_KEY") else "false",
+              "ENVIRONMENT":             "production",
+              "BACKEND_CORS_ORIGINS":    "https://neuroquant-sm.vercel.app,http://localhost:3000",
+              "UPSTOX_ENABLED":          os.environ.get("CR_UPSTOX_ENABLED", "true"),
+              "LIVE_DATA_PROVIDER":      os.environ.get("CR_LIVE_DATA_PROVIDER", "upstox"),
+              "UPSTOX_ANALYTICS_TOKEN":  os.environ.get("CR_UPSTOX_ANALYTICS_TOKEN", ""),
+              "UPSTOX_CLIENT_ID":        os.environ.get("CR_UPSTOX_CLIENT_ID", ""),
+              "UPSTOX_CLIENT_SECRET":    os.environ.get("CR_UPSTOX_CLIENT_SECRET", ""),
+              "UPSTOX_REDIRECT_URI":     os.environ.get("CR_UPSTOX_REDIRECT_URI", "https://neuroquant-api-6g57r5groa-el.a.run.app/api/v1/auth/upstox/callback"),
+              "GROQ_API_KEY":            os.environ.get("CR_GROQ_API_KEY", ""),
+              "GEMINI_API_KEY":          os.environ.get("CR_GEMINI_API_KEY", ""),
           }
 
           # Check if any critical vars are missing.  SUPABASE_JWT_SECRET is
           # optional because current Supabase projects use JWKS (asymmetric)
           # verification by default; the HS256 fallback is only for legacy
           # projects.
-          optional_vars = {"ENVIRONMENT", "BACKEND_CORS_ORIGINS", "SUPABASE_JWT_SECRET"}
+          optional_vars = {
+              "ENVIRONMENT",
+              "BACKEND_CORS_ORIGINS",
+              "SUPABASE_JWT_SECRET",
+              "SENDGRID_API_KEY",
+              "SENDGRID_FROM_EMAIL",
+              "ALERT_EMAIL_ENABLED",
+              "MIGRATIONS_DATABASE_URL",
+              "UPSTOX_ENABLED",
+              "LIVE_DATA_PROVIDER",
+              "UPSTOX_ANALYTICS_TOKEN",
+              "UPSTOX_CLIENT_ID",
+              "UPSTOX_CLIENT_SECRET",
+              "UPSTOX_REDIRECT_URI",
+              "GROQ_API_KEY",
+              "GEMINI_API_KEY",
+          }
           missing = [k for k, v in env_vars.items() if not v and k not in optional_vars]
           if missing:
               print(f"⚠️  Missing critical secrets (will not set env vars): {missing}")
@@ -158,6 +199,13 @@ jobs:
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
             --port 7860 \
+            --timeout 3600s \
+            --concurrency 80 \
+            --min-instances 1 \
+            --max-instances 10 \
+            --cpu 2 \
+            --memory 2Gi \
+            --session-affinity \
             $ENV_FILE_FLAG \
             --quiet
 

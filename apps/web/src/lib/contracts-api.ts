@@ -685,8 +685,12 @@ export const contractsApi = {
   },
 
   getRegimeHistory(days: number = 252): Promise<RegimeHistoryPoint[]> {
-    return getJson<UnknownRecord>(`/regime/history?days=${days}`).then((raw) => {
-      const data = Array.isArray(raw.data) ? (raw.data as UnknownRecord[]) : [];
+    return getJson<unknown>(`/regime/history?days=${days}`).then((raw) => {
+      const data = Array.isArray(raw)
+        ? (raw as UnknownRecord[])
+        : Array.isArray((raw as UnknownRecord)?.data)
+          ? ((raw as UnknownRecord).data as UnknownRecord[])
+          : [];
       return data.map((item) => ({
         time: String(item.time ?? new Date().toISOString()),
         state: toState(item.state),

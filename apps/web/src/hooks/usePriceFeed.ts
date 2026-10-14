@@ -29,14 +29,14 @@ function initGlobalListener() {
     if (!isWsEnvelope(raw) || raw.type !== "tick") return;
 
     const payload = raw.payload ?? {};
-    if (!raw.symbol || typeof payload.price !== "number") return;
+    if (!raw.symbol || typeof payload.price !== "number" || typeof raw.ts !== "string") return;
 
     const symbol = raw.symbol.toUpperCase();
     globalTicks.set(symbol, {
       symbol,
       price: payload.price,
       change_pct: typeof payload.change_pct === "number" ? payload.change_pct : 0,
-      timestamp: raw.ts ?? new Date().toISOString(),
+      timestamp: raw.ts,
       source: raw.source,
     });
 

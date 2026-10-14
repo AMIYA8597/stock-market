@@ -122,6 +122,10 @@ class ErrorInfo(BaseModel):
         default_factory=list,
         description="Field-level error details (for validation errors)",
     )
+    retryable: bool = Field(
+        False,
+        description="Whether retrying the same request may succeed later",
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -175,6 +179,7 @@ class ErrorResponse(BaseModel):
         message: str,
         details: list[ErrorDetail] | None = None,
         request_id: str | None = None,
+        retryable: bool = False,
     ) -> ErrorResponse:
         """Factory method to create a standardized error response.
 
@@ -213,6 +218,7 @@ class ErrorResponse(BaseModel):
                 code=code_value,
                 message=message,
                 details=details or [],
+                retryable=retryable,
             ),
             request_id=request_id or str(uuid4()),
             timestamp=datetime.now(UTC),
