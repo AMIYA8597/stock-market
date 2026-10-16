@@ -1,2 +1,0 @@
-# ML model artifacts (*.pt, *.pkl) are stored here after training.
-# These files are gitignored — only the .gitkeep is tracked.
