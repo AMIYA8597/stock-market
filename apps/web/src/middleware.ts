@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import type { Session } from '@supabase/supabase-js';
 import createMiddleware from 'next-intl/middleware';
 import { routing } from './i18n/routing';
@@ -20,68 +20,100 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env
 const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 let warnedMissingSupabaseConfig = false;
 
+import { getLocalSession } from './lib/auth-session';
+
 export async function middleware(request: NextRequest) {
   // First, run next-intl middleware to handle locales
   const response = intlMiddleware(request);
 
-  let session: Session | null = null;
-
-  if (isSupabaseConfigured) {
-    // Then, attach supabase to the response to refresh sessions
-    const supabase = createServerClient(supabaseUrl!, supabaseAnonKey!, {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-        },
-      },
-    });
-
-    ({ data: { session } } = await supabase.auth.getSession());
-  } else if (!warnedMissingSupabaseConfig) {
-    warnedMissingSupabaseConfig = true;
-    console.warn(
-      '[middleware] NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not set. ' +
-        'Auth is disabled: every request is treated as unauthenticated and protected routes will redirect to /login.'
-    );
-  }
-
-  // Handle protected routes
   const pathname = request.nextUrl.pathname;
   const hasLocale = pathname.match(/^\/(en|hi|bn)(\/|$)/);
   const pathWithoutLocale = hasLocale ? pathname.replace(/^\/(en|hi|bn)/, '') || '/' : pathname;
-  
-  const isPublicPath = ['/', '/login', '/register', '/forgot-password', '/reset-password', '/pricing', '/blog'].includes(pathWithoutLocale) || pathWithoutLocale.startsWith('/blog/');
 
-  // Remembers where an unauthenticated visitor was headed so login can send
-  // them back there - kept in a cookie rather than a ?next= query param so
-  // it never shows up in the address bar.
+  if (pathname.startsWith('/api') || pathname.startsWith('/_next') || pathname.match(/\.(.*)$/)) {
+    return response;
+  }
+
+  // Purely public marketing paths return immediately without any auth overhead
+  const isMarketingPath = ['/', '/pricing', '/blog'].includes(pathWithoutLocale) || pathWithoutLocale.startsWith('/blog/');
+  if (isMarketingPath) {
+    return response;
+  }
+
+  const isAuthEntryPath = ['/login', '/register', '/forgot-password', '/reset-password'].includes(pathWithoutLocale);
   const NEXT_COOKIE = 'nq_next';
 
-  if (!session && !isPublicPath && !pathname.startsWith('/api') && !pathname.startsWith('/_next') && !pathname.match(/\.(.*)$/)) {
+  if (!isSupabaseConfigured) {
+    if (!warnedMissingSupabaseConfig) {
+      warnedMissingSupabaseConfig = true;
+      console.warn(
+        '[middleware] NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY are not set. ' +
+          'Auth is disabled: every request is treated as unauthenticated and protected routes will redirect to /login.'
+      );
+    }
+    if (!isAuthEntryPath) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/login`;
+      url.search = '';
+      const redirect = NextResponse.redirect(url);
+      redirect.cookies.set(NEXT_COOKIE, pathWithoutLocale, {
+        maxAge: 600,
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+      });
+      return redirect;
+    }
+    return response;
+  }
+
+  // Inspect local session in cookies
+  const localSession = getLocalSession(request);
+  const nowInSeconds = Math.floor(Date.now() / 1000);
+
+  let hasValidSession = false;
+  let hasExpiredSession = false;
+
+  if (localSession?.access_token) {
+    if (localSession.expires_at && localSession.expires_at > nowInSeconds + 30) {
+      hasValidSession = true;
+    } else {
+      hasExpiredSession = true;
+    }
+  }
+
+  // If session is expired or expiring, attempt refresh with strict 1000ms timeout
+  if (hasExpiredSession && localSession?.refresh_token) {
+    try {
+      const supabase = createServerClient(supabaseUrl!, supabaseAnonKey!, {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+            cookiesToSet.forEach(({ name, value, options }) =>
+              response.cookies.set(name, value, options)
+            );
+          },
+        },
+      });
+
+      const timeoutPromise = new Promise<{ data: { session: Session | null }; error: Error }>((resolve) =>
+        setTimeout(() => resolve({ data: { session: null }, error: new Error('Auth refresh timeout') }), 1000)
+      );
+
+      const result = await Promise.race([supabase.auth.getSession(), timeoutPromise]);
+      if (result.data?.session) {
+        hasValidSession = true;
+      }
+    } catch (err) {
+      console.warn('[middleware] Supabase session refresh failed or timed out:', err);
+    }
+  }
+
+  // Handle protected routes
+  if (!hasValidSession && !isAuthEntryPath) {
     const url = request.nextUrl.clone();
     url.pathname = `/${hasLocale ? pathname.split('/')[1] : 'en'}/login`;
     url.search = '';
@@ -92,10 +124,18 @@ export async function middleware(request: NextRequest) {
       httpOnly: true,
       sameSite: 'lax',
     });
+    if (hasExpiredSession) {
+      const allCookies = request.cookies.getAll();
+      allCookies
+        .filter((c) => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
+        .forEach((c) => {
+          redirect.cookies.delete(c.name);
+        });
+    }
     return redirect;
   }
 
-  if (session && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
+  if (hasValidSession && ['/login', '/register', '/forgot-password'].includes(pathWithoutLocale)) {
     const locale = hasLocale ? pathname.split('/')[1] : 'en';
     const storedNext = request.cookies.get(NEXT_COOKIE)?.value;
     const destination = storedNext && storedNext.startsWith('/') ? storedNext : '/dashboard';
@@ -113,3 +153,4 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: ['/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 };
+
