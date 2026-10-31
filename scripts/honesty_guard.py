@@ -8,7 +8,7 @@ def check_honesty():
     
     # Define regex patterns for secrets and gaming
     patterns = {
-        "SECRET_POSTGRES_URL": re.compile(r'postgresql(?:\+[^:]+)?://[^:]+:[^@]+@'),
+        "SECRET_POSTGRES_URL": re.compile(r'postgresql(?:\+[^:\s]+)?://[^:\s]+:[^@\s]+@'),
         "SECRET_SK": re.compile(r'sk-[a-zA-Z0-9]{20,}'),
         "SECRET_AIZA": re.compile(r'AIza[0-9A-Za-z-_]{35}'),
         "SECRET_RZP": re.compile(r'rzp_(live|test)_[a-zA-Z0-9]+'),
