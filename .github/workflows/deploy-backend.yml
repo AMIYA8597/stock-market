@@ -124,10 +124,23 @@ jobs:
           python3 - << 'PYEOF'
           import os, sys
 
+          redis_url = os.environ.get("CR_REDIS_URL", "").strip()
+          if redis_url:
+              r_lower = redis_url.lower()
+              if (
+                  "changeme" in r_lower
+                  or "your_" in r_lower
+                  or "replace_me" in r_lower
+                  or r_lower.startswith("redis://localhost")
+                  or r_lower.startswith("redis://127.0.0.1")
+              ):
+                  print(f"⚠️  Ignoring insecure/local CR_REDIS_URL in Cloud Run: {r_lower}")
+                  redis_url = ""
+
           env_vars = {
               "DATABASE_URL":            os.environ.get("CR_DATABASE_URL", ""),
               "MIGRATIONS_DATABASE_URL": os.environ.get("CR_MIGRATIONS_DATABASE_URL", ""),
-              "REDIS_URL":                os.environ.get("CR_REDIS_URL", ""),
+              "REDIS_URL":                redis_url,
               "SUPABASE_URL":            os.environ.get("CR_SUPABASE_URL", ""),
               "SUPABASE_SECRET_KEY":     os.environ.get("CR_SUPABASE_SECRET_KEY", ""),
               "SUPABASE_ANON_KEY":       os.environ.get("CR_SUPABASE_ANON_KEY", ""),
