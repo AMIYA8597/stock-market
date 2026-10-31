@@ -139,12 +139,12 @@ jobs:
               "ALERT_EMAIL_ENABLED":     "true" if os.environ.get("CR_SENDGRID_API_KEY") else "false",
               "ENVIRONMENT":             "production",
               "BACKEND_CORS_ORIGINS":    "https://neuroquant-sm.vercel.app,http://localhost:3000",
-              "UPSTOX_ENABLED":          os.environ.get("CR_UPSTOX_ENABLED", "true"),
-              "LIVE_DATA_PROVIDER":      os.environ.get("CR_LIVE_DATA_PROVIDER", "upstox"),
+              "UPSTOX_ENABLED":          os.environ.get("CR_UPSTOX_ENABLED") or "false",
+              "LIVE_DATA_PROVIDER":      os.environ.get("CR_LIVE_DATA_PROVIDER") or "yfinance",
               "UPSTOX_ANALYTICS_TOKEN":  os.environ.get("CR_UPSTOX_ANALYTICS_TOKEN", ""),
               "UPSTOX_CLIENT_ID":        os.environ.get("CR_UPSTOX_CLIENT_ID", ""),
               "UPSTOX_CLIENT_SECRET":    os.environ.get("CR_UPSTOX_CLIENT_SECRET", ""),
-              "UPSTOX_REDIRECT_URI":     os.environ.get("CR_UPSTOX_REDIRECT_URI", "https://neuroquant-api-6g57r5groa-el.a.run.app/api/v1/auth/upstox/callback"),
+              "UPSTOX_REDIRECT_URI":     os.environ.get("CR_UPSTOX_REDIRECT_URI") or "https://neuroquant-api-6g57r5groa-el.a.run.app/api/v1/auth/upstox/callback",
               "GROQ_API_KEY":            os.environ.get("CR_GROQ_API_KEY", ""),
               "GEMINI_API_KEY":          os.environ.get("CR_GEMINI_API_KEY", ""),
           }
@@ -180,10 +180,10 @@ jobs:
               print(f"ℹ️  Optional secrets not set (JWKS is primary): {missing_optional}")
 
           # Write Cloud Run YAML env vars file
-          # Values are YAML-quoted with | (literal block) to handle any special chars
           lines = []
           for k, v in env_vars.items():
-              # Use double-quoted YAML string; escape any double quotes in value
+              if v == "" and k in optional_vars:
+                  continue
               safe_v = v.replace('\\', '\\\\').replace('"', '\\"')
               lines.append(f'{k}: "{safe_v}"')
 
