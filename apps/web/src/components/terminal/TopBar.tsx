@@ -5,14 +5,13 @@ import { Moon, Search, Settings2, Sun, CreditCard } from "lucide-react";
 import { Link } from "@/i18n/navigation";
 
 import { contractsApi, type PortfolioHoldingsResponse, type MarketIndex } from "@/lib/contracts-api";
-import { systemApi } from "@/lib/api-client";
+import { systemApi, tradingApi, fetchApi } from "@/lib/api-client";
 import { useUIStore } from "@/stores/ui-store";
 import type { SignalResponse } from "@/types/intelligence";
 import { useTradingStore } from "@/stores/tradingStore";
 import { useTradingModeQuery, useTriggerKillSwitchMutation, useBrokerStatusQuery } from "@/hooks/queries/useTrading";
 
 import { usePriceFeed } from "@/hooks/usePriceFeed";
-import { fetchApi } from "@/lib/api-client";
 
 interface TopBarProps {
   selectedSignal: SignalResponse | null;
@@ -83,6 +82,19 @@ export default function TopBar({
   // Only report what the backend's Upstox service actually says; anything
   // unknown (request failed, not signed in) shows as disconnected.
   const connectionStatus: string = brokerStatus?.connection_status ?? "disconnected";
+
+  const handleConnectUpstox = async () => {
+    try {
+      const res = await tradingApi.getUpstoxLoginUrl();
+      if (res?.login_url) {
+        window.open(res.login_url, "upstox_auth", "width=600,height=700");
+      } else {
+        alert("Upstox OAuth credentials not configured on backend.");
+      }
+    } catch (err) {
+      console.error("Failed to get Upstox login URL", err);
+    }
+  };
   
   const { status: priceFeedStatus } = usePriceFeed(["^NSEI"]);
   const [portfolio, setPortfolio] = useState<PortfolioHoldingsResponse | null>(null);
@@ -391,7 +403,12 @@ export default function TopBar({
           Price Feed: {priceFeedStatus}
         </span>
 
-        <span className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] 2xl:inline-flex" title="Upstox WebSocket Connection State">
+        <button
+          type="button"
+          onClick={handleConnectUpstox}
+          className="hidden items-center gap-1 rounded border border-[var(--border-subtle)] bg-[var(--bg-elevated)] px-2 py-1 text-[10px] text-[var(--text-secondary)] transition hover:border-[var(--border-muted)] hover:text-[var(--text-primary)] md:inline-flex cursor-pointer"
+          title={`Upstox Live Stream: ${connectionStatus}. Click to ${connectionStatus === "connected" ? "reconnect" : "connect"}.`}
+        >
           <span className={`h-1.5 w-1.5 rounded-full ${
             connectionStatus === "connected"
               ? "bg-[var(--accent-green)]"
@@ -400,7 +417,7 @@ export default function TopBar({
                 : "bg-[var(--accent-red)]"
           }`} />
           Upstox: {connectionStatus}
-        </span>
+        </button>
 
         <span className={`hidden rounded border px-2 py-1 font-mono text-[10px] terminal:inline-flex items-center gap-1.5 font-bold uppercase tracking-wider ${badgeStyle}`}>
           {direction === "STRONG_BUY" && (

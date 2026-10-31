@@ -238,9 +238,12 @@ class MarketDataService:
 
             if not is_test_mode() and len(symbols) > 1:
                 settings = get_settings()
-                if getattr(settings, "UPSTOX_ENABLED", False) and getattr(
+                from app.services.upstox_service import UpstoxService
+
+                token = UpstoxService.ACCESS_TOKEN or getattr(
                     settings, "UPSTOX_ANALYTICS_TOKEN", None
-                ):
+                )
+                if getattr(settings, "UPSTOX_ENABLED", False) and token:
                     now_mono = time.monotonic()
                     uncached = [
                         s
@@ -258,7 +261,7 @@ class MarketDataService:
                     if uncached:
                         from app.services.ingestion.upstox_source import UpstoxSource
 
-                        source = UpstoxSource()
+                        source = UpstoxSource(token=token)
                         upstox_quotes = await source.get_batch_quotes(uncached)
                         for sym, quote in upstox_quotes.items():
                             norm_sym = MarketDataService._normalize_symbol(sym)
@@ -425,15 +428,17 @@ class MarketDataService:
         """Try Upstox Analytics Token for a live quote. Returns None if unavailable."""
         try:
             from app.core.config import get_settings
+            from app.services.upstox_service import UpstoxService
 
             settings = get_settings()
-            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(
+            token = UpstoxService.ACCESS_TOKEN or getattr(
                 settings, "UPSTOX_ANALYTICS_TOKEN", None
-            ):
+            )
+            if not getattr(settings, "UPSTOX_ENABLED", False) or not token:
                 return None
             from app.services.ingestion.upstox_source import UpstoxSource
 
-            source = UpstoxSource()
+            source = UpstoxSource(token=token)
             quote = await source.get_quote(symbol)
             return {
                 "symbol": cls._normalize_symbol(symbol),
@@ -462,15 +467,17 @@ class MarketDataService:
         """Try Upstox for historical bars. Returns None if unavailable."""
         try:
             from app.core.config import get_settings
+            from app.services.upstox_service import UpstoxService
 
             settings = get_settings()
-            if not getattr(settings, "UPSTOX_ENABLED", False) or not getattr(
+            token = UpstoxService.ACCESS_TOKEN or getattr(
                 settings, "UPSTOX_ANALYTICS_TOKEN", None
-            ):
+            )
+            if not getattr(settings, "UPSTOX_ENABLED", False) or not token:
                 return None
             from app.services.ingestion.upstox_source import UpstoxSource
 
-            source = UpstoxSource()
+            source = UpstoxSource(token=token)
             period_days = {
                 "1d": 30,
                 "5d": 150,
@@ -526,6 +533,12 @@ class MarketDataService:
         test_mode = is_test_mode()
 
         if not test_mode:
+            from app.services.upstox_service import UpstoxService
+
+            upstox_live = UpstoxService.get_cached_quote(sym)
+            if upstox_live and safe_float(upstox_live.get("price")) > 0:
+                return upstox_live
+
             cached_entry = MarketDataService._quote_cache.get(sym)
             if cached_entry is not None and (time.monotonic() - cached_entry[0]) < 10.0:
                 return cached_entry[1]
