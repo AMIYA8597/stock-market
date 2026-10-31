@@ -38,7 +38,11 @@ function shouldUseRelativeApiProxy(baseUrl: string): boolean {
 }
 
 export function getApiBaseUrl(): string {
-  const baseUrl = normalizeHttpBaseUrl(process.env.NEXT_PUBLIC_API_URL, "http://localhost:8000");
+  const defaultFallback =
+    typeof window !== "undefined" && !isLocalHostname(window.location.hostname)
+      ? "https://neuroquant-api-6g57r5groa-el.a.run.app"
+      : "http://localhost:8000";
+  const baseUrl = normalizeHttpBaseUrl(process.env.NEXT_PUBLIC_API_URL, defaultFallback);
   return shouldUseRelativeApiProxy(baseUrl) ? "" : baseUrl;
 }
 

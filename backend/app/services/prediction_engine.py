@@ -847,11 +847,11 @@ HORIZON_SPECS: dict[str, dict[str, Any]] = {
     "15m": {"interval": "5m", "period": "60d", "steps": 3, "confidence": "experimental"},
     "30m": {"interval": "5m", "period": "60d", "steps": 6, "confidence": "low"},
     "1h": {"interval": "5m", "period": "60d", "steps": 12, "confidence": "low"},
-    "1d": {"interval": "1d", "period": "10y", "steps": 1, "confidence": "medium"},
-    "1w": {"interval": "1d", "period": "10y", "steps": 5, "confidence": "medium"},
-    "15d": {"interval": "1d", "period": "10y", "steps": 15, "confidence": "medium"},
-    "1mo": {"interval": "1d", "period": "10y", "steps": 21, "confidence": "low"},
-    "1y": {"interval": "1d", "period": "10y", "steps": 252, "confidence": "low"},
+    "1d": {"interval": "1d", "period": "2y", "steps": 1, "confidence": "medium"},
+    "1w": {"interval": "1d", "period": "2y", "steps": 5, "confidence": "medium"},
+    "15d": {"interval": "1d", "period": "2y", "steps": 15, "confidence": "medium"},
+    "1mo": {"interval": "1d", "period": "2y", "steps": 21, "confidence": "low"},
+    "1y": {"interval": "1d", "period": "2y", "steps": 252, "confidence": "low"},
 }
 
 
@@ -897,7 +897,10 @@ async def forecast_multi_horizon(symbol: str, horizon_labels: list[str]) -> dict
 
     for (interval, period), labels in groups.items():
         try:
-            bars = await MarketDataService.get_history(symbol, interval=interval, period=period)
+            bars = await asyncio.wait_for(
+                MarketDataService.get_history(symbol, interval=interval, period=period),
+                timeout=5.0,
+            )
             if not bars or len(bars) < 20:
                 for h in labels:
                     results[h] = {

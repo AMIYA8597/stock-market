@@ -241,8 +241,8 @@ class IntelligenceService:
         # get_full_prediction() which fetches 2 years of OHLCV data and runs
         # multiple ML models — doing 50 of those simultaneously exhausts
         # memory and CPU, causing 502/503 errors.
-        sem = asyncio.Semaphore(6)
-        _PER_SYMBOL_TIMEOUT = 8  # seconds per symbol before fallback
+        sem = asyncio.Semaphore(12)
+        _PER_SYMBOL_TIMEOUT = 4  # seconds per symbol before fallback
 
         async def _throttled(symbol: str) -> SignalResponse:
             async with sem:

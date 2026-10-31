@@ -263,7 +263,7 @@ export const intelligenceApi = {
     // Use the bulk endpoint instead of firing 50 individual requests
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
       const response = await fetch(
         `${API_URL}/signals/bulk?symbols=${encodeURIComponent(symbols.join(","))}`,
         {

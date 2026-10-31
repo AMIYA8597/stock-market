@@ -24,17 +24,94 @@ const directionColor = (direction: string): string => {
   return "text-[var(--accent-amber)]";
 };
 
+const KNOWN_COMPANY_NAMES: Record<string, string> = {
+  RELIANCE: "Reliance Industries",
+  TCS: "Tata Consultancy Services",
+  HDFCBANK: "HDFC Bank",
+  INFY: "Infosys",
+  ICICIBANK: "ICICI Bank",
+  HINDUNILVR: "Hindustan Unilever",
+  SBIN: "State Bank of India",
+  BHARTIARTL: "Bharti Airtel",
+  ITC: "ITC Limited",
+  KOTAKBANK: "Kotak Mahindra Bank",
+  LT: "Larsen & Toubro",
+  AXISBANK: "Axis Bank",
+  ASIANPAINT: "Asian Paints",
+  MARUTI: "Maruti Suzuki",
+  WIPRO: "Wipro",
+  HCLTECH: "HCL Technologies",
+  ULTRACEMCO: "UltraTech Cement",
+  NESTLEIND: "Nestle India",
+  BAJFINANCE: "Bajaj Finance",
+  TITAN: "Titan Company",
+  SUNPHARMA: "Sun Pharmaceutical",
+  TECHM: "Tech Mahindra",
+  POWERGRID: "Power Grid Corporation",
+  NTPC: "NTPC Limited",
+  ONGC: "ONGC",
+  ADANIPORTS: "Adani Ports",
+  COALINDIA: "Coal India",
+  DIVISLAB: "Divi's Laboratories",
+  DRREDDY: "Dr. Reddy's Laboratories",
+  CIPLA: "Cipla",
+  EICHERMOT: "Eicher Motors",
+  GRASIM: "Grasim Industries",
+  HEROMOTOCO: "Hero MotoCorp",
+  HINDALCO: "Hindalco",
+  INDUSINDBK: "IndusInd Bank",
+  JSWSTEEL: "JSW Steel",
+  "M&M": "Mahindra & Mahindra",
+  TATAMOTORS: "Tata Motors",
+  TATASTEEL: "Tata Steel",
+  BAJAJFINSV: "Bajaj Finserv",
+  BPCL: "Bharat Petroleum",
+  BRITANNIA: "Britannia Industries",
+  HDFCLIFE: "HDFC Life",
+  SBILIFE: "SBI Life Insurance",
+  TATACONSUM: "Tata Consumer Products",
+  UPL: "UPL Limited",
+  VEDL: "Vedanta",
+  APOLLOHOSP: "Apollo Hospitals",
+  ADANIENT: "Adani Enterprises",
+  BAJAJ_AUTO: "Bajaj Auto",
+  "BAJAJ-AUTO": "Bajaj Auto",
+  TRENT: "Trent Limited",
+  JIOFIN: "Jio Financial Services",
+};
+
+const US_EQUITIES = new Set([
+  "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "META", "TSLA", "NVDA", "AMD", "NFLX", "INTC", "JPM", "V", "MA", "DIS",
+]);
+
 function getExchangeAndName(symbol: string): { exchange: string; name: string } {
-  const sym = symbol.toUpperCase();
+  const sym = symbol.toUpperCase().trim();
   if (sym.endsWith(".NS")) {
     const base = sym.split(".NS")[0] ?? sym;
-    return { exchange: "NSE", name: `${base} Ltd.` };
+    return { exchange: "NSE", name: KNOWN_COMPANY_NAMES[base] || `${base} Ltd.` };
   }
-  if (sym.endsWith("-USD") || sym.includes("BTC") || sym.includes("ETH") || sym.includes("SOL") || sym.includes("BNB") || sym.includes("XRP")) {
+  if (sym.endsWith(".BO")) {
+    const base = sym.split(".BO")[0] ?? sym;
+    return { exchange: "BSE", name: KNOWN_COMPANY_NAMES[base] || `${base} Ltd.` };
+  }
+  if (
+    sym.endsWith("-USD") ||
+    sym.includes("BTC") ||
+    sym.includes("ETH") ||
+    sym.includes("SOL") ||
+    sym.includes("BNB") ||
+    sym.includes("XRP")
+  ) {
     const base = sym.replace("-USD", "");
     return { exchange: "CRYPTO", name: `${base} Protocol` };
   }
-  return { exchange: "NASDAQ", name: `${sym} Inc.` };
+  if (KNOWN_COMPANY_NAMES[sym]) {
+    return { exchange: "NSE", name: KNOWN_COMPANY_NAMES[sym] };
+  }
+  if (US_EQUITIES.has(sym)) {
+    return { exchange: "NASDAQ", name: `${sym} Inc.` };
+  }
+  return { exchange: "NSE", name: `${sym} Ltd.` };
 }
 
 function getSector(symbol: string): string {
