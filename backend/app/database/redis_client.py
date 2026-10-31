@@ -292,6 +292,11 @@ async def _redis_pool_singleton() -> Redis:
         if _redis_client is not None:
             return _redis_client
 
+        if not settings.REDIS_URL:
+            logger.info("REDIS_URL not configured, using in-memory cache")
+            _redis_client = InMemoryCache()
+            return _redis_client
+
         try:
             _redis_pool = ConnectionPool.from_url(
                 settings.REDIS_URL,

@@ -195,7 +195,7 @@ jobs:
           # Write Cloud Run YAML env vars file
           lines = []
           for k, v in env_vars.items():
-              if v == "" and k in optional_vars:
+              if v == "" and k in optional_vars and k != "REDIS_URL":
                   continue
               safe_v = v.replace('\\', '\\\\').replace('"', '\\"')
               lines.append(f'{k}: "{safe_v}"')
