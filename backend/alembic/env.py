@@ -28,12 +28,28 @@ from app.core.database import Base
 config = context.config
 settings = get_settings()
 
+def _normalize_sync_url(url: str) -> str:
+    """Ensure the URL uses a sync driver (psycopg2 for PostgreSQL) for Alembic."""
+    if not url:
+        return url
+    if url.startswith("postgresql+asyncpg://"):
+        return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+psycopg2://", 1)
+    return url
+
+
 # Override sqlalchemy.url with the env variable. configparser's default
 # interpolation treats bare "%" as special syntax — a percent-encoded
 # password (e.g. "%40" for "@") would otherwise raise
 # "invalid interpolation syntax". Escape it as "%%" before handing it to
 # set_main_option, which configparser un-escapes back to a single "%".
-config.set_main_option("sqlalchemy.url", settings.MIGRATIONS_DATABASE_URL.replace("%", "%%"))
+config.set_main_option(
+    "sqlalchemy.url",
+    _normalize_sync_url(settings.MIGRATIONS_DATABASE_URL).replace("%", "%%"),
+)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -76,7 +92,7 @@ def do_run_migrations(connection: Connection) -> None:
 
 def run_migrations_online() -> None:
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = settings.MIGRATIONS_DATABASE_URL
+    configuration["sqlalchemy.url"] = _normalize_sync_url(settings.MIGRATIONS_DATABASE_URL)
     from sqlalchemy import engine_from_config
 
     connectable = engine_from_config(
