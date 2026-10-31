@@ -341,6 +341,32 @@ async def test_get_ohlcv_fallback():
             assert len(res) == 1
 
 
+@pytest.mark.asyncio
+async def test_yfinance_history_resampling_3m():
+    import pandas as pd
+
+    # Create dummy 1m data to test resampling into 3min bars
+    dates = pd.date_range("2026-01-01 09:15", periods=6, freq="1min")
+    dummy_df = pd.DataFrame(
+        {
+            "Open": [10.0, 11.0, 12.0, 13.0, 14.0, 15.0],
+            "High": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0],
+            "Low": [9.0, 10.0, 11.0, 12.0, 13.0, 14.0],
+            "Close": [11.0, 12.0, 13.0, 14.0, 15.0, 16.0],
+            "Volume": [100, 100, 100, 100, 100, 100],
+        },
+        index=dates,
+    )
+
+    with patch("yfinance.download", return_value=dummy_df):
+        bars = await MarketDataService._yfinance_history("RELIANCE", "3m", "1d")
+        assert len(bars) == 2
+        # First 3m bar open should be 10.0 and close should be 13.0
+        assert bars[0]["open"] == 10.0
+        assert bars[0]["close"] == 13.0
+        assert bars[0]["volume"] == 300.0
+
+
 def teardown_module(module):
     from app.services import market_data_service
     from tests.conftest import (
