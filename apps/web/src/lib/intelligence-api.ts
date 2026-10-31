@@ -227,6 +227,15 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 
 async function fetchSignalWithFallback(symbol: string): Promise<UnknownRecord> {
   const authHeaders = await getAuthHeaders();
+  if (!authHeaders.Authorization) {
+    return {
+      symbol,
+      timestamp: new Date().toISOString(),
+      ensemble: { direction: "NEUTRAL", confidence: 0.5, kelly_fraction: 0 },
+      model_status: "unauthenticated",
+      message: "Sign in to view AI trading signals.",
+    };
+  }
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 4000);
@@ -279,16 +288,20 @@ export const intelligenceApi = {
       return signalArray.map((s: UnknownRecord) => normalizeSignalResponse(s));
     } catch (err) {
       console.warn("Bulk signals endpoint failed, falling back to individual calls:", err);
-      // Fallback: fetch individually with limited concurrency
-      const CONCURRENCY = 5;
+      // Never spray dozens of requests if unauthenticated or request was aborted
+      if (
+        !authHeaders.Authorization ||
+        (err instanceof Error && (err.message.includes("401") || err.message.includes("403") || err.name === "AbortError"))
+      ) {
+        return [];
+      }
+      // Fallback: fetch only the first few symbols to prevent saturating browser network sockets
+      const fallbackSymbols = symbols.slice(0, 5);
+      const results = await Promise.allSettled(fallbackSymbols.map(fetchSignalWithFallback));
       const all: SignalResponse[] = [];
-      for (let i = 0; i < symbols.length; i += CONCURRENCY) {
-        const batch = symbols.slice(i, i + CONCURRENCY);
-        const results = await Promise.allSettled(batch.map(fetchSignalWithFallback));
-        for (const res of results) {
-          if (res.status === "fulfilled") {
-            all.push(normalizeSignalResponse(res.value));
-          }
+      for (const res of results) {
+        if (res.status === "fulfilled") {
+          all.push(normalizeSignalResponse(res.value));
         }
       }
       return all;

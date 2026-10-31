@@ -634,12 +634,30 @@ class MarketDataService:
 
         await cls._throttle_yfinance(yf_sym)
 
+        # Map non-native intervals or configure resampling
+        resample_rule: str | None = None
+        fetch_interval = interval
+        if interval == "1w":
+            fetch_interval = "1wk"
+        elif interval == "3m":
+            fetch_interval = "1m"
+            resample_rule = "3min"
+        elif interval == "10m":
+            fetch_interval = "5m"
+            resample_rule = "10min"
+        elif interval == "45m":
+            fetch_interval = "15m"
+            resample_rule = "45min"
+        elif interval == "2h":
+            fetch_interval = "1h"
+            resample_rule = "2h"
+
         def _fetch():
             session = cls.get_session()
             df = yf.download(
                 yf_sym,
                 period=period,
-                interval=interval,
+                interval=fetch_interval,
                 progress=False,
                 threads=False,
                 session=session,
@@ -650,6 +668,18 @@ class MarketDataService:
             # Flatten to single level so row["Open"] works
             if isinstance(df.columns, __import__("pandas").MultiIndex):
                 df.columns = df.columns.get_level_values(0)
+
+            if resample_rule:
+                df = df.resample(resample_rule).agg(
+                    {
+                        "Open": "first",
+                        "High": "max",
+                        "Low": "min",
+                        "Close": "last",
+                        "Volume": "sum",
+                    }
+                ).dropna()
+
             bars = []
             for ts, row in df.iterrows():
                 bars.append(
