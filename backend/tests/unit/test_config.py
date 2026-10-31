@@ -79,3 +79,14 @@ def test_only_paper_trading_mode_is_supported(monkeypatch):
         assert "PAPER_TRADING_ONLY" in str(exc)
     else:
         raise AssertionError("unsupported trading mode must be rejected")
+
+
+def test_empty_bool_environment_variables(monkeypatch):
+    monkeypatch.setenv("UPSTOX_ENABLED", "")
+    monkeypatch.setenv("ALERT_EMAIL_ENABLED", "")
+    monkeypatch.setenv("DEBUG", "")
+    settings = Settings()
+    assert settings.UPSTOX_ENABLED is False
+    assert settings.ALERT_EMAIL_ENABLED is False
+    assert settings.DEBUG is False
+

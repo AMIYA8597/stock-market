@@ -467,6 +467,26 @@ class Settings(BaseSettings):
         default=20, description="Number of symbols per batch request to yfinance."
     )
 
+    @field_validator(
+        "UPSTOX_ENABLED",
+        "UPSTOX_WS_ENABLED",
+        "ALERT_EMAIL_ENABLED",
+        "PAPER_TRADING_ONLY",
+        "DEBUG",
+        mode="before",
+    )
+    @classmethod
+    def parse_optional_bool(cls, v: Any) -> Any:
+        if v is None or v == "":
+            return False
+        if isinstance(v, str):
+            v_lower = v.strip().lower()
+            if v_lower in ("false", "0", "no", "f", "off", ""):
+                return False
+            if v_lower in ("true", "1", "yes", "t", "on"):
+                return True
+        return v
+
     @model_validator(mode="after")
     def validate_database_user(self) -> Settings:
         if self.ENVIRONMENT != "test":
