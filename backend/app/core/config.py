@@ -15,7 +15,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Any
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -243,8 +243,16 @@ class Settings(BaseSettings):
     )
 
     # ─── Upstox Integration (OAuth / trading) ──────────────────────────────
-    UPSTOX_API_KEY: str = Field(default="", description="Upstox API Client ID (API Key)")
-    UPSTOX_API_SECRET: str = Field(default="", description="Upstox API Client Secret")
+    UPSTOX_API_KEY: str = Field(
+        default="",
+        validation_alias=AliasChoices("UPSTOX_API_KEY", "UPSTOX_CLIENT_ID"),
+        description="Upstox API Client ID (API Key)",
+    )
+    UPSTOX_API_SECRET: str = Field(
+        default="",
+        validation_alias=AliasChoices("UPSTOX_API_SECRET", "UPSTOX_CLIENT_SECRET"),
+        description="Upstox API Client Secret",
+    )
     UPSTOX_REDIRECT_URI: str = Field(
         default="http://localhost:8000/api/v1/auth/upstox/callback",
         description="Upstox Redirect URI for OAuth login",

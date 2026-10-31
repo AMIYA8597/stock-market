@@ -136,6 +136,14 @@ async def test_resolve_symbol_cache_and_overrides():
     assert SYMBOL_TO_KEY["NIFTY 50"] == "NSE_INDEX|Nifty 50"
 
 @pytest.mark.asyncio
+async def test_resolve_symbol_hardcoded_nifty100():
+    # Resolves without any token or HTTP calls
+    UpstoxService.ACCESS_TOKEN = None
+    assert await UpstoxService.resolve_symbol("RELIANCE") == "NSE_EQ|INE002A01018"
+    assert await UpstoxService.resolve_symbol("TCS") == "NSE_EQ|INE467B01029"
+    assert await UpstoxService.resolve_symbol("INFY") == "NSE_EQ|INE009A01021"
+
+@pytest.mark.asyncio
 @patch("app.services.upstox_service.httpx.AsyncClient.get")
 async def test_resolve_symbol_api_search_exact_match(mock_get):
     UpstoxService.ACCESS_TOKEN = "token"
@@ -143,14 +151,14 @@ async def test_resolve_symbol_api_search_exact_match(mock_get):
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": [
-            {"trading_symbol": "TCS", "segment": "NSE_EQ", "instrument_key": "tcs_key"}
+            {"trading_symbol": "CUSTOMSTOCK", "segment": "NSE_EQ", "instrument_key": "custom_key"}
         ]
     }
     mock_get.return_value = mock_response
 
-    key = await UpstoxService.resolve_symbol("TCS")
-    assert key == "tcs_key"
-    assert SYMBOL_TO_KEY["TCS"] == "tcs_key"
+    key = await UpstoxService.resolve_symbol("CUSTOMSTOCK")
+    assert key == "custom_key"
+    assert SYMBOL_TO_KEY["CUSTOMSTOCK"] == "custom_key"
 
 @pytest.mark.asyncio
 @patch("app.services.upstox_service.httpx.AsyncClient.get")
@@ -160,13 +168,22 @@ async def test_resolve_symbol_api_search_partial_match(mock_get):
     mock_response.status_code = 200
     mock_response.json.return_value = {
         "data": [
-            {"trading_symbol": "INFY-EQ", "segment": "NSE_EQ", "instrument_key": "infy_key"}
+            {"trading_symbol": "CUSTOMPARTIAL-EQ", "segment": "NSE_EQ", "instrument_key": "custom_partial_key"}
         ]
     }
     mock_get.return_value = mock_response
 
-    key = await UpstoxService.resolve_symbol("INFY")
-    assert key == "infy_key"
+    key = await UpstoxService.resolve_symbol("CUSTOMPARTIAL")
+    assert key == "custom_partial_key"
+
+@pytest.mark.asyncio
+async def test_subscribe_symbol_dynamic():
+    mock_streamer = MagicMock()
+    UpstoxService.STREAMER = mock_streamer
+    UpstoxService.CONNECTION_STATUS = "connected"
+
+    await UpstoxService.subscribe_symbol("RELIANCE")
+    mock_streamer.subscribe.assert_called_once_with(["NSE_EQ|INE002A01018"], mode="full")
 
 @pytest.mark.asyncio
 async def test_start_websocket_feed_no_token():

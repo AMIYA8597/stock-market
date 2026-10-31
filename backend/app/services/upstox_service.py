@@ -156,12 +156,29 @@ class UpstoxService:
             KEY_TO_SYMBOL[key] = sym
             return key
 
-        if not cls.ACCESS_TOKEN:
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        token = cls.ACCESS_TOKEN or getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None)
+
+        # Resolve via _resolve_instrument_key (in-memory -> hardcoded top 100 -> DB 2678 -> API search)
+        try:
+            from app.services.ingestion.upstox_source import _resolve_instrument_key
+
+            key = await _resolve_instrument_key(sym, token=token)
+            if key:
+                SYMBOL_TO_KEY[sym] = key
+                KEY_TO_SYMBOL[key] = sym
+                return key
+        except Exception as e:
+            logger.debug(f"Could not resolve Upstox key for {sym} via source resolver: {e}")
+
+        if not token:
             return None
 
         # Search using instruments API
         url = f"https://api.upstox.com/v2/instruments/search?query={sym}"
-        headers = {"Accept": "application/json", "Authorization": f"Bearer {cls.ACCESS_TOKEN}"}
+        headers = {"Accept": "application/json", "Authorization": f"Bearer {token}"}
         try:
             async with httpx.AsyncClient() as client:
                 r = await client.get(url, headers=headers, timeout=10.0)
@@ -194,30 +211,50 @@ class UpstoxService:
         return None
 
     @classmethod
+    async def subscribe_symbol(cls, symbol: str):
+        """Dynamically subscribes the active Upstox streamer to a new symbol."""
+        if not cls.STREAMER or cls.CONNECTION_STATUS != "connected":
+            return
+        key = await cls.resolve_symbol(symbol)
+        if key:
+            try:
+                cls.STREAMER.subscribe([key], mode="full")
+                cls.log_audit(f"Dynamically subscribed Upstox feed to {symbol} ({key})")
+            except Exception as e:
+                logger.error(f"Failed to subscribe Upstox streamer to {symbol}: {e}")
+
+    @classmethod
     async def start_websocket_feed(cls):
         """Starts background thread Upstox V3 Market Data Streamer."""
-        if not cls.ACCESS_TOKEN:
-            logger.warning("Attempted to start Upstox WebSocket feed without access token.")
+        from app.core.config import get_settings
+
+        settings = get_settings()
+        token = cls.ACCESS_TOKEN or getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None)
+        if not token:
+            logger.warning("Attempted to start Upstox WebSocket feed without access or analytics token.")
             return
 
         # Close active streamer if any
         await cls.stop_websocket_feed()
 
         default_symbols = [
-            "RELIANCE",
-            "TCS",
-            "INFY",
-            "HDFCBANK",
-            "ICICIBANK",
-            "SBIN",
-            "NIFTY 50",
-            "NIFTY BANK",
+            "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK",
+            "HINDUNILVR", "ITC", "SBIN", "BHARTIARTL", "KOTAKBANK",
+            "AXISBANK", "LT", "WIPRO", "HCLTECH", "ASIANPAINT",
+            "MARUTI", "SUNPHARMA", "TITAN", "ULTRACEMCO", "BAJFINANCE",
+            "NESTLEIND", "M&M", "TATASTEEL", "NTPC", "POWERGRID",
+            "ONGC", "COALINDIA", "JSWSTEEL", "GRASIM", "ADANIENT",
+            "ADANIPORTS", "BAJAJFINSV", "TECHM", "DRREDDY", "CIPLA",
+            "DIVISLAB", "BRITANNIA", "APOLLOHOSP", "TATACONSUM", "HEROMOTOCO",
+            "EICHERMOT", "BPCL", "SHREECEM", "INDUSINDBK", "HINDALCO",
+            "SBILIFE", "HDFCLIFE", "TATAMOTORS", "BAJAJ-AUTO", "TRENT",
+            "NIFTY 50", "NIFTY BANK",
         ]
 
         keys_to_subscribe = []
         for sym in default_symbols:
             key = await cls.resolve_symbol(sym)
-            if key:
+            if key and key not in keys_to_subscribe:
                 keys_to_subscribe.append(key)
 
         if not keys_to_subscribe:
@@ -225,11 +262,11 @@ class UpstoxService:
             return
 
         cls.CONNECTION_STATUS = "connecting"
-        cls.log_audit(f"Connecting Upstox WebSocket feed for keys: {keys_to_subscribe}")
+        cls.log_audit(f"Connecting Upstox WebSocket feed for {len(keys_to_subscribe)} keys")
 
         try:
             cfg = upstox_client.Configuration()
-            cfg.access_token = cls.ACCESS_TOKEN
+            cfg.access_token = token
             api_client = upstox_client.ApiClient(cfg)
 
             # Instantiate MarketDataStreamerV3

@@ -730,10 +730,14 @@ async def upstox_login_url():
 @router.get("/upstox/status")
 @router.get("/auth/upstox/status", include_in_schema=False)
 async def upstox_auth_status(current_user: User | None = Depends(get_current_user_or_none)):
-    # Requires a signed-in user: the response includes the connected Upstox
-    # account's profile, which must not be readable anonymously.
+    # Requires a signed-in user to view the connected Upstox profile details.
+    # For anonymous requests, safely return disconnected state without 401 noise.
     if not current_user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
+        return {
+            "authenticated": False,
+            "profile": None,
+            "connection_status": "disconnected",
+        }
     from app.services.upstox_service import UpstoxService
     return {
         "authenticated": UpstoxService.ACCESS_TOKEN is not None,

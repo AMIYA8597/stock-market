@@ -249,23 +249,35 @@ export default function Watchlist({ signals, wlLists = [], selectedSymbol, onSel
   const { ticks } = usePriceFeed(symbols);
 
   const [restPrices, setRestPrices] = useState<Map<string, { price: number; change_pct: number }>>(new Map());
-  const restFetchedRef = useRef(false);
+  const fetchedSymbolsRef = useRef<string>("");
 
   useEffect(() => {
-    if (symbols.length === 0 || restFetchedRef.current) return;
-    restFetchedRef.current = true;
+    const key = symbols.slice().sort().join(",");
+    if (symbols.length === 0 || fetchedSymbolsRef.current === key) return;
+    fetchedSymbolsRef.current = key;
+    let isMounted = true;
     (async () => {
       try {
         const quotes = await marketApi.getQuotes(symbols);
+        if (!isMounted) return;
         const map = new Map<string, { price: number; change_pct: number }>();
         for (const q of quotes) {
           map.set(q.symbol.toUpperCase(), { price: q.price, change_pct: q.change_percent });
         }
-        if (map.size > 0) setRestPrices(map);
+        if (map.size > 0) {
+          setRestPrices((prev) => {
+            const next = new Map(prev);
+            map.forEach((v, k) => next.set(k, v));
+            return next;
+          });
+        }
       } catch {
         /* ignore fetch errors */
       }
     })();
+    return () => {
+      isMounted = false;
+    };
   }, [symbols]);
 
   const [tickHistories, setTickHistories] = useState<Record<string, number[]>>({});

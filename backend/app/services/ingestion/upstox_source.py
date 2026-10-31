@@ -278,6 +278,13 @@ async def _resolve_instrument_key(
         logger.debug(f"DB instrument key lookup failed for {sym}: {e}")
 
     # 4. Upstox search API auto-discovery
+    if not token:
+        from app.core.config import get_settings
+        from app.services.upstox_service import UpstoxService
+
+        settings = get_settings()
+        token = UpstoxService.ACCESS_TOKEN or getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None)
+
     if token:
         found_key = await _search_upstox_instrument_key(
             sym, token, base_url or "https://api.upstox.com"
@@ -322,9 +329,14 @@ class UpstoxSource(MarketDataProvider):
 
     def __init__(self, token: str | None = None, base_url: str | None = None, timeout: int = 15):
         from app.core.config import get_settings
+        from app.services.upstox_service import UpstoxService
 
         settings = get_settings()
-        self.token = token if token is not None else settings.UPSTOX_ANALYTICS_TOKEN
+        self.token = (
+            token
+            if token is not None
+            else (UpstoxService.ACCESS_TOKEN or getattr(settings, "UPSTOX_ANALYTICS_TOKEN", None))
+        )
         self.base_url = (base_url or settings.UPSTOX_BASE_URL).rstrip("/")
         self.timeout = aiohttp.ClientTimeout(total=timeout)
 
