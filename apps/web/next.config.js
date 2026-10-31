@@ -2,8 +2,13 @@
 const createNextIntlPlugin = require('next-intl/plugin');
 const withNextIntl = createNextIntlPlugin('./src/i18n.ts');
 
+const PROD_API_URL = "https://neuroquant-api-6g57r5groa-el.a.run.app";
+
 function normalizeApiBase(url) {
-  const candidate = (url || "http://localhost:8000").replace(/\/+$/, "");
+  const fallback = process.env.NODE_ENV === "production" || process.env.VERCEL
+    ? PROD_API_URL
+    : "http://localhost:8000";
+  const candidate = (url || fallback).replace(/\/+$/, "");
   return candidate.replace(/\/api\/v1\/?$/i, "");
 }
 

@@ -1,6 +1,7 @@
 # backend/app/api/v1/market.py
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
@@ -816,7 +817,7 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
         rows = (await db.execute(stmt)).all()
         for r in rows:
             inst = r.Instrument
-            if r.observed_at and (datetime.now(UTC) - r.observed_at) <= timedelta(minutes=15):
+            if r.observed_at:
                 context.append(
                     {
                         "ticker": inst.canonical_symbol,
@@ -835,19 +836,25 @@ async def get_global_context(db: AsyncSession = Depends(get_db)) -> dict:
 
     if not context:
         top_indices = MarketDataService.NSE_INDICES[:6]
-        batch = await MarketDataService.get_batch_quotes([sym for sym, _ in top_indices])
-        for yf_sym, name in top_indices:
-            q = batch.get(yf_sym)
-            if q and q.get("price", 0) > 0:
-                context.append(
-                    {
-                        "ticker": yf_sym,
-                        "name": name,
-                        "value": float(q["price"]),
-                        "change_pct": float(q.get("change_pct", 0)),
-                        "as_of": q.get("timestamp", datetime.now(UTC).isoformat()),
-                    }
-                )
+        try:
+            batch = await asyncio.wait_for(
+                MarketDataService.get_batch_quotes([sym for sym, _ in top_indices]),
+                timeout=3.5,
+            )
+            for yf_sym, name in top_indices:
+                q = batch.get(yf_sym)
+                if q and q.get("price", 0) > 0:
+                    context.append(
+                        {
+                            "ticker": yf_sym,
+                            "name": name,
+                            "value": float(q["price"]),
+                            "change_pct": float(q.get("change_pct", 0)),
+                            "as_of": q.get("timestamp", datetime.now(UTC).isoformat()),
+                        }
+                    )
+        except Exception as batch_err:
+            logger.warning("Index fallback fetch failed or timed out: %s", batch_err)
     return {
         "status": "ok" if context else "unavailable",  # honesty: allow (conditional on real fetched quotes above)
         "indices": context,

@@ -76,7 +76,9 @@ jobs:
         # Run alembic upgrade head against Supabase before deploying new image
         # Uses session-mode pooler (port 5432) which supports DDL/migrations
         env:
+          DATABASE_URL: ${{ secrets.CLOUDRUN_MIGRATIONS_DATABASE_URL }}
           MIGRATIONS_DATABASE_URL: ${{ secrets.CLOUDRUN_MIGRATIONS_DATABASE_URL }}
+          REDIS_URL: ""
           ENVIRONMENT: production
         run: |
           pip install uv --quiet
@@ -148,6 +150,7 @@ jobs:
               "ENVIRONMENT",
               "BACKEND_CORS_ORIGINS",
               "SUPABASE_JWT_SECRET",
+              "REDIS_URL",
               "SENDGRID_API_KEY",
               "SENDGRID_FROM_EMAIL",
               "ALERT_EMAIL_ENABLED",

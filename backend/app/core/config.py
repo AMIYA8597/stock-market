@@ -515,9 +515,13 @@ class Settings(BaseSettings):
             # check, not a blanket production-startup crash that would take
             # down the entire app (including paper trading, which needs no
             # broker credentials) over an optional feature being unused.
+            if not self.DATABASE_URL and self.MIGRATIONS_DATABASE_URL:
+                self.DATABASE_URL = self.MIGRATIONS_DATABASE_URL
+            if not self.MIGRATIONS_DATABASE_URL and self.DATABASE_URL:
+                self.MIGRATIONS_DATABASE_URL = self.DATABASE_URL
+
             required_keys = {
                 "DATABASE_URL": self.DATABASE_URL,
-                "REDIS_URL": self.REDIS_URL,
             }
             for key, val in required_keys.items():
                 val_lower = str(val).lower()
@@ -526,16 +530,23 @@ class Settings(BaseSettings):
                     or "changeme" in val_lower
                     or "your_" in val_lower
                     or "replace_me" in val_lower
-                    or (
-                        key == "REDIS_URL"
-                        and (
-                            val_lower.startswith("redis://localhost")
-                            or val_lower.startswith("redis://127.0.0.1")
-                        )
-                    )
                 ):
                     raise ValueError(
                         f"Missing or insecure value for required production key: {key}"
+                    )
+
+            # REDIS_URL is optional because backend gracefully falls back to in-memory cache
+            if self.REDIS_URL:
+                val_lower = str(self.REDIS_URL).lower()
+                if (
+                    "changeme" in val_lower
+                    or "your_" in val_lower
+                    or "replace_me" in val_lower
+                    or val_lower.startswith("redis://localhost")
+                    or val_lower.startswith("redis://127.0.0.1")
+                ):
+                    raise ValueError(
+                        "Missing or insecure value for required production key: REDIS_URL"
                     )
         return self
 

@@ -383,11 +383,18 @@ export const marketApi = {
   async getQuotes(symbols: string[]): Promise<Quote[]> {
     if (!symbols.length) return [];
     try {
-      const res = await fetchApi<{ quotes: UnknownRecord[] }>(
+      const res = await fetchApi<unknown>(
         `/market/quotes?symbols=${encodeURIComponent(symbols.join(","))}`
       );
-      if (Array.isArray(res?.quotes)) {
-        return res.quotes.map(mapQuote);
+      if (Array.isArray(res)) {
+        return res.map((q) => mapQuote(q as UnknownRecord));
+      }
+      if (res && typeof res === "object") {
+        const obj = res as Record<string, unknown>;
+        if (Array.isArray(obj.quotes)) {
+          return obj.quotes.map((q) => mapQuote(q as UnknownRecord));
+        }
+        return Object.values(obj).map((q) => mapQuote(q as UnknownRecord));
       }
     } catch {
       // Fallback to individual fetches if batch query fails
