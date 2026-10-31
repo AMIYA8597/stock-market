@@ -40,3 +40,20 @@ def test_session_mode_pool_args(monkeypatch):
 
     connect_args = kwargs.get("connect_args", {})
     assert "statement_cache_size" not in connect_args
+
+
+def test_normalize_async_db_url():
+    # PostgreSQL variants
+    assert conn_module._normalize_async_db_url("postgresql+psycopg2://user:pass@host:5432/db") == "postgresql+asyncpg://user:pass@host:5432/db"
+    assert conn_module._normalize_async_db_url("postgresql+psycopg://user:pass@host:5432/db") == "postgresql+asyncpg://user:pass@host:5432/db"
+    assert conn_module._normalize_async_db_url("postgresql://user:pass@host:5432/db") == "postgresql+asyncpg://user:pass@host:5432/db"
+    assert conn_module._normalize_async_db_url("postgres://user:pass@host:5432/db") == "postgresql+asyncpg://user:pass@host:5432/db"
+    assert conn_module._normalize_async_db_url("postgresql+asyncpg://user:pass@host:5432/db") == "postgresql+asyncpg://user:pass@host:5432/db"
+
+    # SQLite variants
+    assert conn_module._normalize_async_db_url("sqlite:///data.db") == "sqlite+aiosqlite:///data.db"
+    assert conn_module._normalize_async_db_url("sqlite+aiosqlite:///data.db") == "sqlite+aiosqlite:///data.db"
+
+    # Empty
+    assert conn_module._normalize_async_db_url("") == ""
+

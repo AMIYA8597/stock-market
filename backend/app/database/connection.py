@@ -84,6 +84,25 @@ def _get_engine_kwargs() -> dict:
     return kwargs
 
 
+def _normalize_async_db_url(url: str) -> str:
+    """Ensure the URL uses an async driver (asyncpg for PostgreSQL, aiosqlite for SQLite)."""
+    if not url:
+        return url
+    if url.startswith("postgresql+asyncpg://") or url.startswith("sqlite+aiosqlite://"):
+        return url
+    if url.startswith("postgresql+psycopg2://"):
+        return url.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql+psycopg://"):
+        return url.replace("postgresql+psycopg://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("sqlite://"):
+        return url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    return url
+
+
 engine = create_async_engine(
     # `create_async_engine` only builds the Engine object here; it does not
     # connect. If DATABASE_URL is unset (misconfigured deployment), fail
@@ -92,8 +111,10 @@ engine = create_async_engine(
     # single most common real local Postgres default, which risks silently
     # reading from/writing to an unrelated real database rather than
     # surfacing the missing configuration.
-    settings.DATABASE_URL
-    or "postgresql+asyncpg://DATABASE_URL_NOT_CONFIGURED:@localhost/DATABASE_URL_NOT_CONFIGURED",
+    _normalize_async_db_url(
+        settings.DATABASE_URL
+        or "postgresql+asyncpg://DATABASE_URL_NOT_CONFIGURED:@localhost/DATABASE_URL_NOT_CONFIGURED"
+    ),
     **_get_engine_kwargs(),
 )
 
