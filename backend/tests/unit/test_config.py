@@ -59,6 +59,15 @@ def test_production_rejects_localhost_redis(monkeypatch):
         raise AssertionError("production must reject process-local Redis")
 
 
+def test_production_allows_empty_redis(monkeypatch):
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://nq_api:secret@example.test/db")
+    monkeypatch.setenv("REDIS_URL", "")
+
+    settings = Settings(_env_file=None)
+    assert settings.REDIS_URL == ""
+
+
 def test_live_order_execution_is_fail_closed(monkeypatch):
     monkeypatch.setenv("LIVE_ORDER_EXECUTION_ENABLED", "true")
 
